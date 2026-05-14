@@ -1,0 +1,71 @@
+/* Tailwind imports */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* -------------------- BASE RESET -------------------- */
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background-color: black;
+  overflow-x: hidden; /* hide horizontal scrollbar */
+  overflow-y: hidden; /* hide vertical scrollbar */
+}
+
+/* -------------------- HIDE SCROLLBARS FOR SPECIFIC ELEMENTS -------------------- */
+.scrollbar-none::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
+}
+
+.scrollbar-none {
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox */
+}
+
+/* Optional: you can apply this class to scrollable divs in React or HTML */
+/* Example:
+<div class="overflow-x-auto scrollbar-none">
+  ...content...
+</div>
+*/
+
+/* ------------------------------------------------------ */
+/* --------- HIDE DEFAULT BROWSER DATE ICON ------------- */
+/* ------------------------------------------------------ */
+
+/* Apply to inputs with class .remove-default-icon */
+
+/* Chrome, Safari, Edge */
+input[type="date"].remove-default-icon::-webkit-inner-spin-button,
+input[type="date"].remove-default-icon::-webkit-clear-button,
+input[type="date"].remove-default-icon::-webkit-calendar-picker-indicator {
+    display: none !important;
+    opacity: 0 !important;
+    -webkit-appearance: none !important;
+}
+
+input[type="date"].remove-default-icon::-webkit-date-and-time-value {
+    text-align: left;
+}
+
+/* Firefox */
+input[type="date"].remove-default-icon {
+    appearance: none !important;
+    -moz-appearance: textfield !important;
+    background-image: none !important;
+}
+
+/* Extra fix for some browsers */
+input[type="date"].remove-default-icon {
+    background: none !important;
+}
+
+/* ------------------------------------------------------ */
+/* --------- FORCE TRUE WHITE BACKGROUND FOR DATE INPUT-- */
+/* ------------------------------------------------------ */
+
+input[type="date"].remove-default-icon {
+    background-color: white !important;
+    color: black !important;
+}
