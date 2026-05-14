@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
 import { Icon } from "@iconify/react";
-import { Toaster } from "react-hot-toast"; // 1. Import Toaster
 import dashboardService from "../../service/dashboardService";
 import AnnouncementModal from "./announcement";
 import AdminLeaveModal from "../../ui/addleavemodal";
@@ -112,16 +111,6 @@ function DashboardHead({ userName, activeTab, setActiveTab }) {
 
   return (
     <div className="w-full bg-white font-poppins relative">
-      {/* 2. Global Toaster: Ensures toasts are visible over modals */}
-      <Toaster
-        position="top-right"
-        reverseOrder={false}
-        toastOptions={{
-          duration: 3000, // 3 sec
-          style: { zIndex: 99999 },
-        }}
-      />
-
       {/* --- HEADER --- */}
       <div className="flex justify-between items-center w-full sm:px-6 pt-3 pb-3">
         <p className="text-sm text-gray-600">
