@@ -5,54 +5,44 @@ import { Printer, Download } from "lucide-react";
 import DashboardLayout from "../ui/pagelayout";
 import html2pdf from "html2pdf.js";
 
-const avatar =
-  "https://ui-avatars.com/api/?name=Admin&background=000000&color=ffffff";
+// ✅ IMPORT CONFIG FILE
+import {
+  avatar,
+  formatINR,
+  formatPayDate,
+  getPdfOptions,
+} from "../utils/payslipPrintconfig";
 
 const Payslip = () => {
   const location = useLocation();
+
   const navigate = useNavigate();
+
   const payslipRef = useRef();
 
   useEffect(() => {
     console.log(">>> [STATE RECEIVED]:", location.state);
+
+    console.log(">>> PAY DATE:", location.state?.employeeData?.pay_date);
   }, [location.state]);
 
   const employee = location.state?.employeeData;
 
   const companyName = location.state?.name || "N/A";
+
   const companyAddress = location.state?.address || "N/A";
 
   const logo = location.state?.logo;
+
   const hLogo = location.state?.horizontal_logo;
 
   const activeCompanyLogo = logo || hLogo || avatar;
 
-  const formatINR = (amount) => {
-    return new Intl.NumberFormat("en-IN", {
-      style: "currency",
-      currency: "INR",
-      maximumFractionDigits: 2,
-    }).format(amount || 0);
-  };
-
+  // ================= PDF DOWNLOAD =================
   const handleDownloadPDF = () => {
     const element = payslipRef.current;
 
-    const opt = {
-      margin: 0.2,
-      filename: `Payslip_${employee?.full_name || "Employee"}.pdf`,
-      image: { type: "jpeg", quality: 1 },
-      html2canvas: {
-        scale: 3,
-        useCORS: true,
-        letterRendering: true,
-      },
-      jsPDF: {
-        unit: "in",
-        format: "a4",
-        orientation: "portrait",
-      },
-    };
+    const opt = getPdfOptions(employee);
 
     html2pdf().set(opt).from(element).save();
   };
@@ -76,12 +66,15 @@ const Payslip = () => {
 
     const { bank_info, consolidated_summary, statutory, components } = employee;
 
+    // ================= EARNINGS =================
     const earnings =
       components?.filter((c) => c.component_type === "earning") || [];
 
+    // ================= DEDUCTIONS =================
     const deductions =
       components?.filter((c) => c.component_type === "deduction") || [];
 
+    // ================= MONTH NAME =================
     const monthName = new Date(
       consolidated_summary?.year,
       consolidated_summary?.month - 1,
@@ -89,9 +82,10 @@ const Payslip = () => {
       month: "long",
     });
 
-    const payDateStr = employee.pay_date || "2026-04-21T06:54:04.92377Z";
+    // ================= PAY DATE =================
+    const formattedPayDate = formatPayDate(employee?.pay_date);
 
-    // ===== ALL DEDUCTIONS =====
+    // ================= ALL DEDUCTIONS =================
     const allDeductions = [
       ...(deductions || []),
 
@@ -111,7 +105,7 @@ const Payslip = () => {
       },
     ].filter((d) => Number(d.monthly_amount) > 0);
 
-    // ===== ROWS ALIGNMENT =====
+    // ================= MAX ROWS =================
     const maxRows = Math.max(earnings.length, allDeductions.length);
 
     return (
@@ -120,7 +114,7 @@ const Payslip = () => {
           ref={payslipRef}
           className="w-full max-w-5xl bg-white px-8 py-6 shadow-lg border border-gray-200"
         >
-          {/* HEADER */}
+          {/* ================= HEADER ================= */}
           <div className="flex justify-between items-start border-b border-gray-200 pb-6 mb-8">
             <div className="flex items-start gap-4">
               <div className="w-16 h-16 overflow-hidden flex items-center justify-center">
@@ -156,7 +150,7 @@ const Payslip = () => {
             </div>
           </div>
 
-          {/* EMPLOYEE SUMMARY */}
+          {/* ================= EMPLOYEE SUMMARY ================= */}
           <div className="mb-10">
             <h2 className="text-xs uppercase tracking-[0.2em] text-gray-400 font-bold mb-4">
               Employee Summary
@@ -166,33 +160,39 @@ const Payslip = () => {
               {/* LEFT */}
               <div className="flex-1 grid grid-cols-2 gap-y-3 text-sm">
                 <span className="text-gray-500">Employee Name</span>
+
                 <span className="font-semibold text-gray-800">
                   : {employee.full_name || "N/A"}
                 </span>
 
                 <span className="text-gray-500">Employee ID</span>
+
                 <span className="font-semibold text-gray-800">
                   : {employee.user_id}
                 </span>
 
                 <span className="text-gray-500">Designation</span>
+
                 <span className="font-semibold text-gray-800">
                   : {bank_info?.designation || "N/A"}
                 </span>
 
                 <span className="text-gray-500">Department</span>
+
                 <span className="font-semibold text-gray-800">
                   : {bank_info?.department || "N/A"}
                 </span>
 
                 <span className="text-gray-500">Pay Period</span>
+
                 <span className="font-semibold text-gray-800">
                   : {monthName} {consolidated_summary?.year}
                 </span>
 
                 <span className="text-gray-500">Pay Date</span>
+
                 <span className="font-semibold text-gray-800">
-                  : {new Date(payDateStr).toLocaleDateString("en-GB")}
+                  : {formattedPayDate}
                 </span>
               </div>
 
@@ -235,7 +235,7 @@ const Payslip = () => {
             </div>
           </div>
 
-          {/* EXTRA DETAILS */}
+          {/* ================= EXTRA DETAILS ================= */}
           <div className="grid grid-cols-2 md:grid-cols-3 gap-6 border-y border-dashed py-8 mb-8 text-sm">
             <div>
               <p className="text-gray-400 uppercase text-[10px] font-bold mb-1">
@@ -298,7 +298,7 @@ const Payslip = () => {
             </div>
           </div>
 
-          {/* EARNINGS & DEDUCTIONS */}
+          {/* ================= TABLE ================= */}
           <div className="border border-gray-200 rounded-xl overflow-hidden mb-10">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b border-gray-200">
@@ -324,11 +324,11 @@ const Payslip = () => {
               <tbody>
                 {[...Array(maxRows)].map((_, idx) => {
                   const earning = earnings[idx];
+
                   const deduction = allDeductions[idx];
 
                   return (
                     <tr key={idx} className="border-b border-gray-100">
-                      {/* EARNINGS */}
                       <td className="px-5 py-3 text-center text-gray-700">
                         {earning?.name || ""}
                       </td>
@@ -337,7 +337,6 @@ const Payslip = () => {
                         {earning ? formatINR(earning.monthly_amount) : ""}
                       </td>
 
-                      {/* DEDUCTIONS */}
                       <td className="px-5 py-3 text-center border-l text-gray-700">
                         {deduction?.name || ""}
                       </td>
@@ -370,7 +369,7 @@ const Payslip = () => {
             </table>
           </div>
 
-          {/* NET PAY */}
+          {/* ================= NET PAY ================= */}
           <div className="bg-green-50 border border-green-200 rounded-2xl px-6 py-5 flex justify-between items-center">
             <div>
               <p className="text-xs uppercase tracking-widest text-gray-500 font-bold">
@@ -387,7 +386,7 @@ const Payslip = () => {
             </h2>
           </div>
 
-          {/* FOOTER */}
+          {/* ================= FOOTER ================= */}
           <p className="text-center text-[11px] text-gray-400 italic mt-10">
             This is a system generated payslip.
           </p>
@@ -412,7 +411,7 @@ const Payslip = () => {
         `}
       </style>
 
-      {/* TOPBAR */}
+      {/* ================= TOPBAR ================= */}
       <div className="bg-white pt-4 px-4 pb-0 w-full print:hidden">
         <div className="flex justify-between items-center border-b border-gray-200 pb-4 mb-5 flex-wrap gap-4">
           <h1 className="text-lg font-bold text-gray-800">Payslip</h1>
@@ -452,7 +451,7 @@ const Payslip = () => {
         </div>
       </div>
 
-      {/* CONTENT */}
+      {/* ================= CONTENT ================= */}
       <div className="w-full overflow-auto no-scrollbar">{renderContent()}</div>
     </DashboardLayout>
   );

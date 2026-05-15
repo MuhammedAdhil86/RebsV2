@@ -87,13 +87,17 @@ export const fetchPayrollAnalytics = async (month, year) => {
       },
     });
 
+    console.log("FULL DATA =>", response.data);
+
     return response.data?.data ?? [];
   } catch (error) {
-    console.error("Error fetching payroll analytics:", error.response?.data || error.message);
+    console.error(
+      "Error fetching payroll analytics:",
+      error.response?.data || error.message
+    );
     throw error;
   }
 };
-
 
 export const fetchFullAttendanceReport = async (month, year) => {
   try {
