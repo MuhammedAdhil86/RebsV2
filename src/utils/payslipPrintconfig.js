@@ -27,7 +27,7 @@ export const formatPayDate = (date) => {
 // ================= PDF OPTIONS =================
 export const getPdfOptions = (employee) => {
   return {
-    margin: 0.2,
+    margin: [0.4, 0.4, 0.4, 0.4], // Margins balanced to protect headers and footers
 
     filename: `Payslip_${employee?.full_name || "Employee"}.pdf`,
 
@@ -46,6 +46,12 @@ export const getPdfOptions = (employee) => {
       unit: "in",
       format: "a4",
       orientation: "portrait",
+    },
+
+    // Prevents breaking inside rows, cards, and major layout sections during PDF generation
+    pagebreak: { 
+      mode: ["css", "legacy"], 
+      avoid: ["tr", ".bg-green-50", ".grid", "table"] 
     },
   };
 };
