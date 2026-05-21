@@ -9,9 +9,10 @@ import { getShiftPolicyById } from "../../service/companyService";
 
 import AddRegularizeModal from "../../ui/addregularize";
 import RegularizationApprovalModal from "../../ui/regularizationapproval";
+import ViewRegularizeModal from "../../ui/viewregularize"; // Imported your live fetch modal
 
 /* ================= ACTION MENU ================= */
-const ActionMenu = ({ row, openMenuId, setOpenMenuId, onEdit }) => {
+const ActionMenu = ({ row, openMenuId, setOpenMenuId, onEdit, onView }) => {
   const isOpen = openMenuId === row.id;
   const buttonRef = useRef(null);
   const menuRef = useRef(null);
@@ -74,7 +75,7 @@ const ActionMenu = ({ row, openMenuId, setOpenMenuId, onEdit }) => {
             <button
               onClick={() => {
                 setOpenMenuId(null);
-                toast("View coming soon");
+                onView(row); // Modified to fire the onView function callback cleanly
               }}
               className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-gray-100"
             >
@@ -97,7 +98,7 @@ function RegularizationTable() {
 
   const [selectedRow, setSelectedRow] = useState(null);
   const [shiftData, setShiftData] = useState(null);
-  const [modalType, setModalType] = useState(null); // "add" | "approve" | null
+  const [modalType, setModalType] = useState(null); // "add" | "approve" | "view" | null
 
   /* ================= FETCH DATA & TRANSFORM ================= */
   const fetchData = async () => {
@@ -248,6 +249,10 @@ function RegularizationTable() {
               setShiftData({ shift_name: "Not Allocated" });
             }
           }}
+          onView={(selectedRow) => {
+            setSelectedRow(selectedRow);
+            setModalType("view"); // Intercepts and activates the viewing modal setup context
+          }}
         />
       ),
     },
@@ -346,6 +351,20 @@ function RegularizationTable() {
               setModalType(null);
             }}
             onOptimisticUpdate={handleOptimisticUpdate}
+          />,
+          document.body,
+        )}
+
+      {/* Clean Portal Insertion for your live View window component */}
+      {modalType === "view" &&
+        createPortal(
+          <ViewRegularizeModal
+            open
+            data={selectedRow}
+            onClose={() => {
+              setModalType(null);
+              setSelectedRow(null);
+            }}
           />,
           document.body,
         )}

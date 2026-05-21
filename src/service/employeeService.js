@@ -493,3 +493,17 @@ export const fetchEmployeeShifts = async (from, to, user_uuid) => {
     throw error;
   }
 };
+
+export const addregularize = async (requestId, date, data) => {
+  try {
+    // Dynamically prefixes "fromReq" directly to match your real route design rules
+    const response = await axiosInstance.put(
+      `/admin/staff/attendance/regularize/fromReq${requestId}/${date}`,
+      data
+    );
+    return response.data;
+  } catch (error) {
+    console.error("Error updating regularisation:", error);
+    throw error;
+  }
+};
