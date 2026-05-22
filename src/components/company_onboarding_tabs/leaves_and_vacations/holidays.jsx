@@ -56,7 +56,7 @@ const Holidays = () => {
       }
       toast.dismiss(syncToastId);
     } catch (e) {
-      console.error("Error loading holiday data:", e);
+      console.error("Dashboard Synchronization Interrupted:", e);
       toast.error(e?.message || "Failed to sync holiday records dashboard.", {
         id: syncToastId,
       });
@@ -75,10 +75,12 @@ const Holidays = () => {
     isEditMode,
     editId = null,
   ) => {
+    // 1. Fire sequential processing toast with tracking token
     const toastId = toast.loading(
       isEditMode ? "Updating holiday record..." : "Saving new holiday...",
     );
 
+    // 2. Create the genuine multipart/form-data payload container instance
     const data = new FormData();
     data.append("title", formDataPayload.title.trim());
     data.append("date", formDataPayload.date);
@@ -86,9 +88,8 @@ const Holidays = () => {
       data.append("image", formDataPayload.image);
     }
 
-    // Map selected branches array out onto flat individual payload form fields
+    // Map selected branches array out onto flat individual payload fields
     if (formDataPayload.selectedBranches.includes("0")) {
-      // Map out all available string items if "All Branches" option is selected
       branchOptions.forEach((b) => {
         data.append("branch", String(b.value).trim());
       });
@@ -99,10 +100,12 @@ const Holidays = () => {
     }
 
     try {
+      // ✅ SUCCESS FIX: Now passing 'data' (the FormData variable), NOT 'formDataPayload'
       const response = isEditMode
         ? await modifyHoliday(editId, data)
         : await addHoliday(data);
 
+      // 3. Resolve loading toast with clean success tracking message from backend
       toast.success(
         response?.message ||
           (isEditMode ? "Holiday updated!" : "Holiday added!"),
@@ -111,15 +114,17 @@ const Holidays = () => {
         },
       );
 
-      loadData(); // Re-fetch list states dynamically
-      setIsModalOpen(false); // Close Modal on clean processing completion
+      loadData(); // Sync parent dashboard charts and rows
+      setIsModalOpen(false); // Close Modal view layer
     } catch (error) {
-      console.error("Parent Captured Core Submission Failure:", error);
+      console.error("Core Processing Operation Rejection:", error);
+
+      // 4. Paint exact Go validator rejection message onto the viewport hot-toast canvas
       toast.error(error.message || "Failed to save holiday structure.", {
         id: toastId,
         duration: 5000,
       });
-      throw error; // Let the child modal component catch it to keep loading spinning active if desired
+      throw error; // Bubble error down to preserve inner user state arrays
     }
   };
 
@@ -169,8 +174,7 @@ const Holidays = () => {
             onClick={() => setIsBulkModalOpen(true)}
             className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-black text-[12px] font-light hover:bg-gray-50 transition-colors"
           >
-            <Upload size={14} strokeWidth={1.5} />
-            Bulk Upload
+            <Upload size={14} strokeWidth={1.5} /> Bulk Upload
           </button>
 
           {/* Add Holiday Button */}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { X, Upload } from "lucide-react";
+import { X, Upload, HelpCircle } from "lucide-react";
 import toast from "react-hot-toast";
 import { uploadHolidayCSV } from "../service/holidayservices";
 import { getBranchData } from "../service/companyService";
@@ -72,13 +72,9 @@ const BulkUploadModal = ({ isOpen, onClose, onRefresh }) => {
 
     setLoading(true);
 
-    // 1. Instantiate clean Form data container
     const data = new FormData();
-
-    // 2. Append file using lowercase key verified by Postman
     data.append("file", selectedFile);
 
-    // 3. Append branch array structure values
     if (selectedBranches.includes("0")) {
       branches.forEach((b) => {
         data.append("branch", String(b.id));
@@ -89,7 +85,6 @@ const BulkUploadModal = ({ isOpen, onClose, onRefresh }) => {
       });
     }
 
-    // 4. Fire network action configuration sequence
     const action = uploadHolidayCSV(data);
 
     toast.promise(
@@ -157,9 +152,50 @@ const BulkUploadModal = ({ isOpen, onClose, onRefresh }) => {
         >
           <div>
             <div className="flex justify-between items-end mb-2">
-              <label className="text-[10px] font-bold text-black/40 uppercase tracking-widest block">
-                Target Branches
-              </label>
+              {/* Wrapped in 'group relative' to safely anchor the hover tooltip box */}
+              <div className="flex items-center gap-1.5 relative group">
+                <label className="text-[10px] font-bold text-black/40 uppercase tracking-widest block">
+                  Target Branches
+                </label>
+
+                <div className="text-black/30 hover:text-black transition-colors cursor-help">
+                  <HelpCircle size={14} />
+                </div>
+
+                {/* Hover Info Tooltip Box */}
+                <div className="invisible group-hover:visible absolute left-0 top-6 z-50 w-72 border border-zinc-200 bg-white shadow-xl rounded-xl p-4 text-xs space-y-2 pointer-events-none transition-all duration-150 animate-in fade-in slide-in-from-top-1">
+                  <div className="font-bold text-black border-b border-black/5 pb-1">
+                    CSV Template Requirements
+                  </div>
+                  <p className="text-black/70">
+                    Your file must be a standard{" "}
+                    <strong className="text-black">.csv</strong> using the exact
+                    header formatting shown below:
+                  </p>
+                  <div className="bg-zinc-50 p-2 rounded border border-black/5 font-mono tracking-tight my-1 text-[11px] text-black/80">
+                    date, title, image
+                  </div>
+                  <ul className="list-disc list-inside space-y-1 text-black/60 text-[11px]">
+                    <li>
+                      <strong className="text-black/80">date:</strong> Required
+                      (YYYY-MM-DD)
+                    </li>
+                    <li>
+                      <strong className="text-black/80">title:</strong> Required
+                      string text
+                    </li>
+                    <li>
+                      <strong className="text-black/80">image:</strong> Optional
+                      column matrix string
+                    </li>
+                  </ul>
+                  <p className="text-[10px] pt-1 text-red-600 font-medium border-t border-black/5">
+                    ⚠️ Creation fails automatically if columns or headers are
+                    missing.
+                  </p>
+                </div>
+              </div>
+
               {branches.length > 0 && !isAllBranchesSelected && (
                 <button
                   type="button"
