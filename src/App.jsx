@@ -9,18 +9,34 @@ function App() {
       {/* Global Loader */}
       <GlobalLoader />
 
-      {/* Toaster notifications */}
-      <Toaster
-        position="top-right"
-        reverseOrder={false}
-        toastOptions={{
-          duration: 3000, // auto close after 3 seconds
-          style: { borderRadius: "8px" },
-        }}
-      />
+      {/* Scrollable App Content Container */}
+      <div className="h-screen w-screen overflow-auto scrollbar-hide relative">
+        {/* FIXED TOASTER CONFIGURATION:
+          We use position: "fixed" and an ultra-high z-index layer 
+          to force the alerts out of local component HTML stacking frames.
+        */}
+        <Toaster
+          position="top-right"
+          reverseOrder={false}
+          containerStyle={{
+            position: "fixed", // Bypasses local scrollable div container limits
+            zIndex: 999999, // Forces priority above your z-[999] modals
+            top: "24px",
+            right: "24px",
+          }}
+          toastOptions={{
+            duration: 4000,
+            style: {
+              borderRadius: "12px",
+              background: "#1c1c1e",
+              color: "#ffffff",
+              fontSize: "14px",
+              padding: "12px 20px",
+              boxShadow: "0 20px 40px rgba(0,0,0,0.2)",
+            },
+          }}
+        />
 
-      {/* Scrollable App Content */}
-      <div className="h-screen w-screen overflow-auto scrollbar-hide">
         <AppRoutes />
       </div>
 

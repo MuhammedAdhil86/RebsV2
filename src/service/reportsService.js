@@ -4,12 +4,14 @@ import {
   getEmployeeBankInfo, 
   getPayrollAnalyticsRun,
   getLeaveReport,
-  attendanceFullReport
+  attendanceFullReport,
+  getFetchAttendanceFineRecords,
 } from "../api/api";
 
 /**
  * Fetch Leave Reports with dynamic filtering
  */
+ 
 export const fetchLeaveReport = async ({ user_id, from, to, status, manager_approval }) => {
   try {
     const params = {
@@ -123,6 +125,34 @@ export const fetchFullAttendanceReport = async (month, year) => {
     }));
   } catch (error) {
     console.error("Error fetching full report:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+
+ 
+export const fetchAttendanceFineRecords = async (month, year, userId = "") => {
+  try {
+    if (!month || !year) {
+      throw new Error("Month and year are required.");
+    }
+
+    // Build params matching the Axios config object structure used in your file
+    const requestParams = {
+      month: Number(month),
+      year: Number(year),
+      ...(userId && { user_id: String(userId) })
+    };
+
+    // Use axiosInstance instead of non-existent raw axios
+    const response = await axiosInstance.get(getFetchAttendanceFineRecords, {
+      params: requestParams
+    });
+
+    // Match response layout data extraction pattern
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching attendance fine records:", error.response?.data || error.message);
     throw error;
   }
 };

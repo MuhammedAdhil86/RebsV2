@@ -1,20 +1,31 @@
-import React, { useState, useEffect } from "react";
-import { X, Upload } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import { X, Upload, ChevronDown } from "lucide-react";
 import toast from "react-hot-toast";
-import { addHoliday, modifyHoliday } from "../service/holidayservices";
 import { getBranchData } from "../service/companyService";
 
-const HolidayModal = ({ isOpen, onClose, onRefresh, editData = null }) => {
+const HolidayModal = ({ isOpen, onClose, onSubmitAction, editData = null }) => {
   const [loading, setLoading] = useState(false);
   const [branches, setBranches] = useState([]);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
   const [formData, setFormData] = useState({
     title: "",
     date: "",
-    branch: "0",
+    selectedBranches: [],
     image: null,
   });
 
+  const dropdownRef = useRef(null);
   const isEditMode = !!editData;
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   useEffect(() => {
     if (isOpen) {
@@ -23,104 +34,118 @@ const HolidayModal = ({ isOpen, onClose, onRefresh, editData = null }) => {
           const data = await getBranchData();
           if (data) setBranches(data);
         } catch (error) {
-          // Toast for data fetching errors
-          toast.error("Failed to load branches. Please check your connection.");
+          toast.error(
+            "Failed to load branches. Please check your network connection.",
+          );
         }
       };
       loadBranches();
+      setDropdownOpen(false);
 
       if (editData) {
         const formattedDate = editData.date
           ? new Date(editData.date).toISOString().split("T")[0]
           : "";
+        let initialBranches = [];
+        if (editData.branch) {
+          initialBranches = Array.isArray(editData.branch)
+            ? editData.branch.map(String)
+            : [String(editData.branch)];
+        } else {
+          initialBranches = ["0"];
+        }
+
         setFormData({
           title: editData.Reason || editData.title || "",
           date: formattedDate,
-          branch: editData.branch?.toString() || "0",
+          selectedBranches: initialBranches,
           image: null,
         });
       } else {
-        setFormData({ title: "", date: "", branch: "0", image: null });
+        setFormData({
+          title: "",
+          date: "",
+          selectedBranches: ["0"],
+          image: null,
+        });
       }
     }
   }, [isOpen, editData]);
 
   if (!isOpen) return null;
 
-  const handleSubmit = async (e) => {
+  const handleBranchToggle = (branchId) => {
+    const stringId = String(branchId).trim();
+    setFormData((prev) => {
+      if (stringId === "0") {
+        return {
+          ...prev,
+          selectedBranches: prev.selectedBranches.includes("0") ? [] : ["0"],
+        };
+      }
+      const filtered = prev.selectedBranches.filter((id) => id !== "0");
+      if (filtered.includes(stringId)) {
+        return {
+          ...prev,
+          selectedBranches: filtered.filter((id) => id !== stringId),
+        };
+      } else {
+        return { ...prev, selectedBranches: [...filtered, stringId] };
+      }
+    });
+  };
+
+  const getDropdownLabel = () => {
+    if (formData.selectedBranches.includes("0")) return "All Branches";
+    if (formData.selectedBranches.length === 0) return "Select Branches...";
+    if (formData.selectedBranches.length === 1) {
+      return (
+        branches.find((b) => String(b.id) === formData.selectedBranches[0])
+          ?.name || "1 Branch Selected"
+      );
+    }
+    return `${formData.selectedBranches.length} Branches Selected`;
+  };
+
+  const internalHandleSubmit = async (e) => {
     e.preventDefault();
-    if (loading) return; // Prevent double submission
+    if (loading) return;
+
+    if (formData.selectedBranches.length === 0) {
+      toast.error("Please select at least one target branch.");
+      return;
+    }
 
     setLoading(true);
-
-    const data = new FormData();
-    data.append("title", formData.title);
-    data.append("date", formData.date);
-    data.append("branch", formData.branch);
-    if (formData.image) data.append("image", formData.image);
-
-    // Using toast.promise to handle UI feedback
-    const action = isEditMode
-      ? modifyHoliday(editData.id, data)
-      : addHoliday(data);
-
-    toast.promise(
-      action,
-      {
-        loading: <b>{isEditMode ? "Updating..." : "Saving..."}</b>,
-        success: (res) => {
-          onRefresh(); // Refresh parent lists
-          onClose(); // Close modal
-          return (
-            res?.message || (isEditMode ? "Holiday updated!" : "Holiday added!")
-          );
-        },
-        error: (err) => {
-          // Extracts error message from API response if available
-          const errorMsg =
-            err?.response?.data?.message ||
-            err?.message ||
-            "Something went wrong.";
-          return <b>{errorMsg}</b>;
-        },
-      },
-      {
-        style: {
-          minWidth: "250px",
-        },
-        success: {
-          duration: 4000,
-          icon: "🎉",
-        },
-        error: {
-          duration: 5000,
-        },
-      },
-    );
-
     try {
-      await action;
+      // Execute proxy event action handed down from context parent wrapper
+      await onSubmitAction(formData, isEditMode, editData?.id);
     } catch (error) {
-      console.error("Submit Error:", error);
+      // Keep state open so inputs are not wiped if error message displays
+      console.error(
+        "Component handled presentation layer error blocking:",
+        error,
+      );
     } finally {
       setLoading(false);
     }
   };
 
+  const isAllSelected = formData.selectedBranches.includes("0");
+
   return (
     <div className="fixed inset-0 z-[999] flex items-center justify-center p-4">
-      {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"
-        onClick={!loading ? onClose : undefined} // Disable close during loading
+        onClick={!loading ? onClose : undefined}
       />
-
       <div className="relative bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-200">
         <div className="p-6 border-b border-black/5 flex justify-between items-center">
           <h2 className="text-lg font-semibold text-black">
             {isEditMode ? "Edit Holiday" : "Add New Holiday"}
           </h2>
           <button
+            type="button"
             disabled={loading}
             onClick={onClose}
             className="p-1.5 hover:bg-black/5 rounded-full transition-colors disabled:opacity-30"
@@ -128,9 +153,7 @@ const HolidayModal = ({ isOpen, onClose, onRefresh, editData = null }) => {
             <X size={20} className="text-black/50" />
           </button>
         </div>
-
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          {/* ... Inputs remain the same ... */}
+        <form onSubmit={internalHandleSubmit} className="p-6 space-y-4">
           <div>
             <label className="text-[10px] font-bold text-black/40 uppercase tracking-widest block mb-1.5">
               Holiday Title
@@ -147,7 +170,6 @@ const HolidayModal = ({ isOpen, onClose, onRefresh, editData = null }) => {
               }
             />
           </div>
-
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="text-[10px] font-bold text-black/40 uppercase tracking-widest block mb-1.5">
@@ -164,30 +186,61 @@ const HolidayModal = ({ isOpen, onClose, onRefresh, editData = null }) => {
                 }
               />
             </div>
-
-            <div>
+            <div className="relative" ref={dropdownRef}>
               <label className="text-[10px] font-bold text-black/40 uppercase tracking-widest block mb-1.5">
                 Branch
               </label>
-              <select
-                required
+              <button
+                type="button"
                 disabled={loading}
-                value={formData.branch}
-                className="w-full border border-black/10 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-black transition-colors bg-white"
-                onChange={(e) =>
-                  setFormData({ ...formData, branch: e.target.value })
-                }
+                onClick={() => setDropdownOpen(!dropdownOpen)}
+                className="w-full border border-black/10 rounded-xl px-4 py-2.5 text-sm text-left bg-white focus:outline-none flex justify-between items-center select-none"
               >
-                <option value="0">All Branches</option>
-                {branches.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name}
-                  </option>
-                ))}
-              </select>
+                <span className="truncate pr-2 text-black/80">
+                  {getDropdownLabel()}
+                </span>
+                <ChevronDown
+                  size={16}
+                  className={`text-black/40 transition-transform duration-200 ${dropdownOpen ? "rotate-180" : ""}`}
+                />
+              </button>
+              {dropdownOpen && (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-black/10 rounded-xl shadow-xl z-20 max-h-48 overflow-y-auto p-1.5 space-y-0.5 animate-in fade-in slide-in-from-top-1 duration-150">
+                  <label className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold cursor-pointer select-none hover:bg-black/[0.03]">
+                    <input
+                      type="checkbox"
+                      checked={isAllSelected}
+                      onChange={() => handleBranchToggle("0")}
+                      className="rounded border-black/20 text-black focus:ring-black accent-black"
+                    />
+                    <span>All Branches</span>
+                  </label>
+                  <div className="border-t border-black/5 my-1" />
+                  {branches.map((b) => {
+                    const stringId = String(b.id).trim();
+                    const isChecked =
+                      isAllSelected ||
+                      formData.selectedBranches.includes(stringId);
+                    return (
+                      <label
+                        key={b.id}
+                        className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs select-none hover:bg-black/[0.03] ${isAllSelected ? "cursor-not-allowed opacity-50 text-black/40" : "cursor-pointer text-black/80"}`}
+                      >
+                        <input
+                          type="checkbox"
+                          disabled={isAllSelected}
+                          checked={isChecked}
+                          onChange={() => handleBranchToggle(stringId)}
+                          className="rounded border-black/20 text-black focus:ring-black accent-black"
+                        />
+                        <span className="truncate">{b.name}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
-
           <div>
             <label className="text-[10px] font-bold text-black/40 uppercase tracking-widest block mb-1.5">
               {isEditMode ? "Replace Image (Optional)" : "Holiday Image"}
@@ -208,7 +261,6 @@ const HolidayModal = ({ isOpen, onClose, onRefresh, editData = null }) => {
               </p>
             </div>
           </div>
-
           <div className="flex gap-3 pt-4">
             <button
               type="button"

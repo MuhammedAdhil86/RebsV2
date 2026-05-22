@@ -6,6 +6,7 @@ import DashboardLayout from "../ui/pagelayout";
 import AttendanceReports from "../components/reports_tab/attendance_reports";
 import LeaveReports from "../components/reports/leavereport";
 import PayrollAttendanceReport from "../components/reports_tab/payrollattendancereport";
+import AttendanceFineRecordsReport from "../components/reports_tab/finereport_tab";
 
 const avatar =
   "https://ui-avatars.com/api/?name=Admin&background=000000&color=ffffff";
@@ -23,6 +24,9 @@ export default function Reports() {
 
       case "Payroll Attendance Report":
         return <PayrollAttendanceReport />;
+
+      case "Fine Reports":
+        return <AttendanceFineRecordsReport />;
 
       default:
         return null;
@@ -61,6 +65,7 @@ export default function Reports() {
             "Attendance Reports",
             "Leave Reports",
             "Payroll Attendance Report",
+            "Fine Reports",
             "Compliance Reports",
             "Miscellaneous Reports",
             "Insurance Details",

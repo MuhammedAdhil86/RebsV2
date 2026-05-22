@@ -1,27 +1,39 @@
 import React, { useState, useEffect } from "react";
-import { Plus, Calendar as CalendarIcon, List as ListIcon } from "lucide-react";
+import {
+  Plus,
+  Calendar as CalendarIcon,
+  List as ListIcon,
+  Upload,
+} from "lucide-react";
+import toast from "react-hot-toast";
 import HolidayCalendar from "./holidayscalender";
 import HolidayList from "./holidayslist";
 import {
   fetchHolidaysByDate,
   fetchAllHolidays,
+  addHoliday,
+  modifyHoliday,
 } from "../../../service/holidayservices";
 import { getBranchData } from "../../../service/companyService";
 import HolidayModal from "../../../ui/addholiday";
+import BulkUploadModal from "../../../ui/holidaybulk";
 
 const Holidays = () => {
   const [activeTab, setActiveTab] = useState("calendar");
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [monthHolidays, setMonthHolidays] = useState([]); // Specifically for Calendar
-  const [allHolidays, setAllHolidays] = useState([]); // For the Full List
+  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
+  const [monthHolidays, setMonthHolidays] = useState([]);
+  const [allHolidays, setAllHolidays] = useState([]);
   const [branchOptions, setBranchOptions] = useState([]);
   const [currentMonth, setCurrentMonth] = useState(
     new Date(new Date().getFullYear(), new Date().getMonth(), 1),
   );
 
   const loadData = async () => {
+    const syncToastId = "dashboard-sync-toast";
+    toast.loading("Syncing holiday records...", { id: syncToastId });
+
     try {
-      // Parallel fetch for efficiency
       const [rawMonthData, rawAllData, rawBranches] = await Promise.all([
         fetchHolidaysByDate(
           currentMonth.getMonth() + 1,
@@ -42,14 +54,74 @@ const Holidays = () => {
           })),
         );
       }
+      toast.dismiss(syncToastId);
     } catch (e) {
       console.error("Error loading holiday data:", e);
+      toast.error(e?.message || "Failed to sync holiday records dashboard.", {
+        id: syncToastId,
+      });
     }
   };
 
   useEffect(() => {
     loadData();
   }, [currentMonth]);
+
+  /**
+   * Lifted Form Submission Action Handler with Manual Toast Pipeline Integration
+   */
+  const handleHolidaySubmit = async (
+    formDataPayload,
+    isEditMode,
+    editId = null,
+  ) => {
+    const toastId = toast.loading(
+      isEditMode ? "Updating holiday record..." : "Saving new holiday...",
+    );
+
+    const data = new FormData();
+    data.append("title", formDataPayload.title.trim());
+    data.append("date", formDataPayload.date);
+    if (formDataPayload.image) {
+      data.append("image", formDataPayload.image);
+    }
+
+    // Map selected branches array out onto flat individual payload form fields
+    if (formDataPayload.selectedBranches.includes("0")) {
+      // Map out all available string items if "All Branches" option is selected
+      branchOptions.forEach((b) => {
+        data.append("branch", String(b.value).trim());
+      });
+    } else {
+      formDataPayload.selectedBranches.forEach((id) => {
+        data.append("branch", String(id).trim());
+      });
+    }
+
+    try {
+      const response = isEditMode
+        ? await modifyHoliday(editId, data)
+        : await addHoliday(data);
+
+      toast.success(
+        response?.message ||
+          (isEditMode ? "Holiday updated!" : "Holiday added!"),
+        {
+          id: toastId,
+        },
+      );
+
+      loadData(); // Re-fetch list states dynamically
+      setIsModalOpen(false); // Close Modal on clean processing completion
+    } catch (error) {
+      console.error("Parent Captured Core Submission Failure:", error);
+      toast.error(error.message || "Failed to save holiday structure.", {
+        id: toastId,
+        duration: 5000,
+      });
+      throw error; // Let the child modal component catch it to keep loading spinning active if desired
+    }
+  };
 
   const getBranchName = (id) => {
     if (id === "0" || !id) return "General";
@@ -61,7 +133,7 @@ const Holidays = () => {
 
   return (
     <div className="p-4 w-full bg-white min-h-screen">
-      {/* TABS & ACTIONS SECTION - Button moved to right end */}
+      {/* TABS & ACTIONS SECTION */}
       <div className="flex justify-between items-end border-b border-gray-300 mb-6">
         {/* Left Side: Tab Navigation */}
         <div className="flex gap-8">
@@ -90,8 +162,18 @@ const Holidays = () => {
           </button>
         </div>
 
-        {/* Right Side: Action Button */}
-        <div className="pb-2">
+        {/* Right Side: Action Buttons */}
+        <div className="pb-2 flex items-center gap-3">
+          {/* Bulk Upload Button */}
+          <button
+            onClick={() => setIsBulkModalOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-black text-[12px] font-light hover:bg-gray-50 transition-colors"
+          >
+            <Upload size={14} strokeWidth={1.5} />
+            Bulk Upload
+          </button>
+
+          {/* Add Holiday Button */}
           <button
             onClick={() => setIsModalOpen(true)}
             className="flex items-center gap-2 px-4 py-2 bg-black rounded-lg text-white text-[12px] font-light hover:bg-zinc-800 transition-colors"
@@ -119,10 +201,18 @@ const Holidays = () => {
         )}
       </div>
 
-      {/* MODAL */}
+      {/* SINGLE HOLIDAY MODAL */}
       <HolidayModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
+        onSubmitAction={handleHolidaySubmit}
+        editData={null}
+      />
+
+      {/* MULTI-BRANCH BULK UPLOAD MODAL */}
+      <BulkUploadModal
+        isOpen={isBulkModalOpen}
+        onClose={() => setIsBulkModalOpen(false)}
         onRefresh={loadData}
       />
     </div>
