@@ -28,8 +28,8 @@ function App() {
             duration: 4000,
             style: {
               borderRadius: "12px",
-              background: "#1c1c1e",
-              color: "#ffffff",
+              background: "#FFFFFF",
+              color: "#000000",
               fontSize: "14px",
               padding: "12px 20px",
               boxShadow: "0 20px 40px rgba(0,0,0,0.2)",

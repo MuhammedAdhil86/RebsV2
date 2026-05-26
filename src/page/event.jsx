@@ -11,7 +11,7 @@ import {
   FiChevronRight,
 } from "react-icons/fi";
 import { Drawer } from "@mui/material";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 
 // Layout & UI
@@ -80,6 +80,7 @@ const CustomToolbar = (props) => (
 );
 
 export default function Events({ userId, userName }) {
+  const queryClient = useQueryClient();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerContent, setDrawerContent] = useState("all");
   const [selectedEvent, setSelectedEvent] = useState(null);
@@ -91,86 +92,166 @@ export default function Events({ userId, userName }) {
   const [branches, setBranches] = useState([]);
 
   useEffect(() => {
-    getBranchData().then((data) =>
-      setBranches(Array.isArray(data) ? data : []),
-    );
+    getBranchData().then((data) => {
+      console.log("➡️ API Response [getBranchData]:", data);
+      setBranches(Array.isArray(data) ? data : []);
+    });
   }, []);
+
+  const handleInstantRefresh = () => {
+    console.log(
+      "🔄 Real-time Update Triggered: Invalidating stale runtime queries...",
+    );
+    queryClient.invalidateQueries(["allEvents"]);
+    queryClient.invalidateQueries(["dailyDetails"]);
+  };
 
   const { data: allEvents = [] } = useQuery({
     queryKey: ["allEvents", currentMonth, currentYear],
-    queryFn: () => fetchEvents(currentMonth, currentYear),
+    queryFn: async () => {
+      const data = await fetchEvents(currentMonth, currentYear);
+      console.log(
+        `➡️ API Response [fetchEvents] for ${currentMonth}/${currentYear}:`,
+        data,
+      );
+      return data;
+    },
   });
 
   const { data: allLeaves = [] } = useQuery({
     queryKey: ["allLeaves", currentMonth, currentYear],
-    queryFn: () => fetchMonthlyLeaves(currentMonth, currentYear),
+    queryFn: async () => {
+      const data = await fetchMonthlyLeaves(currentMonth, currentYear);
+      console.log(
+        `➡️ API Response [fetchMonthlyLeaves] for ${currentMonth}/${currentYear}:`,
+        data,
+      );
+      return data;
+    },
   });
 
   const { data: holidays = [] } = useQuery({
     queryKey: ["holidays", currentYear, selectedBranch],
-    queryFn: () =>
-      selectedBranch !== "all"
-        ? fetchHolidaysByBranch(selectedBranch)
-        : fetchAllHolidays(),
+    queryFn: async () => {
+      const data =
+        selectedBranch !== "all"
+          ? await fetchHolidaysByBranch(selectedBranch)
+          : await fetchAllHolidays();
+      console.log(
+        `➡️ API Response [Holidays] (Branch: ${selectedBranch}, Year: ${currentYear}):`,
+        data,
+      );
+      return data;
+    },
   });
 
   const { data: weeklyOffs = [] } = useQuery({
     queryKey: ["weeklyOffs", currentYear, selectedBranch],
-    queryFn: () =>
-      selectedBranch !== "all"
-        ? getWeeklyOffByBranch(currentYear, selectedBranch)
-        : getWeeklyOffByYear(currentYear),
+    queryFn: async () => {
+      const data =
+        selectedBranch !== "all"
+          ? await getWeeklyOffByBranch(currentYear, selectedBranch)
+          : await getWeeklyOffByYear(currentYear);
+      console.log(
+        `➡️ API Response [Weekly Offs] (Branch: ${selectedBranch}, Year: ${currentYear}):`,
+        data,
+      );
+      return data;
+    },
     placeholderData: (prev) => prev,
   });
 
   const { data: dailyData } = useQuery({
     queryKey: ["dailyDetails", moment(selectedDate).format("YYYY-MM-DD")],
-    queryFn: () => fetchDailyDetails(moment(selectedDate).format("YYYY-MM-DD")),
+    queryFn: async () => {
+      const targetDateStr = moment(selectedDate).format("YYYY-MM-DD");
+      const data = await fetchDailyDetails(targetDateStr);
+      console.log(
+        `➡️ API Response [fetchDailyDetails] for Date (${targetDateStr}):`,
+        data,
+      );
+      return data;
+    },
   });
 
   const calendarEvents = useMemo(() => {
-    const events = (Array.isArray(allEvents) ? allEvents : []).map((e) => ({
-      ...e,
-      start: new Date(e.start_date),
-      end: new Date(e.end_date),
-      isEvent: true,
-    }));
+    const events = (Array.isArray(allEvents) ? allEvents : []).map((e) => {
+      // ✅ FIX: Extract the literal string layout parts up to the seconds, completely stripping the trailing 'Z'
+      // This stops JavaScript from applying local GMT+05:30 offsets, keeping it exactly on May 25 at 18:51 (6:51 PM)
+      const cleanStartStr =
+        e.start_date && e.start_date.includes("Z")
+          ? e.start_date.split("Z")[0]
+          : e.start_date;
+      const cleanEndStr =
+        e.end_date && e.end_date.includes("Z")
+          ? e.end_date.split("Z")[0]
+          : e.end_date;
+
+      return {
+        ...e,
+        start: cleanStartStr ? new Date(cleanStartStr) : new Date(),
+        end: cleanEndStr ? new Date(cleanEndStr) : new Date(),
+        isEvent: true,
+      };
+    });
 
     const leaves = (
       allLeaves?.flatMap((l) =>
-        (l.leave_date || []).map((d) => ({
-          id: `leave-${d.id}`,
-          title: `${l.name} on leave`,
-          start: new Date(d.date),
-          end: new Date(d.date),
-          allDay: true,
-          isLeave: true,
-          status: l.status,
-        })),
+        (l.leave_date || []).map((d) => {
+          const cleanLeaveStr =
+            d.date && d.date.includes("Z") ? d.date.split("Z")[0] : d.date;
+          return {
+            id: `leave-${d.id}`,
+            title: `${l.name} on leave`,
+            start: cleanLeaveStr ? new Date(cleanLeaveStr) : new Date(),
+            end: cleanLeaveStr ? new Date(cleanLeaveStr) : new Date(),
+            allDay: true,
+            isLeave: true,
+            status: l.status,
+          };
+        }),
       ) || []
     ).filter((l) => l.status === "Approved");
 
-    const holidayList = (Array.isArray(holidays) ? holidays : []).map((h) => ({
-      id: `h-${h.id || Math.random()}`,
-      title: h.Reason || h.title || "Holiday",
-      start: new Date(h.date),
-      end: new Date(h.date),
-      allDay: true,
-      isHoliday: true,
-    }));
+    const holidayList = (Array.isArray(holidays) ? holidays : []).map((h) => {
+      const cleanHolidayStr =
+        h.date && h.date.includes("Z") ? h.date.split("Z")[0] : h.date;
+      return {
+        id: `h-${h.id || Math.random()}`,
+        title: h.Reason || h.title || "Holiday",
+        start: cleanHolidayStr ? new Date(cleanHolidayStr) : new Date(),
+        end: cleanHolidayStr ? new Date(cleanHolidayStr) : new Date(),
+        allDay: true,
+        isHoliday: true,
+      };
+    });
 
     const weeklyOffList = (Array.isArray(weeklyOffs) ? weeklyOffs : []).map(
-      (w) => ({
-        id: `woff-${w.id || Math.random()}`,
-        title: `Weekly Off`,
-        start: new Date(w.date),
-        end: new Date(w.date),
-        allDay: true,
-        isWeeklyOff: true,
-      }),
+      (w) => {
+        const cleanWoffStr =
+          w.date && w.date.includes("Z") ? w.date.split("Z")[0] : w.date;
+        return {
+          id: `woff-${w.id || Math.random()}`,
+          title: `Weekly Off`,
+          start: cleanWoffStr ? new Date(cleanWoffStr) : new Date(),
+          end: cleanWoffStr ? new Date(cleanWoffStr) : new Date(),
+          allDay: true,
+          isWeeklyOff: true,
+        };
+      },
     );
 
-    return [...events, ...leaves, ...holidayList, ...weeklyOffList];
+    const mergedResults = [
+      ...events,
+      ...leaves,
+      ...holidayList,
+      ...weeklyOffList,
+    ];
+    console.log(
+      "📊 Computed Calendar Events Merged Core Array List:",
+      mergedResults,
+    );
+    return mergedResults;
   }, [allEvents, allLeaves, holidays, weeklyOffs]);
 
   const handleNavigate = (newDate) => {
@@ -287,13 +368,21 @@ export default function Events({ userId, userName }) {
                         {h.title || h.Reason}
                       </p>
                       <p className="text-[10px] text-gray-400 mt-0.5 uppercase font-normal">
-                        {format(new Date(h.date), "dd MMM, yyyy")}
+                        {format(
+                          new Date(
+                            h.date && h.date.includes("Z")
+                              ? h.date.split("Z")[0]
+                              : h.date,
+                          ),
+                          "dd MMM, yyyy",
+                        )}
                       </p>
                     </div>
                   </div>
                 ))}
             </div>
           </div>
+
           {/* Weekly Offs */}
           <div className="bg-white p-6 rounded-[24px] border border-gray-100 shadow-sm">
             <h3 className="tracking-widest uppercase text-gray-400 mb-5 flex items-center gap-2 font-normal">
@@ -316,13 +405,21 @@ export default function Events({ userId, userName }) {
                         Weekly Off ({w.day})
                       </p>
                       <p className="text-[10px] text-gray-400 uppercase font-normal">
-                        {format(new Date(w.date), "MMM dd, yyyy")}
+                        {format(
+                          new Date(
+                            w.date && w.date.includes("Z")
+                              ? w.date.split("Z")[0]
+                              : w.date,
+                          ),
+                          "MMM dd, yyyy",
+                        )}
                       </p>
                     </div>
                   </div>
                 ))}
             </div>
           </div>
+
           {/* Leaves */}
           <div className="bg-white p-6 rounded-[24px] border border-gray-100 shadow-sm">
             <div className="flex justify-between items-center mb-6 font-normal">
@@ -362,6 +459,7 @@ export default function Events({ userId, userName }) {
               )}
             </div>
           </div>
+
           {/* Planned Events */}
           <div className="bg-white p-6 rounded-[24px] border border-gray-100 shadow-sm">
             <div className="flex justify-between items-center mb-6 font-normal">
@@ -389,7 +487,15 @@ export default function Events({ userId, userName }) {
                     <div className="flex items-center gap-3 text-[10px] text-gray-400 uppercase font-normal">
                       <span className="flex items-center gap-1">
                         <FiClock size={12} />{" "}
-                        {format(new Date(e.start_date), "hh:mm a")}
+                        {/* ✅ FIX: Formatted right-side panel layout time block perfectly */}
+                        {format(
+                          new Date(
+                            e.start_date && e.start_date.includes("Z")
+                              ? e.start_date.split("Z")[0]
+                              : e.start_date,
+                          ),
+                          "hh:mm a",
+                        )}
                       </span>
                     </div>
                   </div>
@@ -412,14 +518,18 @@ export default function Events({ userId, userName }) {
           className: "w-[549px] rounded-l-[40px] shadow-2xl border-none",
         }}
       >
-        <div className="p-6  h-full flex flex-col font-poppins text-[12px]">
+        <div className="p-6 h-full flex flex-col font-poppins text-[12px]">
           {drawerContent === "create" && (
-            <EventCreate onClose={() => setDrawerOpen(false)} />
+            <EventCreate
+              onClose={() => setDrawerOpen(false)}
+              onCreateSuccess={handleInstantRefresh}
+            />
           )}
           {drawerContent === "detail" && selectedEvent && (
             <EventDetailPage
               event={selectedEvent}
               onBack={() => setDrawerOpen(false)}
+              onDeleteSuccess={handleInstantRefresh}
             />
           )}
           {drawerContent === "all" && (

@@ -17,6 +17,7 @@ import {
   getAllowanceData,
   getCompliances,
   getCountry,
+  RemainingRegularization,
   updateCompanyDet,
   postBranch,
   getOrgType,
@@ -580,5 +581,20 @@ export const getWeeklyOffByBranch = async (year, branchId) => {
   } catch (error) {
     console.error("Error:", error);
     return [];
+  }
+};
+
+export const fetchRemainingRegularization = async (uuid) => {
+  try {
+    // Replaces dynamic parameters or appends directly if preferred
+
+    const response = await axiosInstance.get(RemainingRegularization);
+    
+    // Clean nested fallback extraction matching your template format
+    const data = response.data?.data || response.data || {};
+    return data;
+  } catch (error) {
+    console.error("Error fetching remaining regularizations:", error);
+    return null; 
   }
 };

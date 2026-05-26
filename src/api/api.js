@@ -71,6 +71,7 @@ export const deleteEvent = "/admin/event/delete/:id"
 export const cancelEvent = "/admin/event/cancel/:id"
 
 
+
 //Digital Assets
 
 export const getDigitalDashboard = "/admin/digital-asset/dashboard"
@@ -371,3 +372,4 @@ export const updateLeavePolicy = (id) => `/leave-policy/update/${id}`;
 
 
 export const regularizeAttendanceApproval = "/admin/attendance/regularize/approval";
+export const RemainingRegularization = (uuid) => `/admin/attendance/regularization/remaining/${uuid}`;

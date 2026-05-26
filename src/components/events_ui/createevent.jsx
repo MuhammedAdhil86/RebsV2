@@ -14,10 +14,10 @@ const EventCreate = () => {
     end_date: "",
     end_time: "",
     event_type: "",
-    participation: [],
+    participation: [], // Array storing checked employee UUID strings
     place: "",
     link: "",
-    when_to_notify: "", // Assume this is in minutes
+    when_to_notify: "",
     timezone: "",
   });
 
@@ -39,9 +39,16 @@ const EventCreate = () => {
   const [successMessage, setSuccessMessage] = useState("");
 
   const formatTime = (minutes) => {
+    if (!minutes) return "00:00:00";
     const hrs = String(Math.floor(minutes / 60)).padStart(2, "0");
     const mins = String(minutes % 60).padStart(2, "0");
     return `${hrs}:${mins}:00`;
+  };
+
+  const formatDateTimeWithZone = (dateStr, timeStr) => {
+    if (!dateStr || !timeStr) return "";
+    const standardTime = timeStr.length === 5 ? `${timeStr}:00` : timeStr;
+    return `${dateStr}T${standardTime}`;
   };
 
   const validateForm = () => {
@@ -52,29 +59,36 @@ const EventCreate = () => {
     if (!formData.start_date) newErrors.start_date = "Start Date is required";
     if (!formData.start_time) newErrors.start_time = "Start Time is required";
     if (!formData.end_date) newErrors.end_date = "End Date is required";
-
     if (!formData.end_time) newErrors.end_time = "End Time is required";
     if (!formData.event_type) newErrors.event_type = "Event type is required";
-    // if (formData.participation.length === 0)
-    //   newErrors.participation = "At least one participant is required";
-    if (!formData.place) newErrors.place = "Place is required";
+    if (!formData.timezone)
+      newErrors.timezone = "Timezone selection is required";
+    if (!formData.when_to_notify)
+      newErrors.when_to_notify = "Notification timing is required";
+
+    if (formData.event_type === "offline" && !formData.place) {
+      newErrors.place = "Place is required for offline events";
+    }
     if (formData.event_type === "online" && !formData.link) {
       newErrors.link = "Meeting link is required for online events";
     }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (validateForm()) {
-      const startDateTime = new Date(
-        `${formData.start_date}T${formData.start_time}`,
-      ).toISOString();
-      const endDateTime = new Date(
-        `${formData.end_date}T${formData.end_time}`,
-      ).toISOString();
+      const startDateTime = formatDateTimeWithZone(
+        formData.start_date,
+        formData.start_time,
+      );
+      const endDateTime = formatDateTimeWithZone(
+        formData.end_date,
+        formData.end_time,
+      );
 
-      // Convert participation array to an array of objects with `uuid` keys
       const participationArray = formData.participation.map((uuid) => ({
         uuid,
       }));
@@ -86,16 +100,15 @@ const EventCreate = () => {
         end_date: endDateTime,
         event_type: formData.event_type,
         participation: participationArray,
-        place: formData.place,
-        meeting_url: formData.link || "",
-        reminder_before: formatTime(parseInt(formData.when_to_notify, 10)), // Convert to HH:MM:SS
+        place: formData.event_type === "offline" ? formData.place : "Online",
+        meeting_url: formData.event_type === "online" ? formData.link : "",
+        reminder_before: formatTime(parseInt(formData.when_to_notify, 10)),
         time_zone: formData.timezone,
       };
 
       try {
         const response = await createEvent(eventPayload);
         toast.success("Event created successfully");
-        console.log("Event created successfully:", response);
         setFormData({
           title: "",
           description: "",
@@ -111,16 +124,37 @@ const EventCreate = () => {
           timezone: "",
         });
       } catch (error) {
-        toast.error("Error creating event.Please Try Again");
+        toast.error("Error creating event. Please Try Again");
         console.error("Error creating event:", error);
       }
     }
   };
 
-  const handleEmployeeSelection = (uuid) => {
+  // Handles checking/unchecking boxes from within the Drawer list view
+  const handleEmployeeToggle = (uuid) => {
+    setFormData((prevFormData) => {
+      const isAlreadySelected = prevFormData.participation.includes(uuid);
+      if (isAlreadySelected) {
+        return {
+          ...prevFormData,
+          participation: prevFormData.participation.filter((id) => id !== uuid),
+        };
+      } else {
+        return {
+          ...prevFormData,
+          participation: [...prevFormData.participation, uuid],
+        };
+      }
+    });
+  };
+
+  // Removes a chip entry cleanly from the outside layout preview block
+  const handleRemoveEmployee = (uuidToRemove) => {
     setFormData((prevFormData) => ({
       ...prevFormData,
-      participation: [...prevFormData.participation, uuid],
+      participation: prevFormData.participation.filter(
+        (id) => id !== uuidToRemove,
+      ),
     }));
   };
 
@@ -141,120 +175,143 @@ const EventCreate = () => {
   };
 
   return (
-    <div className=" h-[800px] p-8">
-      <h1 className="text-3xl text-black font-semibold mb-6">Create Event</h1>
+    <div className="h-auto min-h-[800px] p-8 bg-white font-['Poppins'] font-normal text-black">
+      <h1 className="text-3xl text-black font-semibold mb-6 font-['Poppins']">
+        Create Event
+      </h1>
       <form onSubmit={handleSubmit} className="space-y-8">
         {successMessage && (
-          <div style={{ color: "green", marginBottom: "10px" }}>
+          <div
+            style={{ color: "green", marginBottom: "10px" }}
+            className="font-['Poppins']"
+          >
             {successMessage}
           </div>
         )}
+
+        {/* Title */}
         <div>
-          <label className="block text-sm font-medium text-gray-700">
+          <label className="block text-sm font-medium text-gray-700 font-['Poppins']">
             Title
           </label>
           <input
-            className="w-full border text-black border-gray-300 rounded-md p-2"
+            className="w-full border text-black border-gray-300 rounded-md p-2 font-['Poppins'] font-normal"
             name="title"
             placeholder="Event title"
             value={formData.title}
             onChange={handleChange}
           />
           {errors.title && (
-            <p className="text-red-500 text-sm">{errors.title}</p>
+            <p className="text-red-500 text-sm font-['Poppins']">
+              {errors.title}
+            </p>
           )}
         </div>
 
-        <div className="h-16">
-          <label className="block text-sm  -mt-4 font-medium text-gray-700">
+        {/* Description */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 font-['Poppins']">
             Description
           </label>
           <textarea
-            className="w-full border  text-black border-gray-300 rounded-md p-2"
+            className="w-full border text-black border-gray-300 rounded-md p-2 font-['Poppins'] font-normal"
             name="description"
             placeholder="Event description"
             value={formData.description}
             onChange={handleChange}
           />
           {errors.description && (
-            <p className="text-red-500 text-sm">{errors.description}</p>
+            <p className="text-red-500 text-sm font-['Poppins']">
+              {errors.description}
+            </p>
           )}
         </div>
 
-        <div className="flex space-x-4 ">
+        {/* Start Date & Time */}
+        <div className="flex space-x-4">
           <div className="w-1/2">
-            <label className="block text-sm font-medium text-gray-700">
+            <label className="block text-sm font-medium text-gray-700 font-['Poppins']">
               Start Date
             </label>
             <input
               type="date"
-              className="w-full  border text-black border-gray-300 rounded-md p-2"
+              className="w-full border text-black border-gray-300 rounded-md p-2 font-['Poppins'] font-normal"
               name="start_date"
               value={formData.start_date}
               onChange={handleChange}
             />
             {errors.start_date && (
-              <p className="text-red-500 text-sm">{errors.start_date}</p>
+              <p className="text-red-500 text-sm font-['Poppins']">
+                {errors.start_date}
+              </p>
             )}
           </div>
 
           <div className="w-1/2">
-            <label className="block text-sm font-medium text-gray-700">
+            <label className="block text-sm font-medium text-gray-700 font-['Poppins']">
               Start Time
             </label>
             <input
               type="time"
-              className="w-full border text-black border-gray-300 rounded-md p-2"
+              className="w-full border text-black border-gray-300 rounded-md p-2 font-['Poppins'] font-normal"
               name="start_time"
               value={formData.start_time}
               onChange={handleChange}
             />
             {errors.start_time && (
-              <p className="text-red-500 text-sm">{errors.start_time}</p>
+              <p className="text-red-500 text-sm font-['Poppins']">
+                {errors.start_time}
+              </p>
             )}
           </div>
         </div>
 
+        {/* End Date & Time */}
         <div className="flex space-x-4">
           <div className="w-1/2">
-            <label className="block text-sm font-medium text-gray-700">
+            <label className="block text-sm font-medium text-gray-700 font-['Poppins']">
               End Date
             </label>
             <input
               type="date"
-              className="w-full  border text-black border-gray-300 rounded-md p-2"
+              className="w-full border text-black border-gray-300 rounded-md p-2 font-['Poppins'] font-normal"
               name="end_date"
               value={formData.end_date}
               onChange={handleChange}
             />
             {errors.end_date && (
-              <p className="text-red-500 text-sm">{errors.end_date}</p>
+              <p className="text-red-500 text-sm font-['Poppins']">
+                {errors.end_date}
+              </p>
             )}
           </div>
 
           <div className="w-1/2">
-            <label className="block text-sm font-medium text-gray-700">
+            <label className="block text-sm font-medium text-gray-700 font-['Poppins']">
               End Time
             </label>
             <input
               type="time"
-              className="w-full border text-black border-gray-300 rounded-md p-2"
+              className="w-full border text-black border-gray-300 rounded-md p-2 font-['Poppins'] font-normal"
               name="end_time"
               value={formData.end_time}
               onChange={handleChange}
             />
             {errors.end_time && (
-              <p className="text-red-500 text-sm">{errors.end_time}</p>
+              <p className="text-red-500 text-sm font-['Poppins']">
+                {errors.end_time}
+              </p>
             )}
           </div>
         </div>
 
+        {/* Event Type */}
         <div>
-          <label className="block text-sm -mt-4 font-medium text-gray-700">
+          <label className="block text-sm font-medium text-gray-700 font-['Poppins']">
             Event Type
           </label>
           <select
-            className="w-full border text-black border-gray-300 rounded-md p-2"
+            className="w-full border text-black border-gray-300 rounded-md p-2 font-['Poppins'] font-normal"
             name="event_type"
             value={formData.event_type}
             onChange={handleChange}
@@ -264,21 +321,26 @@ const EventCreate = () => {
             <option value="offline">Offline</option>
           </select>
           {errors.event_type && (
-            <p className="text-red-500 text-sm">{errors.event_type}</p>
+            <p className="text-red-500 text-sm font-['Poppins']">
+              {errors.event_type}
+            </p>
           )}
         </div>
 
+        {/* Participation & Notify Container */}
         <div className="flex space-x-4">
           <div className="w-1/2">
-            <label className="block text-sm -mt-4 font-medium text-gray-700">
+            <label className="block text-sm font-medium text-gray-700 font-['Poppins']">
               Participation
             </label>
             <div className="relative">
               <div
-                className="w-full h-10 border text-black border-gray-300 rounded-md p-2 pr-8 cursor-pointer"
+                className="w-full h-10 border text-black border-gray-300 rounded-md p-2 pr-8 cursor-pointer font-['Poppins'] font-normal bg-white flex items-center"
                 onClick={handleDrawerOpen}
               >
-                {"Select employees"}
+                {formData.participation.length > 0
+                  ? `${formData.participation.length} employee(s) selected`
+                  : "Select employees"}
               </div>
               <span
                 className="absolute inset-y-0 right-2 flex items-center text-gray-500 cursor-pointer"
@@ -288,9 +350,12 @@ const EventCreate = () => {
               </span>
             </div>
             {errors.participation && (
-              <p className="text-red-500 text-sm">{errors.participation}</p>
+              <p className="text-red-500 text-sm font-['Poppins']">
+                {errors.participation}
+              </p>
             )}
           </div>
+
           <Drawer
             anchor="right"
             open={drawerOpen}
@@ -306,48 +371,114 @@ const EventCreate = () => {
             <EventEmployee
               onBack={handleDrawerClose}
               onClose={() => setDrawerOpen(false)}
-              onEmployeeSelect={handleEmployeeSelection}
+              selectedEmployees={formData.participation} // Synchronized selection state
+              onEmployeeToggle={handleEmployeeToggle} // Shared checkbox state engine
             />
           </Drawer>
 
+          {/* Dropdown Reminder Selector */}
           <div className="w-1/2">
-            <label className="block text-sm -mt-4 font-medium text-gray-700">
+            <label className="block text-sm font-medium text-gray-700 font-['Poppins']">
               When to Notify
             </label>
-            <input
-              type="time" // Changed to time input
-              className="w-full border text-black border-gray-300 rounded-md p-2"
+            <select
+              className="w-full border text-black border-gray-300 rounded-md p-2 font-['Poppins'] font-normal"
               name="when_to_notify"
               value={formData.when_to_notify}
               onChange={handleChange}
-              required // Ensures a valid time is entered
-            />
+            >
+              <option value="">Select reminder time</option>
+              <option value="5">5 minutes before</option>
+              <option value="10">10 minutes before</option>
+              <option value="15">15 minutes before</option>
+              <option value="20">20 minutes before</option>
+              <option value="30">30 minutes before</option>
+            </select>
+            {errors.when_to_notify && (
+              <p className="text-red-500 text-sm font-['Poppins']">
+                {errors.when_to_notify}
+              </p>
+            )}
           </div>
         </div>
 
-        <div className="flex space-x-4">
-          <div className="w-1/2">
-            <label className="block text-sm font-medium text-gray-700">
-              Place
-            </label>
-            <input
-              className="w-full border text-black border-gray-300 rounded-md p-2"
-              name="place"
-              placeholder="Event location"
-              value={formData.place}
-              onChange={handleChange}
-            />
-            {errors.place && (
-              <p className="text-red-500 text-sm">{errors.place}</p>
-            )}
+        {/* Selected Employees Data Preview layout Chips view */}
+        {formData.participation.length > 0 && (
+          <div className="bg-gray-50 p-4 rounded-md border border-gray-200 mt-2 font-['Poppins']">
+            <p className="text-sm font-medium text-gray-700 mb-2 font-['Poppins']">
+              Selected Employees Data:
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {formData.participation.map((uuid) => (
+                <div
+                  key={uuid}
+                  className="flex items-center bg-gray-200 text-gray-800 px-3 py-1 rounded-full text-xs font-['Poppins'] font-normal"
+                >
+                  <span className="truncate max-w-[180px] font-['Poppins']">
+                    {uuid}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveEmployee(uuid)}
+                    className="ml-2 text-gray-500 hover:text-red-600 font-bold focus:outline-none"
+                  >
+                    &times;
+                  </button>
+                </div>
+              ))}
+            </div>
           </div>
+        )}
+
+        {/* Conditional Fields: Place/Link and Timezone Layout */}
+        <div className="flex space-x-4">
+          {formData.event_type === "offline" && (
+            <div className="w-1/2">
+              <label className="block text-sm font-medium text-gray-700 font-['Poppins']">
+                Place
+              </label>
+              <input
+                className="w-full border text-black border-gray-300 rounded-md p-2 font-['Poppins'] font-normal"
+                name="place"
+                placeholder="Event location"
+                value={formData.place}
+                onChange={handleChange}
+              />
+              {errors.place && (
+                <p className="text-red-500 text-sm font-['Poppins']">
+                  {errors.place}
+                </p>
+              )}
+            </div>
+          )}
+
+          {formData.event_type === "online" && (
+            <div className="w-1/2">
+              <label className="block text-sm font-medium text-gray-700 font-['Poppins']">
+                Meeting Link
+              </label>
+              <input
+                className="w-full border text-black border-gray-300 rounded-md p-2 font-['Poppins'] font-normal"
+                type="url"
+                name="link"
+                placeholder="https://example.com"
+                value={formData.link}
+                onChange={handleChange}
+              />
+              {errors.link && (
+                <p className="text-red-500 text-sm font-['Poppins']">
+                  {errors.link}
+                </p>
+              )}
+            </div>
+          )}
 
           <div className="w-1/2">
-            <label className="block text-sm font-medium text-gray-700">
+            <label className="block text-sm font-medium text-gray-700 font-['Poppins']">
               Timezone
             </label>
             <select
-              className="w-full border text-black border-gray-300 rounded-md p-2"
+              className="w-full border text-black border-gray-300 rounded-md p-2 font-['Poppins'] font-normal"
               name="timezone"
               value={formData.timezone}
               onChange={handleChange}
@@ -360,33 +491,16 @@ const EventCreate = () => {
               ))}
             </select>
             {errors.timezone && (
-              <p className="text-red-500 text-sm">{errors.timezone}</p>
+              <p className="text-red-500 text-sm font-['Poppins']">
+                {errors.timezone}
+              </p>
             )}
           </div>
         </div>
 
-        {formData.event_type === "online" && (
-          <div>
-            <label className="block text-sm -mt-4 font-medium text-gray-700">
-              Link (Optional)
-            </label>
-            <input
-              className="w-full border text-black border-gray-300 rounded-md p-2"
-              type="url"
-              name="link"
-              placeholder="https://example.com"
-              value={formData.link}
-              onChange={handleChange}
-            />
-            {errors.link && (
-              <p className="text-red-500 text-sm">{errors.link}</p>
-            )}
-          </div>
-        )}
-
         <button
           type="submit"
-          className="bg-black text-white font-semibold py-2 px-4 rounded"
+          className="bg-black text-white py-2 px-4 rounded font-['Poppins'] font-normal"
         >
           Create Event
         </button>

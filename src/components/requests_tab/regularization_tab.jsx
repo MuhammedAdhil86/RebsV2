@@ -47,7 +47,7 @@ const RegularizeCard = ({ req, onCardClick }) => (
     <div className="bg-[#f9fafb] p-3 rounded-lg mt-3">
       <p className="text-[11px] text-gray-700">Remarks :</p>
       <p className="text-[11px] text-gray-600 mt-1 leading-relaxed line-clamp-2">
-        {req.remarks}
+        {req.remarks || "No remarks provided"}
       </p>
 
       {(req.status === "Approved" || req.status === "Rejected") &&
@@ -61,8 +61,14 @@ const RegularizeCard = ({ req, onCardClick }) => (
         )}
 
       <div className="flex justify-between mt-4 text-[11px] text-gray-500">
-        <span className="bg-white px-3 py-1 rounded">{req.displayInDate}</span>
-        <span className="bg-white px-3 py-1 rounded">{req.displayOutDate}</span>
+        <span className="bg-white px-3 py-1 rounded">
+          In: {req.displayInDate}{" "}
+          {req.checkIn !== "--" ? `(${req.checkIn})` : ""}
+        </span>
+        <span className="bg-white px-3 py-1 rounded">
+          Out: {req.displayOutDate}{" "}
+          {req.checkOut !== "--" ? `(${req.checkOut})` : ""}
+        </span>
       </div>
     </div>
 
@@ -93,40 +99,48 @@ export default function RegularizationTab() {
     if (!silent) setLoading(true);
     try {
       const res = await fetchRegularizationRequests();
-      const transformed = res.data.map((item) => ({
-        ...item,
-        id: item.id,
-        userId: item.user_id,
-        name: item.user_name || "N/A",
-        designation_name: item.designation_name || "N/A",
-        designation: item.designation_name || "N/A", // used by your modal
-        status: item.status
-          ? item.status.charAt(0).toUpperCase() +
-            item.status.slice(1).toLowerCase()
-          : "Pending",
-        remarks: item.remarks || "",
-        date: item.in_date ? new Date(item.in_date).toLocaleDateString() : "--",
-        checkIn: item.in_date
-          ? new Date(item.in_date).toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            })
-          : "--",
-        checkOut: item.out_date
-          ? new Date(item.out_date).toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            })
-          : "--",
-        displayInDate: item.in_date
-          ? new Date(item.in_date).toLocaleDateString()
-          : "--",
-        displayOutDate: item.out_date
-          ? new Date(item.out_date).toLocaleDateString()
-          : "--",
-        workingHours: item.total_work_hours || "--",
-        remaining: item.remaining || 0,
-      }));
+      const transformed = res.data.map((item) => {
+        // Extract raw dates based on backend struct structure
+        const rawInDate = item.in_date?.Valid ? item.in_date.Time : null;
+        const rawOutDate = item.out_date?.Valid ? item.out_date.Time : null;
+
+        return {
+          ...item,
+          id: item.id,
+          userId: item.user_id,
+          name: item.user_name || "N/A",
+          designation_name: item.designation_name || "N/A",
+          designation: item.designation_name || "N/A",
+          status: item.status
+            ? item.status.charAt(0).toUpperCase() +
+              item.status.slice(1).toLowerCase()
+            : "Pending",
+          remarks: item.remarks || "",
+
+          // Fixed date assignments safely verifying availability flags
+          date: rawInDate ? new Date(rawInDate).toLocaleDateString() : "--",
+          checkIn: rawInDate
+            ? new Date(rawInDate).toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              })
+            : "--",
+          checkOut: rawOutDate
+            ? new Date(rawOutDate).toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              })
+            : "--",
+          displayInDate: rawInDate
+            ? new Date(rawInDate).toLocaleDateString()
+            : "--",
+          displayOutDate: rawOutDate
+            ? new Date(rawOutDate).toLocaleDateString()
+            : "--",
+          workingHours: item.total_work_hours || "--",
+          remaining: item.remaining || 0,
+        };
+      });
       setData(transformed);
     } catch (err) {
       toast.error("Failed to load requests");
