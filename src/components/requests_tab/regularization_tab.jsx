@@ -1,89 +1,21 @@
-import React, { useEffect, useState, useMemo } from "react";
-import { MoreHorizontal, Loader2 } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import toast from "react-hot-toast";
+
+// Components
+import UniversalTable from "../../ui/universal_table";
+import RegularizationApprovalModal from "../../ui/regularizationapproval";
 
 // Services
 import { fetchRegularizationRequests } from "../../service/employeeService";
-import {
-  approveRegularization,
-  getShiftPolicyById,
-} from "../../service/companyService";
-
-// The Modal you provided earlier
-import RegularizationApprovalModal from "../../ui/regularizationapproval";
+import { fetchRemainingRegularization } from "../../service/companyService";
+import { getShiftPolicyById } from "../../service/companyService";
 
 const statusColors = {
-  Pending: "text-yellow-500",
-  Approved: "text-green-600",
-  Rejected: "text-red-600",
+  Pending: "bg-yellow-100 text-yellow-700",
+  Approved: "bg-green-100 text-green-600",
+  Rejected: "bg-red-100 text-red-600",
 };
-
-/* ================= CARD COMPONENT ================= */
-const RegularizeCard = ({ req, onCardClick }) => (
-  <div
-    onClick={() => onCardClick(req)}
-    className="bg-white p-5 rounded-xl shadow-sm border w-full cursor-pointer hover:border-gray-300 transition-all"
-  >
-    <div className="flex justify-between items-start">
-      <div>
-        <p className="text-[12px] font-medium">{req.name}</p>
-        <p className="text-[11px] text-gray-500">{req.designation_name}</p>
-        <span
-          className={`text-[11px] flex items-center gap-1 ${statusColors[req.status]}`}
-        >
-          <span
-            className={`w-2 h-2 rounded-full ${
-              req.status === "Pending"
-                ? "bg-yellow-600"
-                : statusColors[req.status].replace("text", "bg")
-            }`}
-          ></span>
-          {req.status}
-        </span>
-      </div>
-      <MoreHorizontal className="w-4 h-4 text-gray-400 cursor-pointer" />
-    </div>
-
-    <div className="bg-[#f9fafb] p-3 rounded-lg mt-3">
-      <p className="text-[11px] text-gray-700">Remarks :</p>
-      <p className="text-[11px] text-gray-600 mt-1 leading-relaxed line-clamp-2">
-        {req.remarks || "No remarks provided"}
-      </p>
-
-      {(req.status === "Approved" || req.status === "Rejected") &&
-        req.approved_by && (
-          <>
-            <p className="text-[11px] text-gray-700 mt-3">Processed By :</p>
-            <p className="text-[11px] text-gray-600 mt-1 leading-relaxed">
-              {req.approved_by}
-            </p>
-          </>
-        )}
-
-      <div className="flex justify-between mt-4 text-[11px] text-gray-500">
-        <span className="bg-white px-3 py-1 rounded">
-          In: {req.displayInDate}{" "}
-          {req.checkIn !== "--" ? `(${req.checkIn})` : ""}
-        </span>
-        <span className="bg-white px-3 py-1 rounded">
-          Out: {req.displayOutDate}{" "}
-          {req.checkOut !== "--" ? `(${req.checkOut})` : ""}
-        </span>
-      </div>
-    </div>
-
-    {req.status === "Pending" && (
-      <div className="flex gap-2 mt-5" onClick={(e) => e.stopPropagation()}>
-        <button className="flex-1 px-3 py-1.5 text-[11px] rounded-lg border border-red-400 text-red-500 hover:bg-red-50">
-          Reject
-        </button>
-        <button className="flex-1 px-3 py-1.5 text-[11px] rounded-lg bg-black text-white hover:bg-gray-800">
-          Approve
-        </button>
-      </div>
-    )}
-  </div>
-);
 
 /* ================= MAIN COMPONENT ================= */
 export default function RegularizationTab() {
@@ -99,8 +31,7 @@ export default function RegularizationTab() {
     if (!silent) setLoading(true);
     try {
       const res = await fetchRegularizationRequests();
-      const transformed = res.data.map((item) => {
-        // Extract raw dates based on backend struct structure
+      const transformed = (res.data || []).map((item) => {
         const rawInDate = item.in_date?.Valid ? item.in_date.Time : null;
         const rawOutDate = item.out_date?.Valid ? item.out_date.Time : null;
 
@@ -117,7 +48,6 @@ export default function RegularizationTab() {
             : "Pending",
           remarks: item.remarks || "",
 
-          // Fixed date assignments safely verifying availability flags
           date: rawInDate ? new Date(rawInDate).toLocaleDateString() : "--",
           checkIn: rawInDate
             ? new Date(rawInDate).toLocaleTimeString([], {
@@ -138,7 +68,7 @@ export default function RegularizationTab() {
             ? new Date(rawOutDate).toLocaleDateString()
             : "--",
           workingHours: item.total_work_hours || "--",
-          remaining: item.remaining || 0,
+          remaining: 0,
         };
       });
       setData(transformed);
@@ -153,15 +83,22 @@ export default function RegularizationTab() {
     fetchData();
   }, []);
 
-  // Open modal and fetch shift logic
   const handleOpenModal = async (req) => {
-    setSelectedRequest(req);
     setIsModalOpen(true);
     try {
-      const shift = await getShiftPolicyById(req.userId);
+      const [shift, remainingRes] = await Promise.all([
+        getShiftPolicyById(req.userId),
+        fetchRemainingRegularization(req.userId),
+      ]);
+
       setShiftData(shift);
+      setSelectedRequest({
+        ...req,
+        remainingData: remainingRes,
+      });
     } catch (err) {
       setShiftData({ shift_name: "Not Allocated" });
+      setSelectedRequest(req);
     }
   };
 
@@ -175,14 +112,43 @@ export default function RegularizationTab() {
     );
   };
 
-  const groups = useMemo(
-    () => ({
-      pending: data.filter((r) => r.status === "Pending"),
-      approved: data.filter((r) => r.status === "Approved"),
-      rejected: data.filter((r) => r.status === "Rejected"),
-    }),
-    [data],
-  );
+  /* ================= UNIVERSAL TABLE COLUMNS CONFIGURATION ================= */
+  const columns = [
+    {
+      key: "name",
+      label: "Name",
+      width: 180,
+      render: (val) => <span className="font-medium text-gray-700">{val}</span>,
+    },
+    {
+      key: "designation_name",
+      label: "Designation",
+      width: 160,
+      render: (val) => (
+        <span className="truncate block max-w-[140px] text-gray-500 mx-auto">
+          {val}
+        </span>
+      ),
+    },
+    { key: "date", label: "Date", width: 120 },
+    { key: "checkIn", label: "Check In", width: 100 },
+    { key: "checkOut", label: "Check Out", width: 100 },
+    { key: "workingHours", label: "Working Hours", width: 130 },
+    {
+      key: "status",
+      label: "Status",
+      width: 120,
+      render: (val) => (
+        <span
+          className={`px-3 py-1 rounded-full text-[10px] font-semibold uppercase tracking-wider mx-auto inline-block ${
+            statusColors[val] || "bg-yellow-100 text-yellow-700"
+          }`}
+        >
+          {val}
+        </span>
+      ),
+    },
+  ];
 
   if (loading)
     return (
@@ -190,70 +156,38 @@ export default function RegularizationTab() {
     );
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6 p-4">
-      {/* PENDING */}
-      <div>
-        <h3 className="text-[12px] mb-3">
-          Pending Requests{" "}
-          <span className="text-gray-400">({groups.pending.length})</span>
+    <div className="bg-[#f9fafb] rounded-xl p-4 border border-gray-100 shadow-sm w-full">
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="text-sm font-semibold text-gray-800">
+          Regularization Requests
         </h3>
-        <div className="flex flex-col gap-4">
-          {groups.pending.map((req) => (
-            <RegularizeCard
-              key={req.id}
-              req={req}
-              onCardClick={handleOpenModal}
-            />
-          ))}
-        </div>
       </div>
 
-      {/* APPROVED */}
-      <div>
-        <h3 className="text-[12px] mb-3">
-          Approved Requests{" "}
-          <span className="text-gray-400">({groups.approved.length})</span>
-        </h3>
-        <div className="flex flex-col gap-4">
-          {groups.approved.map((req) => (
-            <RegularizeCard
-              key={req.id}
-              req={req}
-              onCardClick={handleOpenModal}
-            />
-          ))}
-        </div>
-      </div>
-
-      {/* REJECTED */}
-      <div>
-        <h3 className="text-[12px] mb-3">
-          Rejected Requests{" "}
-          <span className="text-gray-400">({groups.rejected.length})</span>
-        </h3>
-        <div className="flex flex-col gap-4">
-          {groups.rejected.map((req) => (
-            <RegularizeCard
-              key={req.id}
-              req={req}
-              onCardClick={handleOpenModal}
-            />
-          ))}
-        </div>
-      </div>
+      {/* Render the core shared system component */}
+      <UniversalTable
+        columns={columns}
+        data={data}
+        rowsPerPage={10}
+        rowClickHandler={handleOpenModal}
+      />
 
       {/* THE MODAL */}
-      <RegularizationApprovalModal
-        open={isModalOpen}
-        data={selectedRequest}
-        shiftData={shiftData}
-        onClose={() => {
-          setIsModalOpen(false);
-          setSelectedRequest(null);
-        }}
-        onSuccess={() => fetchData(true)}
-        onOptimisticUpdate={handleOptimisticUpdate}
-      />
+      {isModalOpen &&
+        createPortal(
+          <RegularizationApprovalModal
+            open={isModalOpen}
+            data={selectedRequest}
+            shiftData={shiftData}
+            onClose={() => {
+              setIsModalOpen(false);
+              setSelectedRequest(null);
+              setShiftData(null);
+            }}
+            onSuccess={() => fetchData(true)}
+            onOptimisticUpdate={handleOptimisticUpdate}
+          />,
+          document.body,
+        )}
     </div>
   );
 }

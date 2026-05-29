@@ -586,11 +586,9 @@ export const getWeeklyOffByBranch = async (year, branchId) => {
 
 export const fetchRemainingRegularization = async (uuid) => {
   try {
-    // Replaces dynamic parameters or appends directly if preferred
-
-    const response = await axiosInstance.get(RemainingRegularization);
+    // 💡 Simply execute the function directly instead of using .replace()
+    const response = await axiosInstance.get(RemainingRegularization(uuid));
     
-    // Clean nested fallback extraction matching your template format
     const data = response.data?.data || response.data || {};
     return data;
   } catch (error) {

@@ -20,6 +20,16 @@ const RegularizationApprovalModal = ({
 
   if (!open || !data) return null;
 
+  // Extract the target policy object safely from the dynamic data response
+  // It handles both raw array payloads or the data nested via custom service extractors
+  const policy =
+    data.remainingData?.policies?.[0] || data.remaining?.policies?.[0] || null;
+
+  const remainingCount = policy ? policy.remaining : data.remaining || 0;
+  const usedCount = policy ? policy.used : 0;
+  const limitCount = policy ? policy.regularisation_limit : 0;
+  const policyType = policy ? policy.regularisation_type : "";
+
   const handleAction = async (status) => {
     if (loading) return;
 
@@ -38,7 +48,7 @@ const RegularizationApprovalModal = ({
       toast.success(
         status === "approved"
           ? "Regularization approved successfully"
-          : "Regularization rejected successfully"
+          : "Regularization rejected successfully",
       );
 
       onClose();
@@ -103,7 +113,10 @@ const RegularizationApprovalModal = ({
                   value={data.checkIn}
                   className="w-full px-4 py-2.5 bg-gray-50 border rounded-lg text-sm"
                 />
-                <Clock size={16} className="absolute right-4 top-3 text-gray-400" />
+                <Clock
+                  size={16}
+                  className="absolute right-4 top-3 text-gray-400"
+                />
               </div>
               <div className="h-[14px]" />
             </div>
@@ -116,7 +129,10 @@ const RegularizationApprovalModal = ({
                   value={data.checkOut}
                   className="w-full px-4 py-2.5 bg-gray-50 border rounded-lg text-sm"
                 />
-                <Clock size={16} className="absolute right-4 top-3 text-gray-400" />
+                <Clock
+                  size={16}
+                  className="absolute right-4 top-3 text-gray-400"
+                />
               </div>
               <div className="h-[14px]" />
             </div>
@@ -125,20 +141,22 @@ const RegularizationApprovalModal = ({
               <label className="text-[11px] text-gray-400">Shift</label>
               <div className="relative">
                 <select
-                  readOnly
-                  className="w-full px-4 py-2.5 bg-gray-50 border rounded-lg appearance-none"
+                  disabled
+                  value={shiftData?.shift_name || "Not Allocated"}
+                  className="w-full px-4 py-2.5 bg-gray-50 border rounded-lg appearance-none text-sm cursor-not-allowed"
                 >
                   <option>{shiftData?.shift_name || "Not Allocated"}</option>
                 </select>
-                <ChevronDown size={14} className="absolute right-4 top-3.5 text-gray-400" />
+                <ChevronDown
+                  size={14}
+                  className="absolute right-4 top-3.5 text-gray-400"
+                />
               </div>
               <div className="h-[14px]" />
             </div>
 
             <div>
-              <label className="text-[11px] text-gray-400">
-                Hours Worked
-              </label>
+              <label className="text-[11px] text-gray-400">Hours Worked</label>
               <input
                 readOnly
                 value={data.workingHours}
@@ -159,17 +177,33 @@ const RegularizationApprovalModal = ({
           </div>
 
           {/* FOOTER */}
-          <div className="flex justify-between items-center mt-5">
-            <p className="text-[12px]">
-              Regularization Remaining :
-              <span className="ml-1">{data.remaining || 0}</span>
-            </p>
+          <div className="flex justify-between items-center mt-5 border-t pt-4">
+            <div className="flex flex-col gap-0.5 text-[12px] text-gray-600">
+              <div>
+                <span>Quota Usage: </span>
+                <span className="font-semibold text-gray-900">{usedCount}</span>
+                <span className="text-gray-400"> / {limitCount}</span>
+                {policyType && (
+                  <span className="text-[11px] text-gray-500 ml-1 bg-gray-100 px-1.5 py-0.5 rounded capitalize">
+                    {policyType.toLowerCase()}
+                  </span>
+                )}
+              </div>
+              <div>
+                <span>Regularization Remaining: </span>
+                <span
+                  className={`font-bold ${remainingCount === 0 ? "text-red-500" : "text-green-600"}`}
+                >
+                  {remainingCount}
+                </span>
+              </div>
+            </div>
 
             <div className="flex gap-4 text-[12px]">
               <button
                 disabled={loading}
                 onClick={() => handleAction("rejected")}
-                className="px-8 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg disabled:opacity-60"
+                className="px-8 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg disabled:opacity-60 transition-colors"
               >
                 Reject
               </button>
@@ -177,7 +211,7 @@ const RegularizationApprovalModal = ({
               <button
                 disabled={loading}
                 onClick={() => handleAction("approved")}
-                className="px-8 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg disabled:opacity-60"
+                className="px-8 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg disabled:opacity-60 transition-colors"
               >
                 Approve
               </button>
