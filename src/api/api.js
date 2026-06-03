@@ -320,6 +320,29 @@ export const postBulkAllocatePayroll= "/api/payroll/template-allocations";
 export const getPayrollDataAnalyticsList = (month, year, status) => 
   `/api/payroll/analytics/list/all-runs?month=${month}&year=${year}&status=${status}`;
 export const updatePayrollAnalytics = "/api/payroll/analytics/update";
+
+
+export const getSalaryTemplates = "/api/payroll/templates";
+export const getEpfStatus = "/api/payroll/statutory/epf";
+export const postEnableEpf = "/api/payroll/statutory/epf/enable";
+export const postDisableEpf = "/api/payroll/statutory/epf/disable";
+
+export const getEsiStatus = "/api/payroll/statutory/esi";
+export const postEnableEsi = "/api/payroll/statutory/esi/enable";
+export const postDisableEsi = "/api/payroll/statutory/esi/disable";
+
+export const getPtStatus = "/api/payroll/statutory/professional-tax";
+
+export const getLwfStatus = "/api/payroll/statutory/lwf";
+export const postEnableLwf = "/api/payroll/statutory/lwf/enable";
+export const postDisableLwf = "/api/payroll/statutory/lwf/disable";
+export const putUpsertLwf = "/api/payroll/statutory/lwf/upsert";
+export const getptslabs = "/api/payroll/statutory/professional-tax/slabs/active";
+export const postCreateSalaryComponent = "/api/payroll/components";
+
+export const getLwfStateRules = "/api/payroll/statutory/lwf/rules/states";
+export const getLwfRulesByState = "/api/payroll/statutory/lwf/rules";
+export const putUpsertPT = "/api/payroll/statutory/professional-tax/upsert";
 // Attendance Policy
 export const postAttendancePolicyAdd = "/attendance-policy/add";
 

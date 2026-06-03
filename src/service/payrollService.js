@@ -1,33 +1,47 @@
 import axiosInstance from "./axiosinstance";
 
-import { getpolicyLookup,
+import {
+  getpolicyLookup,
   updatePolicyStatus,
-  getDifaultleavePolicy,
+  getDifaultleavePolicy, // Retained matching naming convention
   postCloneLeavePolicy,
   updateSalaryPayrollComponent,
   updatePayrollSalaryTemplate,
-getPayrollcomponents, 
-deletePayrollComponent,
-deleteTemplateAllocation,
-getPayrollDataAnalyticsList,
- getReimbursementList,
- updateReimbursementStatus,
- postLeaveBulkAllocation,
-deletePayrollTemplate,
-postBulkAllocatePayroll,
-deleteLeavePolicy,
-updatePayrollAnalytics,} from "../api/api";
+  getPayrollcomponents,
+  deletePayrollComponent,
+  deleteTemplateAllocation,
+  getPayrollDataAnalyticsList,
+  getptslabs,
+  putUpsertPT,
+  getReimbursementList,
+  updateReimbursementStatus,
+  postLeaveBulkAllocation,
+  deletePayrollTemplate,
+  postBulkAllocatePayroll,
+  deleteLeavePolicy as deleteLeavePolicyUrl, // Resolved naming clash
+  updatePayrollAnalytics,
+  // Safe imports of newly centralized keys
+  getSalaryTemplates,
+  getEpfStatus,
+  postEnableEpf,
+  postDisableEpf,
+  getEsiStatus,
+  postEnableEsi,
+  postDisableEsi,
+  getPtStatus,
+  getLwfStatus,
+  getLwfRulesByState,
+  postEnableLwf,
+  postDisableLwf,
+  putUpsertLwf,
+  getLwfStateRules,
+  postCreateSalaryComponent
+} from "../api/api";
 
 const payrollService = {
   // ---------------- POLICY LOOKUPS ----------------
-  /**
-   * Fetches dropdown data for Leave Policy Applicability
-   * @param {string} filterType - e.g., 'department_id', 'branch_id', 'designation_id', or 'gender'
-   * @param {string} value - defaults to 'lookup'
-   */
   getPolicyLookupData: async (filterType, value = "lookup") => {
     try {
-      // Constructs: /staff/get-by/single-filter?department_id=lookup
       const res = await axiosInstance.get(`${getpolicyLookup}?${filterType}=${value}`);
       return res.data || [];
     } catch (err) {
@@ -39,7 +53,7 @@ const payrollService = {
   // ---------------- SALARY TEMPLATES ----------------
   getSalaryTemplates: async () => {
     try {
-      const res = await axiosInstance.get("api/payroll/templates");
+      const res = await axiosInstance.get(getSalaryTemplates);
       console.log("Salary Templates API Response:", res);
       console.log("Salary Templates Items:", res.data?.data?.items);
       return res.data?.data?.items || [];
@@ -48,10 +62,10 @@ const payrollService = {
       throw err;
     }
   },
+
   getPayrollComponents: async () => {
     try {
       const res = await axiosInstance.get(getPayrollcomponents);
-      // Adjusting based on common API patterns: returning res.data.data or res.data
       return res.data?.data || res.data || [];
     } catch (err) {
       console.error("Error in getPayrollComponents:", err.response || err);
@@ -62,7 +76,7 @@ const payrollService = {
   // ---------------- EPF ----------------
   getEPF: async () => {
     try {
-      const res = await axiosInstance.get("api/payroll/statutory/epf");
+      const res = await axiosInstance.get(getEpfStatus);
       return res.data?.data || {};
     } catch (err) {
       console.error("Error in getEPF:", err.response || err);
@@ -72,7 +86,7 @@ const payrollService = {
 
   enableEPF: async () => {
     try {
-      const res = await axiosInstance.post("api/payroll/statutory/epf/enable", { enabled: true });
+      const res = await axiosInstance.post(postEnableEpf, { enabled: true });
       return res.data;
     } catch (err) {
       console.error("Error in enableEPF:", err.response || err);
@@ -82,7 +96,7 @@ const payrollService = {
 
   disableEPF: async () => {
     try {
-      const res = await axiosInstance.post("api/payroll/statutory/epf/disable");
+      const res = await axiosInstance.post(postDisableEpf);
       return res.data;
     } catch (err) {
       console.error("Error in disableEPF:", err.response || err);
@@ -93,7 +107,7 @@ const payrollService = {
   // ---------------- ESI ----------------
   getESI: async () => {
     try {
-      const res = await axiosInstance.get("api/payroll/statutory/esi");
+      const res = await axiosInstance.get(getEsiStatus);
       console.log("ESI FULL RESPONSE 👉", res.data);
       console.log("ESI DATA OBJECT 👉", res.data?.data);
       console.log("ESI ROW EXISTS 👉", res.data?.data?.row_exists);
@@ -107,7 +121,7 @@ const payrollService = {
 
   enableESI: async () => {
     try {
-      const res = await axiosInstance.post("api/payroll/statutory/esi/enable", { enabled: true });
+      const res = await axiosInstance.post(postEnableEsi, { enabled: true });
       return res.data;
     } catch (err) {
       console.error("Error in enableESI:", err.response || err);
@@ -117,7 +131,7 @@ const payrollService = {
 
   disableESI: async () => {
     try {
-      const res = await axiosInstance.post("api/payroll/statutory/esi/disable");
+      const res = await axiosInstance.post(postDisableEsi);
       return res.data;
     } catch (err) {
       console.error("Error in disableESI:", err.response || err);
@@ -128,7 +142,7 @@ const payrollService = {
   // ---------------- PROFESSIONAL TAX ----------------
   getPT: async () => {
     try {
-      const res = await axiosInstance.get("api/payroll/statutory/professional-tax");
+      const res = await axiosInstance.get(getPtStatus);
       return res.data?.data || {};
     } catch (err) {
       console.error("Error in getPT:", err.response || err);
@@ -139,7 +153,7 @@ const payrollService = {
   // ---------------- LABOUR WELFARE FUND ----------------
   getLWF: async () => {
     try {
-      const res = await axiosInstance.get("api/payroll/statutory/lwf");
+      const res = await axiosInstance.get(getLwfStatus);
       return res.data?.data || {};
     } catch (err) {
       console.error("Error in getLWF:", err.response || err);
@@ -147,11 +161,35 @@ const payrollService = {
     }
   },
 
+  /**
+  
+     * @param {string} stateName - Name of the state (e.g., 'west bengal')
+  
+     */
+  getLWFRulesByState: async (stateName) => {
+    if (!stateName) throw new Error("State name is required to fetch LWF rules.");
+
+    try {
+      const sanitizedState = encodeURIComponent(stateName.trim().toLowerCase());
+      const res = await axiosInstance.get(`${getLwfRulesByState}?state=${sanitizedState}`);
+
+      // ✅ FIX: Check if data is an array, and extract the first object element directly
+      if (res.data?.data && Array.isArray(res.data.data) && res.data.data.length > 0) {
+        return res.data.data[0];
+      }
+
+      // Fallback in case the backend payload structure changes to an object in the future
+      return res.data?.data || res.data || null;
+    } catch (err) {
+      console.error(`Error in getLWFRulesByState for ${stateName}:`, err.response || err);
+      throw err;
+    }
+  },
   enableLWF: async ({ state, deduction_cycle }) => {
     if (!state) throw new Error("State is required to enable LWF");
     if (!deduction_cycle) throw new Error("Deduction cycle is required");
 
-    const res = await axiosInstance.post("api/payroll/statutory/lwf/enable", {
+    const res = await axiosInstance.post(postEnableLwf, {
       enabled: true,
       state,
       deduction_cycle,
@@ -161,7 +199,7 @@ const payrollService = {
 
   disableLWF: async () => {
     try {
-      const res = await axiosInstance.post("api/payroll/statutory/lwf/disable");
+      const res = await axiosInstance.post(postDisableLwf);
       return res.data;
     } catch (err) {
       console.error("Error in disableLWF:", err.response || err);
@@ -175,7 +213,7 @@ const payrollService = {
       if (!state) throw new Error("State is required");
       if (!deduction_cycle) throw new Error("Deduction cycle is required");
 
-      const res = await axiosInstance.put("api/payroll/statutory/lwf/upsert", {
+      const res = await axiosInstance.put(putUpsertLwf, {
         state,
         deduction_cycle,
         description,
@@ -187,15 +225,49 @@ const payrollService = {
     }
   },
 
+  getLWFStateRules: async () => {
+    try {
+      const res = await axiosInstance.get(getLwfStateRules);
+      // Returns res.data.data or falls back to res.data, otherwise returns an empty array
+      return res.data?.data || res.data || [];
+    } catch (err) {
+      console.error("Error in getLWFStateRules:", err.response || err);
+      throw err;
+    }
+  },
+  getActivePTSlabs: async (stateName) => {
+    if (!stateName) throw new Error("State name parameter is required for lookup.");
+
+    try {
+      // Normalizes naming spaces and converts characters to lowercase automatically
+      const sanitizedState = encodeURIComponent(stateName.trim().toLowerCase());
+      const res = await axiosInstance.get(`${getptslabs}?state=${sanitizedState}`);
+
+      // Flexible unpacking structure to safely forward either nested array payloads or fallbacks
+      return res.data?.data || res.data || [];
+    } catch (err) {
+      console.error(`Error in getActivePTSlabs request pipeline for ${stateName}:`, err.response || err);
+      throw err;
+    }
+  },
   // ---------------- SALARY COMPONENTS ----------------
   createSalaryComponent: async (payload) => {
     try {
-      const res = await axiosInstance.post("api/payroll/components", payload);
+      const res = await axiosInstance.post(postCreateSalaryComponent, payload);
       console.log("Create Salary Component Response:", res);
       console.log("Create Salary Component Data:", res.data);
       return res.data;
     } catch (err) {
       console.error("Error in createSalaryComponent:", err.response || err);
+      throw err;
+    }
+  },
+  upsertPT: async (payload) => {
+    try {
+      const res = await axiosInstance.put(putUpsertPT, payload);
+      return res.data;
+    } catch (err) {
+      console.error("Error inside upsertPT execution row:", err);
       throw err;
     }
   },
@@ -215,10 +287,7 @@ const payrollService = {
 
   updatePolicyStatus: async (id) => {
     try {
-      const res = await axiosInstance.patch(
-        `${updatePolicyStatus}/${id}`
-      );
-
+      const res = await axiosInstance.patch(`${updatePolicyStatus}/${id}`);
       console.log("Status Update Response:", res.data);
       return res.data;
     } catch (err) {
@@ -231,32 +300,30 @@ const payrollService = {
     try {
       const res = await axiosInstance.get(getDifaultleavePolicy);
       console.log("Default Leave Policy Response:", res.data);
-      // Adjust the return path based on your API structure (e.g., res.data?.data)
       return res.data?.data || res.data || [];
     } catch (err) {
       console.error("Error in getDefaultLeavePolicies:", err.response || err);
       throw err;
     }
   },
-cloneLeavePolicy: async (ids) => {
+
+  cloneLeavePolicy: async (ids) => {
     try {
-      // The API expects: { "leave_policy_ids": [1, 2, 5] }
-      const res = await axiosInstance.post(postCloneLeavePolicy, { 
-        leave_policy_ids: ids 
+      const res = await axiosInstance.post(postCloneLeavePolicy, {
+        leave_policy_ids: ids
       });
-      
       return res.data;
     } catch (err) {
       console.error("Error in cloneLeavePolicy:", err.response || err);
       throw err;
     }
   },
-updateSalaryComponent: async (id, payload) => {
+
+  updateSalaryComponent: async (id, payload) => {
     try {
-      // 2. Use the exact API constant here
       const url = updateSalaryPayrollComponent(id);
       const response = await axiosInstance.put(url, payload);
-      
+
       return {
         ok: response.status === 200 || response.status === 204,
         message: response.data?.message || "Updated Successfully",
@@ -267,15 +334,12 @@ updateSalaryComponent: async (id, payload) => {
       throw error;
     }
   },
- 
 
-  
-updateSalaryTemplate: async (id, payload) => {
+  updateSalaryTemplate: async (id, payload) => {
     if (!id) throw new Error("Template ID is missing.");
 
     try {
-      const url = updatePayrollSalaryTemplate(id); // Generates /api/payroll/templates/58
-      
+      const url = updatePayrollSalaryTemplate(id);
       const { data, status } = await axiosInstance.put(url, payload);
 
       return {
@@ -284,13 +348,12 @@ updateSalaryTemplate: async (id, payload) => {
         data: data?.data || data,
       };
     } catch (err) {
-      // Extract the actual error message from the backend response
       const errorMessage = err.response?.data?.message || "Failed to update salary template.";
       console.error(`[PayrollService] Update Error for ID ${id}:`, err.response || err);
-      
       throw new Error(errorMessage);
     }
   },
+
   deleteComponent: async (id) => {
     try {
       const response = await axiosInstance.delete(`${deletePayrollComponent}/${id}`);
@@ -300,6 +363,7 @@ updateSalaryTemplate: async (id, payload) => {
       throw error;
     }
   },
+
   deleteTemplate: async (id) => {
     try {
       const response = await axiosInstance.delete(`${deletePayrollTemplate}/${id}`);
@@ -309,6 +373,7 @@ updateSalaryTemplate: async (id, payload) => {
       throw error;
     }
   },
+
   deleteAllocation: async (id) => {
     try {
       const response = await axiosInstance.delete(`${deleteTemplateAllocation}/${id}`);
@@ -318,16 +383,14 @@ updateSalaryTemplate: async (id, payload) => {
       throw error;
     }
   },
+
   deleteLeavePolicy: async (id) => {
     try {
-      // If deleteLeavePolicy is a function: deleteLeavePolicy(id)
-      // If it's a string: `${deleteLeavePolicy}/${id}`
-      const url = typeof deleteLeavePolicy === 'function' 
-                  ? deleteLeavePolicy(id) 
-                  : `${deleteLeavePolicy}/${id}`;
+      const url = typeof deleteLeavePolicyUrl === 'function'
+        ? deleteLeavePolicyUrl(id)
+        : `${deleteLeavePolicyUrl}/${id}`;
 
       const res = await axiosInstance.delete(url);
-      
       console.log(`Delete Leave Policy ${id} Response:`, res.data);
       return res.data;
     } catch (err) {
@@ -335,17 +398,14 @@ updateSalaryTemplate: async (id, payload) => {
       throw err;
     }
   },
-getReimbursements: async (signal) => {
+
+  getReimbursements: async (signal) => {
     try {
       const res = await axiosInstance.get(getReimbursementList, { signal });
-      
-      // Postman showed the array is in res.data.data
       const actualData = res.data?.data;
-      
       if (process.env.NODE_ENV === "development") {
         console.log("💸 Reimbursement API Response:", actualData);
       }
-
       return Array.isArray(actualData) ? actualData : [];
     } catch (err) {
       if (err.name === "CanceledError") return [];
@@ -353,18 +413,16 @@ getReimbursements: async (signal) => {
       throw err;
     }
   },
+
   updateReimbursementStatus: async (payload) => {
     try {
-      // payload expects { id: "2", status: "approved" }
       const res = await axiosInstance.patch(updateReimbursementStatus, payload);
-
       if (process.env.NODE_ENV === "development") {
         console.groupCollapsed("%c 📝 Reimbursement: Status Update", "color: #10b981; font-weight: bold;");
         console.log("Payload:", payload);
         console.log("Response:", res.data);
         console.groupEnd();
       }
-
       return res.data;
     } catch (err) {
       const errorMsg = err.response?.data?.message || "Failed to update status";
@@ -372,81 +430,53 @@ getReimbursements: async (signal) => {
       throw new Error(errorMsg);
     }
   },
+
   bulkAllocateLeave: async (payload) => {
     try {
       console.log("LOG: Initiating Bulk Allocation Request...");
-      console.log("LOG: Destination URL:", postLeaveBulkAllocation);
-      console.log("LOG: Request Payload:", payload);
-
       const res = await axiosInstance.post(postLeaveBulkAllocation, payload);
-      
-      console.log("LOG: Bulk Allocation Success Response:", res.data);
       return res.data;
     } catch (err) {
       console.error("LOG ERROR: bulkAllocateLeave failed:", err.response || err);
-      // We throw the error so the component's catch block can handle the toast message
       throw err;
     }
   },
-bulkAllocatePayroll: async (payload) => {
-  // 1. Clean the URL (remove accidental quotes from your api file)
-  const endpoint = postBulkAllocatePayroll.replace(/"/g, ""); 
 
-  try {
-    const { data } = await axiosInstance.post(endpoint, payload);
-    return data;
-  } catch (err) {
-    // 2. Extract the absolute best error info available
-    const errorData = err.response?.data;
-    
-    // Create a custom error object that carries the backend's specific logic
-    const customError = new Error();
-    customError.message = errorData?.message || errorData?.error || "Allocation failed";
-    customError.details = errorData?.errors || null; // For field-specific validation arrays
-    customError.status = err.response?.status;
-    
-    throw customError; 
-  }
-},
-getPayrollAnalyticsRuns: async (month, year, status) => {
+  bulkAllocatePayroll: async (payload) => {
     try {
-      // 1. Generate the dynamic URL
-      const url = getPayrollDataAnalyticsList(month, year, status);
-      
-      // DEBUG: Log the parameters and the final generated URL
-      console.log(`🚀 Fetching Payroll Analytics for: ${month}/${year} (Status: ${status})`);
-      console.log(`🔗 API URL: ${url}`);
+      const { data } = await axiosInstance.post(postBulkAllocatePayroll, payload);
+      return data;
+    } catch (err) {
+      const errorData = err.response?.data;
+      const customError = new Error();
+      customError.message = errorData?.message || errorData?.error || "Allocation failed";
+      customError.details = errorData?.errors || null;
+      customError.status = err.response?.status;
+      throw customError;
+    }
+  },
 
-      // 2. Execute the GET request
-      const res = await axiosInstance.get(url); 
-      
-      // DEBUG: Log the response to see the structure of the "runs" array
-      console.log("✅ Payroll Analytics Response:", res.data);
-      
-      // 3. Return the data
+  getPayrollAnalyticsRuns: async (month, year, status) => {
+    try {
+      const url = getPayrollDataAnalyticsList(month, year, status);
+      console.log(`🚀 Fetching Payroll Analytics for: ${month}/${year} (Status: ${status})`);
+      const res = await axiosInstance.get(url);
       return res.data;
     } catch (err) {
-      // DEBUG: Detailed error logging
-      console.error("❌ Error in getPayrollAnalyticsRuns:", {
-        message: err.message,
-        status: err.response?.status,
-        data: err.response?.data
-      });
+      console.error("❌ Error in getPayrollAnalyticsRuns:", err);
       throw err;
     }
-},
-updatePayrollAnalyticsRuns: async (payload) => {
+  },
+
+  updatePayrollAnalyticsRuns: async (payload) => {
     try {
       const res = await axiosInstance.put(updatePayrollAnalytics, payload);
-      
       if (process.env.NODE_ENV === "development") {
         console.log("✅ Payroll Analytics Update Response:", res.data);
       }
-
       return res.data;
     } catch (err) {
       console.error("❌ Error in updatePayrollAnalyticsRuns:", err.response || err);
-      // Throw the backend error message if available
       const errorMsg = err.response?.data?.message || "Failed to update payroll analytics";
       throw new Error(errorMsg);
     }
