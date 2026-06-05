@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useMemo } from "react";
-import { X, Calendar, Clock } from "lucide-react";
+import { X, Calendar, Clock, MailPlus, Plus, Trash2 } from "lucide-react";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { format, isValid } from "date-fns";
@@ -15,6 +15,8 @@ function AddRegularizeModal({ open, data, onClose, onSuccess }) {
   const [loading, setLoading] = useState(false);
   const [staffList, setStaffList] = useState([]);
   const [shiftName, setShiftName] = useState("Not Allocated");
+  const [showCcBox, setShowCcBox] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   const [form, setForm] = useState({
     staffId: "",
@@ -24,7 +26,8 @@ function AddRegularizeModal({ open, data, onClose, onSuccess }) {
     remarks: "",
   });
 
-  const [showDatePicker, setShowDatePicker] = useState(false);
+  // Dynamic array state starting with exactly one single discrete column box
+  const [ccList, setCcList] = useState([""]);
 
   /* ================= FETCH STAFF ================= */
   useEffect(() => {
@@ -54,6 +57,13 @@ function AddRegularizeModal({ open, data, onClose, onSuccess }) {
           : "",
       remarks: data.remarks || "",
     });
+
+    if (data.cc && data.cc.length > 0) {
+      setCcList(data.cc);
+      setShowCcBox(true);
+    } else {
+      setCcList([""]);
+    }
   }, [data]);
 
   /* ================= FETCH SHIFT ================= */
@@ -81,17 +91,34 @@ function AddRegularizeModal({ open, data, onClose, onSuccess }) {
     setForm((p) => ({ ...p, [e.target.name]: e.target.value }));
   };
 
+  // Formats to exact local text layout string: "YYYY-MM-DD HH:mm:ss"
   const buildDateTimeISO = (date, time) => {
     if (!date || !time) return null;
-    const [hours, minutes] = time.split(":");
-    const dt = new Date(date);
-    dt.setHours(Number(hours), Number(minutes), 0, 0);
-    return dt.toISOString();
+    const dateString = format(date, "yyyy-MM-dd");
+    return `${dateString} ${time}:00`;
+  };
+
+  /* ================= DYNAMIC CC ACTIONS ================= */
+  const handleCcChange = (index, value) => {
+    const updatedCc = [...ccList];
+    updatedCc[index] = value;
+    setCcList(updatedCc);
+  };
+
+  const addCcField = () => {
+    setCcList([...ccList, ""]);
+  };
+
+  const removeCcField = (index) => {
+    if (ccList.length === 1) {
+      setCcList([""]);
+    } else {
+      setCcList(ccList.filter((_, i) => i !== index));
+    }
   };
 
   /* ================= WORK HOURS CALCULATION ================= */
   const workHours = useMemo(() => {
-    // Only calculate if BOTH fields are present
     if (!form.date || !form.checkIn || !form.checkOut) return "--";
 
     const [inH, inM] = form.checkIn.split(":").map(Number);
@@ -114,22 +141,25 @@ function AddRegularizeModal({ open, data, onClose, onSuccess }) {
 
   /* ================= SUBMIT LOGIC ================= */
   const handleSubmit = async () => {
-    // Mandatory fields
     if (!form.staffId || !form.date) {
       toast.error("Please select Staff and Date");
       return;
     }
 
-    // Regularization logic: At least one punch (In or Out) must be filled
     if (!form.checkIn && !form.checkOut) {
       toast.error("Please provide at least a Check-In or Check-Out time");
       return;
     }
 
-    // Construct payload dynamically
+    // Clean structural array mapping
+    const processedCcArray = ccList
+      .map((email) => email.trim())
+      .filter(Boolean);
+
     const payload = {
       user_id: String(form.staffId),
       remarks: form.remarks?.trim() || "",
+      cc: processedCcArray,
     };
 
     if (form.checkIn) {
@@ -157,12 +187,27 @@ function AddRegularizeModal({ open, data, onClose, onSuccess }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
         {/* Header */}
-        <div className="flex justify-between items-center px-6 py-4 border-b">
-          <h3 className="font-semibold text-sm text-gray-800">
-            Attendance Regularization
-          </h3>
+        <div className="flex justify-between items-center px-6 py-4 border-b shrink-0">
+          <div className="flex items-center gap-3">
+            <h3 className="font-semibold text-sm text-gray-800">
+              Attendance Regularization
+            </h3>
+
+            <button
+              type="button"
+              onClick={() => setShowCcBox(!showCcBox)}
+              className={`p-1.5 rounded-md border transition-colors flex items-center gap-1.5 text-xs font-medium ${
+                showCcBox
+                  ? "bg-black text-white border-black"
+                  : "bg-white text-gray-600 hover:bg-gray-50 border-gray-200"
+              }`}
+            >
+              <MailPlus size={14} />
+              <span>{showCcBox ? "Remove CC" : "Add CC"}</span>
+            </button>
+          </div>
           <button
             onClick={() => onClose(false)}
             className="text-gray-400 hover:text-gray-600"
@@ -171,8 +216,8 @@ function AddRegularizeModal({ open, data, onClose, onSuccess }) {
           </button>
         </div>
 
-        {/* Form Body */}
-        <div className="p-6 grid grid-cols-2 gap-6 text-sm">
+        {/* Scrollable Form Body */}
+        <div className="p-6 grid grid-cols-2 gap-6 text-sm overflow-y-auto grow">
           {/* Staff Select */}
           <div>
             <label className="text-gray-500 text-xs font-medium">Staff</label>
@@ -271,6 +316,50 @@ function AddRegularizeModal({ open, data, onClose, onSuccess }) {
             />
           </div>
 
+          {/* Dynamic CC Field Segment */}
+          {showCcBox && (
+            <div className="col-span-2 space-y-2">
+              <label className="text-gray-500 text-xs font-medium block">
+                CC Recipients
+              </label>
+
+              {ccList.map((emailValue, index) => (
+                <div key={index} className="flex items-center gap-2">
+                  <input
+                    type="email"
+                    value={emailValue}
+                    onChange={(e) => handleCcChange(index, e.target.value)}
+                    placeholder="recipient@company.com"
+                    className="flex-1 px-4 py-2 border rounded-lg bg-gray-50"
+                  />
+
+                  {/* Dynamic Action Button Group */}
+                  <div className="flex gap-1">
+                    <button
+                      type="button"
+                      onClick={addCcField}
+                      className="p-2.5 bg-gray-100 text-gray-700 hover:bg-black hover:text-white rounded-lg transition-colors border"
+                      title="Add recipient box"
+                    >
+                      <Plus size={16} />
+                    </button>
+
+                    {ccList.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeCcField(index)}
+                        className="p-2.5 bg-red-50 text-red-600 hover:bg-red-600 hover:text-white rounded-lg transition-colors border border-red-100"
+                        title="Delete box"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* Remarks */}
           <div className="col-span-2">
             <label className="text-gray-500 text-xs font-medium">Remarks</label>
@@ -286,7 +375,7 @@ function AddRegularizeModal({ open, data, onClose, onSuccess }) {
         </div>
 
         {/* Footer Actions */}
-        <div className="flex justify-end gap-3 px-6 py-4 border-t">
+        <div className="flex justify-end gap-3 px-6 py-4 border-t shrink-0">
           <button
             onClick={() => onClose(false)}
             className="px-6 py-2 border rounded-lg hover:bg-gray-50 transition-colors"

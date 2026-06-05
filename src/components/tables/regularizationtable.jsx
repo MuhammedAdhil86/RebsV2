@@ -9,7 +9,7 @@ import { getShiftPolicyById } from "../../service/companyService";
 
 import AddRegularizeModal from "../../ui/addregularize";
 import RegularizationApprovalModal from "../../ui/regularizationapproval";
-import ViewRegularizeModal from "../../ui/viewregularize"; // Imported your live fetch modal
+import ViewRegularizeModal from "../../ui/viewregularize";
 
 /* ================= ACTION MENU ================= */
 const ActionMenu = ({ row, openMenuId, setOpenMenuId, onEdit, onView }) => {
@@ -75,7 +75,7 @@ const ActionMenu = ({ row, openMenuId, setOpenMenuId, onEdit, onView }) => {
             <button
               onClick={() => {
                 setOpenMenuId(null);
-                onView(row); // Modified to fire the onView function callback cleanly
+                onView(row);
               }}
               className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-gray-100"
             >
@@ -98,7 +98,7 @@ function RegularizationTable() {
 
   const [selectedRow, setSelectedRow] = useState(null);
   const [shiftData, setShiftData] = useState(null);
-  const [modalType, setModalType] = useState(null); // "add" | "approve" | "view" | null
+  const [modalType, setModalType] = useState(null);
 
   /* ================= FETCH DATA & TRANSFORM ================= */
   const fetchData = async () => {
@@ -106,46 +106,66 @@ function RegularizationTable() {
     try {
       const res = await fetchRegularizationRequests();
 
-      // Standardizing the response to match your specific API Object structure
       const transformed = (res.data || []).map((item) => {
-        // Accessing the .Time property within the nested in_date/out_date objects
         const rawInTime = item.in_date?.Time;
         const rawOutTime = item.out_date?.Time;
 
-        const inDateObj = rawInTime ? new Date(rawInTime) : null;
-        const outDateObj = rawOutTime ? new Date(rawOutTime) : null;
+        let displayDate = "--";
+        let displayCheckIn = "--";
+        let displayCheckOut = "--";
+
+        // Process "In" Time explicitly without timezone changes
+        if (rawInTime && item.in_date?.Valid) {
+          const [datePart, timePart] = rawInTime.replace("Z", "").split("T");
+          if (datePart && timePart) {
+            const [year, month, day] = datePart.split("-");
+            const [hour, minute] = timePart.split(":");
+
+            const months = [
+              "Jan",
+              "Feb",
+              "Mar",
+              "Apr",
+              "May",
+              "Jun",
+              "Jul",
+              "Aug",
+              "Sep",
+              "Oct",
+              "Nov",
+              "Dec",
+            ];
+            displayDate = `${day} ${months[parseInt(month, 10) - 1]} ${year}`;
+
+            displayCheckIn = `${hour}:${minute}`;
+          }
+        }
+
+        // Process "Out" Time explicitly without timezone changes
+        if (rawOutTime && item.out_date?.Valid) {
+          const [, timePart] = rawOutTime.replace("Z", "").split("T");
+          if (timePart) {
+            const [hour, minute] = timePart.split(":");
+            displayCheckOut = `${hour}:${minute}`;
+          }
+        }
 
         return {
           id: item.id,
           userId: item.user_id,
           name: item.user_name || "N/A",
           designation: item.designation_name || "N/A",
-          date: inDateObj
-            ? inDateObj.toLocaleDateString("en-GB", {
-                day: "2-digit",
-                month: "short",
-                year: "numeric",
-              })
+          date: displayDate,
+          checkIn: displayCheckIn,
+          checkOut: displayCheckOut,
+          workingHours: item.total_work_hours
+            ? item.total_work_hours.replace(" hours", "")
             : "--",
-          checkIn: inDateObj
-            ? inDateObj.toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-              })
-            : "--",
-          checkOut: outDateObj
-            ? outDateObj.toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-              })
-            : "--",
-          workingHours: item.total_work_hours || "--",
           status: item.status || "pending",
           avatar:
             item.user_image || `https://i.pravatar.cc/40?u=${item.user_id}`,
           remarks: item.remarks || "",
           remaining: item.remaining || 0,
-          // Keep raw data for modal usage if needed
           raw_data: item,
         };
       });
@@ -155,6 +175,7 @@ function RegularizationTable() {
       console.error("Fetch error:", err);
       toast.error("Failed to load regularization requests");
     } finally {
+      // FIXED: Turn off loading state properly here
       setLoading(false);
     }
   };
@@ -251,7 +272,7 @@ function RegularizationTable() {
           }}
           onView={(selectedRow) => {
             setSelectedRow(selectedRow);
-            setModalType("view"); // Intercepts and activates the viewing modal setup context
+            setModalType("view");
           }}
         />
       ),
@@ -355,7 +376,6 @@ function RegularizationTable() {
           document.body,
         )}
 
-      {/* Clean Portal Insertion for your live View window component */}
       {modalType === "view" &&
         createPortal(
           <ViewRegularizeModal
