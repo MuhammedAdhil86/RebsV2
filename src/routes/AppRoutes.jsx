@@ -1,6 +1,8 @@
 import React from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
-import { useAuthStore } from "../store/authStore";
+
+// Import Guards from our separate file
+import { ProtectedRoute, PublicRoute } from "../components/protectedroute";
 
 // Pages
 import Login from "../page/login";
@@ -11,8 +13,6 @@ import Dashboard from "../page/dashboard";
 import Settings from "../page/settings";
 import LogPage from "../page/testpage";
 import ManageEmployees from "../page/manageemployee";
-import EmployeeDtails from "../page/employeedetails";
-import EmployeeProfileStaticUI from "../page/employeedetails";
 import EmployeeProfile from "../page/employeedetails";
 import EmployeeOnboarding from "../page/exployeeonbording";
 import ConsolidatedData from "../components/tables/consoildate";
@@ -30,27 +30,22 @@ import Events from "../page/event";
 import Letter from "../page/letter";
 import JobEnquiry from "../page/jobenquiry";
 
-// ProtectedRoute Component
-const ProtectedRoute = ({ element: Element }) => {
-  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-
-  if (!isAuthenticated) {
-    // Redirect to root login page
-    return <Navigate to="/" replace />;
-  }
-
-  return <Element />;
-};
-
 function AppRoutes() {
   return (
     <Routes>
-      {/* --- Auth Routes --- */}
-      <Route path="/" element={<Login />} />
-      <Route path="/forgetpass" element={<ForgotPasswordUI />} />
-      <Route path="/otp" element={<OtpUi />} />
-      <Route path="/newpassword" element={<NewPasswordUI />} />
-      {/* --- Protected Routes --- */}
+      {/* --- Auth / Public Routes (Logged-in users CANNOT access) --- */}
+      <Route path="/" element={<PublicRoute element={Login} />} />
+      <Route
+        path="/forgetpass"
+        element={<PublicRoute element={ForgotPasswordUI} />}
+      />
+      <Route path="/otp" element={<PublicRoute element={OtpUi} />} />
+      <Route
+        path="/newpassword"
+        element={<PublicRoute element={NewPasswordUI} />}
+      />
+
+      {/* --- Protected Routes (Logged-out users CANNOT access) --- */}
       <Route
         path="/dashboard"
         element={<ProtectedRoute element={Dashboard} />}
@@ -89,10 +84,6 @@ function AppRoutes() {
         path="/activity"
         element={<ProtectedRoute element={EmployeeCalendar} />}
       />
-      <Route
-        path="/activity"
-        element={<ProtectedRoute element={EmployeeCalendar} />}
-      />
       <Route path="/payroll" element={<ProtectedRoute element={Payroll} />} />
       <Route
         path="/announcements"
@@ -102,14 +93,14 @@ function AppRoutes() {
         path="/asset"
         element={<ProtectedRoute element={AssetManager} />}
       />
-      <Route path="/letter" element={<ProtectedRoute element={Letter} />} />{" "}
+      <Route path="/letter" element={<ProtectedRoute element={Letter} />} />
       <Route path="/events" element={<ProtectedRoute element={Events} />} />
       <Route
         path="/jobenquiry"
         element={<ProtectedRoute element={JobEnquiry} />}
       />
-      {/* <Route path="/manageemployees" element={<ProtectedRoute element={ManageEmployees} />} /> */}
-      {/* Catch-all redirect to login */}
+
+      {/* Catch-all fallback */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

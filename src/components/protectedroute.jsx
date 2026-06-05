@@ -1,25 +1,31 @@
-// src/components/ProtectedRoute.jsx
 import React from "react";
-import { Navigate, useLocation } from "react-router-dom";
-import { useAuthStore } from "../store/authStore"; // ✅ adjust path based on your alias setup
+import { Navigate } from "react-router-dom";
+import { useAuthStore } from "../store/authStore";
 
 /**
- * ✅ ProtectedRoute
- * Used to protect private pages.
- * Checks Zustand's isAuthenticated state.
- * Redirects to "/" (Login) if user is not authenticated.
+ * 🔐 ProtectedRoute
+ * Stops logged-out users from accessing dashboard pages.
  */
-const ProtectedRoute = ({ element: Component }) => {
-  const location = useLocation();
+export const ProtectedRoute = ({ element: Element }) => {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
 
   if (!isAuthenticated) {
-    // redirect unauthenticated users to login
-    return <Navigate to="/" replace state={{ from: location }} />;
+    return <Navigate to="/" replace />;
   }
 
-  // ✅ Render protected component if authenticated
-  return <Component />;
+  return <Element />;
 };
 
-export default ProtectedRoute;
+/**
+ * 🔓 PublicRoute
+ * Stops logged-in users from going back to the login screen.
+ */
+export const PublicRoute = ({ element: Element }) => {
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+
+  if (isAuthenticated) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return <Element />;
+};

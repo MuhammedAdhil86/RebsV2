@@ -1,11 +1,12 @@
 import React, { useState } from "react";
-import { Link, NavLink } from "react-router-dom";
+import { Link, NavLink, useNavigate } from "react-router-dom"; // ✅ Added useNavigate
 import { Settings } from "lucide-react";
 import { Icon } from "@iconify/react";
 import rebsLogo from "../assets/img/Picture1.png";
 import { useAuthStore } from "../store/authStore"; // Zustand store
 
 function SideBar({ isCollapsed, toggleSidebar }) {
+  const navigate = useNavigate(); // ✅ Hook for clean navigation history management
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
@@ -13,6 +14,7 @@ function SideBar({ isCollapsed, toggleSidebar }) {
   const toggleMobileSidebar = () => setIsMobileOpen(!isMobileOpen);
 
   const user = useAuthStore((state) => state.user);
+  const logout = useAuthStore((state) => state.logout); // ✅ Extract standard logout action
 
   const firstName = user?.first_name || "";
   const lastName = user?.last_name || "";
@@ -47,7 +49,7 @@ function SideBar({ isCollapsed, toggleSidebar }) {
     organisationonboard: <Icon icon="octicon:organization-24" width="20" />,
     employeeOnboard: <Icon icon="clarity:employee-line" width="20" />,
     Hiring: <Icon icon="hugeicons:job-link" width="20" />,
-    enquiry: <Icon icon="hugeicons:quill-write-02" width="20" />, // ✅ Added Enquiry Icon
+    enquiry: <Icon icon="hugeicons:quill-write-02" width="20" />,
     interview: <Icon icon="mage:message-conversation" width="20" />,
     manageShift: <Icon icon="ic:twotone-manage-history" width="20" />,
   };
@@ -79,7 +81,6 @@ function SideBar({ isCollapsed, toggleSidebar }) {
         },
         { title: "Manage Shift", path: `/shift`, icon: icons.manageShift },
         { title: "Reports", path: "/reports", icon: icons.reports },
-
         {
           title: "Asset Manager",
           path: "/asset",
@@ -121,7 +122,7 @@ function SideBar({ isCollapsed, toggleSidebar }) {
           icon: icons.Hiring,
         },
         {
-          title: "Job Enquiry", // ✅ Added Job Enquiry Item
+          title: "Job Enquiry",
           path: "/jobenquiry",
           icon: icons.enquiry,
         },
@@ -133,6 +134,12 @@ function SideBar({ isCollapsed, toggleSidebar }) {
       ],
     },
   ];
+
+  // ✅ Streamlined Logout Execution Handler
+  const handleLogoutClick = () => {
+    logout(); // 1. Completely purges auth credentials via Zustand
+    navigate("/", { replace: true }); // 2. Directs to root path & eliminates the previous history reference line
+  };
 
   return (
     <>
@@ -233,11 +240,9 @@ function SideBar({ isCollapsed, toggleSidebar }) {
                 <span className="text-sm flex-1 text-left">Settings</span>
               </Link>
 
+              {/* ✅ Wire up corrected logout callback */}
               <button
-                onClick={() => {
-                  localStorage.removeItem("token");
-                  window.location.href = "/login";
-                }}
+                onClick={handleLogoutClick}
                 className="w-full flex items-center space-x-3 px-4 py-2 rounded-lg text-gray-300 hover:bg-gray-600 transition-colors"
               >
                 <Icon icon="material-symbols:logout" width="20" height="20" />
