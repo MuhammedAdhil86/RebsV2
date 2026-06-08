@@ -8,6 +8,7 @@ import {
   fetchUserLocationDevice,
   allocateShift,
 } from "../../../service/policiesService";
+import { fetchDeviceHistoryByUser } from "../../../service/deviceService";
 
 /* --------------------------
    Reverse Geocode Helper
@@ -41,6 +42,11 @@ export default function ManagePrivilegesSection({ uuid }) {
   const [selectedShiftId, setSelectedShiftId] = useState("");
   const [shiftFrom, setShiftFrom] = useState("");
   const [shiftTo, setShiftTo] = useState("");
+
+  // States for Device History Modal
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [deviceHistory, setDeviceHistory] = useState([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
 
   useEffect(() => {
     const getShifts = async () => {
@@ -89,6 +95,23 @@ export default function ManagePrivilegesSection({ uuid }) {
     fetchPrivileges();
   }, [uuid]);
 
+  // Handle open history logic
+  const handleViewDeviceHistory = async () => {
+    setLoadingHistory(true);
+    setShowHistoryModal(true);
+    try {
+      // Executes the clean dataset returned by the high-scale service transformer
+      const history = await fetchDeviceHistoryByUser(uuid);
+      setDeviceHistory(history);
+    } catch (error) {
+      console.error("Error loading high-scale device collection:", error);
+      toast.error("Failed to fetch device history");
+      setShowHistoryModal(false);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
   const saveShift = async () => {
     if (!selectedShiftId || !shiftFrom) {
       toast.error("Please select shift and Effective From date.");
@@ -115,7 +138,6 @@ export default function ManagePrivilegesSection({ uuid }) {
     }
   };
 
-  // Map shifts for CustomSelect
   const shiftOptions = shifts.map((s) => ({
     label: s.shift_name,
     value: s.id,
@@ -151,6 +173,7 @@ export default function ManagePrivilegesSection({ uuid }) {
       <div className="text-sm space-y-2">
         <Row label="User Type" value={userType} />
 
+        {/* Shift Management */}
         <div className="flex justify-between items-center border-b border-gray-100 py-2">
           <span className="text-gray-500 text-[12px]">Work Shift</span>
           <div className="flex items-center gap-2">
@@ -171,23 +194,44 @@ export default function ManagePrivilegesSection({ uuid }) {
           </div>
         </div>
 
-        <Row label="Registered Device" value={device} />
+        {/* Device Row with History Trigger */}
+        <div className="flex justify-between items-center border-b border-gray-100 py-2">
+          <span className="text-gray-500 text-[12px]">Registered Device</span>
+          <div className="flex items-center gap-2 max-w-[220px]">
+            <span className="font-medium text-gray-800 text-[13px] truncate">
+              {device}
+            </span>
+            {isEditing && (
+              <button
+                className="text-blue-600 text-[12px] hover:underline shrink-0"
+                onClick={handleViewDeviceHistory}
+              >
+                History
+              </button>
+            )}
+          </div>
+        </div>
+
         <Row label="Location" value={location} />
       </div>
 
+      {/* --- Shift Modal --- */}
       {showShiftModal && (
-        <Modal title="Update Shift" onClose={() => setShowShiftModal(false)}>
+        <Modal
+          title="Update Shift"
+          width="340px"
+          onClose={() => setShowShiftModal(false)}
+        >
           <div className="flex flex-col gap-3">
             <div>
               <label className="text-[11px] text-gray-400 block mb-1">
                 Select Shift
               </label>
-              {/* USE CUSTOM SELECT HERE */}
               <CustomSelect
                 value={selectedShiftId}
                 options={shiftOptions}
                 onChange={(val) => setSelectedShiftId(Number(val))}
-                minWidth={290} // Adjusted for modal width
+                minWidth={290}
               />
             </div>
 
@@ -224,6 +268,77 @@ export default function ManagePrivilegesSection({ uuid }) {
           </div>
         </Modal>
       )}
+
+      {/* --- Device History Modal --- */}
+      {showHistoryModal && (
+        <Modal
+          title="Device Log History"
+          width="450px"
+          onClose={() => setShowHistoryModal(false)}
+        >
+          {loadingHistory ? (
+            <div className="text-gray-500 text-sm text-center py-6">
+              Loading history logs...
+            </div>
+          ) : deviceHistory.length === 0 ? (
+            <div className="text-gray-400 text-sm text-center py-6">
+              No historical data available.
+            </div>
+          ) : (
+            <div className="max-h-[350px] overflow-y-auto space-y-3 pr-1">
+              {deviceHistory.map((log, index) => (
+                <div
+                  key={index}
+                  className="p-3 bg-gray-50 rounded-lg border border-gray-100 text-[12px] space-y-1.5"
+                >
+                  <div className="flex justify-between items-start">
+                    <span className="font-semibold text-gray-800 text-[13px]">
+                      {log.device}
+                    </span>
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${log.is_active ? "bg-green-100 text-green-700" : "bg-gray-200 text-gray-600"}`}
+                    >
+                      {log.is_active ? "Active" : "Inactive"}
+                    </span>
+                  </div>
+                  <div className="text-gray-500">
+                    ID:{" "}
+                    <span className="text-gray-700 font-mono">
+                      {log.device_id || "N/A"}
+                    </span>
+                  </div>
+                  <div className="text-gray-500">
+                    Approved By:{" "}
+                    <span className="text-gray-700">
+                      {log.approved_by_name} ({log.approved_by || "N/A"})
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 pt-1 border-t border-gray-200 text-gray-400 text-[11px]">
+                    <div>
+                      First Use:
+                      <br />
+                      <span className="text-gray-600 font-medium">
+                        {log.first_used_at
+                          ? new Date(log.first_used_at).toLocaleDateString()
+                          : "-"}
+                      </span>
+                    </div>
+                    <div>
+                      Last Use:
+                      <br />
+                      <span className="text-gray-600 font-medium">
+                        {log.last_used_at
+                          ? new Date(log.last_used_at).toLocaleDateString()
+                          : "-"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Modal>
+      )}
     </div>
   );
 }
@@ -240,10 +355,13 @@ function Row({ label, value }) {
   );
 }
 
-function Modal({ title, onClose, children }) {
+function Modal({ title, onClose, width = "340px", children }) {
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] backdrop-blur-[2px]">
-      <div className="bg-white rounded-xl shadow-2xl p-6 w-[340px] animate-in fade-in zoom-in duration-200">
+      <div
+        style={{ width: width }}
+        className="bg-white rounded-xl shadow-2xl p-6 max-w-[95vw] animate-in fade-in zoom-in duration-200"
+      >
         <div className="flex justify-between items-center mb-4">
           <h3 className="font-bold text-gray-900 text-[16px]">{title}</h3>
           <button
