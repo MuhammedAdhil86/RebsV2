@@ -92,6 +92,9 @@ export const updateCompanyDet = "/company/update"
 export const getOrgType ="/admin/organization-type/get"
 export const getCountry = "/master/country"
 export const updateCompany = "/company/update";
+export const getCompantClaims = "/claims/company";
+export const approveCompanyClaim = (id) => `/claims/${id}/approve`;
+
 
 //Company Structure
 

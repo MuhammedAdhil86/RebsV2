@@ -5,6 +5,7 @@ import DashboardLayout from "../ui/pagelayout";
 import WfhTab from "../components/requests_tab/wtf_tab";
 import RegularizationTab from "../components/requests_tab/regularization_tab";
 import DeviceRequestTab from "../components/requests_tab/device_tab";
+import ClaimsRequestTab from "../components/requests_tab/claims_tab";
 import DeviceApprovalModal from "../ui/devicestatusmodal";
 
 function Requests() {
@@ -85,6 +86,18 @@ function Requests() {
         >
           Device Request
         </button>
+
+        {/* 2. ADD CLAIMS REQUEST NAVIGATION BUTTON */}
+        <button
+          onClick={() => setActiveTab("claims")}
+          className={`pb-1 ${
+            activeTab === "claims"
+              ? "border-b-2 border-black font-medium"
+              : "text-gray-500"
+          }`}
+        >
+          Claims Request
+        </button>
       </div>
 
       {/* Tab Panels Layout Mapping Container Context Blocks */}
@@ -99,6 +112,9 @@ function Requests() {
             onRowClick={handleDeviceRowClick}
           />
         )}
+
+        {/* 3. RENDER CLAIMS TAB CONDITIONALLY */}
+        {activeTab === "claims" && <ClaimsRequestTab />}
       </div>
 
       {/* Device Review Modal Rendered dynamically at body root level via Portals */}
@@ -114,7 +130,6 @@ function Requests() {
             }}
             onSuccess={handleSuccessReload}
             onOptimisticUpdate={(id, nextStatus) => {
-              // Allows handling raw layout level mutations locally before network resolves
               console.log(
                 `Optimistic updates targeted toward request #${id} changing to status: ${nextStatus}`,
               );

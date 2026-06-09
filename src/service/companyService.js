@@ -16,7 +16,9 @@ import {
   getLeavePolicy,
   getAllowanceData,
   getCompliances,
+  approveCompanyClaim,
   getCountry,
+  getCompantClaims,
   RemainingRegularization,
   updateCompanyDet,
   postBranch,
@@ -594,5 +596,32 @@ export const fetchRemainingRegularization = async (uuid) => {
   } catch (error) {
     console.error("Error fetching remaining regularizations:", error);
     return null; 
+  }
+};
+
+export const fetchCompanyClaims = async () => {
+  try {
+    const response = await axiosInstance.get(getCompantClaims);
+    console.log("Company claims response:", response);
+    return response.data.data;
+  } catch (error) {
+    console.error("Error fetching company claims:", error);
+    throw error;
+  }
+};
+export const updateCompanyClaimStatus = async (id, action) => {
+  try {
+    // Convert "Approved" -> "approved" or "Rejected" -> "rejected" to match backend expectations
+    const backendStatus = action.toLowerCase();
+
+    const response = await axiosInstance.put(approveCompanyClaim(id), {
+      status: backendStatus
+    });
+    
+    console.log("Approve/Reject claim response:", response);
+    return response.data;
+  } catch (error) {
+    console.error(`Error updating status for claim ID ${id}:`, error);
+    throw error;
   }
 };

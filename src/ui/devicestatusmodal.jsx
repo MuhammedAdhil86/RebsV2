@@ -26,13 +26,22 @@ const DeviceApprovalModal = ({
   // Clean the status string to match comparisons accurately
   const status = data.status ? data.status.toLowerCase() : "pending";
 
+  // Safely extract device_id text string from response structure variations
+  const resolvedDeviceId =
+    typeof data.device_id === "object"
+      ? data.device_id?.Valid
+        ? data.device_id.String
+        : ""
+      : data.device_id || "";
+
   const handleStatusAction = async (targetStatus) => {
     setSubmitting(true);
     setActionType(targetStatus);
 
     try {
-      // Body payload layout sent to the backend
+      // Integrated body payload payload mapping including critical device_id context
       const payloadBody = {
+        device_id: resolvedDeviceId,
         remarks: remarks || `Device request status updated to ${targetStatus}`,
       };
 
@@ -69,7 +78,7 @@ const DeviceApprovalModal = ({
 
       {/* Main Container Card */}
       <div className="relative w-full max-w-md transform overflow-hidden rounded-xl bg-white p-6 shadow-2xl transition-all border border-gray-100 animate-in fade-in zoom-in-95 duration-200">
-        {/* Header Layout */}
+        {/* Header Layout (X icon handles closing) */}
         <div className="flex items-center justify-between border-b border-gray-100 pb-3 mb-4">
           <div className="flex items-center gap-2">
             <div className="p-1.5 bg-gray-50 rounded-lg text-gray-800">
@@ -108,7 +117,10 @@ const DeviceApprovalModal = ({
               <label className="block text-[11px] font-medium text-gray-400 mb-0.5">
                 Current Device
               </label>
-              <p className="text-xs font-semibold text-gray-700 truncate">
+              <p
+                className="text-xs font-semibold text-gray-700 truncate"
+                title={data.oldDevice}
+              >
                 {data.oldDevice}
               </p>
             </div>
@@ -116,26 +128,40 @@ const DeviceApprovalModal = ({
               <label className="block text-[11px] font-medium text-blue-500 mb-0.5">
                 Requested Device
               </label>
-              <p className="text-xs font-semibold text-gray-800 truncate">
+              <p
+                className="text-xs font-semibold text-gray-800 truncate"
+                title={data.newDevice}
+              >
                 {data.newDevice}
               </p>
             </div>
           </div>
 
-          {/* Context Meta Row */}
-          <div className="bg-gray-50/50 p-2.5 rounded-lg border border-gray-100 flex items-center justify-between text-xs text-gray-600">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-              <span>
-                Detected: <strong className="text-gray-800">{data.date}</strong>
+          {/* Context Meta Row showing device ID metadata */}
+          <div className="bg-gray-50/50 p-2.5 rounded-lg border border-gray-100 flex flex-col gap-1.5 text-xs text-gray-600">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                <span>
+                  Detected:{" "}
+                  <strong className="text-gray-800">{data.date}</strong>
+                </span>
+              </div>
+              <span className="text-[11px] font-medium">
+                Current Status:{" "}
+                <span className="capitalize font-semibold text-gray-800">
+                  {data.status}
+                </span>
               </span>
             </div>
-            <span className="text-[11px] font-medium">
-              Current Status:{" "}
-              <span className="capitalize font-semibold text-gray-800">
-                {data.status}
-              </span>
-            </span>
+            {resolvedDeviceId && (
+              <div className="text-[11px] border-t border-gray-200/60 pt-1.5 text-gray-500 font-mono truncate">
+                Device ID:{" "}
+                <span className="text-gray-700 select-all">
+                  {resolvedDeviceId}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Action Input Logger Remarks */}
