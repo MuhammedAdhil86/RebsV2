@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Search, Loader2, Download } from "lucide-react";
 import * as XLSX from "xlsx-js-style";
 import CustomSelect from "../../ui/customselect";
@@ -29,13 +29,21 @@ export default function LeaveReports() {
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
+
+      const apiStatus =
+        mainFilter === "status" && dynamicValue
+          ? dynamicValue.toLowerCase()
+          : undefined;
+      const apiApproval =
+        mainFilter === "managerApproval" && dynamicValue
+          ? dynamicValue
+          : undefined;
+
       const data = await fetchLeaveReport({
-        user_id: searchUser || undefined,
         from,
         to,
-        status: mainFilter === "status" ? dynamicValue : undefined,
-        manager_approval:
-          mainFilter === "managerApproval" ? dynamicValue : undefined,
+        status: apiStatus,
+        manager_approval: apiApproval,
       });
 
       setRecords(data);
@@ -44,13 +52,26 @@ export default function LeaveReports() {
     } finally {
       setLoading(false);
     }
-  }, [searchUser, from, to, mainFilter, dynamicValue]);
+  }, [from, to, mainFilter, dynamicValue]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  // --- Table Column Definitions with Hover Logic ---
+  // --- Search Filter Logic ---
+  const filteredRecords = useMemo(() => {
+    if (!searchUser.trim()) return records;
+    const search = searchUser.toLowerCase();
+
+    return records.filter(
+      (r) =>
+        r.employee_name?.toLowerCase().includes(search) ||
+        r.department_name?.toLowerCase().includes(search) ||
+        r.designation?.toLowerCase().includes(search) ||
+        r.user_id?.toString().toLowerCase().includes(search),
+    );
+  }, [records, searchUser]);
+
   const columns = [
     { label: "Date", key: "date" },
     {
@@ -110,19 +131,24 @@ export default function LeaveReports() {
     {
       label: "Status",
       key: "status",
-      render: (val) => (
-        <span
-          className={`px-2 py-1 rounded-full text-[10px]  ${
-            val === "Approved"
-              ? "bg-green-100 text-green-700"
-              : val === "Rejected"
-                ? "bg-red-100 text-red-700"
-                : "bg-orange-100 text-orange-700"
-          }`}
-        >
-          {val}
-        </span>
-      ),
+      render: (val) => {
+        const displayVal = val
+          ? val.charAt(0).toUpperCase() + val.slice(1)
+          : "—";
+        return (
+          <span
+            className={`px-2 py-1 rounded-full text-[10px] ${
+              displayVal === "Approved"
+                ? "bg-green-100 text-green-700"
+                : displayVal === "Rejected"
+                  ? "bg-red-100 text-red-700"
+                  : "bg-orange-100 text-orange-700"
+            }`}
+          >
+            {displayVal}
+          </span>
+        );
+      },
     },
     {
       label: "Approval",
@@ -138,7 +164,7 @@ export default function LeaveReports() {
   ];
 
   const handleDownload = () => {
-    if (!records.length) return;
+    if (!filteredRecords.length) return;
     const headerRow = [
       "Date",
       "User ID",
@@ -150,8 +176,7 @@ export default function LeaveReports() {
       "Status",
       "Manager Approval",
     ];
-
-    const dataRows = records.map((r) => [
+    const dataRows = filteredRecords.map((r) => [
       r.date ? new Date(r.date).toLocaleDateString() : "",
       r.user_id?.toString() || "",
       r.employee_name || "",
@@ -167,16 +192,14 @@ export default function LeaveReports() {
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.aoa_to_sheet(sheetData);
 
-    // --- Dynamic Auto-Width Calculation ---
     const colWidths = headerRow.map((header, i) => {
       const maxLen = Math.max(
         header.length,
         ...dataRows.map((row) => (row[i] ? row[i].toString().length : 0)),
       );
-      return { wch: maxLen + 5 }; // Content length + padding
+      return { wch: maxLen + 5 };
     });
     ws["!cols"] = colWidths;
-
     ws["!merges"] = [
       { s: { r: 0, c: 0 }, e: { r: 0, c: headerRow.length - 1 } },
     ];
@@ -200,17 +223,18 @@ export default function LeaveReports() {
   return (
     <div className="p-1 px-3 bg-white rounded-xl shadow-sm border border-gray-100">
       <div className="flex justify-between items-center mb-2">
-        <h2 className="text-[16px]  text-gray-800">Leave Reports</h2>
+        <h2 className="text-[16px] text-gray-800">Leave Reports</h2>
         <button
           onClick={handleDownload}
-          disabled={loading || records.length === 0}
-          className="flex items-center gap-2 px-4 py-2 text-[12px] font-medium rounded-lg bg-black text-white hover:bg-gray-800 disabled:bg-gray-300 transition-all"
+          disabled={loading || filteredRecords.length === 0}
+          className="flex items-center gap-2 px-4 py-1 text-[12px] font-medium rounded bg-black text-white hover:bg-gray-800 disabled:bg-gray-300 transition-all"
         >
           <Download className="w-3 h-3" /> Export Excel
         </button>
       </div>
 
-      <div className="flex flex-wrap gap-4 items-end mb-6 bg-gray-50 p-4 rounded-lg border border-gray-100">
+      {/* ✅ Updated: Structured flex layout with items-stretch ensuring uniform element heights */}
+      <div className="flex flex-wrap gap-4 items-stretch mb-6 bg-gray-50 p-4 rounded-lg border border-gray-100">
         <div className="flex flex-col gap-1">
           <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">
             From
@@ -219,9 +243,10 @@ export default function LeaveReports() {
             type="date"
             value={from}
             onChange={(e) => setFrom(e.target.value)}
-            className="border rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-black outline-none"
+            className="border rounded-md px-3 h-[38px] text-sm focus:ring-2 focus:ring-black outline-none bg-white"
           />
         </div>
+
         <div className="flex flex-col gap-1">
           <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">
             To
@@ -229,44 +254,61 @@ export default function LeaveReports() {
           <input
             type="date"
             value={to}
-            onChange={(e) => setTo(e.target.value)}
-            className="border rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-black outline-none"
+            onChange={(e) => setToDate(e.target.value)}
+            className="border rounded-md px-3 h-[38px] text-sm focus:ring-2 focus:ring-black outline-none bg-white"
           />
         </div>
 
-        <CustomSelect
-          placeholder="Filter By"
-          value={mainFilter}
-          onChange={(val) => {
-            setMainFilter(val);
-            setDynamicValue("");
-          }}
-          options={[
-            { label: "Status", value: "status" },
-            { label: "Manager Approval", value: "managerApproval" },
-          ]}
-          minWidth={150}
-        />
-
-        {mainFilter && (
+        <div className="flex flex-col gap-1">
+          <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">
+            Filter By
+          </label>
           <CustomSelect
-            placeholder="Select Value"
-            value={dynamicValue}
-            onChange={setDynamicValue}
-            options={["Approved", "Pending", "Rejected"]}
+            placeholder="Filter"
+            value={mainFilter}
+            onChange={(val) => {
+              setMainFilter(val === "Filter" ? "" : val);
+              setDynamicValue(val === "managerApproval" ? "Approved" : "");
+            }}
+            options={[
+              { label: "Filter", value: "Filter" },
+              { label: "Manager Approval", value: "managerApproval" },
+            ]}
             minWidth={150}
           />
-        )}
+        </div>
 
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Search Staff..."
-            value={searchUser}
-            onChange={(e) => setSearchUser(e.target.value)}
-            className="w-full border rounded-md pl-10 pr-3 py-2 text-sm focus:ring-2 focus:ring-black outline-none"
-          />
+        {/* ✅ Dynamic Value Select Field is structured to preserve layout heights seamlessly */}
+        {mainFilter ? (
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">
+              Select Value
+            </label>
+            <CustomSelect
+              placeholder="Select Value"
+              value={dynamicValue}
+              onChange={setDynamicValue}
+              options={[
+                { label: "Approved", value: "Approved" },
+                { label: "Pending", value: "Pending" },
+                { label: "Rejected", value: "Rejected" },
+              ]}
+              minWidth={150}
+            />
+          </div>
+        ) : null}
+
+        <div className="flex flex-col gap-1 flex-1 min-w-[200px] justify-end">
+          <div className="relative w-full h-[38px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search Staff..."
+              value={searchUser}
+              onChange={(e) => setSearchUser(e.target.value)}
+              className="w-full h-full border rounded-md pl-10 pr-3 text-sm focus:ring-2 focus:ring-black outline-none bg-white"
+            />
+          </div>
         </div>
       </div>
 
@@ -276,7 +318,7 @@ export default function LeaveReports() {
           <p className="text-gray-400 text-sm">Fetching report details...</p>
         </div>
       ) : (
-        <ReportTable columns={columns} data={records} rowsPerPage={8} />
+        <ReportTable columns={columns} data={filteredRecords} rowsPerPage={8} />
       )}
     </div>
   );

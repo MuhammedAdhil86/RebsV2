@@ -59,6 +59,9 @@ export const getReportIndia = "/admin/staff/fullreport"
 export const getLeaveReport = "/admin/leave/employee/leave/report";
 export  const attendanceFullReport = (month, year) => `/admin/staff/fullreport/${month}/${year}`;
 export const getFetchAttendanceFineRecords = "/admin/attendance/fine-records";
+export const getUnapprovedAbsentReport = (fromDate, toDate) => 
+  `/admin/leave/unapproved-absent?from_date=${fromDate}&to_date=${toDate}`;
+
 
 //Events and Leave Calendar
 

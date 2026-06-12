@@ -6,6 +6,7 @@ import {
   getLeaveReport,
   attendanceFullReport,
   getFetchAttendanceFineRecords,
+  getUnapprovedAbsentReport,
 } from "../api/api";
 
 /**
@@ -154,5 +155,26 @@ export const fetchAttendanceFineRecords = async (month, year, userId = "") => {
   } catch (error) {
     console.error("Error fetching attendance fine records:", error.response?.data || error.message);
     throw error;
+  }
+};
+
+/**
+ * Fetches the list of unapproved employee absences within a specific date range.
+ * @param {string|Date} from - Start date (YYYY-MM-DD or Date object).
+ * @param {string|Date} to - End date (YYYY-MM-DD or Date object).
+ * @returns {Promise<Array>} Resolves to an array of unapproved absence records.
+ */
+export const fetchUnapprovedAbsentReport = async (from, to) => {
+  if (!from || !to) throw new Error("Validation Error: Both fields are required.");
+
+  const clean = (d) => (d instanceof Date ? d.toISOString().split("T")[0] : d);
+
+
+  try {
+    const res = await axiosInstance.get(getUnapprovedAbsentReport(clean(from), clean(to)));
+    const records = res?.data?.data?.data ?? res?.data?.data ?? [];
+    return Array.isArray(records) ? records : [];
+  } catch (err) {
+    throw new Error(err.response?.data?.message || err.response?.data?.error || err.message);
   }
 };

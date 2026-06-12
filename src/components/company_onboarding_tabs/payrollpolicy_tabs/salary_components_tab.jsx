@@ -27,32 +27,54 @@ const SalaryComponents = () => {
       setIsLoading(true);
       setError(null);
 
+      // Fetch from both sources concurrently
       const [compRes, reimbursements] = await Promise.all([
         axiosInstance.get("/api/payroll/components", { signal }),
         payrollService.getReimbursements(signal),
       ]);
 
+      // 1. Process Earnings Data
       const compItems = compRes.data?.data?.items;
       if (Array.isArray(compItems)) {
         const filteredEarnings = compItems
           .filter((item) => item.component_type === "earning")
           .map((item) => {
-            // Append (Default Template) to the name if company_id is 0
+            // Check if it is a default global template component
             if (item.company_id === 0) {
               return {
                 ...item,
                 name: `${item.name} (Default Template)`,
-                isReadOnly: true, // Custom flag to identify read-only items
+                isReadOnly: true, // Flag to block updates
+                canDelete: false, // Flag to block deletion in three-dot menu
               };
             }
-            return item;
+            return {
+              ...item,
+              canDelete: true, // Standard components can be deleted
+            };
           });
         setEarningsData(filteredEarnings);
       } else {
         setEarningsData([]);
       }
 
-      setReimbursementData(reimbursements || []);
+      // 2. Process Reimbursements Data
+      if (Array.isArray(reimbursements)) {
+        const processedReimbursements = reimbursements.map((item) => {
+          if (item.company_id === 0) {
+            return {
+              ...item,
+              name: `${item.name} (Default Template)`,
+              isReadOnly: true,
+              canDelete: false,
+            };
+          }
+          return { ...item, canDelete: true };
+        });
+        setReimbursementData(processedReimbursements);
+      } else {
+        setReimbursementData([]);
+      }
     } catch (err) {
       if (err.name !== "CanceledError") {
         setError(err.message || "Failed to load payroll data.");
@@ -69,7 +91,7 @@ const SalaryComponents = () => {
   }, []);
 
   const handleEditRow = (rowData) => {
-    // Block editing if company_id is 0 or isReadOnly flag is present
+    // Block editing immediately if the template belongs to system defaults (company_id 0)
     if (rowData.company_id === 0 || rowData.isReadOnly) {
       return;
     }
@@ -103,6 +125,7 @@ const SalaryComponents = () => {
         </div>
       )}
 
+      {/* Tab Navigation Switches */}
       <div className="flex border-b border-gray-200 mb-4">
         {subTabs.map((tab) => (
           <button
@@ -119,6 +142,7 @@ const SalaryComponents = () => {
         ))}
       </div>
 
+      {/* Tab Content Panes */}
       <div className="fade-in">
         {activeSubTab === "earnings" && (
           <Earnings

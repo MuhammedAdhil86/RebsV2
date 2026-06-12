@@ -58,7 +58,7 @@ function SideBar({ isCollapsed, toggleSidebar }) {
     {
       section: "HUMAN RESOURCES",
       items: [
-        { title: "Attendance", path: `/dashboard`, icon: icons.hr },
+        { title: "HR Dashboard", path: `/dashboard`, icon: icons.hr },
         {
           title: "Letter",
           path: "/letter",

@@ -1,10 +1,11 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { FiBell } from "react-icons/fi";
 import DashboardLayout from "../ui/pagelayout";
 
 // Reports
 import AttendanceReports from "../components/reports_tab/attendance_reports";
 import LeaveReports from "../components/reports/leavereport";
+import UnapprovedAbsentReports from "../components/reports_tab/unapprovedleaves_tab";
 import PayrollAttendanceReport from "../components/reports_tab/payrollattendancereport";
 import AttendanceFineRecordsReport from "../components/reports_tab/finereport_tab";
 
@@ -12,7 +13,15 @@ const avatar =
   "https://ui-avatars.com/api/?name=Admin&background=000000&color=ffffff";
 
 export default function Reports() {
-  const [activeTab, setActiveTab] = useState("Attendance Reports");
+  // ✅ Lazy-initialize state from localStorage to prevent flash of wrong default tab on reload
+  const [activeTab, setActiveTab] = useState(() => {
+    return localStorage.getItem("activeReportTab") || "Attendance Reports";
+  });
+
+  // ✅ Write active tab transformations natively back to localStorage cache memory
+  useEffect(() => {
+    localStorage.setItem("activeReportTab", activeTab);
+  }, [activeTab]);
 
   const renderTab = () => {
     switch (activeTab) {
@@ -21,6 +30,9 @@ export default function Reports() {
 
       case "Leave Reports":
         return <LeaveReports />;
+
+      case "Unapproved Leaves":
+        return <UnapprovedAbsentReports />;
 
       case "Payroll Attendance Report":
         return <PayrollAttendanceReport />;
@@ -64,11 +76,11 @@ export default function Reports() {
           {[
             "Attendance Reports",
             "Leave Reports",
+            "Unapproved Leaves",
             "Payroll Attendance Report",
             "Fine Reports",
             "Compliance Reports",
             "Miscellaneous Reports",
-            "Insurance Details",
           ].map((tab) => (
             <button
               key={tab}

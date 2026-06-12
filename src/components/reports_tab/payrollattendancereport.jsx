@@ -478,7 +478,7 @@ export default function PayrollAttendanceReport() {
           <button
             onClick={handleDownloadSalary}
             disabled={!records.length || loading}
-            className="flex items-center gap-2 px-4 py-2 text-[12px] rounded-lg border bg-black text-white disabled:opacity-50 hover:bg-gray-800 transition-colors"
+            className="flex items-center gap-2 px-4 py-2 text-[12px] rounded border bg-black text-white disabled:opacity-50 hover:bg-gray-800 transition-colors"
           >
             <Download className="w-4 h-4" />
             Download
@@ -487,7 +487,7 @@ export default function PayrollAttendanceReport() {
           <button
             onClick={handleDownloadBankExcel}
             disabled={!records.length || loading}
-            className="flex items-center gap-2 px-4 py-2 text-[12px] rounded-lg border bg-blue-600 text-white disabled:opacity-50 hover:bg-blue-700 transition-colors"
+            className="flex items-center gap-2 px-4 py-2 text-[12px] rounded border bg-blue-600 text-white disabled:opacity-50 hover:bg-blue-700 transition-colors"
           >
             <Download className="w-4 h-4" />
             Download for Bank

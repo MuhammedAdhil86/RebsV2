@@ -134,15 +134,24 @@ const Earnings = ({ data, onEdit, onRefresh }) => {
                 left: menuPosition.left,
                 zIndex: 10000,
               }}
-              className="w-44 bg-white border border-gray-100 rounded-xl shadow-xl overflow-hidden p-1.5"
+              className="w-44 bg-white border border-gray-100 rounded-xl shadow-xl overflow-hidden p-1.5 animate-in fade-in zoom-in-95 duration-100"
             >
-              <button
-                className="w-full text-left px-3 py-2 text-[11px] font-medium font-['Poppins'] text-red-500 hover:bg-red-50 transition-colors flex items-center gap-2 rounded-lg"
-                onClick={openDeleteModal}
-              >
-                <Trash2 size={14} />
-                Delete Component
-              </button>
+              {selectedRow?.company_id === 0 ? (
+                /* Static feedback text displayed for default template rows */
+                <div className="w-full text-left px-3 py-2 text-[11px] font-medium font-['Poppins'] text-red-400 bg-red-50/50 italic cursor-not-allowed select-none rounded-lg flex items-center gap-2">
+                  <Trash2 size={14} className="opacity-60" />
+                  Can't delete default
+                </div>
+              ) : (
+                /* Standard dynamic action switch button */
+                <button
+                  className="w-full text-left px-3 py-2 text-[11px] font-medium font-['Poppins'] text-red-500 hover:bg-red-50 transition-colors flex items-center gap-2 rounded-lg"
+                  onClick={openDeleteModal}
+                >
+                  <Trash2 size={14} />
+                  Delete Component
+                </button>
+              )}
             </div>
           </>,
           document.body,

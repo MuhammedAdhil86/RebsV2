@@ -295,7 +295,7 @@ export default function AttendanceFineRecordsReport() {
         <button
           onClick={handleDownloadExcel}
           disabled={!filteredRecords.length || loading}
-          className="flex items-center gap-2 h-[34px] px-5 text-[12px] rounded-lg border bg-black text-white disabled:opacity-50 hover:bg-gray-800 transition-colors cursor-pointer"
+          className="flex items-center gap-2 h-[34px] px-4 text-[12px] rounded border bg-black text-white disabled:opacity-50 hover:bg-gray-800 transition-colors cursor-pointer"
         >
           <Download className="w-4 h-4" />
           Download Report
