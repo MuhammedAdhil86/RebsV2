@@ -27,25 +27,31 @@ const SalaryComponents = () => {
       setIsLoading(true);
       setError(null);
 
-      // Fetch from both sources
       const [compRes, reimbursements] = await Promise.all([
         axiosInstance.get("/api/payroll/components", { signal }),
         payrollService.getReimbursements(signal),
       ]);
 
-      // 1. Set Earnings - Fixed mapping to match API key "component_type"
       const compItems = compRes.data?.data?.items;
       if (Array.isArray(compItems)) {
-        // Updated from item.type to item.component_type
-        const filteredEarnings = compItems.filter(
-          (item) => item.component_type === "earning",
-        );
+        const filteredEarnings = compItems
+          .filter((item) => item.component_type === "earning")
+          .map((item) => {
+            // Append (Default Template) to the name if company_id is 0
+            if (item.company_id === 0) {
+              return {
+                ...item,
+                name: `${item.name} (Default Template)`,
+                isReadOnly: true, // Custom flag to identify read-only items
+              };
+            }
+            return item;
+          });
         setEarningsData(filteredEarnings);
       } else {
         setEarningsData([]);
       }
 
-      // 2. Set Reimbursements
       setReimbursementData(reimbursements || []);
     } catch (err) {
       if (err.name !== "CanceledError") {
@@ -63,6 +69,10 @@ const SalaryComponents = () => {
   }, []);
 
   const handleEditRow = (rowData) => {
+    // Block editing if company_id is 0 or isReadOnly flag is present
+    if (rowData.company_id === 0 || rowData.isReadOnly) {
+      return;
+    }
     setSelectedComponent(rowData);
     setIsEditing(true);
   };

@@ -20,6 +20,9 @@ function DashboardHead({ userName, activeTab, setActiveTab }) {
   const [isAdminLeaveModalOpen, setIsAdminLeaveModalOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState(null);
 
+  // State to manage version tag visibility
+  const [showVersion, setShowVersion] = useState(false);
+
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
@@ -117,13 +120,23 @@ function DashboardHead({ userName, activeTab, setActiveTab }) {
           Hi, <span className="font-medium">{userName}</span>, welcome back!
         </p>
         <div className="flex items-center gap-3">
+          {/* --- VERSION TAG --- */}
+          {showVersion && (
+            <span className="text-[11px] font-mono text-gray-400 bg-gray-50 border border-gray-100 px-2 py-0.5 rounded transition-all">
+              v2.345 (12-06-2026)
+            </span>
+          )}
+
           <button className="p-2 rounded-full hover:bg-gray-100">
             <Icon
               icon="hugeicons:notification-02"
               className="w-5 h-5 text-gray-600"
             />
           </button>
-          <button className="p-2 rounded-full hover:bg-gray-100">
+          <button
+            onClick={() => setShowVersion(!showVersion)}
+            className="p-2 rounded-full hover:bg-gray-100"
+          >
             <Icon
               icon="solar:settings-linear"
               className="w-5 h-5 text-gray-600"
