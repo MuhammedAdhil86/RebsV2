@@ -3,6 +3,7 @@ import { Icon } from "@iconify/react";
 import dashboardService from "../../service/dashboardService";
 import AnnouncementModal from "./announcement";
 import AdminLeaveModal from "../../ui/addleavemodal";
+import HeaderGolbal from "../../ui/headerglobal"; // ✅ Added global header import
 
 function DashboardHead({ userName, activeTab, setActiveTab }) {
   const [dashboardData, setDashboardData] = useState({
@@ -114,39 +115,9 @@ function DashboardHead({ userName, activeTab, setActiveTab }) {
 
   return (
     <div className="w-full bg-white font-poppins relative">
-      {/* --- HEADER --- */}
-      <div className="flex justify-between items-center w-full sm:px-6 pt-3 pb-3">
-        <p className="text-sm text-gray-600">
-          Hi, <span className="font-medium">{userName}</span>, welcome back!
-        </p>
-        <div className="flex items-center gap-3">
-          {/* --- VERSION TAG --- */}
-          {showVersion && (
-            <span className="text-[11px] font-mono text-gray-400 bg-gray-50 border border-gray-100 px-2 py-0.5 rounded transition-all">
-              v2.345 (12-06-2026)
-            </span>
-          )}
-
-          <button className="p-2 rounded-full hover:bg-gray-100">
-            <Icon
-              icon="hugeicons:notification-02"
-              className="w-5 h-5 text-gray-600"
-            />
-          </button>
-          <button
-            onClick={() => setShowVersion(!showVersion)}
-            className="p-2 rounded-full hover:bg-gray-100"
-          >
-            <Icon
-              icon="solar:settings-linear"
-              className="w-5 h-5 text-gray-600"
-            />
-          </button>
-          <button className="flex items-center gap-2 px-3 py-1 border rounded-full text-[12px]">
-            Settings <span className="text-sm font-medium">{userName}</span>
-          </button>
-        </div>
-      </div>
+      {/* --- UNIVERSAL HEADER --- */}
+      {/* ✅ Cleanly integrated HeaderGolbal component instance context layout */}
+      <HeaderGolbal userName={userName} />
 
       {/* --- DASHBOARD TITLE --- */}
       <div className="w-full sm:px-6 mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">

@@ -7,7 +7,9 @@ import {
   userShiftDetailsUrl, 
   userLocationDeviceUrl, 
   allocateShiftUrl,
-  allocateEmployeePolicy, 
+  allocateEmployeePolicy,
+  fetchEffectiveAllocations,
+  postSwapShift,
 } from "../api/api"; 
 
 /**
@@ -116,5 +118,45 @@ export const createShift = async (payload) => {
     console.error("Error in createShift service:", error);
     // We throw the error so the Component's catch block can handle the toast messages
     throw error;
+  }
+};
+
+export const fetchShiftAllocationsforSwap = async (uuid = null) => {
+  try {
+    const cleanedUuid = typeof uuid === "string" ? uuid.trim() : uuid;
+
+    const response = await axiosInstance.get(fetchEffectiveAllocations, {
+      // If cleanedUuid is empty string or null, it skips appending query strings completely
+      params: cleanedUuid ? { user_id: cleanedUuid } : {},
+    });
+    
+    return response.data;
+  } catch (error) {
+    console.error("Failed to fetch shift allocations inside service:", error);
+    throw error;
+  }
+};
+
+export const executeShiftSwap = async (payload) => {
+  try {
+    const response = await axiosInstance.post(postSwapShift, payload);
+    
+    // Returns the exact success message response from your backend
+    return {
+      success: true,
+      message: response.data?.message || "Shifts swapped successfully.",
+      data: response.data?.data || null
+    };
+  } catch (error) {
+    console.error("Error inside executeShiftSwap service:", error);
+    
+    // Extracts the exact error message sent by your backend router validation/logic rules
+    const serverMessage = error.response?.data?.message || "Failed to process shift swap request.";
+    
+    return {
+      success: false,
+      message: serverMessage,
+      error: error.response?.data || error.message
+    };
   }
 };

@@ -2,9 +2,10 @@ import React, { useState } from "react";
 import { FiBell } from "react-icons/fi";
 import DashboardLayout from "../ui/pagelayout";
 import AllocateShift from "../components/shift_tabs/allocateshift";
-import ShiftOverview from "../components/shift_tabs/shiftoverview"; // ✅ Added import
+import ShiftOverview from "../components/shift_tabs/shiftoverview";
+import SwapShift from "../components/shift_tabs/swapshift"; // ✅ Added import for SwapShift
 
-// ✅ Online avatar
+// Online avatar
 const avatar = "https://cdn-icons-png.flaticon.com/512/3135/3135715.png";
 
 const TabButton = ({ title, isActive, onClick }) => (
@@ -21,7 +22,7 @@ const TabButton = ({ title, isActive, onClick }) => (
 );
 
 export default function ManageEmployeeShifts() {
-  const [activeTab, setActiveTab] = useState("overview"); // ✅ Default = Shift Overview
+  const [activeTab, setActiveTab] = useState("overview"); // Default = Shift Overview
 
   return (
     <div className="min-h-screen w-full bg-gray-100 flex flex-col">
@@ -47,7 +48,7 @@ export default function ManageEmployeeShifts() {
             </div>
 
             {/* Tabs */}
-            <div className="flex gap-5   border-b border-gray-200 px-5 py-2">
+            <div className="flex gap-5 border-b border-gray-200 px-5 py-2">
               <TabButton
                 title="Shift Overview"
                 isActive={activeTab === "overview"}
@@ -63,22 +64,14 @@ export default function ManageEmployeeShifts() {
                 isActive={activeTab === "swap"}
                 onClick={() => setActiveTab("swap")}
               />
-              <TabButton
-                title="Deleted Employees"
-                isActive={activeTab === "deleted"}
-                onClick={() => setActiveTab("deleted")}
-              />
             </div>
 
             {/* Content */}
             <div className="">
-              {activeTab === "overview" && <ShiftOverview />} {/* ✅ Imported component */}
+              {activeTab === "overview" && <ShiftOverview />}
               {activeTab === "allocate" && <AllocateShift />}
-              {activeTab === "swap" && (
-                <div className="text-center p-10 text-gray-500 text-sm">
-                  Swap Shift UI goes here.
-                </div>
-              )}
+              {activeTab === "swap" && <SwapShift />}{" "}
+              {/* ✅ Replaced placeholder with component */}
               {activeTab === "deleted" && (
                 <div className="text-center p-10 text-gray-500 text-sm">
                   Deleted Employees UI goes here.

@@ -204,7 +204,7 @@ export default function LoginUI() {
                         type="checkbox"
                         checked={rememberMe}
                         onChange={() => setRememberMe(!rememberMe)}
-                        className="h-4 w-4 text-black border-gray-300 rounded"
+                        className="h-4 w-4 bg-white text-black border-gray-300 rounded accent-black focus:ring-black"
                       />
                       <label className="ml-2 block text-gray-700 font-sans">
                         Remember me
