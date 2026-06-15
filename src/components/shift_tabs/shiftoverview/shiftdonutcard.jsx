@@ -2,15 +2,38 @@ import React from "react";
 import useShiftDashboardStore from "../../../store/shiftoverviewStore";
 
 const ShiftDonutChart = ({ className }) => {
-  const { shiftDetails } = useShiftDashboardStore();
+  const { shiftDetails, allShiftsMaster } = useShiftDashboardStore();
 
-  const total = shiftDetails.reduce((sum, s) => sum + (s.total_people || 0), 0);
+  // 1. MASTER Headcount Anchor (Keeps the donut visual sizes completely static)
+  const masterSource =
+    allShiftsMaster.length > 0 ? allShiftsMaster : shiftDetails;
+  const masterStaticTotal =
+    masterSource.reduce((sum, s) => sum + (s.total_people || 0), 0) || 20;
 
-  const donutChartData = shiftDetails.map((shift, index) => ({
-    label: shift.shift_name,
-    percentage: total ? Math.round((shift.total_people / total) * 100) : 0,
-    color: ["#8A79F6", "#FD9589", "#54D1DD", "#FFB067", "#52C41A"][index % 5],
-  }));
+  // 2. Map fixed visual segments based on permanent shift capacities
+  const donutChartData = masterSource.map((masterShift, index) => {
+    // Check if this shift exists in the current active payload
+    const activeFilteredShift = shiftDetails.find(
+      (s) => s.shift_name === masterShift.shift_name,
+    );
+
+    // Live display staff population count to toggle opacity filters
+    const liveStaffCount = activeFilteredShift
+      ? activeFilteredShift.total_people
+      : 0;
+
+    // Calculate static visual slice widths against the baseline master headcount
+    const staticPercentage = masterStaticTotal
+      ? Math.round((masterShift.total_people / masterStaticTotal) * 100)
+      : 0;
+
+    return {
+      label: masterShift.shift_name,
+      liveStaff: liveStaffCount,
+      percentage: staticPercentage,
+      color: ["#8A79F6", "#FD9589", "#54D1DD", "#FFB067", "#52C41A"][index % 5],
+    };
+  });
 
   const radius = 30;
   const circumference = 2 * Math.PI * radius;
@@ -20,7 +43,7 @@ const ShiftDonutChart = ({ className }) => {
     <div
       className={`bg-white rounded-xl p-4 pb-4 shadow-sm flex flex-col items-center w-full ${className}`}
     >
-      {/* SVG Donut - Same Design */}
+      {/* SVG Donut Ring */}
       <div className="relative w-[180px] h-[180px] mb-4">
         <svg
           viewBox="0 0 100 100"
@@ -31,6 +54,8 @@ const ShiftDonutChart = ({ className }) => {
             const dash = `${arc} ${circumference}`;
             const dashOffset = -accumulatedOffset;
             accumulatedOffset += arc;
+
+            if (item.percentage === 0) return null;
 
             return (
               <circle
@@ -43,19 +68,26 @@ const ShiftDonutChart = ({ className }) => {
                 strokeWidth="14"
                 strokeDasharray={dash}
                 strokeDashoffset={dashOffset}
+                className="transition-all duration-300 ease-in-out"
+                opacity={
+                  item.liveStaff > 0 || shiftDetails.length > 1 ? 1 : 0.25
+                }
               />
             );
           })}
         </svg>
         <div className="absolute inset-0 flex items-center justify-center">
-          <span className="text-[18px] font-bold text-black">{total}</span>
+          <span className="text-[18px] font-bold text-black">
+            {masterStaticTotal}
+          </span>
         </div>
       </div>
 
-      {/* HORIZONTAL SCROLLABLE LEGENDS WITH VISIBLE SCROLLBAR */}
+      {/* ---------- HORIZONTAL SCROLLABLE LEGENDS ---------- */}
       <div className="w-full mt-2">
         <div
-          className="flex flex-nowrap items-center gap-5 overflow-x-auto pb-3 custom-scrollbar"
+          // Added identical tailwind arbitrary scroll styling matching your ShiftRatioCard
+          className="flex flex-nowrap items-center gap-5 overflow-x-auto pb-3 [scrollbar-width:thin] [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-track]:bg-[#f1f1f1] [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#ccc] [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-[#8a79f6]"
           style={{ WebkitOverflowScrolling: "touch" }}
         >
           {donutChartData.map((item) => (
@@ -67,6 +99,7 @@ const ShiftDonutChart = ({ className }) => {
                 className="w-2.5 h-2.5 rounded-full flex-shrink-0"
                 style={{ backgroundColor: item.color }}
               />
+              {/* ✅ REMOVED COUNT FROM BOTTOM LABELS: Renders pure text context now */}
               <span className="text-[12px] text-gray-600 whitespace-nowrap font-medium">
                 {item.label}
               </span>
@@ -74,24 +107,6 @@ const ShiftDonutChart = ({ className }) => {
           ))}
         </div>
       </div>
-
-      {/* Small internal style for the "rarecase" scrollbar appearance */}
-      <style jsx>{`
-        .custom-scrollbar::-webkit-scrollbar {
-          height: 4px; /* Thin scrollbar */
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-          background: #f1f1f1;
-          border-radius: 10px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: #ccc;
-          border-radius: 10px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: #8a79f6; /* Color changes to your primary purple on hover */
-        }
-      `}</style>
     </div>
   );
 };

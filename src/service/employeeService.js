@@ -24,6 +24,7 @@ updatePersonalInfo,
 getStaff,
 getEmployeeCalendar,
 getEmployeeShifts,
+getDeleteUser,
 getEmployeePolicy,
 
   getMaritalStatus// make sure you export this from your api.js
@@ -504,6 +505,22 @@ export const addregularize = async (requestId, date, data) => {
     return response.data;
   } catch (error) {
     console.error("Error updating regularisation:", error);
+    throw error;
+  }
+};
+
+/**
+ * Fetch a list of deleted users/staff members
+ * @param {Object} [params] - Optional filters like page, limit, or search queries
+ * @returns {Promise<any>} - Resolves to the deleted users data payload
+ */
+export const fetchDeletedUsers = async (params = {}) => {
+  try {
+    const response = await axiosInstance.get(getDeleteUser, { params });
+    console.log("Deleted users list response:", response.data);
+    return response.data.data || response.data; // Accommodates either standard API envelope structures
+  } catch (error) {
+    console.error("❌ Error fetching deleted users:", error);
     throw error;
   }
 };

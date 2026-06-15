@@ -10,6 +10,7 @@ import UniversalTable from "../ui/universal_table";
 import { MoreVertical } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
 import { Link } from "react-router-dom";
+import { fetchDeletedUsers } from "../service/employeeService";
 
 const API_BASE_URL = "https://rebs-hr-cwhyx.ondigitalocean.app/";
 
@@ -17,10 +18,15 @@ const TABS = [
   { key: "all", label: "All Employees" },
   { key: "active", label: "Active Employees" },
   { key: "inactive", label: "Inactive Employees" },
+  { key: "deleted", label: "Deleted Employees" },
 ];
 
 function ManageEmployees() {
-  const { employees, loading, fetchEmployees } = useEmployeeStore();
+  const {
+    employees,
+    loading: initialLoading,
+    fetchEmployees,
+  } = useEmployeeStore();
   const [tab, setTab] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [view, setView] = useState("card");
@@ -32,9 +38,32 @@ function ManageEmployees() {
   const dropdownRef = useRef(null);
   const navigate = useNavigate();
 
+  // Local state tracking for deleted data engine
+  const [deletedEmployees, setDeletedEmployees] = useState([]);
+  const [loadingDeleted, setLoadingDeleted] = useState(false);
+
+  const isDeletedTab = tab === "deleted";
+  const loading = isDeletedTab ? loadingDeleted : initialLoading;
+
   useEffect(() => {
-    fetchEmployees();
-  }, [fetchEmployees]);
+    if (isDeletedTab) {
+      const loadDeletedData = async () => {
+        try {
+          setLoadingDeleted(true);
+          const data = await fetchDeletedUsers();
+          setDeletedEmployees(data || []);
+        } catch (err) {
+          toast.error("Failed to fetch deleted users data.");
+        } finally {
+          setLoadingDeleted(false);
+        }
+      };
+      loadDeletedData();
+    } else {
+      fetchEmployees();
+    }
+    setSelectedRows([]); // Clear check state models on tab context changes
+  }, [tab, fetchEmployees]);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -56,8 +85,11 @@ function ManageEmployees() {
     });
   };
 
-  const filteredData = employees
+  const baseDataset = isDeletedTab ? deletedEmployees : employees;
+
+  const filteredData = baseDataset
     .filter((emp) => {
+      if (isDeletedTab) return true;
       if (tab === "active")
         return emp.is_active === true || emp.is_active === "true";
       if (tab === "inactive")
@@ -72,27 +104,26 @@ function ManageEmployees() {
         emp.last_name?.toLowerCase().includes(term) ||
         emp.department?.toLowerCase().includes(term) ||
         emp.designation?.toLowerCase().includes(term) ||
-        emp.ph_no?.toString().includes(term)
+        emp.ph_no?.toString().includes(term) ||
+        emp.email?.toLowerCase().includes(term)
       );
     });
 
   const handleSelectAll = (e) => {
     if (e.target.checked) {
-      setSelectedRows(filteredData.map((d) => d.uuid));
+      setSelectedRows(filteredData.map((d) => d.uuid || d.id));
     } else {
       setSelectedRows([]);
     }
   };
 
-  const handleSelectRow = (e, uuid) => {
+  const handleSelectRow = (e, targetId) => {
     e.stopPropagation();
     setSelectedRows((prev) =>
-      e.target.checked ? [...prev, uuid] : prev.filter((x) => x !== uuid),
+      e.target.checked
+        ? [...prev, targetId]
+        : prev.filter((x) => x !== targetId),
     );
-  };
-
-  const handleRowClick = (row) => {
-    navigate(`/details/${row.id}`);
   };
 
   const bulkUpdateStatus = async (activate) => {
@@ -174,97 +205,115 @@ function ManageEmployees() {
     }
   };
 
-  // -----------------------------
-  // UPDATED CARD WITH FULL CLICK
-  // -----------------------------
-  const renderEmployeeCard = (emp) => (
-    <div
-      key={emp.id}
-      onClick={() => navigate(`/details/${emp.id}`)}
-      className="bg-white rounded-2xl flex flex-col justify-between h-full transition hover:shadow-md p-3.5 cursor-pointer"
-    >
-      <div className="flex justify-between items-start mb-4">
-        <div className="flex items-center space-x-4">
-          <img
-            src={emp.image || avatar}
-            alt={emp.first_name}
-            className="w-14 h-14 rounded-full object-cover"
-          />
+  const renderEmployeeCard = (emp) => {
+    const uniqueId = emp.uuid || emp.id;
+    return (
+      <div
+        key={uniqueId}
+        onClick={() => !isDeletedTab && navigate(`/details/${emp.id}`)}
+        className={`bg-white rounded-2xl flex flex-col justify-between h-full transition p-3.5 ${
+          isDeletedTab
+            ? "border border-red-100 shadow-sm"
+            : "hover:shadow-md cursor-pointer"
+        }`}
+      >
+        <div className="flex justify-between items-start mb-4">
+          <div className="flex items-center space-x-4">
+            <img
+              src={emp.image || avatar}
+              alt={emp.first_name}
+              className={`w-14 h-14 rounded-full object-cover ${isDeletedTab ? "grayscale-[30%]" : ""}`}
+            />
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <span
+              className={`px-3 py-1 rounded-full text-xs font-medium ${
+                isDeletedTab
+                  ? "bg-red-50 text-red-600 border border-red-200"
+                  : emp.is_active === true || emp.is_active === "true"
+                    ? "bg-green-100 text-green-700"
+                    : "bg-gray-100 text-gray-700"
+              }`}
+            >
+              {isDeletedTab
+                ? "Deleted"
+                : emp.is_active === true || emp.is_active === "true"
+                  ? "Active"
+                  : "Inactive"}
+            </span>
+            {!isDeletedTab && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate(`/details/${emp.id}`);
+                }}
+                className="p-2 rounded-full hover:bg-gray-100"
+              >
+                <FiMoreHorizontal className="w-5 h-5 text-gray-500" />
+              </button>
+            )}
+          </div>
         </div>
 
-        <div className="flex items-center space-x-2">
-          <span
-            className={`px-3 py-1 rounded-full text-xs font-medium ${
-              emp.is_active === true || emp.is_active === "true"
-                ? "bg-green-100 text-green-700"
-                : "bg-red-100 text-red-700"
-            }`}
-          >
-            {emp.is_active === true || emp.is_active === "true"
-              ? "Active"
-              : "Inactive"}
-          </span>
-          {/* Button fixed with stopPropagation */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              navigate(`/details/${emp.id}`);
-            }}
-            className="p-2 rounded-full hover:bg-gray-100"
-          >
-            <FiMoreHorizontal className="w-5 h-5 text-gray-500" />
-          </button>
+        <div>
+          <h3 className="text-[12px] font-medium text-gray-800">
+            {emp.first_name} {emp.last_name}
+          </h3>
+          <p className="text-[10px] text-gray-500">
+            {emp.designation || "N/A"}
+          </p>
+        </div>
+
+        <div className="flex flex-col text-gray-600 bg-gray-50 p-2 rounded-lg mt-2">
+          <div className="flex justify-between">
+            <span className="text-[10px] text-gray-700">Department</span>
+            <span className="text-[10px] text-gray-700">
+              {isDeletedTab ? "Date of Deletion" : "Date of Joining"}
+            </span>
+          </div>
+
+          <div className="flex justify-between mt-0.5">
+            <span className="text-[12px] text-black">
+              {emp.department || "N/A"}
+            </span>
+            <span className="text-[12px] text-black font-medium">
+              {isDeletedTab
+                ? formatDate(emp.deleted_at)
+                : formatDate(emp.date_of_join)}
+            </span>
+          </div>
+
+          <div className="flex items-center space-x-2 text-[12px] text-gray-800 mt-1.5 border-t border-gray-100 pt-1">
+            <Icon icon="solar:phone-linear" className="text-gray-500 w-4 h-4" />
+            <span>{emp.ph_no || "N/A"}</span>
+          </div>
+
+          <div className="flex items-center space-x-2 text-[12px] text-gray-800">
+            <Icon icon="mage:email" className="text-gray-500 w-4 h-4" />
+            <span className="truncate max-w-[22ch]">{emp.email}</span>
+          </div>
         </div>
       </div>
-
-      <div>
-        <h3 className="text-[12px] font-medium text-gray-800">
-          {emp.first_name} {emp.last_name}
-        </h3>
-        <p className="text-[10px] text-gray-500">{emp.designation}</p>
-      </div>
-      <div className="flex flex-col text-gray-600 bg-gray-100 p-2 rounded-lg mt-2">
-        {/* LABELS */}
-        <div className="flex justify-between">
-          <span className="text-[10px] text-gray-700">Department</span>
-          <span className="text-[10px] text-gray-700">Date of Joining</span>
-        </div>
-
-        {/* VALUES — reduced gap using mt-0.5 */}
-        <div className="flex justify-between mt-0.5">
-          <span className="text-[12px] text-black">{emp.department}</span>
-          <span className="text-[12px] text-black">
-            {formatDate(emp.date_of_join)}
-          </span>
-        </div>
-
-        {/* PHONE */}
-        <div className="flex items-center space-x-2 text-[12px] text-gray-800 mt-1.5 ">
-          <Icon icon="solar:phone-linear" className="text-black w-4 h-4" />
-          <span>{emp.ph_no}</span>
-        </div>
-
-        {/* EMAIL */}
-        <div className="flex items-center space-x-2 text-[12px] text-gray-800 ">
-          <Icon icon="mage:email" className="text-black w-4 h-4" />
-          <span>{emp.email}</span>
-        </div>
-      </div>
-    </div>
-  );
+    );
+  };
 
   const tableColumns = [
     {
       key: "select",
       label: "",
-      render: (_, row) => (
-        <input
-          type="checkbox"
-          className="h-4 w-4 rounded border-gray-300 text-blue-600"
-          checked={selectedRows.includes(row.uuid)}
-          onChange={(e) => handleSelectRow(e, row.uuid)}
-        />
-      ),
+      render: (_, row) => {
+        const rowId = row.uuid || row.id;
+        return (
+          <input
+            type="checkbox"
+            className="h-4 w-4 rounded border-gray-300 text-blue-600 cursor-pointer disabled:opacity-40"
+            checked={selectedRows.includes(rowId)}
+            onChange={(e) => handleSelectRow(e, rowId)}
+            disabled={isDeletedTab}
+          />
+        );
+      },
     },
     {
       key: "name",
@@ -300,10 +349,14 @@ function ManageEmployees() {
       },
     },
     {
-      key: "date_of_join",
-      label: "Date of Joining",
+      key: "date_context",
+      label: isDeletedTab ? "Date of Deletion" : "Date of Joining",
       render: (_, row) =>
-        row.date_of_join ? formatDate(row.date_of_join) : "N/A",
+        isDeletedTab
+          ? formatDate(row.deleted_at)
+          : row.date_of_join
+            ? formatDate(row.date_of_join)
+            : "N/A",
     },
     {
       key: "department",
@@ -346,28 +399,33 @@ function ManageEmployees() {
       render: (_, row) => (
         <span
           className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-            row.is_active === false || row.is_active === "false"
+            isDeletedTab
               ? "bg-red-100 text-red-800"
-              : "bg-green-100 text-green-800"
+              : row.is_active === false || row.is_active === "false"
+                ? "bg-gray-100 text-gray-800"
+                : "bg-green-100 text-green-800"
           }`}
         >
-          {row.is_active === false || row.is_active === "false"
-            ? "Inactive"
-            : "Active"}
+          {isDeletedTab
+            ? "Deleted"
+            : row.is_active === false || row.is_active === "false"
+              ? "Inactive"
+              : "Active"}
         </span>
       ),
     },
     {
       key: "actions",
       label: "",
-      render: (_, row) => (
-        <button
-          onClick={() => navigate(`/details/${row.id}`)}
-          className="text-gray-400 hover:text-gray-600"
-        >
-          <MoreVertical size={16} />
-        </button>
-      ),
+      render: (_, row) =>
+        !isDeletedTab ? (
+          <button
+            onClick={() => navigate(`/details/${row.id}`)}
+            className="text-gray-400 hover:text-gray-600"
+          >
+            <MoreVertical size={16} />
+          </button>
+        ) : null,
     },
   ];
 
@@ -377,8 +435,8 @@ function ManageEmployees() {
 
       <div className="h-full flex flex-col">
         <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-6">
-          {/* Header */}
-          <div className="flex justify-between items-center  border-b border-gray-300 ">
+          {/* Header Area */}
+          <div className="flex justify-between items-center border-b border-gray-300 pb-2">
             <h1 className="text-xl font-medium text-gray-800">
               Manage Employees
             </h1>
@@ -394,7 +452,7 @@ function ManageEmployees() {
             </div>
           </div>
 
-          {/* Tabs */}
+          {/* Navigation Tabs */}
           <section className="bg-white w-full mb-2">
             <div className="border-b flex flex-wrap gap-4 px-0 pt-2 text-sm text-gray-600">
               {TABS.map((t) => (
@@ -413,23 +471,25 @@ function ManageEmployees() {
             </div>
           </section>
 
-          {/* Controls */}
+          {/* Action Control Blocks */}
           <div className="flex justify-between items-center mb-4 flex-wrap gap-4">
             <span className="text-gray-700 font-medium text-[14px]">
               {loading
                 ? "Loading..."
-                : `${filteredData.length} Total Employees`}
+                : `${filteredData.length} Total ${isDeletedTab ? "Deleted Record(s)" : "Employees"}`}
             </span>
 
             <div className="flex items-center space-x-3">
-              <Link to="/employeeonboarding">
-                <button className="flex items-center bg-black hover:bg-gray-800 text-white px-3 sm:px-4 py-2 rounded-lg text-[12px]">
-                  <FiPlus className="w-4 h-4 mr-1" /> Add Employee
-                </button>
-              </Link>
+              {!isDeletedTab && (
+                <Link to="/employeeonboarding">
+                  <button className="flex items-center bg-black hover:bg-gray-800 text-white px-3 sm:px-4 py-2 rounded-lg text-[12px]">
+                    <FiPlus className="w-4 h-4 mr-1" /> Add Employee
+                  </button>
+                </Link>
+              )}
 
-              {/* Dropdown */}
-              {view === "table" && (
+              {/* Operations Dropdown Panel */}
+              {view === "table" && !isDeletedTab && (
                 <div className="relative">
                   <button
                     onClick={() => setIsDropdownOpen(!isDropdownOpen)}
@@ -482,7 +542,7 @@ function ManageEmployees() {
                 </div>
               )}
 
-              {/* View Toggle */}
+              {/* View Layout Toggles */}
               <div className="flex items-center bg-white rounded-lg border border-gray-200 shadow-sm p-1">
                 <button
                   className={`px-3 sm:px-4 py-2 rounded-lg text-[12px] font-medium ${
@@ -507,7 +567,7 @@ function ManageEmployees() {
                 </button>
               </div>
 
-              {/* Search */}
+              {/* Filtering Search Bar */}
               <div className="relative flex items-center">
                 <input
                   type="text"
@@ -521,18 +581,18 @@ function ManageEmployees() {
             </div>
           </div>
 
-          {/* Conditional View */}
+          {/* Core Dataset Rendering Area */}
           {view === "card" ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {loading ? (
                 <div className="col-span-full text-center text-gray-500 py-10">
-                  Loading...
+                  Loading records...
                 </div>
               ) : filteredData.length > 0 ? (
                 filteredData.map(renderEmployeeCard)
               ) : (
                 <div className="col-span-full text-center text-gray-500 py-10">
-                  No employees to show.
+                  No records to display.
                 </div>
               )}
             </div>
@@ -546,7 +606,7 @@ function ManageEmployees() {
         </div>
       </div>
 
-      {/* Delete Confirmation Modal */}
+      {/* Confirmation Modal */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-xl w-[400px] p-6">
@@ -557,7 +617,7 @@ function ManageEmployees() {
               Are you sure you want to permanently delete
               <span className="font-medium text-gray-900">
                 {" "}
-                {selectedRows.length} employee(s)
+                {selectedRows.length} employee(s){" "}
               </span>
               ? This action cannot be undone.
             </p>

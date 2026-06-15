@@ -2,8 +2,13 @@ import React, { useEffect, useMemo, useRef } from "react";
 import useShiftDashboardStore from "../../store/shiftoverviewStore";
 
 const ShiftRatioCard = ({ className = "" }) => {
-  const { shiftRatios, fetchShiftRatios, selectedShiftName, changeShift } =
-    useShiftDashboardStore();
+  const {
+    shiftRatios,
+    fetchShiftRatios,
+    selectedShiftName,
+    changeShift,
+    allShiftsMaster,
+  } = useShiftDashboardStore();
 
   const scrollContainerRef = useRef(null);
 
@@ -55,14 +60,24 @@ const ShiftRatioCard = ({ className = "" }) => {
       <div className="w-full mb-6">
         <div
           ref={scrollContainerRef}
-          className="flex flex-nowrap items-center gap-6 overflow-x-auto pb-2 custom-scrollbar"
+          className="flex flex-nowrap items-center gap-6 overflow-x-auto pb-2 [scrollbar-width:thin] [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-track]:bg-[#f1f1f1] [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#ccc] [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-[#8a79f6]"
           style={{ WebkitOverflowScrolling: "touch" }}
         >
           {shifts.map((shift) => (
             <button
               key={shift}
-              onClick={() => changeShift?.(shift)}
-              // Added "active-shift-tab" class for the querySelector
+              type="button"
+              onClick={() => {
+                // Find the full shift object from the master shift list to preserve the shift_id metadata structure context
+                const matchedShiftObj = allShiftsMaster?.find(
+                  (s) => s.shift_name === shift,
+                );
+                if (matchedShiftObj && changeShift) {
+                  changeShift(matchedShiftObj);
+                } else {
+                  changeShift?.(shift);
+                }
+              }}
               className={`flex-shrink-0 pb-2 text-[12px] font-medium whitespace-nowrap transition-all relative ${
                 shift === activeShift
                   ? "text-black active-shift-tab"
@@ -110,10 +125,10 @@ const ShiftRatioCard = ({ className = "" }) => {
         />
       </div>
 
-      {/* ---------- LEGENDS ---------- */}
+      {/* ---------- LEGENDS SCROLL AREA ---------- */}
       <div className="mt-auto">
         <div
-          className="flex flex-nowrap items-center gap-5 overflow-x-auto pb-3 custom-scrollbar"
+          className="flex flex-nowrap items-center gap-5 overflow-x-auto pb-3 [scrollbar-width:thin] [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-track]:bg-[#f1f1f1] [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#ccc] [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-[#8a79f6]"
           style={{ WebkitOverflowScrolling: "touch" }}
         >
           <LegendItem color="bg-green-400" label="Online" value={online} />
@@ -123,23 +138,6 @@ const ShiftRatioCard = ({ className = "" }) => {
           <LegendItem color="bg-purple-600" label="Early" value={early} />
         </div>
       </div>
-
-      <style jsx>{`
-        .custom-scrollbar::-webkit-scrollbar {
-          height: 4px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-          background: #f1f1f1;
-          border-radius: 10px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: #ccc;
-          border-radius: 10px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: #8a79f6;
-        }
-      `}</style>
     </div>
   );
 };

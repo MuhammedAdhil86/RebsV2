@@ -391,7 +391,7 @@ export const postCloneLeavePolicy = "/leave-policy/clone-defaults";
 export const getReimbursementList = "/api/payroll/reimbursements/list";
 export const updateReimbursementStatus = "/api/payroll/reimbursements/status";
 export const updateSalaryPayrollComponent = (id) => `/api/payroll/components/${id}`;
-
+export const getDeleteUser= "/staff/admin/deleted-users";
 // Change this:
 // export const updatePayrollSalaryTemplate = (id) => `/api/payroll/templates${id}`;
 
@@ -411,3 +411,7 @@ export const updateLeavePolicy = (id) => `/leave-policy/update/${id}`;
 
 export const regularizeAttendanceApproval = "/admin/attendance/regularize/approval";
 export const RemainingRegularization = (uuid) => `/admin/attendance/regularization/remaining/${uuid}`;
+
+
+// Notification
+export const getAllNotification = "/employee/notification/get";

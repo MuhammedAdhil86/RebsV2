@@ -230,8 +230,21 @@ export default function SwapShift() {
         {/* Left Section (Form Controls) */}
         <div className="xl:col-span-1 space-y-5 border-r border-gray-100 pr-0 xl:pr-6 font-normal">
           <div>
-            <h2 className="text-base font-normal text-gray-800">
-              Request Shift Swap
+            <h2 className="text-base font-normal text-gray-800 flex items-center gap-1.5">
+              Swap Shift
+              <svg
+                className="h-4 w-4 text-gray-500"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
+                />
+              </svg>
             </h2>
             <p className="text-xs text-gray-500 font-normal">
               Configure the exchange data allocations framework down below.

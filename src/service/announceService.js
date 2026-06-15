@@ -1,6 +1,6 @@
 import axiosInstance from "./axiosinstance";
 // Added getAnnouncement to the imports below
-import { postAnnouncement, getDept, getStaff, getAnnouncement } from "../api/api"; 
+import { postAnnouncement, getDept, getStaff, getAllNotification } from "../api/api"; 
 
 const announceService = {
   addAnnouncement: async (announcementData) => {
@@ -62,6 +62,18 @@ const announceService = {
       return response.data.data || response.data;
     } catch (error) {
       console.error("Error fetching announcements:", error);
+      throw error;
+    }
+  },
+  fetchNotifications: async () => {
+    try {
+      const response = await axiosInstance.get(getAllNotification);
+      console.log("Notifications fetched:", response.data);
+      
+      // Returning response.data.data or falling back to response.data
+      return response.data.data || response.data;
+    } catch (error) {
+      console.error("Error fetching notifications:", error);
       throw error;
     }
   },

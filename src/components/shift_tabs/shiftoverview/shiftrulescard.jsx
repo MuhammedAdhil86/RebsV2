@@ -22,12 +22,9 @@ const ShiftRulesCard = ({ className }) => {
     >
       {/* ---------- HEADER ---------- */}
       <div className="flex justify-between items-center pb-3 mb-3 border-b border-gray-200">
-        <div className="text-base font-medium text-gray-800">
-          {heading || "Shift Rules and Conditions"}
-        </div>
-        <button className="text-gray-700 flex items-center gap-2 text-sm">
-          <FiEdit size={18} /> Edit
-        </button>
+        <h2 className="text-[14px] text-gray-800 font-medium">
+          Shift Rules and Conditions
+        </h2>
       </div>
 
       <div className="space-y-4 overflow-auto">
