@@ -1,15 +1,22 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react"; // 1. Added useEffect
 import DashboardLayout from "../ui/pagelayout";
 import DashboardHead from "../components/dashboard/head";
 import DashboardOverview from "../components/dashboard/overview";
 import LogDetails from "../components/dashboard/Attendance Tabs/logdetails";
 import LeaveRequestes from "../components/tables/leaverequests";
-// DailyAttendance import removed
 import MusterRoll from "../components/tables/musterroll";
 import RegularizationTable from "../components/tables/regularizationtable";
 
 function Dashboard({ userId, userName, onLogout }) {
-  const [activeTab, setActiveTab] = useState("overview");
+  // 2. Initialize state from localStorage if it exists, otherwise default to "overview"
+  const [activeTab, setActiveTab] = useState(() => {
+    return localStorage.getItem("dashboardActiveTab") || "overview";
+  });
+
+  // 3. Save the active tab to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem("dashboardActiveTab", activeTab);
+  }, [activeTab]);
 
   // Attendance Data
   const ATTENDANCE_DATA = {
@@ -52,11 +59,8 @@ function Dashboard({ userId, userName, onLogout }) {
 
   return (
     <DashboardLayout userId={userId} userName={userName} onLogout={onLogout}>
-      {/* Remove parent padding/margin */}
       <div className="h-full flex flex-col w-full m-0 p-0">
-        {/* Scrollable internal content with hidden scrollbar */}
         <div className="flex-1 overflow-y-auto w-full m-0 p-0 scrollbar-hide">
-          {/* Dashboard Header */}
           <DashboardHead
             userName={userName}
             ATTENDANCE_DATA={ATTENDANCE_DATA}
@@ -64,7 +68,6 @@ function Dashboard({ userId, userName, onLogout }) {
             setActiveTab={setActiveTab}
           />
 
-          {/* Page Content Area */}
           <div className="mt-6 flex flex-col gap-6 w-full m-0 p-0">
             {activeTab === "overview" && (
               <DashboardOverview
@@ -82,17 +85,13 @@ function Dashboard({ userId, userName, onLogout }) {
 
             {activeTab === "leaverequests" && <LeaveRequestes />}
 
-            {/* Daily Attendance rendering block removed */}
-
             {activeTab === "musterRoll" && <MusterRoll />}
 
-            {/* ✅ ONLY ADDITION */}
             {activeTab === "regularization" && <RegularizationTable />}
           </div>
         </div>
       </div>
 
-      {/* Hidden scrollbar CSS */}
       <style>{`
         .scrollbar-hide::-webkit-scrollbar {
           display: none;

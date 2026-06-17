@@ -1,13 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import DashboardLayout from "../ui/pagelayout";
-import avatar from "../assets/img/avatar.svg";
-import {
-  FiBell,
-  FiSearch,
-  FiRefreshCw,
-  FiEye,
-  FiAlertCircle,
-} from "react-icons/fi";
+import HeaderGlobal from "../ui/headerglobal";
+import { FiSearch, FiRefreshCw, FiEye, FiAlertCircle } from "react-icons/fi";
 import { MoreHorizontal } from "lucide-react";
 import UniversalTable from "../ui/universal_table";
 import { fetchJobEnquiries, moveToReview } from "../service/hiringService";
@@ -101,7 +95,7 @@ const JobEnquiry = () => {
       key: "first_name",
       width: 220,
       render: (_, row) => (
-        <div className="flex flex-col items-center">
+        <div className="flex flex-col">
           <span className="font-medium text-gray-800">{`${row.first_name} ${row.last_name}`}</span>
           <span className="text-[10px] text-gray-400">{row.email}</span>
         </div>
@@ -133,6 +127,7 @@ const JobEnquiry = () => {
       render: (_, row) => (
         <div className="flex justify-center">
           <button
+            type="button"
             onClick={(e) => handleOpenMenu(e, row.id)}
             className={`p-2 rounded-full transition-colors ${openMenuId === row.id ? "bg-gray-100" : "hover:bg-gray-50"}`}
           >
@@ -152,71 +147,67 @@ const JobEnquiry = () => {
   return (
     <DashboardLayout userName="Admin">
       <Toaster position="top-right" />
-      <div className="bg-white flex justify-between items-center p-3 mb-2 rounded-xl">
-        <h1 className="text-[15px] font-medium text-gray-800">Job Enquiries</h1>
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 flex items-center justify-center rounded-full border border-gray-300 cursor-pointer">
-            <FiBell className="text-gray-600 text-lg" />
-          </div>
-          <div className="w-9 h-9 rounded-full border border-gray-200 overflow-hidden">
-            <img
-              src={avatar}
-              alt="User"
-              className="w-full h-full object-cover"
-            />
-          </div>
-        </div>
-      </div>
 
-      {!selectedApplication ? (
-        <>
-          <div className="bg-white p-4 rounded-t-2xl border-b border-gray-100 flex justify-between items-center">
-            <div className="relative w-full max-w-sm">
-              <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm" />
-              <input
-                type="text"
-                placeholder="Search candidates..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 bg-[#f9fafb] border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-black transition-all"
-              />
+      <div className="flex-1 overflow-y-auto px-4 flex flex-col gap-6">
+        {/* Global Shared Header Integration */}
+        <HeaderGlobal userName="Admin" />
+
+        {/* Pure Section Title Header */}
+        <div className="border-b border-gray-200 pb-2 -mt-2">
+          <h1 className="text-xl font-medium text-gray-800">Job Enquiries</h1>
+        </div>
+
+        {!selectedApplication ? (
+          <>
+            <div className="bg-white p-4 rounded-t-2xl border-b border-gray-100 flex justify-between items-center">
+              <div className="relative w-full max-w-sm">
+                <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm" />
+                <input
+                  type="text"
+                  placeholder="Search candidates..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 bg-[#f9fafb] border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-black transition-all"
+                />
+              </div>
+              <span className="text-[11px] text-gray-400 font-medium bg-gray-50 px-3 py-1.5 rounded-full border border-gray-100">
+                Total: {filteredData.length}
+              </span>
             </div>
-            <span className="text-[11px] text-gray-400 font-medium bg-gray-50 px-3 py-1.5 rounded-full border border-gray-100">
-              Total: {filteredData.length}
-            </span>
-          </div>
-          <div className="bg-white rounded-b-2xl shadow-sm min-h-[450px]">
-            {loading ? (
-              <div className="flex flex-col items-center justify-center py-20">
-                <div className="w-8 h-8 border-4 border-gray-100 border-t-black rounded-full animate-spin"></div>
-              </div>
-            ) : error ? (
-              <div className="flex flex-col items-center justify-center py-20 gap-4">
-                <FiAlertCircle className="text-red-400 text-4xl" />
-                <button
-                  onClick={loadData}
-                  className="bg-black text-white px-6 py-2 rounded-lg text-xs font-bold uppercase"
-                >
-                  Retry
-                </button>
-              </div>
-            ) : (
-              <UniversalTable
-                columns={columns}
-                data={filteredData}
-                rowsPerPage={8}
-                rowClickHandler={() => setOpenMenuId(null)}
-              />
-            )}
-          </div>
-        </>
-      ) : (
-        /* ✅ Logic switched to the separate file component */
-        <ApplicationDetail
-          application={selectedApplication}
-          onBack={() => setSelectedApplication(null)}
-        />
-      )}
+
+            <div className="bg-white rounded-b-2xl shadow-sm min-h-[450px]">
+              {loading ? (
+                <div className="flex flex-col items-center justify-center py-20">
+                  <div className="w-8 h-8 border-4 border-gray-100 border-t-black rounded-full animate-spin"></div>
+                </div>
+              ) : error ? (
+                <div className="flex flex-col items-center justify-center py-20 gap-4">
+                  <FiAlertCircle className="text-red-400 text-4xl" />
+                  <button
+                    type="button"
+                    onClick={loadData}
+                    className="bg-black text-white px-6 py-2 rounded-lg text-xs font-bold uppercase"
+                  >
+                    Retry
+                  </button>
+                </div>
+              ) : (
+                <UniversalTable
+                  columns={columns}
+                  data={filteredData}
+                  rowsPerPage={8}
+                  rowClickHandler={() => setOpenMenuId(null)}
+                />
+              )}
+            </div>
+          </>
+        ) : (
+          <ApplicationDetail
+            application={selectedApplication}
+            onBack={() => setSelectedApplication(null)}
+          />
+        )}
+      </div>
 
       {openMenuId && (
         <div
@@ -231,6 +222,7 @@ const JobEnquiry = () => {
             </p>
           </div>
           <button
+            type="button"
             onClick={() =>
               handleViewApplication(
                 enquiryData.find((i) => i.id === openMenuId),
@@ -241,6 +233,7 @@ const JobEnquiry = () => {
             <FiEye className="text-gray-400" /> View Application
           </button>
           <button
+            type="button"
             onClick={() => {
               setOpenMenuId(null);
               toast("Updating status manually...");

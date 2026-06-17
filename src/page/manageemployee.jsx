@@ -1,15 +1,21 @@
 import React, { useEffect, useState, useRef } from "react";
 import DashboardLayout from "../ui/pagelayout";
+import HeaderGlobal from "../ui/headerglobal";
 import avatar from "../assets/img/avatar.svg";
-import { FiBell, FiSearch, FiPlus, FiMoreHorizontal } from "react-icons/fi";
-import { ChevronDown, Shield, UserCheck, UserX, Trash2 } from "lucide-react";
+import { FiSearch, FiPlus, FiMoreHorizontal } from "react-icons/fi";
+import {
+  ChevronDown,
+  Shield,
+  UserCheck,
+  UserX,
+  Trash2,
+  MoreVertical,
+} from "lucide-react";
 import { Icon } from "@iconify/react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import useEmployeeStore from "../store/employeeStore";
 import UniversalTable from "../ui/universal_table";
-import { MoreVertical } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
-import { Link } from "react-router-dom";
 import { fetchDeletedUsers } from "../service/employeeService";
 
 const API_BASE_URL = "https://rebs-hr-cwhyx.ondigitalocean.app/";
@@ -244,6 +250,7 @@ function ManageEmployees() {
             </span>
             {!isDeletedTab && (
               <button
+                type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   navigate(`/details/${emp.id}`);
@@ -301,7 +308,18 @@ function ManageEmployees() {
   const tableColumns = [
     {
       key: "select",
-      label: "",
+      label: (
+        <input
+          type="checkbox"
+          className="h-4 w-4 rounded border-gray-300 text-blue-600 cursor-pointer disabled:opacity-40"
+          onChange={handleSelectAll}
+          checked={
+            filteredData.length > 0 &&
+            selectedRows.length === filteredData.length
+          }
+          disabled={isDeletedTab || filteredData.length === 0}
+        />
+      ),
       render: (_, row) => {
         const rowId = row.uuid || row.id;
         return (
@@ -420,6 +438,7 @@ function ManageEmployees() {
       render: (_, row) =>
         !isDeletedTab ? (
           <button
+            type="button"
             onClick={() => navigate(`/details/${row.id}`)}
             className="text-gray-400 hover:text-gray-600"
           >
@@ -434,22 +453,15 @@ function ManageEmployees() {
       <Toaster position="top-right" reverseOrder={false} />
 
       <div className="h-full flex flex-col">
-        <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-6">
-          {/* Header Area */}
-          <div className="flex justify-between items-center border-b border-gray-300 pb-2">
+        <div className="flex-1 overflow-y-auto px-4 flex flex-col gap-6">
+          {/* Integrated Global Shared Header */}
+          <HeaderGlobal userName="Admin" />
+
+          {/* Page Subtitle Context Title */}
+          <div className="flex justify-between items-center border-b border-gray-200 pb-2 -mt-">
             <h1 className="text-xl font-medium text-gray-800">
               Manage Employees
             </h1>
-            <div className="flex items-center space-x-4">
-              <div className="w-8 h-8 flex items-center justify-center border rounded-full">
-                <FiBell className="w-5 h-5 text-gray-600" />
-              </div>
-              <img
-                src={avatar}
-                alt="Profile"
-                className="w-8 h-8 rounded-full object-cover"
-              />
-            </div>
           </div>
 
           {/* Navigation Tabs */}
@@ -458,6 +470,7 @@ function ManageEmployees() {
               {TABS.map((t) => (
                 <button
                   key={t.key}
+                  type="button"
                   onClick={() => setTab(t.key)}
                   className={`pb-2 whitespace-nowrap transition-colors ${
                     tab === t.key
@@ -482,7 +495,10 @@ function ManageEmployees() {
             <div className="flex items-center space-x-3">
               {!isDeletedTab && (
                 <Link to="/employeeonboarding">
-                  <button className="flex items-center bg-black hover:bg-gray-800 text-white px-3 sm:px-4 py-2 rounded-lg text-[12px]">
+                  <button
+                    type="button"
+                    className="flex items-center bg-black hover:bg-gray-800 text-white px-3 sm:px-4 py-2 rounded-lg text-[12px]"
+                  >
                     <FiPlus className="w-4 h-4 mr-1" /> Add Employee
                   </button>
                 </Link>
@@ -492,6 +508,7 @@ function ManageEmployees() {
               {view === "table" && !isDeletedTab && (
                 <div className="relative">
                   <button
+                    type="button"
                     onClick={() => setIsDropdownOpen(!isDropdownOpen)}
                     className="flex items-center bg-gray-800 hover:bg-gray-900 text-white px-3 sm:px-4 py-2 rounded-lg text-[12px]"
                   >
@@ -506,6 +523,7 @@ function ManageEmployees() {
                     >
                       <div className="py-1">
                         <button
+                          type="button"
                           onClick={handleAddPrivilege}
                           className="w-full text-left px-4 py-2 text-[12px] text-gray-700 hover:bg-gray-100 flex items-center"
                         >
@@ -513,6 +531,7 @@ function ManageEmployees() {
                           Add Privilege
                         </button>
                         <button
+                          type="button"
                           onClick={handleActivateUser}
                           className="w-full text-left px-4 py-2 text-[12px] text-gray-700 hover:bg-gray-100 flex items-center"
                         >
@@ -520,6 +539,7 @@ function ManageEmployees() {
                           Activate User
                         </button>
                         <button
+                          type="button"
                           onClick={handleDeactivateUser}
                           className="w-full text-left px-4 py-2 text-[12px] text-gray-700 hover:bg-gray-100 flex items-center"
                         >
@@ -530,6 +550,7 @@ function ManageEmployees() {
                         <hr className="my-1 border-gray-200" />
 
                         <button
+                          type="button"
                           onClick={handleDelete}
                           className="w-full text-left px-4 py-2 text-[12px] text-red-600 hover:bg-red-50 flex items-center"
                         >
@@ -545,6 +566,7 @@ function ManageEmployees() {
               {/* View Layout Toggles */}
               <div className="flex items-center bg-white rounded-lg border border-gray-200 shadow-sm p-1">
                 <button
+                  type="button"
                   className={`px-3 sm:px-4 py-2 rounded-lg text-[12px] font-medium ${
                     view === "table"
                       ? "bg-gray-100 text-gray-800 shadow-sm"
@@ -556,6 +578,7 @@ function ManageEmployees() {
                 </button>
 
                 <button
+                  type="button"
                   className={`px-3 sm:px-4 py-2 rounded-lg text-[12px] font-medium ${
                     view === "card"
                       ? "bg-gray-100 text-gray-800 shadow-sm"
@@ -614,10 +637,9 @@ function ManageEmployees() {
               Confirm Delete
             </h2>
             <p className="text-sm text-gray-600 mb-4">
-              Are you sure you want to permanently delete
+              Are you sure you want to permanently delete{" "}
               <span className="font-medium text-gray-900">
-                {" "}
-                {selectedRows.length} employee(s){" "}
+                {selectedRows.length} employee(s)
               </span>
               ? This action cannot be undone.
             </p>
@@ -635,6 +657,7 @@ function ManageEmployees() {
 
             <div className="flex justify-end gap-3">
               <button
+                type="button"
                 onClick={() => setShowDeleteConfirm(false)}
                 disabled={isDeleting}
                 className="px-4 py-2 text-sm rounded-md border border-gray-300 text-gray-700 hover:bg-gray-100"
@@ -642,6 +665,7 @@ function ManageEmployees() {
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={confirmBulkDelete}
                 disabled={isDeleting}
                 className="px-4 py-2 text-sm rounded-md bg-red-600 text-white hover:bg-red-700"

@@ -1,7 +1,7 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { FiBell } from "react-icons/fi";
 import DashboardLayout from "../ui/pagelayout";
+import HeaderGlobal from "../ui/headerglobal"; // ✅ Integrated global header component
 import WfhTab from "../components/requests_tab/wtf_tab";
 import RegularizationTab from "../components/requests_tab/regularization_tab";
 import DeviceRequestTab from "../components/requests_tab/device_tab";
@@ -9,12 +9,20 @@ import ClaimsRequestTab from "../components/requests_tab/claims_tab";
 import DeviceApprovalModal from "../ui/devicestatusmodal";
 
 function Requests() {
-  const [activeTab, setActiveTab] = useState("wfh");
+  // ✅ Lazy state initialization from localStorage to remember tab choices across refreshes
+  const [activeTab, setActiveTab] = useState(() => {
+    return localStorage.getItem("requests_active_tab") || "wfh";
+  });
 
   // Modal State triggers for managing device request interactions
   const [selectedDeviceRow, setSelectedDeviceRow] = useState(null);
   const [isDeviceModalOpen, setIsDeviceModalOpen] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  // ✅ Synchronize activeTab choices inside the localStorage stream container
+  useEffect(() => {
+    localStorage.setItem("requests_active_tab", activeTab);
+  }, [activeTab]);
 
   // Triggers row selection context window when a user clicks an item inside UniversalTable
   const handleDeviceRowClick = (rowData) => {
@@ -29,92 +37,73 @@ function Requests() {
 
   return (
     <DashboardLayout userName="Admin" onLogout={() => {}}>
-      {/* Header Panel */}
-      <div className="bg-white flex justify-between items-center p-4 mb-4 shadow-sm rounded-lg">
-        <h1 className="text-lg font-medium text-gray-800">Requests</h1>
+      <div className="w-full space-y-4">
+        {/* ✅ Replaced raw header structure with global shared navbar element */}
+        <HeaderGlobal userName="Admin" />
 
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="w-9 h-9 flex items-center justify-center rounded-full border border-gray-300">
-            <FiBell className="text-gray-600 text-lg" />
-          </div>
-
-          <button className="text-sm text-gray-700 border border-gray-300 px-4 py-1 rounded-full">
-            Settings
+        {/* Navigation Tab Links Component Header Layout */}
+        <div className="flex gap-4 border-b px-4 text-[14px] bg-white pt-2 shadow-sm rounded-t-lg select-none">
+          <button
+            type="button"
+            onClick={() => setActiveTab("wfh")}
+            className={`pb-2 px-1 transition-all relative font-medium ${
+              activeTab === "wfh"
+                ? "text-black font-semibold after:content-[''] after:absolute after:bottom-0 after:left-0 after:w-full after:h-[2px] after:bg-black"
+                : "text-gray-500 hover:text-black"
+            }`}
+          >
+            Work From Home
           </button>
 
-          <div className="w-9 h-9 rounded-full border border-gray-200 overflow-hidden">
-            <img
-              src="https://i.pravatar.cc/150?img=12"
-              alt="User"
-              className="w-full h-full object-cover"
-            />
-          </div>
+          <button
+            type="button"
+            onClick={() => setActiveTab("regularization")}
+            className={`pb-2 px-1 transition-all relative font-medium ${
+              activeTab === "regularization"
+                ? "text-black font-semibold after:content-[''] after:absolute after:bottom-0 after:left-0 after:w-full after:h-[2px] after:bg-black"
+                : "text-gray-500 hover:text-black"
+            }`}
+          >
+            Regularization
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("device")}
+            className={`pb-2 px-1 transition-all relative font-medium ${
+              activeTab === "device"
+                ? "text-black font-semibold after:content-[''] after:absolute after:bottom-0 after:left-0 after:w-full after:h-[2px] after:bg-black"
+                : "text-gray-500 hover:text-black"
+            }`}
+          >
+            Device Request
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("claims")}
+            className={`pb-2 px-1 transition-all relative font-medium ${
+              activeTab === "claims"
+                ? "text-black font-semibold after:content-[''] after:absolute after:bottom-0 after:left-0 after:w-full after:h-[2px] after:bg-black"
+                : "text-gray-500 hover:text-black"
+            }`}
+          >
+            Claims Request
+          </button>
         </div>
-      </div>
 
-      {/* Navigation Tab Links */}
-      <div className="flex gap-4 border-b px-4 text-[14px]">
-        <button
-          onClick={() => setActiveTab("wfh")}
-          className={`pb-1 ${
-            activeTab === "wfh"
-              ? "border-b-2 border-black font-medium"
-              : "text-gray-500"
-          }`}
-        >
-          Work From Home
-        </button>
-
-        <button
-          onClick={() => setActiveTab("regularization")}
-          className={`pb-1 ${
-            activeTab === "regularization"
-              ? "border-b-2 border-black font-medium"
-              : "text-gray-500"
-          }`}
-        >
-          Regularization
-        </button>
-
-        <button
-          onClick={() => setActiveTab("device")}
-          className={`pb-1 ${
-            activeTab === "device"
-              ? "border-b-2 border-black font-medium"
-              : "text-gray-500"
-          }`}
-        >
-          Device Request
-        </button>
-
-        {/* 2. ADD CLAIMS REQUEST NAVIGATION BUTTON */}
-        <button
-          onClick={() => setActiveTab("claims")}
-          className={`pb-1 ${
-            activeTab === "claims"
-              ? "border-b-2 border-black font-medium"
-              : "text-gray-500"
-          }`}
-        >
-          Claims Request
-        </button>
-      </div>
-
-      {/* Tab Panels Layout Mapping Container Context Blocks */}
-      <div className="mt-4">
-        {activeTab === "wfh" && <WfhTab />}
-
-        {activeTab === "regularization" && <RegularizationTab />}
-
-        {activeTab === "device" && (
-          <DeviceRequestTab
-            key={refreshTrigger}
-            onRowClick={handleDeviceRowClick}
-          />
-        )}
-
-        {/* 3. RENDER CLAIMS TAB CONDITIONALLY */}
-        {activeTab === "claims" && <ClaimsRequestTab />}
+        {/* Tab Panels Display Wrapper Container */}
+        <div className="mt-2">
+          {activeTab === "wfh" && <WfhTab />}
+          {activeTab === "regularization" && <RegularizationTab />}
+          {activeTab === "device" && (
+            <DeviceRequestTab
+              key={refreshTrigger}
+              onRowClick={handleDeviceRowClick}
+            />
+          )}
+          {activeTab === "claims" && <ClaimsRequestTab />}
+        </div>
       </div>
 
       {/* Device Review Modal Rendered dynamically at body root level via Portals */}

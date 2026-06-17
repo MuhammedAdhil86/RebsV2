@@ -6,15 +6,14 @@ import {
   ThumbsUp,
   Heart,
   Megaphone,
-  CheckCircle,
   XCircle,
   Clock,
   Layers,
   Loader2,
   Paperclip,
+  RefreshCw,
 } from "lucide-react";
 
-// Helper to format ISO date strings cleanly
 const formatNotificationDate = (dateString) => {
   if (!dateString || dateString.startsWith("0001")) return "N/A";
   const date = new Date(dateString);
@@ -36,8 +35,8 @@ const Notification = () => {
     const getNotifications = async () => {
       try {
         setLoading(true);
-        const data = await announceService.fetchNotifications();
-        setNotifications(data || []);
+        const res = await announceService.fetchNotifications();
+        setNotifications(res || []);
       } catch (err) {
         console.error("Failed to load notifications:", err);
         setError("Could not retrieve notifications. Please try refreshing.");
@@ -49,14 +48,11 @@ const Notification = () => {
     getNotifications();
   }, []);
 
-  // Handler to toggle standard local layout interactions instantly
-  const handleLocalLikeToggle = (notificationId) => {
-    setNotifications((prevList) => prevPrevListMap(prevList, notificationId));
-  };
-
-  const prevPrevListMap = (list, targetId) => {
+  // Safe optimistic toggle utility mapping target fields correctly
+  const toggleLocalAnnouncementLikeState = (list, targetNotificationId) => {
     return list.map((item) => {
-      if (item.id !== targetId || item.type !== "announcement") return item;
+      if (item.id !== targetNotificationId || item.type !== "announcement")
+        return item;
 
       const currentHasLiked = item.data?.user_interaction?.has_liked || false;
       const currentCount = item.data?.likes_count || 0;
@@ -65,14 +61,80 @@ const Notification = () => {
         ...item,
         data: {
           ...item.data,
-          likes_count: currentHasLiked ? currentCount - 1 : currentCount + 1,
+          likes_count: currentHasLiked
+            ? Math.max(0, currentCount - 1)
+            : currentCount + 1,
           user_interaction: {
-            ...item.data.user_interaction,
+            ...item.data?.user_interaction,
             has_liked: !currentHasLiked,
           },
         },
       };
     });
+  };
+
+  // 1. Optimistic Like Toggle with rollback handling
+  const handleLikeToggle = async (notificationId, announcementId) => {
+    if (!announcementId) return;
+
+    // Update local state instantly for a lightning fast UI response
+    setNotifications((prev) =>
+      toggleLocalAnnouncementLikeState(prev, notificationId),
+    );
+
+    try {
+      await announceService.toggleLike(announcementId);
+    } catch (err) {
+      console.error("Failed to persist like adjustment:", err);
+      // Revert back if API call fails
+      setNotifications((prev) =>
+        toggleLocalAnnouncementLikeState(prev, notificationId),
+      );
+    }
+  };
+
+  // 2. Comment Posting Integration
+  const handleCommentSubmit = async (
+    notificationId,
+    announcementId,
+    commentText,
+  ) => {
+    if (!commentText.trim() || !announcementId) return;
+    try {
+      const response = await announceService.postComment(
+        announcementId,
+        commentText,
+      );
+
+      setNotifications((prevList) =>
+        prevList.map((item) => {
+          if (item.id !== notificationId) return item;
+          const currentComments = item.data?.comments || [];
+          return {
+            ...item,
+            data: {
+              ...item.data,
+              comments: [
+                ...currentComments,
+                response?.data || { id: Date.now(), text: commentText },
+              ],
+            },
+          };
+        }),
+      );
+    } catch (err) {
+      console.error("Failed to attach comment reference:", err);
+    }
+  };
+
+  // 3. Emoji Selection Bar Integration
+  const handleEmojiSelect = async (announcementId, emojiType) => {
+    if (!announcementId) return;
+    try {
+      await announceService.postEmoji(announcementId, emojiType);
+    } catch (err) {
+      console.error("Failed to map emoji collection payload:", err);
+    }
   };
 
   if (loading) {
@@ -100,7 +162,6 @@ const Notification = () => {
 
   return (
     <div className="w-full bg-white max-w-xl mx-auto rounded-xl overflow-hidden">
-      {/* Header Container */}
       <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-white sticky top-0 z-10">
         <div>
           <h2 className="text-sm font-bold text-gray-900">Notifications</h2>
@@ -113,13 +174,14 @@ const Notification = () => {
         </span>
       </div>
 
-      {/* Scrollable Notification List */}
       <div className="divide-y divide-gray-50 max-h-[450px] overflow-y-auto [scrollbar-width:thin]">
         {notifications.map((notification) => (
           <NotificationCard
             key={notification.id}
             item={notification}
-            onLikeToggle={handleLocalLikeToggle}
+            onLikeToggle={handleLikeToggle}
+            onCommentSubmit={handleCommentSubmit}
+            onEmojiSelect={handleEmojiSelect}
           />
         ))}
 
@@ -137,25 +199,18 @@ const Notification = () => {
 };
 
 /* Polymorphic Layout Card Component */
-const NotificationCard = ({ item, onLikeToggle }) => {
-  const { id, type, created_at, data } = item;
+const NotificationCard = ({
+  item,
+  onLikeToggle,
+  onCommentSubmit,
+  onEmojiSelect,
+}) => {
+  const { id, type, created_at, data = {} } = item;
+  const [commentInput, setCommentInput] = useState("");
+  const [showCommentBox, setShowCommentBox] = useState(false);
 
-  // 1. LEAVE APPLICATIONS
+  // 1. LEAVE APPLICATIONS Layout Card
   if (type === "leave") {
-    if (!data.name && !data.reason) {
-      return (
-        <div className="p-3.5 hover:bg-gray-50 transition-colors flex items-start gap-3 text-xs text-gray-400 italic">
-          <Clock className="w-4 h-4 text-gray-300 shrink-0 mt-0.5" />
-          <div className="flex-1">
-            Empty leave request fragment shell received.
-          </div>
-          <span className="text-[10px] shrink-0">
-            {formatNotificationDate(created_at)}
-          </span>
-        </div>
-      );
-    }
-
     const isApproved = data.status === "Approved";
     const isRejected = data.status === "Rejected";
 
@@ -177,7 +232,7 @@ const NotificationCard = ({ item, onLikeToggle }) => {
           <div className="flex items-start justify-between gap-2">
             <p className="text-xs text-gray-800 leading-snug">
               <span className="font-semibold text-gray-900">
-                {data.name || "N/A"}
+                {data.name || "Employee"}
               </span>{" "}
               {data.designation ? `(${data.designation})` : ""} applied for
               leave.
@@ -219,10 +274,8 @@ const NotificationCard = ({ item, onLikeToggle }) => {
     );
   }
 
-  // 2. SYSTEM ANNOUNCEMENTS
+  // 2. SYSTEM ANNOUNCEMENTS Layout Card (Supports Actions & Interactive Red Hearts)
   if (type === "announcement") {
-    if (!data.title && !data.description) return null;
-
     const hasLiked = data.user_interaction?.has_liked || false;
     const likesCount = data.likes_count || 0;
     const commentsCount = data.comments?.length || 0;
@@ -236,16 +289,18 @@ const NotificationCard = ({ item, onLikeToggle }) => {
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
             <h4 className="text-xs font-bold text-gray-900 truncate">
-              {data.title}
+              {data.title || "System Announcement"}
             </h4>
             <span className="text-[10px] text-gray-400 shrink-0 font-medium">
               {formatNotificationDate(created_at)}
             </span>
           </div>
 
-          <p className="text-[11px] text-gray-600 mt-1 whitespace-pre-line leading-relaxed">
-            {data.description}
-          </p>
+          {data.description && (
+            <p className="text-[11px] text-gray-600 mt-1 whitespace-pre-line leading-relaxed">
+              {data.description}
+            </p>
+          )}
 
           {data.attachment && (
             <div className="mt-2">
@@ -265,7 +320,7 @@ const NotificationCard = ({ item, onLikeToggle }) => {
           <div className="flex items-center gap-4 mt-3 pt-2 border-t border-gray-100/70">
             <button
               type="button"
-              onClick={() => onLikeToggle(id)}
+              onClick={() => onLikeToggle(id, data.id)} // Passes notification tracking entry ID AND target data element ID
               className={`flex items-center gap-1.5 text-[11px] font-semibold transition-colors group ${
                 hasLiked ? "text-red-500" : "text-gray-400 hover:text-red-500"
               }`}
@@ -278,21 +333,60 @@ const NotificationCard = ({ item, onLikeToggle }) => {
               <span>{likesCount} Likes</span>
             </button>
 
-            <div className="flex items-center gap-1.5 text-[11px] text-gray-400 font-medium">
-              <MessageSquare className="w-4 h-4 text-gray-300" />
+            <button
+              type="button"
+              onClick={() => setShowCommentBox(!showCommentBox)}
+              className="flex items-center gap-1.5 text-[11px] text-gray-400 hover:text-blue-600 font-medium transition-colors"
+            >
+              <MessageSquare className="w-4 h-4 text-gray-300 stroke-current" />
               <span>{commentsCount} Comments</span>
+            </button>
+
+            {/* Quick Emoji Strip */}
+            <div className="flex items-center gap-1 ml-auto bg-gray-50 px-1.5 py-0.5 rounded-md border border-gray-100">
+              {["👍", "❤️", "🔥", "🙌"].map((emoji) => (
+                <button
+                  key={emoji}
+                  type="button"
+                  onClick={() => onEmojiSelect(data.id, emoji)}
+                  className="hover:scale-125 transition-transform text-xs p-0.5"
+                >
+                  {emoji}
+                </button>
+              ))}
             </div>
           </div>
+
+          {/* Collapsible Comment Bar */}
+          {showCommentBox && (
+            <div className="mt-2.5 pt-2.5 border-t border-gray-50 flex gap-2">
+              <input
+                type="text"
+                value={commentInput}
+                onChange={(e) => setCommentInput(e.target.value)}
+                placeholder="Write a workspace response..."
+                className="flex-1 text-[11px] border border-gray-200 rounded px-2.5 py-1 focus:outline-none focus:border-blue-500"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  onCommentSubmit(id, data.id, commentInput);
+                  setCommentInput("");
+                }}
+                className="bg-blue-600 text-white text-[10px] font-bold px-3 py-1 rounded hover:bg-blue-700 transition-colors"
+              >
+                Send
+              </button>
+            </div>
+          )}
         </div>
       </div>
     );
   }
 
-  // 3. ANNOUNCEMENT ENGAGEMENTS (Likes & Comments Feed Items)
+  // 3. ANNOUNCEMENT ENGAGEMENTS Layout Cards (Social Feed logs)
   if (type === "announcement_like" || type === "announcement_comment") {
     const isLike = type === "announcement_like";
-    if (!data.title && !data.description) return null;
-
     return (
       <div className="p-3.5 hover:bg-gray-50 transition-colors flex items-start gap-3">
         <div
@@ -313,12 +407,19 @@ const NotificationCard = ({ item, onLikeToggle }) => {
           <div className="flex items-start justify-between gap-2">
             <div className="text-xs text-gray-700 leading-snug">
               <span className="font-semibold text-gray-900 block mb-0.5">
-                {data.title}
+                {data.title ||
+                  (isLike
+                    ? "Announcement Interaction"
+                    : "New Activity Summary")}
               </span>
               <span
                 className={isLike ? "text-gray-500" : "text-gray-800 italic"}
               >
-                {isLike ? data.description : `"${data.description}"`}
+                {data.description
+                  ? isLike
+                    ? data.description
+                    : `"${data.description}"`
+                  : "Workspace update logged."}
               </span>
             </div>
             <span className="text-[10px] text-gray-400 shrink-0 font-medium">
@@ -330,7 +431,68 @@ const NotificationCard = ({ item, onLikeToggle }) => {
     );
   }
 
-  return null;
+  // 4. SHIFT SWAPPING UPDATES Layout Card
+  if (type === "shift_swap") {
+    const isApproved = data.status?.toLowerCase() === "approved";
+    return (
+      <div className="p-3.5 hover:bg-gray-50 transition-colors flex items-start gap-3 bg-slate-50/30">
+        <div
+          className={`p-2 rounded-xl shrink-0 mt-0.5 ${
+            isApproved
+              ? "bg-emerald-50 text-emerald-600"
+              : "bg-zinc-50 text-slate-600"
+          }`}
+        >
+          <RefreshCw className="w-3.5 h-3.5" />
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start justify-between gap-2">
+            <div className="text-xs text-gray-700 leading-snug">
+              <span className="font-semibold text-gray-900 block mb-0.5">
+                Shift Swap Request Update
+              </span>
+              <p className="text-gray-600">
+                <span className="font-medium text-gray-800">
+                  {data.requester_name}
+                </span>{" "}
+                requested a swap with{" "}
+                <span className="font-medium text-gray-800">
+                  {data.target_name}
+                </span>{" "}
+                for date{" "}
+                <span className="font-medium text-gray-700">
+                  {formatNotificationDate(data.swap_date).split(",")[0]}
+                </span>
+                .
+              </p>
+            </div>
+            <span className="text-[10px] text-gray-400 shrink-0 font-medium">
+              {formatNotificationDate(created_at)}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 mt-2 text-[10px]">
+            <span
+              className={`px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider text-[9px] ${
+                isApproved
+                  ? "bg-emerald-100 text-emerald-700"
+                  : "bg-gray-100 text-gray-700"
+              }`}
+            >
+              {data.status || "Pending"}
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Universal Fallback Catch-All layout
+  return (
+    <div className="p-3.5 text-[11px] text-gray-400 italic bg-gray-50/50">
+      Workspace activity updated (ID: #{id || "N/A"})
+    </div>
+  );
 };
 
 export default Notification;

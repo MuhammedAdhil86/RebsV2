@@ -8,6 +8,10 @@ export const postLeaveBulkAllocation = "/leave-policy/allocate/staffs"
 export const postAnnouncement = "/admin/announcement/add"
 export const Login = "/staff/login"
 export const getAnnouncement = "/admin/announcement/get"
+// Interactive Announcement Features (Likes, Comments, Emojis)
+export const addComment = (id) => `/announcement/comment/add/${id}`;
+export const addEmoji = (id) => `/announcement/emojis/add/${id}`;
+export const addLike = (id) => `/announcement/like/add/${id}`;
 //Employeelist
 
 export const getTotalEmployee = "/admin/staffstatus/list"

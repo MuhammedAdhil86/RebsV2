@@ -1,6 +1,6 @@
 import axiosInstance from "./axiosinstance";
 // Added getAnnouncement to the imports below
-import { postAnnouncement, getDept, getStaff, getAllNotification } from "../api/api"; 
+import { postAnnouncement, getDept, getStaff, getAllNotification,getAnnouncement,addLike,addComment,addEmoji, } from "../api/api"; 
 
 const announceService = {
   addAnnouncement: async (announcementData) => {
@@ -77,6 +77,45 @@ const announceService = {
       throw error;
     }
   },
+  toggleLike: async (id) => {
+    try {
+      const response = await axiosInstance.post(addLike(id));
+      console.log(`Like status updated for announcement #${id}:`, response.data);
+      return response.data;
+    } catch (error) {
+      console.error(`Error toggling like on announcement #${id}:`, error);
+      throw error;
+    }
+  },
+
+  // NEW: Add a comment to an announcement
+  postComment: async (id, commentText) => {
+    try {
+      // Assuming your backend expects an object with comment details
+      const response = await axiosInstance.post(addComment(id), {
+        description: commentText // adjust key to match backend layout requirements
+      });
+      console.log(`Comment posted successfully on announcement #${id}:`, response.data);
+      return response.data;
+    } catch (error) {
+      console.error(`Error posting comment on announcement #${id}:`, error);
+      throw error;
+    }
+  },
+
+  // NEW: React with an emoji to an announcement
+  postEmoji: async (id, emojiType) => {
+    try {
+      const response = await axiosInstance.post(addEmoji(id), {
+        emoji: emojiType // adjust body parameter depending on API signature expectations
+      });
+      console.log(`Emoji interaction sent on announcement #${id}:`, response.data);
+      return response.data;
+    } catch (error) {
+      console.error(`Error dropping emoji on announcement #${id}:`, error);
+      throw error;
+    }
+  }
 };
 
 export default announceService;

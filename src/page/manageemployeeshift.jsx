@@ -1,19 +1,17 @@
-import React, { useState } from "react";
-import { FiBell } from "react-icons/fi";
+import React, { useState, useEffect } from "react";
 import DashboardLayout from "../ui/pagelayout";
+import HeaderGlobal from "../ui/headerglobal"; // ✅ Integrated the global header component
 import AllocateShift from "../components/shift_tabs/allocateshift";
 import ShiftOverview from "../components/shift_tabs/shiftoverview";
-import SwapShift from "../components/shift_tabs/swapshift"; // ✅ Added import for SwapShift
-
-// Online avatar
-const avatar = "https://cdn-icons-png.flaticon.com/512/3135/3135715.png";
+import SwapShift from "../components/shift_tabs/swapshift";
 
 const TabButton = ({ title, isActive, onClick }) => (
   <button
+    type="button"
     onClick={onClick}
-    className={`pb-1 text-[13px] font-medium transition-all ${
+    className={`pb-1 text-[13px] font-medium transition-all relative ${
       isActive
-        ? "border-b-2 border-black text-black"
+        ? "text-black font-semibold after:content-[''] after:absolute after:bottom-[-9px] after:left-0 after:w-full after:h-[2px] after:bg-black"
         : "text-gray-500 hover:text-black"
     }`}
   >
@@ -22,33 +20,26 @@ const TabButton = ({ title, isActive, onClick }) => (
 );
 
 export default function ManageEmployeeShifts() {
-  const [activeTab, setActiveTab] = useState("overview"); // Default = Shift Overview
+  // ✅ Lazy initialize active state from localStorage to persist across refreshes
+  const [activeTab, setActiveTab] = useState(() => {
+    return localStorage.getItem("manage_shifts_active_tab") || "overview";
+  });
+
+  // ✅ Write updated choice to the local storage whenever activeTab switches
+  useEffect(() => {
+    localStorage.setItem("manage_shifts_active_tab", activeTab);
+  }, [activeTab]);
 
   return (
     <div className="min-h-screen w-full bg-gray-100 flex flex-col">
       <DashboardLayout>
-        <div className="w-full">
-          <div className="bg-white shadow-sm w-full rounded-lg">
-            {/* Header */}
-            <div className="flex justify-between items-center px-5 py-3 border-b border-gray-200">
-              <h1 className="text-[15px] font-medium text-gray-800">
-                Manage Employee Shift
-              </h1>
-              <div className="flex items-center gap-3">
-                <FiBell className="text-gray-500 text-lg" />
-                <button className="text-[13px] text-gray-700">Settings</button>
-                <div className="w-8 h-8 rounded-full overflow-hidden border">
-                  <img
-                    src={avatar}
-                    alt="User"
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-              </div>
-            </div>
+        <div className="w-full space-y-4">
+          {/* ✅ Cleanly replaced the hardcoded header element with your reusable navbar component */}
+          <HeaderGlobal userName="Admin" />
 
-            {/* Tabs */}
-            <div className="flex gap-5 border-b border-gray-200 px-5 py-2">
+          <div className="bg-white shadow-sm w-full rounded-lg">
+            {/* Tabs Navigation Bar */}
+            <div className="flex gap-5 border-b border-gray-200 px-5 py-2 select-none">
               <TabButton
                 title="Shift Overview"
                 isActive={activeTab === "overview"}
@@ -66,12 +57,11 @@ export default function ManageEmployeeShifts() {
               />
             </div>
 
-            {/* Content */}
-            <div className="">
+            {/* Render Context View Panels */}
+            <div className="p-4">
               {activeTab === "overview" && <ShiftOverview />}
               {activeTab === "allocate" && <AllocateShift />}
-              {activeTab === "swap" && <SwapShift />}{" "}
-              {/* ✅ Replaced placeholder with component */}
+              {activeTab === "swap" && <SwapShift />}
               {activeTab === "deleted" && (
                 <div className="text-center p-10 text-gray-500 text-sm">
                   Deleted Employees UI goes here.

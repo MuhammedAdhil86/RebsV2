@@ -3,7 +3,6 @@ import { Calendar, momentLocalizer } from "react-big-calendar";
 import moment from "moment";
 import "react-big-calendar/lib/css/react-big-calendar.css";
 import {
-  FiBell,
   FiPlus,
   FiCalendar,
   FiClock,
@@ -16,6 +15,7 @@ import { format } from "date-fns";
 
 // Layout & UI
 import DashboardLayout from "../ui/pagelayout";
+import HeaderGlobal from "../ui/headerglobal"; // ✅ Added import path for unified HeaderGlobal
 import EventCreate from "../components/events_ui/createevent";
 import EventDetailPage from "../components/events_ui/eventdetailpage";
 import AllEvents from "../components/events_ui/allevents";
@@ -176,8 +176,6 @@ export default function Events({ userId, userName }) {
 
   const calendarEvents = useMemo(() => {
     const events = (Array.isArray(allEvents) ? allEvents : []).map((e) => {
-      // ✅ FIX: Extract the literal string layout parts up to the seconds, completely stripping the trailing 'Z'
-      // This stops JavaScript from applying local GMT+05:30 offsets, keeping it exactly on May 25 at 18:51 (6:51 PM)
       const cleanStartStr =
         e.start_date && e.start_date.includes("Z")
           ? e.start_date.split("Z")[0]
@@ -268,243 +266,248 @@ export default function Events({ userId, userName }) {
 
   return (
     <DashboardLayout userName={userName || "Admin"}>
-      <div className="flex justify-between items-center mb-8 font-poppins px-3">
-        <div>
-          <h1 className="text-[16px] text-gray-900 uppercase tracking-widest font-normal">
-            Operation Center
-          </h1>
-          <p className="text-[10px] text-gray-400 tracking-widest uppercase mt-1 font-normal">
-            Schedule & Availability
-          </p>
-        </div>
-        <div className="flex items-center gap-6 text-[12px]">
-          <select
-            value={selectedBranch}
-            onChange={(e) => setSelectedBranch(e.target.value)}
-            className="bg-transparent text-gray-600 tracking-widest uppercase outline-none cursor-pointer border-none focus:ring-0 font-normal"
-          >
-            <option value="all">All Branches</option>
-            {branches.map((b) => (
-              <option key={b.id || b.value} value={b.id || b.value}>
-                {b.name || b.label}
-              </option>
-            ))}
-          </select>
-          <button
-            onClick={() => openDrawer("create")}
-            className="flex items-center gap-2 bg-black text-white px-5 py-2 rounded-xl tracking-widest hover:bg-gray-800 transition-all uppercase font-normal"
-          >
-            <FiPlus size={14} /> New Event
-          </button>
-          <div className="w-10 h-10 rounded-full border border-gray-100 flex items-center justify-center bg-white cursor-pointer hover:bg-gray-50 transition-colors">
-            <FiBell size={18} className="text-gray-600" />
-          </div>
-        </div>
-      </div>
+      <div className="w-full">
+        {/* ✅ Global Header Component Integration */}
+        <HeaderGlobal userName={userName || "Admin"} />
 
-      <div className="flex flex-col lg:flex-row gap-6 h-[calc(100vh-180px)] font-poppins text-[12px]">
-        <div className="flex-1 bg-white rounded-[32px] shadow-sm border border-gray-100 p-6 overflow-hidden flex flex-col">
-          <Calendar
-            localizer={localizer}
-            events={calendarEvents}
-            date={calendarDate}
-            onNavigate={handleNavigate}
-            onSelectSlot={(slot) => setSelectedDate(slot.start)}
-            onSelectEvent={(e) => openDrawer("detail", e)}
-            selectable
-            popup
-            components={{ toolbar: CustomToolbar }}
-            eventPropGetter={(event) => ({
-              style: {
-                backgroundColor: event.isHoliday
-                  ? eventColors.holiday
-                  : event.isWeeklyOff
-                    ? eventColors.weeklyOff
-                    : event.isLeave
-                      ? eventColors.leave
-                      : eventColors.meeting,
-                borderRadius: "6px",
-                border: "none",
-                color: "white",
-                padding: "4px 8px",
-                fontSize: "10px",
-                fontFamily: "Poppins",
-                fontWeight: "400",
-              },
-            })}
-            dayPropGetter={(date) =>
-              moment(date).isSame(moment(), "day")
-                ? {
-                    style: {
-                      backgroundColor: "#f8fbff",
-                      borderTop: "2px solid #000",
-                    },
-                  }
-                : {}
-            }
-            style={{ flex: 1 }}
-          />
-        </div>
-
-        <div className="w-full lg:w-[380px] space-y-6 overflow-y-auto pr-2 custom-scrollbar">
-          {/* Holidays */}
-          <div className="bg-white p-6 rounded-[24px] border border-gray-100 shadow-sm">
-            <h3 className="tracking-widest uppercase text-gray-400 mb-5 flex items-center gap-2 font-normal">
-              <div className="w-1 h-3 bg-green-500 rounded-full" /> Upcoming
-              Holidays
-            </h3>
-            <div className="space-y-4">
-              {holidays
-                ?.filter((h) => moment(h.date).isSameOrAfter(moment(), "day"))
-                .slice(0, 2)
-                .map((h, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center gap-4 p-3 bg-gray-50/50 rounded-2xl"
-                  >
-                    <FiCalendar className="text-green-500" />
-                    <div>
-                      <p className="text-gray-800 leading-tight font-normal">
-                        {h.title || h.Reason}
-                      </p>
-                      <p className="text-[10px] text-gray-400 mt-0.5 uppercase font-normal">
-                        {format(
-                          new Date(
-                            h.date && h.date.includes("Z")
-                              ? h.date.split("Z")[0]
-                              : h.date,
-                          ),
-                          "dd MMM, yyyy",
-                        )}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-            </div>
+        {/* Action Controls & Info Center Bar */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 rounded-2xl border border-gray-100 shadow-sm font-poppins text-[12px]">
+          <div>
+            <h2 className="text-sm  text-gray-900 tracking-wider uppercase">
+              Operation Center
+            </h2>
+            <p className="text-[10px] text-gray-400 uppercase tracking-wider mt-0.5">
+              Schedule & Availability Logs
+            </p>
           </div>
 
-          {/* Weekly Offs */}
-          <div className="bg-white p-6 rounded-[24px] border border-gray-100 shadow-sm">
-            <h3 className="tracking-widest uppercase text-gray-400 mb-5 flex items-center gap-2 font-normal">
-              <div className="w-1 h-3 bg-gray-400 rounded-full" /> Weekly Offs
-            </h3>
-            <div className="space-y-3">
-              {weeklyOffs
-                ?.filter((w) => moment(w.date).isSameOrAfter(moment(), "day"))
-                .slice(0, 2)
-                .map((w, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center gap-4 p-3 hover:bg-gray-50 rounded-2xl transition-all group"
-                  >
-                    <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center text-gray-400 group-hover:bg-black group-hover:text-white transition-all">
-                      <FiClock size={14} />
-                    </div>
-                    <div>
-                      <p className="text-gray-800 leading-none mb-1 font-normal">
-                        Weekly Off ({w.day})
-                      </p>
-                      <p className="text-[10px] text-gray-400 uppercase font-normal">
-                        {format(
-                          new Date(
-                            w.date && w.date.includes("Z")
-                              ? w.date.split("Z")[0]
-                              : w.date,
-                          ),
-                          "MMM dd, yyyy",
-                        )}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-            </div>
+          <div className="flex items-center gap-4 flex-wrap w-full sm:w-auto justify-end">
+            <select
+              value={selectedBranch}
+              onChange={(e) => setSelectedBranch(e.target.value)}
+              className="bg-transparent text-gray-600 tracking-widest uppercase outline-none cursor-pointer border border-gray-200 rounded-lg px-3 py-1.5 focus:ring-0 font-normal"
+            >
+              <option value="all">All Branches</option>
+              {branches.map((b) => (
+                <option key={b.id || b.value} value={b.id || b.value}>
+                  {b.name || b.label}
+                </option>
+              ))}
+            </select>
+
+            <button
+              onClick={() => openDrawer("create")}
+              className="flex items-center gap-2 bg-black text-white px-5 py-2 rounded-xl tracking-widest hover:bg-gray-800 transition-all uppercase font-normal shadow-sm"
+            >
+              <FiPlus size={14} /> New Event
+            </button>
+          </div>
+        </div>
+
+        {/* Calendar Core Workspace Area Layout */}
+        <div className="flex flex-col lg:flex-row gap-6 h-[calc(100vh-220px)] font-poppins text-[12px]">
+          <div className="flex-1 bg-white rounded-[32px] shadow-sm border border-gray-100 p-6 overflow-hidden flex flex-col">
+            <Calendar
+              localizer={localizer}
+              events={calendarEvents}
+              date={calendarDate}
+              onNavigate={handleNavigate}
+              onSelectSlot={(slot) => setSelectedDate(slot.start)}
+              onSelectEvent={(e) => openDrawer("detail", e)}
+              selectable
+              popup
+              components={{ toolbar: CustomToolbar }}
+              eventPropGetter={(event) => ({
+                style: {
+                  backgroundColor: event.isHoliday
+                    ? eventColors.holiday
+                    : event.isWeeklyOff
+                      ? eventColors.weeklyOff
+                      : event.isLeave
+                        ? eventColors.leave
+                        : eventColors.meeting,
+                  borderRadius: "6px",
+                  border: "none",
+                  color: "white",
+                  padding: "4px 8px",
+                  fontSize: "10px",
+                  fontFamily: "Poppins",
+                  fontWeight: "400",
+                },
+              })}
+              dayPropGetter={(date) =>
+                moment(date).isSame(moment(), "day")
+                  ? {
+                      style: {
+                        backgroundColor: "#f8fbff",
+                        borderTop: "2px solid #000",
+                      },
+                    }
+                  : {}
+              }
+              style={{ flex: 1 }}
+            />
           </div>
 
-          {/* Leaves */}
-          <div className="bg-white p-6 rounded-[24px] border border-gray-100 shadow-sm">
-            <div className="flex justify-between items-center mb-6 font-normal">
-              <h3 className="tracking-widest uppercase text-gray-400">
-                On Leave
+          <div className="w-full lg:w-[380px] space-y-6 overflow-y-auto pr-2 custom-scrollbar">
+            {/* Holidays */}
+            <div className="bg-white p-6 rounded-[24px] border border-gray-100 shadow-sm">
+              <h3 className="tracking-widest uppercase text-gray-400 mb-5 flex items-center gap-2 font-normal">
+                <div className="w-1 h-3 bg-green-500 rounded-full" /> Upcoming
+                Holidays
               </h3>
-              <span className="text-[10px] text-blue-600 bg-blue-50 px-2 py-0.5 rounded uppercase font-normal">
-                {format(selectedDate, "dd MMM")}
-              </span>
-            </div>
-            <div className="space-y-4">
-              {dailyData?.leaves?.length > 0 ? (
-                dailyData.leaves.map((l, i) => (
-                  <div key={i} className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <img
-                        src={l.image || DEFAULT_AVATAR}
-                        className="w-8 h-8 rounded-full object-cover border border-gray-50"
-                        alt=""
-                      />
+              <div className="space-y-4">
+                {holidays
+                  ?.filter((h) => moment(h.date).isSameOrAfter(moment(), "day"))
+                  .slice(0, 2)
+                  .map((h, i) => (
+                    <div
+                      key={i}
+                      className="flex items-center gap-4 p-3 bg-gray-50/50 rounded-2xl"
+                    >
+                      <FiCalendar className="text-green-500" />
                       <div>
-                        <p className="text-gray-800 leading-none font-normal">
-                          {l.name}
+                        <p className="text-gray-800 leading-tight font-normal">
+                          {h.title || h.Reason}
                         </p>
-                        <p className="text-[10px] text-gray-400 uppercase tracking-tighter font-normal">
-                          {l.designation}
+                        <p className="text-[10px] text-gray-400 mt-0.5 uppercase font-normal">
+                          {format(
+                            new Date(
+                              h.date && h.date.includes("Z")
+                                ? h.date.split("Z")[0]
+                                : h.date,
+                            ),
+                            "dd MMM, yyyy",
+                          )}
                         </p>
                       </div>
                     </div>
-                    <div className="w-1 h-1 rounded-full bg-red-400 animate-pulse" />
-                  </div>
-                ))
-              ) : (
-                <p className="text-gray-300 italic text-center py-2 font-normal">
-                  No active leaves
-                </p>
-              )}
+                  ))}
+              </div>
             </div>
-          </div>
 
-          {/* Planned Events */}
-          <div className="bg-white p-6 rounded-[24px] border border-gray-100 shadow-sm">
-            <div className="flex justify-between items-center mb-6 font-normal">
-              <h3 className="tracking-widest uppercase text-gray-400">
-                Planned Events
+            {/* Weekly Offs */}
+            <div className="bg-white p-6 rounded-[24px] border border-gray-100 shadow-sm">
+              <h3 className="tracking-widest uppercase text-gray-400 mb-5 flex items-center gap-2 font-normal">
+                <div className="w-1 h-3 bg-gray-400 rounded-full" /> Weekly Offs
               </h3>
-              <button
-                onClick={() => openDrawer("all")}
-                className="text-[10px] text-gray-400 hover:text-black uppercase underline underline-offset-4"
-              >
-                View All
-              </button>
-            </div>
-            <div className="space-y-4">
-              {dailyData?.events?.length > 0 ? (
-                dailyData.events.map((e, i) => (
-                  <div
-                    key={i}
-                    onClick={() => openDrawer("detail", e)}
-                    className="p-3 bg-gray-50/50 rounded-xl hover:bg-gray-50 cursor-pointer transition-all border border-transparent hover:border-gray-200"
-                  >
-                    <p className="text-gray-800 mb-2 leading-tight font-normal">
-                      {e.title}
-                    </p>
-                    <div className="flex items-center gap-3 text-[10px] text-gray-400 uppercase font-normal">
-                      <span className="flex items-center gap-1">
-                        <FiClock size={12} />{" "}
-                        {/* ✅ FIX: Formatted right-side panel layout time block perfectly */}
-                        {format(
-                          new Date(
-                            e.start_date && e.start_date.includes("Z")
-                              ? e.start_date.split("Z")[0]
-                              : e.start_date,
-                          ),
-                          "hh:mm a",
-                        )}
-                      </span>
+              <div className="space-y-3">
+                {weeklyOffs
+                  ?.filter((w) => moment(w.date).isSameOrAfter(moment(), "day"))
+                  .slice(0, 2)
+                  .map((w, i) => (
+                    <div
+                      key={i}
+                      className="flex items-center gap-4 p-3 hover:bg-gray-50 rounded-2xl transition-all group"
+                    >
+                      <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center text-gray-400 group-hover:bg-black group-hover:text-white transition-all">
+                        <FiClock size={14} />
+                      </div>
+                      <div>
+                        <p className="text-gray-800 leading-none mb-1 font-normal">
+                          Weekly Off ({w.day})
+                        </p>
+                        <p className="text-[10px] text-gray-400 uppercase font-normal">
+                          {format(
+                            new Date(
+                              w.date && w.date.includes("Z")
+                                ? w.date.split("Z")[0]
+                                : w.date,
+                            ),
+                            "MMM dd, yyyy",
+                          )}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                ))
-              ) : (
-                <p className="text-gray-300 italic text-center py-2 font-normal">
-                  No events planned
-                </p>
-              )}
+                  ))}
+              </div>
+            </div>
+
+            {/* Leaves */}
+            <div className="bg-white p-6 rounded-[24px] border border-gray-100 shadow-sm">
+              <div className="flex justify-between items-center mb-6 font-normal">
+                <h3 className="tracking-widest uppercase text-gray-400">
+                  On Leave
+                </h3>
+                <span className="text-[10px] text-blue-600 bg-blue-50 px-2 py-0.5 rounded uppercase font-normal">
+                  {format(selectedDate, "dd MMM")}
+                </span>
+              </div>
+              <div className="space-y-4">
+                {dailyData?.leaves?.length > 0 ? (
+                  dailyData.leaves.map((l, i) => (
+                    <div key={i} className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <img
+                          src={l.image || DEFAULT_AVATAR}
+                          className="w-8 h-8 rounded-full object-cover border border-gray-50"
+                          alt=""
+                        />
+                        <div>
+                          <p className="text-gray-800 leading-none font-normal">
+                            {l.name}
+                          </p>
+                          <p className="text-[10px] text-gray-400 uppercase tracking-tighter font-normal">
+                            {l.designation}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="w-1 h-1 rounded-full bg-red-400 animate-pulse" />
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-gray-300 italic text-center py-2 font-normal">
+                    No active leaves
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Planned Events */}
+            <div className="bg-white p-6 rounded-[24px] border border-gray-100 shadow-sm">
+              <div className="flex justify-between items-center mb-6 font-normal">
+                <h3 className="tracking-widest uppercase text-gray-400">
+                  Planned Events
+                </h3>
+                <button
+                  onClick={() => openDrawer("all")}
+                  className="text-[10px] text-gray-400 hover:text-black uppercase underline underline-offset-4"
+                >
+                  View All
+                </button>
+              </div>
+              <div className="space-y-4">
+                {dailyData?.events?.length > 0 ? (
+                  dailyData.events.map((e, i) => (
+                    <div
+                      key={i}
+                      onClick={() => openDrawer("detail", e)}
+                      className="p-3 bg-gray-50/50 rounded-xl hover:bg-gray-50 cursor-pointer transition-all border border-transparent hover:border-gray-200"
+                    >
+                      <p className="text-gray-800 mb-2 leading-tight font-normal">
+                        {e.title}
+                      </p>
+                      <div className="flex items-center gap-3 text-[10px] text-gray-400 uppercase font-normal">
+                        <span className="flex items-center gap-1">
+                          <FiClock size={12} />{" "}
+                          {format(
+                            new Date(
+                              e.start_date && e.start_date.includes("Z")
+                                ? e.start_date.split("Z")[0]
+                                : e.start_date,
+                            ),
+                            "hh:mm a",
+                          )}
+                        </span>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-gray-300 italic text-center py-2 font-normal">
+                    No events planned
+                  </p>
+                )}
+              </div>
             </div>
           </div>
         </div>
