@@ -4,13 +4,11 @@ import {
   Calendar,
   MessageSquare,
   ThumbsUp,
-  Heart,
   Megaphone,
   XCircle,
-  Clock,
-  Layers,
   Loader2,
   Paperclip,
+  Layers,
   RefreshCw,
 } from "lucide-react";
 
@@ -47,95 +45,6 @@ const Notification = () => {
 
     getNotifications();
   }, []);
-
-  // Safe optimistic toggle utility mapping target fields correctly
-  const toggleLocalAnnouncementLikeState = (list, targetNotificationId) => {
-    return list.map((item) => {
-      if (item.id !== targetNotificationId || item.type !== "announcement")
-        return item;
-
-      const currentHasLiked = item.data?.user_interaction?.has_liked || false;
-      const currentCount = item.data?.likes_count || 0;
-
-      return {
-        ...item,
-        data: {
-          ...item.data,
-          likes_count: currentHasLiked
-            ? Math.max(0, currentCount - 1)
-            : currentCount + 1,
-          user_interaction: {
-            ...item.data?.user_interaction,
-            has_liked: !currentHasLiked,
-          },
-        },
-      };
-    });
-  };
-
-  // 1. Optimistic Like Toggle with rollback handling
-  const handleLikeToggle = async (notificationId, announcementId) => {
-    if (!announcementId) return;
-
-    // Update local state instantly for a lightning fast UI response
-    setNotifications((prev) =>
-      toggleLocalAnnouncementLikeState(prev, notificationId),
-    );
-
-    try {
-      await announceService.toggleLike(announcementId);
-    } catch (err) {
-      console.error("Failed to persist like adjustment:", err);
-      // Revert back if API call fails
-      setNotifications((prev) =>
-        toggleLocalAnnouncementLikeState(prev, notificationId),
-      );
-    }
-  };
-
-  // 2. Comment Posting Integration
-  const handleCommentSubmit = async (
-    notificationId,
-    announcementId,
-    commentText,
-  ) => {
-    if (!commentText.trim() || !announcementId) return;
-    try {
-      const response = await announceService.postComment(
-        announcementId,
-        commentText,
-      );
-
-      setNotifications((prevList) =>
-        prevList.map((item) => {
-          if (item.id !== notificationId) return item;
-          const currentComments = item.data?.comments || [];
-          return {
-            ...item,
-            data: {
-              ...item.data,
-              comments: [
-                ...currentComments,
-                response?.data || { id: Date.now(), text: commentText },
-              ],
-            },
-          };
-        }),
-      );
-    } catch (err) {
-      console.error("Failed to attach comment reference:", err);
-    }
-  };
-
-  // 3. Emoji Selection Bar Integration
-  const handleEmojiSelect = async (announcementId, emojiType) => {
-    if (!announcementId) return;
-    try {
-      await announceService.postEmoji(announcementId, emojiType);
-    } catch (err) {
-      console.error("Failed to map emoji collection payload:", err);
-    }
-  };
 
   if (loading) {
     return (
@@ -176,13 +85,7 @@ const Notification = () => {
 
       <div className="divide-y divide-gray-50 max-h-[450px] overflow-y-auto [scrollbar-width:thin]">
         {notifications.map((notification) => (
-          <NotificationCard
-            key={notification.id}
-            item={notification}
-            onLikeToggle={handleLikeToggle}
-            onCommentSubmit={handleCommentSubmit}
-            onEmojiSelect={handleEmojiSelect}
-          />
+          <NotificationCard key={notification.id} item={notification} />
         ))}
 
         {notifications.length === 0 && (
@@ -199,15 +102,8 @@ const Notification = () => {
 };
 
 /* Polymorphic Layout Card Component */
-const NotificationCard = ({
-  item,
-  onLikeToggle,
-  onCommentSubmit,
-  onEmojiSelect,
-}) => {
+const NotificationCard = ({ item }) => {
   const { id, type, created_at, data = {} } = item;
-  const [commentInput, setCommentInput] = useState("");
-  const [showCommentBox, setShowCommentBox] = useState(false);
 
   // 1. LEAVE APPLICATIONS Layout Card
   if (type === "leave") {
@@ -274,12 +170,8 @@ const NotificationCard = ({
     );
   }
 
-  // 2. SYSTEM ANNOUNCEMENTS Layout Card (Supports Actions & Interactive Red Hearts)
+  // 2. SYSTEM ANNOUNCEMENTS Layout Card (Read-Only)
   if (type === "announcement") {
-    const hasLiked = data.user_interaction?.has_liked || false;
-    const likesCount = data.likes_count || 0;
-    const commentsCount = data.comments?.length || 0;
-
     return (
       <div className="p-3.5 hover:bg-gray-50 transition-colors flex items-start gap-3 bg-blue-50/10">
         <div className="p-2 rounded-xl bg-blue-50 text-blue-600 shrink-0 mt-0.5">
@@ -315,76 +207,12 @@ const NotificationCard = ({
               </a>
             </div>
           )}
-
-          {/* ❤️ Interactive Like/Comment Action Footer Area */}
-          <div className="flex items-center gap-4 mt-3 pt-2 border-t border-gray-100/70">
-            <button
-              type="button"
-              onClick={() => onLikeToggle(id, data.id)} // Passes notification tracking entry ID AND target data element ID
-              className={`flex items-center gap-1.5 text-[11px] font-semibold transition-colors group ${
-                hasLiked ? "text-red-500" : "text-gray-400 hover:text-red-500"
-              }`}
-            >
-              <Heart
-                className={`w-4 h-4 transition-transform group-active:scale-90 ${
-                  hasLiked ? "fill-red-500 stroke-red-500" : "stroke-current"
-                }`}
-              />
-              <span>{likesCount} Likes</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setShowCommentBox(!showCommentBox)}
-              className="flex items-center gap-1.5 text-[11px] text-gray-400 hover:text-blue-600 font-medium transition-colors"
-            >
-              <MessageSquare className="w-4 h-4 text-gray-300 stroke-current" />
-              <span>{commentsCount} Comments</span>
-            </button>
-
-            {/* Quick Emoji Strip */}
-            <div className="flex items-center gap-1 ml-auto bg-gray-50 px-1.5 py-0.5 rounded-md border border-gray-100">
-              {["👍", "❤️", "🔥", "🙌"].map((emoji) => (
-                <button
-                  key={emoji}
-                  type="button"
-                  onClick={() => onEmojiSelect(data.id, emoji)}
-                  className="hover:scale-125 transition-transform text-xs p-0.5"
-                >
-                  {emoji}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Collapsible Comment Bar */}
-          {showCommentBox && (
-            <div className="mt-2.5 pt-2.5 border-t border-gray-50 flex gap-2">
-              <input
-                type="text"
-                value={commentInput}
-                onChange={(e) => setCommentInput(e.target.value)}
-                placeholder="Write a workspace response..."
-                className="flex-1 text-[11px] border border-gray-200 rounded px-2.5 py-1 focus:outline-none focus:border-blue-500"
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  onCommentSubmit(id, data.id, commentInput);
-                  setCommentInput("");
-                }}
-                className="bg-blue-600 text-white text-[10px] font-bold px-3 py-1 rounded hover:bg-blue-700 transition-colors"
-              >
-                Send
-              </button>
-            </div>
-          )}
         </div>
       </div>
     );
   }
 
-  // 3. ANNOUNCEMENT ENGAGEMENTS Layout Cards (Social Feed logs)
+  // 3. ANNOUNCEMENT ENGAGEMENTS Layout Cards (Social Feed logs / History summaries)
   if (type === "announcement_like" || type === "announcement_comment") {
     const isLike = type === "announcement_like";
     return (

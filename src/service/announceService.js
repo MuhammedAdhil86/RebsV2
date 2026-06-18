@@ -77,42 +77,37 @@ const announceService = {
       throw error;
     }
   },
-  toggleLike: async (id) => {
+toggleLike: async (announcementId) => {
     try {
-      const response = await axiosInstance.post(addLike(id));
-      console.log(`Like status updated for announcement #${id}:`, response.data);
+      const response = await axiosInstance.post(addLike(announcementId));
       return response.data;
     } catch (error) {
-      console.error(`Error toggling like on announcement #${id}:`, error);
+      console.error(`Error adding like to announcement #${announcementId}:`, error);
       throw error;
     }
   },
 
-  // NEW: Add a comment to an announcement
-  postComment: async (id, commentText) => {
+  // Calls: POST /announcement/comment/add/{id}
+postComment: async (announcementId, commentText) => {
+  try {
+    const response = await axiosInstance.post(addComment(announcementId), {
+      comment: commentText // ✅ Fixed key name and resolved double-nesting payload issue
+    });
+    return response.data;
+  } catch (error) {
+    console.error(`Error posting comment on announcement #${announcementId}:`, error);
+    throw error;
+  }
+},
+  // Calls: POST /announcement/emojis/add/{id}
+  postEmoji: async (announcementId, emojiType) => {
     try {
-      // Assuming your backend expects an object with comment details
-      const response = await axiosInstance.post(addComment(id), {
-        description: commentText // adjust key to match backend layout requirements
+      const response = await axiosInstance.post(addEmoji(announcementId), {
+        emoji: emojiType
       });
-      console.log(`Comment posted successfully on announcement #${id}:`, response.data);
       return response.data;
     } catch (error) {
-      console.error(`Error posting comment on announcement #${id}:`, error);
-      throw error;
-    }
-  },
-
-  // NEW: React with an emoji to an announcement
-  postEmoji: async (id, emojiType) => {
-    try {
-      const response = await axiosInstance.post(addEmoji(id), {
-        emoji: emojiType // adjust body parameter depending on API signature expectations
-      });
-      console.log(`Emoji interaction sent on announcement #${id}:`, response.data);
-      return response.data;
-    } catch (error) {
-      console.error(`Error dropping emoji on announcement #${id}:`, error);
+      console.error(`Error posting emoji on announcement #${announcementId}:`, error);
       throw error;
     }
   }
