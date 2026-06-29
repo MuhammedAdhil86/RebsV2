@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { ChevronDown } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
 import { createWeeklyOff } from "../../../service/eventservice";
@@ -121,8 +121,52 @@ const WeekendsAndOffDays = () => {
 
   useEffect(() => {
     fetchBranches();
-    fetchShifts();
   }, []);
+
+  // Monitor the grid layout state for partial-day selections
+  const fetchType = useMemo(() => {
+    let hasHalf1 = false;
+    let hasHalf2 = false;
+
+    weeks.forEach((w) => {
+      if (w.half1.length > 0) hasHalf1 = true;
+      if (w.half2.length > 0) hasHalf2 = true;
+    });
+
+    if (hasHalf1 && !hasHalf2) return "Second Half";
+    if (hasHalf2 && !hasHalf1) return "First Half";
+    return null;
+  }, [weeks]);
+
+  // Handle side-effects whenever type settings filter configurations clear or adjust
+  useEffect(() => {
+    if (fetchType) {
+      loadFilteredShifts(fetchType);
+    } else {
+      setShifts([]);
+      setSelectedShift("");
+      setSelectedPolicyId("");
+    }
+  }, [fetchType]);
+
+  const loadFilteredShifts = async (typeParam) => {
+    try {
+      const shiftData = await fetchWeeklyOffShifts(typeParam);
+      setShifts(shiftData || []);
+
+      if (shiftData && shiftData.length > 0) {
+        setSelectedShift(shiftData[0].id);
+        // Extracts nested policy_id safely out of the nested sub-array structure
+        const activePolicyId = shiftData[0].policies?.[0]?.policy_id || "";
+        setSelectedPolicyId(activePolicyId);
+      } else {
+        setSelectedShift("");
+        setSelectedPolicyId("");
+      }
+    } catch (error) {
+      console.error("Error loading specific shifts:", error);
+    }
+  };
 
   const fetchBranches = async () => {
     try {
@@ -133,30 +177,6 @@ const WeekendsAndOffDays = () => {
       }
     } catch (error) {
       console.error("Error fetching branches:", error);
-    }
-  };
-
-  const fetchShifts = async () => {
-    try {
-      const [firstHalfData, secondHalfData] = await Promise.all([
-        fetchWeeklyOffShifts("First Half"),
-        fetchWeeklyOffShifts("Second Half"),
-      ]);
-
-      // We add a unique identifier to each shift object to avoid duplicate key errors
-      const combinedShifts = [
-        ...(firstHalfData || []),
-        ...(secondHalfData || []),
-      ];
-
-      setShifts(combinedShifts);
-
-      if (combinedShifts.length > 0) {
-        setSelectedShift(combinedShifts[0].id);
-        setSelectedPolicyId(combinedShifts[0].policy_id || "");
-      }
-    } catch (error) {
-      console.error("Error fetching shifts:", error);
     }
   };
 
@@ -193,8 +213,11 @@ const WeekendsAndOffDays = () => {
       toast.error("Please select a branch");
       return;
     }
-    if (!selectedShift) {
-      toast.error("Please select a shift");
+
+    if (fetchType && !selectedShift) {
+      toast.error(
+        "Please select a shift policy for your partial layout selections",
+      );
       return;
     }
 
@@ -208,8 +231,8 @@ const WeekendsAndOffDays = () => {
           type: "Specific",
           weeks: [weekNumber],
           is_half_day: false,
-          shift_id: parseInt(selectedShift),
-          policy_id: selectedPolicyId,
+          shift_id: null,
+          policy_id: null,
         });
       });
 
@@ -221,7 +244,7 @@ const WeekendsAndOffDays = () => {
           is_half_day: true,
           half_day_type: "First Half",
           shift_id: parseInt(selectedShift),
-          policy_id: selectedPolicyId,
+          policy_id: selectedPolicyId ? parseInt(selectedPolicyId) : null,
         });
       });
 
@@ -233,7 +256,7 @@ const WeekendsAndOffDays = () => {
           is_half_day: true,
           half_day_type: "Second Half",
           shift_id: parseInt(selectedShift),
-          policy_id: selectedPolicyId,
+          policy_id: selectedPolicyId ? parseInt(selectedPolicyId) : null,
         });
       });
     });
@@ -264,7 +287,7 @@ const WeekendsAndOffDays = () => {
 
   const labelClass = "text-[12px] font-medium text-gray-700 mb-2 block ml-1";
   const selectClass =
-    "w-full py-2 bg-white border border-gray-200 rounded-xl text-[13px] appearance-none focus:outline-none text-gray-600 h-[45px] font-poppins shadow-sm px-4";
+    "w-full py-2 bg-white border border-gray-200 rounded-xl text-[13px] appearance-none focus:outline-none text-gray-600 h-[45px] font-poppins shadow-sm px-4 disabled:bg-gray-100 disabled:cursor-not-allowed disabled:text-gray-400";
 
   return (
     <div className="w-full bg-[#F4F7F9] p-6 font-poppins">
@@ -329,25 +352,39 @@ const WeekendsAndOffDays = () => {
                 <select
                   className={selectClass}
                   value={selectedShift}
+                  disabled={!fetchType}
                   onChange={(e) => {
                     const val = e.target.value;
                     setSelectedShift(val);
                     const shiftObj = shifts.find(
                       (s) => s.id.toString() === val.toString(),
                     );
-                    setSelectedPolicyId(shiftObj?.policy_id || "");
+                    // Safe parsing fallback extraction for nested array policy metadata
+                    setSelectedPolicyId(
+                      shiftObj?.policies?.[0]?.policy_id || "",
+                    );
                   }}
                 >
-                  <option value="" disabled>
-                    Select Shift
-                  </option>
-                  {shifts.map((s, idx) => (
-                    <option key={`${s.id}-${idx}`} value={s.id}>
-                      {/* Use a fallback if half_day_type is missing */}
-                      {s.shift_name}{" "}
-                      {s.half_day_type ? `(${s.half_day_type})` : ""}
+                  {!fetchType ? (
+                    <option value="">
+                      Select half-day off to unlock shifts
                     </option>
-                  ))}
+                  ) : (
+                    <option value="" disabled>
+                      Select Shift
+                    </option>
+                  )}
+                  {shifts.map((s, idx) => {
+                    // Pulling the string literal out of the nested object to label accurately
+                    const subPolicyLabel = s.policies?.[0]?.policy_name
+                      ? ` (${s.policies[0].policy_name})`
+                      : "";
+                    return (
+                      <option key={`${s.id}-${idx}`} value={s.id}>
+                        {s.shift_name} {subPolicyLabel}
+                      </option>
+                    );
+                  })}
                 </select>
                 <ChevronDown
                   className="absolute right-4 top-[42px] text-gray-400 pointer-events-none"
@@ -372,7 +409,7 @@ const WeekendsAndOffDays = () => {
             <div className="flex items-center gap-3">
               <div className="w-5 h-5 bg-[#96E0BC] rounded-[4px]"></div>
               <span className="text-[12px] text-gray-500">
-                1st Click: Full Day
+                1st Click: Full Day (No shift required)
               </span>
             </div>
             <div className="flex items-center gap-3">
@@ -384,7 +421,7 @@ const WeekendsAndOffDays = () => {
                 }}
               ></div>
               <span className="text-[12px] text-gray-500">
-                2nd Click: 1st Half Day
+                2nd Click: 1st Half Day (Loads Second Half policies)
               </span>
             </div>
             <div className="flex items-center gap-3">
@@ -396,7 +433,7 @@ const WeekendsAndOffDays = () => {
                 }}
               ></div>
               <span className="text-[12px] text-gray-500">
-                3rd Click: 2nd Half Day
+                3rd Click: 2nd Half Day (Loads First Half policies)
               </span>
             </div>
           </div>

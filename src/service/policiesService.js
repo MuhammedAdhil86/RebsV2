@@ -141,7 +141,6 @@ export const executeShiftSwap = async (payload) => {
   try {
     const response = await axiosInstance.post(postSwapShift, payload);
     
-    // Returns the exact success message response from your backend
     return {
       success: true,
       message: response.data?.message || "Shifts swapped successfully.",
@@ -150,13 +149,24 @@ export const executeShiftSwap = async (payload) => {
   } catch (error) {
     console.error("Error inside executeShiftSwap service:", error);
     
-    // Extracts the exact error message sent by your backend router validation/logic rules
-    const serverMessage = error.response?.data?.message || "Failed to process shift swap request.";
+    // 1. Safely extract the inner response object whether it is a pre-parsed object or a raw text string
+    let serverData = error.response?.data;
+    if (typeof serverData === "string") {
+      try {
+        serverData = JSON.parse(serverData);
+      } catch (e) {
+        // Leave as string if it isn't JSON format
+      }
+    }
+
+    // 2. Map the extracted backend variables directly to the return block
+    const serverMessage = serverData?.message || "shift swap failed";
+    const detailedReason = serverData?.data || "Failed to process shift swap request.";
     
     return {
       success: false,
-      message: serverMessage,
-      error: error.response?.data || error.message
+      message: serverMessage,  // <-- "shift swap failed"
+      data: detailedReason     // <-- "both employees already have the same shift on..."
     };
   }
 };

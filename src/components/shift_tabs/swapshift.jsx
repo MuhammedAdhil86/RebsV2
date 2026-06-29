@@ -14,6 +14,7 @@ export default function SwapShift() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Simplified unified notification state string to eliminate object parsing friction
   const [notification, setNotification] = useState({ type: "", message: "" });
   const [submitting, setSubmitting] = useState(false);
   const [calendarEmployeeFilter, setCalendarEmployeeFilter] = useState("");
@@ -41,12 +42,12 @@ export default function SwapShift() {
     </div>
   );
 
-  // Automatically clear notifications after 3 seconds
+  // Automatically clear notifications after 6 seconds
   useEffect(() => {
     if (notification.message) {
       const timer = setTimeout(() => {
         setNotification({ type: "", message: "" });
-      }, 3000);
+      }, 6000);
       return () => clearTimeout(timer);
     }
   }, [notification]);
@@ -148,7 +149,6 @@ export default function SwapShift() {
   const handleSwapSubmit = async (e) => {
     e.preventDefault();
 
-    // Check for missing items
     if (
       !formData.fromEmployee ||
       !formData.toEmployee ||
@@ -156,16 +156,16 @@ export default function SwapShift() {
     ) {
       setNotification({
         type: "error",
-        message: "Please select an initiator, target employee, and swap date.",
+        message:
+          "Validation Error: Please select an initiator, target employee, and swap date.",
       });
       return;
     }
 
-    // Validation guard: block same UUID swap requests
     if (formData.fromEmployee === formData.toEmployee) {
       setNotification({
         type: "error",
-        message: "Can't swap with same user.",
+        message: "Validation Error: Can't swap with same user.",
       });
       return;
     }
@@ -182,20 +182,73 @@ export default function SwapShift() {
     try {
       const result = await executeShiftSwap(payload);
 
-      if (result.success) {
-        setNotification({ type: "success", message: result.message });
+      if (result && (result.success || result.status_code === 200)) {
+        setNotification({
+          type: "success",
+          message: result.message || "Shift swapped successfully!",
+        });
+
         const freshData = await fetchShiftAllocationsforSwap(
           calendarEmployeeFilter || formData.fromEmployee || null,
         );
         if (freshData?.status_code === 200)
           setApiShiftData(freshData.data || []);
       } else {
-        setNotification({ type: "error", message: result.message });
+        const combinedErr = result?.data
+          ? `${result.message}: ${result.data}`
+          : result?.message || "shift swap failed";
+        setNotification({
+          type: "error",
+          message: combinedErr,
+        });
       }
     } catch (err) {
+      // 1. Gather all potential text locations from your Axios Error Stack log
+      let rawString =
+        err.response?.data ||
+        err.request?.responseText ||
+        err.responseText ||
+        "";
+
+      // If it's inside an object layout due to interceptors
+      if (rawString && typeof rawString === "object") {
+        rawString = JSON.stringify(rawString);
+      }
+
+      let finalErrorMessage = "";
+
+      if (typeof rawString === "string" && rawString.includes("message")) {
+        try {
+          // Try standard JSON recovery mapping
+          const parsed = JSON.parse(rawString.trim());
+          if (parsed?.message && parsed?.data) {
+            finalErrorMessage = `${parsed.message}: ${parsed.data}`;
+          } else if (parsed?.message) {
+            finalErrorMessage = parsed.message;
+          }
+        } catch (e) {
+          // Regex extraction safety fallback directly out of the Postman string format block if parsing hiccups
+          const messageMatch = rawString.match(/"message"\s*:\s*"([^"]+)"/);
+          const dataMatch = rawString.match(/"data"\s*:\s*"([^"]+)"/);
+
+          if (messageMatch && dataMatch) {
+            finalErrorMessage = `${messageMatch[1]}: ${dataMatch[1]}`;
+          } else if (messageMatch) {
+            finalErrorMessage = messageMatch[1];
+          }
+        }
+      }
+
+      // Final display assignment fallback guard
+      if (!finalErrorMessage) {
+        finalErrorMessage =
+          err.message ||
+          "shift swap failed: Network pipeline exception occurred.";
+      }
+
       setNotification({
         type: "error",
-        message: "Network pipeline dispatch exception wrapper occurred.",
+        message: finalErrorMessage,
       });
     } finally {
       setSubmitting(false);
@@ -212,9 +265,10 @@ export default function SwapShift() {
 
   return (
     <div className="p-6 bg-white rounded-b-lg font-normal">
+      {/* Unified Notification View Node showing combined message directly */}
       {notification.message && (
         <div
-          className={`mb-4 p-3 rounded-lg text-xs font-normal border transition-opacity duration-300 ${
+          className={`mb-4 p-3 rounded-lg text-xs font-normal border transition-all duration-300 ${
             notification.type === "success"
               ? "bg-green-50 border-green-200 text-green-800"
               : notification.type === "error"
@@ -222,7 +276,7 @@ export default function SwapShift() {
                 : "bg-blue-50 border-blue-200 text-blue-800"
           }`}
         >
-          {notification.message}
+          <span className="capitalize font-normal">{notification.message}</span>
         </div>
       )}
 
@@ -231,9 +285,9 @@ export default function SwapShift() {
         <div className="xl:col-span-1 space-y-5 border-r border-gray-100 pr-0 xl:pr-6 font-normal">
           <div>
             <h2 className="text-base font-normal text-gray-800 flex items-center gap-1.5">
-              Swap Shift
+              Swap
               <svg
-                className="h-4 w-4 text-gray-500"
+                className="h-4 w-4 text-gray-500 flex-shrink-0"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -245,6 +299,7 @@ export default function SwapShift() {
                   d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
                 />
               </svg>
+              Shift
             </h2>
             <p className="text-xs text-gray-500 font-normal">
               Configure the exchange data allocations framework down below.
