@@ -12,7 +12,10 @@ import {
   deleteTemplateAllocation,
   getPayrollDataAnalyticsList,
   getptslabs,
+  getTDS,
+  getTaxRegimes,
   putUpsertPT,
+  putUpsertTDS,
   getReimbursementList,
   updateReimbursementStatus,
   postLeaveBulkAllocation,
@@ -160,7 +163,24 @@ const payrollService = {
       throw err;
     }
   },
-
+  getTDS: async () => {
+    try {
+      const res = await axiosInstance.get(getTDS);
+      return res.data?.data || {};
+    } catch (err) {
+      console.error("Error in getTDS:", err.response || err);
+      throw err;
+    }
+  },
+getTaxRegimes: async () => {
+    try {
+      const res = await axiosInstance.get(getTaxRegimes);
+      return res.data?.data || res.data || [];
+    } catch (err) {
+      console.error("Error in getTaxRegimes:", err.response || err);
+      throw err;
+    }
+  },
   /**
   
      * @param {string} stateName - Name of the state (e.g., 'west bengal')
@@ -224,7 +244,45 @@ const payrollService = {
       throw err;
     }
   },
+// ---------------- TAX DEDUCTED AT SOURCE (TDS) ----------------
+upsertTDS: async (payload) => {
+    try {
+      const res = await axiosInstance.put(putUpsertTDS, payload); 
+      
+      // ✅ CRITICAL FIX: If the API returns 200 OK but "ok" is false, force an error!
+      if (res.data && res.data.ok === false) {
+        throw {
+          success: false,
+          message: res.data?.message || "Failed to update TDS settings",
+          backendError: res.data?.error || null, // Captures "invalid or non-default tax regime selected"
+          errors: res.data?.errors || null,
+          status: 200
+        };
+      }
 
+      // If ok is true, proceed as a real success
+      return {
+        success: true,
+        message: res.data?.message || "TDS Settings updated successfully",
+        data: res.data?.data || res.data
+      };
+    } catch (err) {
+      // This handles standard non-200 errors (400, 404, 500, etc.)
+      console.error("Error inside upsertTDS execution row:", err.response || err);
+      
+      // If our manual throw from above triggered this, pass it straight through
+      if (err.success === false) throw err;
+
+      const serverError = err.response?.data;
+      throw {
+        success: false,
+        message: serverError?.message || "Failed to update TDS settings",
+        backendError: serverError?.error || null, 
+        errors: serverError?.errors || null,
+        status: err.response?.status
+      };
+    }
+  },
   getLWFStateRules: async () => {
     try {
       const res = await axiosInstance.get(getLwfStateRules);

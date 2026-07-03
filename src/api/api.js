@@ -353,6 +353,9 @@ export const postCreateSalaryComponent = "/api/payroll/components";
 export const getLwfStateRules = "/api/payroll/statutory/lwf/rules/states";
 export const getLwfRulesByState = "/api/payroll/statutory/lwf/rules";
 export const putUpsertPT = "/api/payroll/statutory/professional-tax/upsert";
+export const getTDS ="/api/payroll/tds/tds-settings";
+export const putUpsertTDS ="/api/payroll/tds/upsert/tds-settings";
+export const getTaxRegimes = "/api/payroll/tds/tax-regimes";
 // Attendance Policy
 export const postAttendancePolicyAdd = "/attendance-policy/add";
 

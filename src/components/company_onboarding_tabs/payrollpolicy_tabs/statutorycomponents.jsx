@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from "react";
 import payrollService from "../../../service/payrollService";
+import { toast } from "react-hot-toast";
 
-// Components
+// Tab Layout Components
 import EpfTab from "./statutory_component_tabs/Epf_tab";
 import EnableEPF from "./statutory_component_tabs/epf_enable";
 import UpsertEPF from "./statutory_component_tabs/upsertepf";
@@ -14,36 +15,43 @@ import ProfessionalTaxTab from "./statutory_component_tabs/pt_tab";
 import UpsertPT from "./statutory_component_tabs/upsertpt";
 
 import LabourWelfareFundTab from "./statutory_component_tabs/lw_fund_tab";
-import UpsertLWF from "./statutory_component_tabs/upsertlwf"; // ✅ NEW
+import UpsertLWF from "./statutory_component_tabs/upsertlwf";
+
+import TdsTab from "./statutory_component_tabs/tds_tab";
 
 const StatutoryComponents = () => {
-  const tabs = ["EPF", "ESI", "PT", "LWF"];
+  const tabs = ["EPF", "ESI", "PT", "LWF", "TDS"];
   const [activeTab, setActiveTab] = useState("EPF");
 
-  // ---------------- EPF ----------------
+  // ---------------- EPF States ----------------
   const [epfData, setEpfData] = useState(null);
   const [epfEnabled, setEpfEnabled] = useState(false);
   const [epfLoading, setEpfLoading] = useState(false);
   const [epfRowExists, setEpfRowExists] = useState(true);
+  const [epfEditMode, setEpfEditMode] = useState(false);
 
-  // ---------------- ESI ----------------
+  // ---------------- ESI States ----------------
   const [esiData, setEsiData] = useState(null);
   const [esiEnabled, setEsiEnabled] = useState(false);
   const [esiLoading, setEsiLoading] = useState(false);
   const [esiRowExists, setEsiRowExists] = useState(true);
 
-  // ---------------- PT ----------------
+  // ---------------- PT States ----------------
   const [ptData, setPtData] = useState(null);
   const [ptLoading, setPtLoading] = useState(false);
   const [ptEditMode, setPtEditMode] = useState(false);
 
-  // ---------------- LWF ----------------
+  // ---------------- LWF States ----------------
   const [lwfData, setLwfData] = useState(null);
   const [lwfEnabled, setLwfEnabled] = useState(false);
   const [lwfLoading, setLwfLoading] = useState(false);
-  const [lwfEditMode, setLwfEditMode] = useState(false); // ✅ NEW
+  const [lwfEditMode, setLwfEditMode] = useState(false);
 
-  // ---------------- Global ----------------
+  // ---------------- TDS States ----------------
+  const [tdsData, setTdsData] = useState(null);
+  const [tdsLoading, setTdsLoading] = useState(false);
+
+  // ---------------- Global Loading ----------------
   const [loading, setLoading] = useState(true);
 
   // ================= FETCHERS =================
@@ -55,6 +63,7 @@ const StatutoryComponents = () => {
       setEpfData(data);
       setEpfEnabled(Boolean(data?.enabled));
       setEpfRowExists(Boolean(data?.row_exists));
+      setEpfEditMode(false);
     } finally {
       setEpfLoading(false);
     }
@@ -89,9 +98,19 @@ const StatutoryComponents = () => {
       const data = await payrollService.getLWF();
       setLwfData(data);
       setLwfEnabled(Boolean(data?.enabled));
-      setLwfEditMode(false); // ✅ reset after fetch
+      setLwfEditMode(false);
     } finally {
       setLwfLoading(false);
+    }
+  }, []);
+
+  const fetchTDS = useCallback(async () => {
+    setTdsLoading(true);
+    try {
+      const data = await payrollService.getTDS();
+      setTdsData(data);
+    } finally {
+      setTdsLoading(false);
     }
   }, []);
 
@@ -100,11 +119,17 @@ const StatutoryComponents = () => {
   useEffect(() => {
     const fetchAll = async () => {
       setLoading(true);
-      await Promise.all([fetchEPF(), fetchESI(), fetchPT(), fetchLWF()]);
+      await Promise.all([
+        fetchEPF(),
+        fetchESI(),
+        fetchPT(),
+        fetchLWF(),
+        fetchTDS(),
+      ]);
       setLoading(false);
     };
     fetchAll();
-  }, [fetchEPF, fetchESI, fetchPT, fetchLWF]);
+  }, [fetchEPF, fetchESI, fetchPT, fetchLWF, fetchTDS]);
 
   // ================= HANDLERS =================
 
@@ -148,8 +173,6 @@ const StatutoryComponents = () => {
     }
   };
 
-  // -------- LWF --------
-
   const handleEnableLWF = async ({ state, deduction_cycle }) => {
     setLwfLoading(true);
     try {
@@ -170,15 +193,49 @@ const StatutoryComponents = () => {
     }
   };
 
-  // ================= TAB CONTENT =================
+  // ✅ HANDLES THE MANUALLY FORCED FAKE-200 ERROR RESPONSE
+  const handleUpdateTDS = async (payload) => {
+    setTdsLoading(true);
+    try {
+      const response = await payrollService.upsertTDS(payload);
+      toast.success(response?.message || "TDS Settings updated successfully!");
+      await fetchTDS();
+      return true;
+    } catch (err) {
+      console.error("UI Caught exception track:", err);
+
+      // Now catches the native string error flawlessly from our forced throw block
+      if (err?.backendError && typeof err.backendError === "string") {
+        toast.error(err.backendError);
+      } else if (err?.errors && typeof err.errors === "object") {
+        Object.entries(err.errors).forEach(([field, messages]) => {
+          const msg = Array.isArray(messages) ? messages[0] : messages;
+          toast.error(`${field}: ${msg}`);
+        });
+      } else {
+        toast.error(err?.message || "Failed to update TDS settings.");
+      }
+      return false;
+    } finally {
+      setTdsLoading(false);
+    }
+  };
+
+  // ================= ROUTING VIEWS =================
 
   const tabComponents = {
     EPF: epfLoading ? (
       <div className="text-center py-10">Loading...</div>
+    ) : epfEditMode ? (
+      <UpsertEPF epfData={epfData} onSuccess={fetchEPF} />
     ) : !epfRowExists ? (
       <UpsertEPF onSuccess={fetchEPF} />
     ) : epfEnabled ? (
-      <EpfTab epfData={epfData} onDisable={handleDisableEpf} />
+      <EpfTab
+        epfData={epfData}
+        onDisable={handleDisableEpf}
+        onEdit={() => setEpfEditMode(true)}
+      />
     ) : (
       <EnableEPF onEnable={handleEnableEpf} />
     ),
@@ -188,7 +245,11 @@ const StatutoryComponents = () => {
     ) : !esiRowExists ? (
       <UpsertESI onSuccess={fetchESI} />
     ) : esiEnabled ? (
-      <EsiTab esiData={esiData} onDisable={handleDisableEsi} />
+      <EsiTab
+        esiData={esiData}
+        onDisable={handleDisableEsi}
+        onEdit={() => {}}
+      />
     ) : (
       <EnableESI onEnable={handleEnableEsi} />
     ),
@@ -201,7 +262,6 @@ const StatutoryComponents = () => {
       <ProfessionalTaxTab data={ptData} onEdit={() => setPtEditMode(true)} />
     ),
 
-    // ✅ FIXED LWF FLOW
     LWF: lwfLoading ? (
       <div className="text-center py-10">Loading...</div>
     ) : lwfEditMode ? (
@@ -213,9 +273,20 @@ const StatutoryComponents = () => {
         loading={lwfLoading}
         onEnable={handleEnableLWF}
         onDisable={handleDisableLWF}
-        onEdit={() => setLwfEditMode(true)} // ✅ Update button trigger
+        onEdit={() => setLwfEditMode(true)}
       />
     ),
+
+    TDS:
+      tdsLoading && !tdsData ? (
+        <div className="text-center py-10">Loading...</div>
+      ) : (
+        <TdsTab
+          tdsData={tdsData}
+          onUpdate={handleUpdateTDS}
+          loading={tdsLoading}
+        />
+      ),
   };
 
   return (
@@ -225,18 +296,17 @@ const StatutoryComponents = () => {
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`pb-2 ${
-              activeTab === tab
-                ? "border-b-2 border-black font-medium"
-                : "text-gray-400"
-            }`}
+            className={`pb-2 ${activeTab === tab ? "border-b-2 border-black font-medium" : "text-gray-400"}`}
           >
             {tab}
           </button>
         ))}
       </div>
-
-      {loading ? <div className="py-10">Loading...</div> : tabComponents[activeTab]}
+      {loading ? (
+        <div className="py-10">Loading...</div>
+      ) : (
+        tabComponents[activeTab]
+      )}
     </div>
   );
 };

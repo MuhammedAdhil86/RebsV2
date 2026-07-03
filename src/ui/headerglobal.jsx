@@ -1,14 +1,28 @@
 import React, { useState, useEffect, useRef } from "react";
 import { FiBell } from "react-icons/fi";
 import Notification from "../page/notification";
+import { useAuthStore } from "../store/authStore"; // ✅ Import your Zustand store
 
-export default function HeaderGolbal({ userName = "Admin" }) {
-  const avatar = "https://i.pravatar.cc/150?img=12";
+export default function HeaderGlobal() {
   const [showVersion, setShowVersion] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
 
   const notificationRef = useRef(null);
   const settingsRef = useRef(null);
+
+  // ✅ Extract live user data from Zustand store
+  const user = useAuthStore((state) => state.user);
+
+  const firstName = user?.first_name || "";
+  const lastName = user?.last_name || "";
+  const displayName =
+    `${firstName} ${lastName}`.trim() || user?.name || "Admin";
+
+  // ✅ Use user image if available, fallback to dynamic initials avatar
+  const avatarUrl =
+    user?.image && user.image.trim() !== ""
+      ? user.image
+      : `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=random&color=fff`;
 
   // Close dropdowns cleanly if user clicks anywhere outside of them
   useEffect(() => {
@@ -30,10 +44,11 @@ export default function HeaderGolbal({ userName = "Admin" }) {
 
   return (
     <div className="bg-white flex justify-between items-center p-4 rounded-lg font-normal w-full gap-4 relative">
-      {/* Welcoming text with subtitle */}
+      {/* Welcoming text with dynamic user name */}
       <div className="font-normal">
         <p className="text-sm text-gray-600 font-normal">
-          Hi, <span className="font-normal">{userName}</span>, welcome back!
+          Hi, <span className="font-semibold text-gray-800">{displayName}</span>
+          , welcome back!
         </p>
       </div>
 
@@ -44,7 +59,7 @@ export default function HeaderGolbal({ userName = "Admin" }) {
             type="button"
             onClick={() => {
               setShowNotifications(!showNotifications);
-              setShowVersion(false); // Close version dropdown if open
+              setShowVersion(false);
             }}
             className={`w-9 h-9 flex items-center justify-center rounded-full border cursor-pointer transition-all ${
               showNotifications
@@ -58,7 +73,6 @@ export default function HeaderGolbal({ userName = "Admin" }) {
           {/* Render overlay view when active */}
           {showNotifications && (
             <div className="absolute right-[-80px] sm:right-0 mt-2 w-[calc(100vw-32px)] sm:w-[480px] max-w-[550px] bg-white rounded-xl shadow-xl border border-gray-100 z-50 overflow-hidden">
-              {/* Constrain height inside header drop layout view */}
               <div className="max-h-[500px] overflow-y-auto [scrollbar-width:thin]">
                 <Notification />
               </div>
@@ -72,7 +86,7 @@ export default function HeaderGolbal({ userName = "Admin" }) {
             className="text-sm text-gray-700 border border-gray-300 px-4 py-1 rounded-full font-normal hover:bg-gray-50 transition-colors"
             onClick={() => {
               setShowVersion(!showVersion);
-              setShowNotifications(false); // Close notifications if open
+              setShowNotifications(false);
             }}
           >
             Settings
@@ -81,17 +95,17 @@ export default function HeaderGolbal({ userName = "Admin" }) {
           {/* Version Info Dropdown */}
           {showVersion && (
             <div className="absolute right-0 mt-2 w-48 bg-gray-900 text-white text-xs p-3 rounded-lg shadow-lg z-50">
-              <p className="font-semibold text-gray-300">rebs v2.111</p>
-              <p className="text-gray-400 mt-1">13-06-2026 07:17:00</p>
+              <p className="font-semibold text-gray-300">rebs v2.112</p>
+              <p className="text-gray-400 mt-1">03-07-2026 17:03:28</p>
             </div>
           )}
         </div>
 
-        {/* Profile Avatar Box */}
-        <div className="w-9 h-9 rounded-full border border-gray-200 overflow-hidden select-none">
+        {/* Dynamic Profile Avatar Box */}
+        <div className="w-9 h-9 rounded-full border border-gray-200 overflow-hidden select-none flex items-center justify-center bg-gray-100">
           <img
-            src={avatar}
-            alt="User profile avatar"
+            src={avatarUrl}
+            alt={`${displayName}'s profile avatar`}
             className="w-full h-full object-cover"
           />
         </div>
