@@ -96,7 +96,7 @@ export default function HeaderGlobal() {
           {showVersion && (
             <div className="absolute right-0 mt-2 w-48 bg-gray-900 text-white text-xs p-3 rounded-lg shadow-lg z-50">
               <p className="font-semibold text-gray-300">rebs v2.112</p>
-              <p className="text-gray-400 mt-1">03-07-2026 17:03:28</p>
+              <p className="text-gray-400 mt-1">03-07-2026 17:17:28</p>
             </div>
           )}
         </div>
