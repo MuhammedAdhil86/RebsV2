@@ -55,6 +55,7 @@ const StatutoryComponents = () => {
   const [loading, setLoading] = useState(true);
 
   // ================= FETCHERS =================
+  // Added try/catch to all fetchers to prevent silent failures
 
   const fetchEPF = useCallback(async () => {
     setEpfLoading(true);
@@ -64,6 +65,9 @@ const StatutoryComponents = () => {
       setEpfEnabled(Boolean(data?.enabled));
       setEpfRowExists(Boolean(data?.row_exists));
       setEpfEditMode(false);
+    } catch (error) {
+      console.error("EPF Fetch Error:", error);
+      toast.error("Failed to load EPF data.");
     } finally {
       setEpfLoading(false);
     }
@@ -76,6 +80,9 @@ const StatutoryComponents = () => {
       setEsiData(data);
       setEsiEnabled(Boolean(data?.enabled));
       setEsiRowExists(Boolean(data?.row_exists));
+    } catch (error) {
+      console.error("ESI Fetch Error:", error);
+      toast.error("Failed to load ESI data.");
     } finally {
       setEsiLoading(false);
     }
@@ -87,6 +94,9 @@ const StatutoryComponents = () => {
       const data = await payrollService.getPT();
       setPtData(data);
       setPtEditMode(false);
+    } catch (error) {
+      console.error("PT Fetch Error:", error);
+      toast.error("Failed to load PT data.");
     } finally {
       setPtLoading(false);
     }
@@ -99,6 +109,9 @@ const StatutoryComponents = () => {
       setLwfData(data);
       setLwfEnabled(Boolean(data?.enabled));
       setLwfEditMode(false);
+    } catch (error) {
+      console.error("LWF Fetch Error:", error);
+      toast.error("Failed to load LWF data.");
     } finally {
       setLwfLoading(false);
     }
@@ -109,6 +122,9 @@ const StatutoryComponents = () => {
     try {
       const data = await payrollService.getTDS();
       setTdsData(data);
+    } catch (error) {
+      console.error("TDS Fetch Error:", error);
+      toast.error("Failed to load TDS data.");
     } finally {
       setTdsLoading(false);
     }
@@ -117,18 +133,23 @@ const StatutoryComponents = () => {
   // ================= INITIAL LOAD =================
 
   useEffect(() => {
+    let isMounted = true; // Cleanup flag for Strict Mode/Routing
+
     const fetchAll = async () => {
       setLoading(true);
-      await Promise.all([
-        fetchEPF(),
-        fetchESI(),
-        fetchPT(),
-        fetchLWF(),
-        fetchTDS(),
-      ]);
-      setLoading(false);
+      // Use allSettled so if one module (e.g., PT) fails, EPF and ESI still load perfectly
+      await Promise.allSettled([fetchEPF(), fetchESI(), fetchPT(), fetchLWF()]);
+
+      if (isMounted) {
+        setLoading(false);
+      }
     };
+
     fetchAll();
+
+    return () => {
+      isMounted = false;
+    };
   }, [fetchEPF, fetchESI, fetchPT, fetchLWF, fetchTDS]);
 
   // ================= HANDLERS =================
@@ -137,7 +158,10 @@ const StatutoryComponents = () => {
     setEpfLoading(true);
     try {
       await payrollService.enableEPF();
+      toast.success("EPF Enabled");
       await fetchEPF();
+    } catch (error) {
+      toast.error("Failed to enable EPF");
     } finally {
       setEpfLoading(false);
     }
@@ -147,7 +171,10 @@ const StatutoryComponents = () => {
     setEpfLoading(true);
     try {
       await payrollService.disableEPF();
+      toast.success("EPF Disabled");
       await fetchEPF();
+    } catch (error) {
+      toast.error("Failed to disable EPF");
     } finally {
       setEpfLoading(false);
     }
@@ -157,7 +184,10 @@ const StatutoryComponents = () => {
     setEsiLoading(true);
     try {
       await payrollService.enableESI();
+      toast.success("ESI Enabled");
       await fetchESI();
+    } catch (error) {
+      toast.error("Failed to enable ESI");
     } finally {
       setEsiLoading(false);
     }
@@ -167,7 +197,10 @@ const StatutoryComponents = () => {
     setEsiLoading(true);
     try {
       await payrollService.disableESI();
+      toast.success("ESI Disabled");
       await fetchESI();
+    } catch (error) {
+      toast.error("Failed to disable ESI");
     } finally {
       setEsiLoading(false);
     }
@@ -177,7 +210,10 @@ const StatutoryComponents = () => {
     setLwfLoading(true);
     try {
       await payrollService.enableLWF({ state, deduction_cycle });
+      toast.success("LWF Enabled");
       await fetchLWF();
+    } catch (error) {
+      toast.error("Failed to enable LWF");
     } finally {
       setLwfLoading(false);
     }
@@ -187,13 +223,15 @@ const StatutoryComponents = () => {
     setLwfLoading(true);
     try {
       await payrollService.disableLWF();
+      toast.success("LWF Disabled");
       await fetchLWF();
+    } catch (error) {
+      toast.error("Failed to disable LWF");
     } finally {
       setLwfLoading(false);
     }
   };
 
-  // ✅ HANDLES THE MANUALLY FORCED FAKE-200 ERROR RESPONSE
   const handleUpdateTDS = async (payload) => {
     setTdsLoading(true);
     try {
@@ -204,7 +242,6 @@ const StatutoryComponents = () => {
     } catch (err) {
       console.error("UI Caught exception track:", err);
 
-      // Now catches the native string error flawlessly from our forced throw block
       if (err?.backendError && typeof err.backendError === "string") {
         toast.error(err.backendError);
       } else if (err?.errors && typeof err.errors === "object") {
@@ -225,7 +262,7 @@ const StatutoryComponents = () => {
 
   const tabComponents = {
     EPF: epfLoading ? (
-      <div className="text-center py-10">Loading...</div>
+      <div className="text-center py-10">Loading EPF...</div>
     ) : epfEditMode ? (
       <UpsertEPF epfData={epfData} onSuccess={fetchEPF} />
     ) : !epfRowExists ? (
@@ -241,7 +278,7 @@ const StatutoryComponents = () => {
     ),
 
     ESI: esiLoading ? (
-      <div className="text-center py-10">Loading...</div>
+      <div className="text-center py-10">Loading ESI...</div>
     ) : !esiRowExists ? (
       <UpsertESI onSuccess={fetchESI} />
     ) : esiEnabled ? (
@@ -255,7 +292,7 @@ const StatutoryComponents = () => {
     ),
 
     PT: ptLoading ? (
-      <div className="text-center py-10">Loading...</div>
+      <div className="text-center py-10">Loading PT...</div>
     ) : ptEditMode ? (
       <UpsertPT data={ptData} onSuccess={fetchPT} />
     ) : (
@@ -263,7 +300,7 @@ const StatutoryComponents = () => {
     ),
 
     LWF: lwfLoading ? (
-      <div className="text-center py-10">Loading...</div>
+      <div className="text-center py-10">Loading LWF...</div>
     ) : lwfEditMode ? (
       <UpsertLWF lwfData={lwfData} onSuccess={fetchLWF} />
     ) : (
@@ -279,7 +316,7 @@ const StatutoryComponents = () => {
 
     TDS:
       tdsLoading && !tdsData ? (
-        <div className="text-center py-10">Loading...</div>
+        <div className="text-center py-10">Loading TDS...</div>
       ) : (
         <TdsTab
           tdsData={tdsData}
@@ -296,14 +333,20 @@ const StatutoryComponents = () => {
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`pb-2 ${activeTab === tab ? "border-b-2 border-black font-medium" : "text-gray-400"}`}
+            className={`pb-2 transition-colors ${
+              activeTab === tab
+                ? "border-b-2 border-black font-medium text-black"
+                : "text-gray-400 hover:text-gray-700"
+            }`}
           >
             {tab}
           </button>
         ))}
       </div>
       {loading ? (
-        <div className="py-10">Loading...</div>
+        <div className="py-10 text-center text-gray-500">
+          Loading statutory components...
+        </div>
       ) : (
         tabComponents[activeTab]
       )}

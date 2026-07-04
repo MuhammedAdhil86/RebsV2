@@ -1,242 +1,256 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import payrollService from "../../../../service/payrollService";
+import { toast } from "react-hot-toast";
 
-const TdsTab = ({ tdsData = {}, onUpdate, loading }) => {
+const TdsTab = ({ onUpdate }) => {
+  const [selectedYearId, setSelectedYearId] = useState(null);
+  const [financialYears, setFinancialYears] = useState([]);
+  const [tdsData, setTdsData] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
   const [regimesList, setRegimesList] = useState([]);
-  const [fetchingRegimes, setFetchingRegimes] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [fetching, setFetching] = useState(false);
 
-  // Local form state variables
   const [tanNumber, setTanNumber] = useState("");
   const [tanCircle, setTanCircle] = useState("");
   const [allowOverride, setAllowOverride] = useState(false);
   const [defaultRegimeId, setDefaultRegimeId] = useState("");
   const [description, setDescription] = useState("");
 
-  // Sync data safely into fields
   useEffect(() => {
-    if (tdsData && Object.keys(tdsData).length > 0) {
+    const init = async () => {
+      setLoading(true);
+      try {
+        const activeYear = await payrollService.getActiveFinancialYear();
+        if (activeYear?.id) {
+          setFinancialYears([activeYear]);
+          setSelectedYearId(String(activeYear.id));
+        }
+      } catch (err) {
+        toast.error("Could not load financial settings.");
+      } finally {
+        setLoading(false);
+      }
+    };
+    init();
+  }, []);
+
+  const loadTdsData = useCallback(async (id) => {
+    if (!id) return;
+    setFetching(true);
+    try {
+      const response = await payrollService.getTDS(id);
+      setTdsData(response);
+    } catch (err) {
+      toast.error("Failed to load TDS details.");
+    } finally {
+      setFetching(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (selectedYearId) loadTdsData(selectedYearId);
+  }, [selectedYearId, loadTdsData]);
+
+  useEffect(() => {
+    if (tdsData) {
       setTanNumber(tdsData.tan_number || "");
       setTanCircle(tdsData.tan_circle || "");
       setAllowOverride(Boolean(tdsData.allow_employee_regime_selection));
-      setDefaultRegimeId(
-        tdsData.default_regime?.id ? String(tdsData.default_regime.id) : "",
-      );
+      setDefaultRegimeId(String(tdsData.default_regime?.id || ""));
       setDescription(tdsData.description || "");
     }
   }, [tdsData]);
 
   const handleStartEdit = async () => {
-    setIsEditing(true);
-    setFetchingRegimes(true);
     try {
       const data = await payrollService.getTaxRegimes();
-      const loadedRegimes = Array.isArray(data) ? data : [];
-      setRegimesList(loadedRegimes);
-
-      if (!defaultRegimeId && loadedRegimes.length > 0) {
-        setDefaultRegimeId(String(loadedRegimes[0].id));
-      }
+      setRegimesList(Array.isArray(data) ? data : []);
+      setIsEditing(true);
     } catch (err) {
-      console.error("Could not load tax regimes layout list array:", err);
-    } finally {
-      setFetchingRegimes(false);
+      toast.error("Could not load tax regimes.");
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
     const success = await onUpdate({
-      financial_year_id: Number(tdsData?.financial_year?.id) || 1,
+      financial_year_id: Number(selectedYearId),
       tan_number: tanNumber.trim().toUpperCase(),
       tan_circle: tanCircle.trim(),
       allow_employee_regime_selection: allowOverride,
       default_regime: Number(defaultRegimeId),
       description: description.trim(),
     });
-
     if (success) {
       setIsEditing(false);
+      loadTdsData(selectedYearId);
     }
   };
 
-  const financialYearName =
-    tdsData?.financial_year?.name || tdsData?.financial_year?.code || "--";
-  const assessmentYearName = tdsData?.financial_year?.assessment_year || "--";
+  // Helper for the custom dropdown arrow
+  const CustomArrow = () => (
+    <div className="absolute inset-y-0 right-0 flex items-center px-3 pointer-events-none">
+      <svg
+        className="h-4 w-4 text-gray-400"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth="2"
+          d="M19 9l-7 7-7-7"
+        />
+      </svg>
+    </div>
+  );
 
-  // --- EDIT STATE VIEW ---
-  if (isEditing) {
-    return (
-      <div className="bg-white rounded-lg border border-gray-200 p-6 font-[Poppins] text-[13px] text-gray-700">
-        <h2 className="text-[14px] font-medium mb-4">
-          Update TDS Configuration ({financialYearName})
-        </h2>
+  if (loading)
+    return <div className="text-center py-10">Loading configuration...</div>;
 
-        <form onSubmit={handleSubmit} className="space-y-4 max-w-xl">
-          <div className="flex flex-col gap-1.5">
-            <label className="font-medium text-gray-600">TAN Number</label>
+  return (
+    <div className="space-y-6">
+      <div className="bg-white p-4 border border-gray-200 rounded-lg">
+        <label className="block text-xs font-medium text-gray-600 mb-2">
+          Financial Year
+        </label>
+        <div className="relative w-full max-w-xs">
+          <select
+            value={selectedYearId || ""}
+            onChange={(e) => setSelectedYearId(e.target.value)}
+            className="appearance-none border border-gray-300 rounded-md p-2 w-full text-xs bg-white pr-10 focus:ring-1 focus:ring-black outline-none"
+          >
+            {financialYears.map((fy) => (
+              <option key={fy.id} value={fy.id}>
+                {fy.name}
+              </option>
+            ))}
+          </select>
+          <CustomArrow />
+        </div>
+      </div>
+
+      {fetching ? (
+        <div className="text-center py-10">Updating view...</div>
+      ) : isEditing ? (
+        <div className="bg-white rounded-lg border border-gray-200 p-6">
+          <h2 className="text-sm font-medium mb-6">Update TDS Configuration</h2>
+          <form onSubmit={handleSubmit} className="space-y-4 max-w-xl">
             <input
-              type="text"
               value={tanNumber}
               onChange={(e) => setTanNumber(e.target.value)}
-              className="border border-gray-300 rounded-md p-2 text-xs focus:outline-none focus:border-black uppercase"
-              placeholder="e.g. ABCDE1234F"
-              required
+              className="border p-2 w-full rounded"
+              placeholder="TAN Number"
             />
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <label className="font-medium text-gray-600">
-              TDS Circle / Range
-            </label>
             <input
-              type="text"
               value={tanCircle}
               onChange={(e) => setTanCircle(e.target.value)}
-              className="border border-gray-300 rounded-md p-2 text-xs focus:outline-none focus:border-black"
-              placeholder="e.g. Kochi"
-              required
+              className="border p-2 w-full rounded"
+              placeholder="TAN Circle"
             />
-          </div>
 
-          <div className="flex flex-col gap-1.5">
-            <label className="font-medium text-gray-600">
-              Default Tax Regime
-            </label>
-            <select
-              value={defaultRegimeId}
-              onChange={(e) => setDefaultRegimeId(e.target.value)}
-              disabled={fetchingRegimes}
-              className="border border-gray-300 rounded-md p-2 text-xs bg-white focus:outline-none focus:border-black disabled:opacity-50"
-            >
-              {fetchingRegimes ? (
-                <option>Loading configurations...</option>
-              ) : regimesList.length > 0 ? (
-                regimesList.map((item) => (
-                  <option key={item.id} value={String(item.id)}>
-                    {item.name || item.code || `Regime ID: ${item.id}`}
+            {/* Updated Select with Custom Arrow */}
+            <div className="relative w-full">
+              <select
+                value={defaultRegimeId}
+                onChange={(e) => setDefaultRegimeId(e.target.value)}
+                className="appearance-none border p-2 w-full rounded bg-white pr-10"
+              >
+                {regimesList.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name}
                   </option>
-                ))
-              ) : (
-                <>
-                  <option value="1">New Tax Regime</option>
-                  <option value="2">Old Tax Regime</option>
-                </>
-              )}
-            </select>
-          </div>
+                ))}
+              </select>
+              <CustomArrow />
+            </div>
 
-          <div className="flex flex-col gap-1.5">
-            <label className="font-medium text-gray-600">Description</label>
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={allowOverride}
+                onChange={(e) => setAllowOverride(e.target.checked)}
+              />
+              Allow Employee Override
+            </label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="border border-gray-300 rounded-md p-2 text-xs focus:outline-none focus:border-black h-20 resize-none"
-              placeholder="Provide a configuration reference description..."
+              className="border p-2 w-full rounded"
+              placeholder="Description"
+              rows={2}
             />
+            <div className="flex gap-4 mt-6">
+              <button
+                type="submit"
+                className="px-5 py-1.5 bg-black text-white rounded"
+              >
+                Save
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsEditing(false)}
+                className="px-5 py-1.5 border border-black rounded"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
+      ) : (
+        <div className="bg-white rounded-lg border border-gray-200 p-6">
+          <h2 className="text-sm font-medium mb-6">
+            Tax Deducted at Source (TDS)
+          </h2>
+          <div className="space-y-4">
+            {[
+              { label: "Financial Year", value: tdsData?.financial_year?.name },
+              {
+                label: "Assessment Year",
+                value: tdsData?.financial_year?.assessment_year,
+              },
+              { label: "TAN Number", value: tdsData?.tan_number },
+              { label: "TAN Circle", value: tdsData?.tan_circle },
+              {
+                label: "Default Regime",
+                value: tdsData?.default_regime?.regime?.toUpperCase(),
+              },
+              {
+                label: "Allow Override",
+                value: tdsData?.allow_employee_regime_selection ? "Yes" : "No",
+              },
+            ].map((item, idx) => (
+              <div
+                key={idx}
+                className="flex gap-3 border-b border-gray-100 pb-2"
+              >
+                <span className="w-[180px] text-gray-500">{item.label}</span>
+                <span className="font-medium text-black">
+                  {item.value || "--"}
+                </span>
+              </div>
+            ))}
           </div>
-
-          <div className="flex items-center gap-2 py-2">
-            <input
-              type="checkbox"
-              id="allowOverrideCheck"
-              checked={allowOverride}
-              onChange={(e) => setAllowOverride(e.target.checked)}
-              className="w-4 h-4 accent-black rounded cursor-pointer"
-            />
-            <label
-              htmlFor="allowOverrideCheck"
-              className="select-none cursor-pointer text-gray-600"
-            >
-              Allow employees to select their preferred tax regime
-            </label>
-          </div>
-
-          <div className="flex gap-2 pt-2">
+          {tdsData?.description && (
+            <div className="mt-6 text-xs bg-gray-50 p-3 rounded border border-gray-200 text-gray-600">
+              <span className="text-gray-700 font-semibold block mb-1">
+                Description:
+              </span>
+              {tdsData.description}
+            </div>
+          )}
+          <div className="mt-6">
             <button
-              type="submit"
-              disabled={loading}
-              className="px-5 py-[6px] text-[12px] bg-black text-white font-medium rounded-md hover:bg-gray-800 transition disabled:opacity-50"
+              onClick={handleStartEdit}
+              className="px-5 py-1.5 border border-black rounded text-sm font-medium hover:bg-gray-50"
             >
-              {loading ? "Saving..." : "Save"}
-            </button>
-            <button
-              type="button"
-              onClick={() => setIsEditing(false)}
-              className="px-5 py-[6px] text-[12px] border border-gray-300 text-black font-medium rounded-md hover:bg-gray-100 transition"
-            >
-              Cancel
+              Update
             </button>
           </div>
-        </form>
-      </div>
-    );
-  }
-
-  // --- VIEW DETAILS STATE ---
-  return (
-    <div className="bg-white rounded-lg border border-gray-200 p-6 font-[Poppins] text-[13px] text-gray-700">
-      <h2 className="text-[14px] font-medium mb-4">
-        Tax Deducted at Source (TDS)
-      </h2>
-
-      <div className="space-y-3">
-        <div className="flex gap-16">
-          <span className="font-medium min-w-[150px]">Financial Year</span>
-          <span className="text-gray-600">{financialYearName}</span>
         </div>
-
-        <div className="flex gap-16">
-          <span className="font-medium min-w-[150px]">Assessment Year</span>
-          <span className="text-gray-600">{assessmentYearName}</span>
-        </div>
-
-        <div className="flex gap-16">
-          <span className="font-medium min-w-[150px]">TAN Number</span>
-          <span className="text-gray-600">{tdsData?.tan_number || "--"}</span>
-        </div>
-
-        <div className="flex gap-16">
-          <span className="font-medium min-w-[150px]">TDS Circle / Range</span>
-          <span className="text-gray-600">{tdsData?.tan_circle || "--"}</span>
-        </div>
-
-        <div className="flex gap-16">
-          <span className="font-medium min-w-[150px]">Employee Override</span>
-          <span className="text-gray-600">
-            {tdsData?.allow_employee_regime_selection
-              ? "Allowed to choose tax regime preference"
-              : "Restricted (Admin enforced)"}
-          </span>
-        </div>
-
-        <div className="flex gap-16">
-          <span className="font-medium min-w-[150px]">Default Tax Regime</span>
-          <span className="text-gray-600">
-            {tdsData?.default_regime?.name ||
-              (tdsData?.default_regime?.regime
-                ? tdsData.default_regime.regime.charAt(0).toUpperCase() +
-                  tdsData.default_regime.regime.slice(1)
-                : "--")}{" "}
-            Regime
-          </span>
-        </div>
-
-        <div className="flex gap-16 pb-3 border-b border-gray-200">
-          <span className="font-medium min-w-[150px]">Description</span>
-          <span className="text-gray-600">{tdsData?.description || "--"}</span>
-        </div>
-      </div>
-
-      <div className="flex gap-3 mt-8">
-        <button
-          onClick={handleStartEdit}
-          className="px-5 py-[6px] text-[12px] border border-black rounded-md font-medium text-gray-700 hover:bg-gray-50"
-        >
-          Update
-        </button>
-      </div>
+      )}
     </div>
   );
 };

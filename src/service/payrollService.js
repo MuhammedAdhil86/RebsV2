@@ -13,6 +13,7 @@ import {
   getPayrollDataAnalyticsList,
   getptslabs,
   getTDS,
+  getFinancialYears,
   getTaxRegimes,
   putUpsertPT,
   putUpsertTDS,
@@ -163,15 +164,34 @@ const payrollService = {
       throw err;
     }
   },
-  getTDS: async () => {
+// Add this new method to fetch the active financial year
+  getActiveFinancialYear: async () => {
     try {
-      const res = await axiosInstance.get(getTDS);
-      return res.data?.data || {};
+      const res = await axiosInstance.get(getFinancialYears);
+      return res.data?.data || null;
     } catch (err) {
-      console.error("Error in getTDS:", err.response || err);
+      console.error("Error fetching financial year:", err.response || err);
       throw err;
     }
   },
+
+  // Update getTDS to accept the financialYearId
+getTDS: async (financialYearId) => {
+  try {
+    // If no ID is provided, this will throw an error to prevent the 400
+    if (!financialYearId) {
+       throw new Error("financial_year_id is required");
+    }
+    
+    // This constructs the URL correctly: /api/payroll/tds/tds-settings?financial_year_id=1
+    const url = `${getTDS}?financial_year_id=${financialYearId}`;
+    const res = await axiosInstance.get(url);
+    return res.data?.data || {};
+  } catch (err) {
+    console.error("Error in getTDS:", err.response || err);
+    throw err;
+  }
+},
 getTaxRegimes: async () => {
     try {
       const res = await axiosInstance.get(getTaxRegimes);

@@ -356,6 +356,7 @@ export const putUpsertPT = "/api/payroll/statutory/professional-tax/upsert";
 export const getTDS ="/api/payroll/tds/tds-settings";
 export const putUpsertTDS ="/api/payroll/tds/upsert/tds-settings";
 export const getTaxRegimes = "/api/payroll/tds/tax-regimes";
+export const getFinancialYears = "/api/payroll/tds/financial-year/active";
 // Attendance Policy
 export const postAttendancePolicyAdd = "/attendance-policy/add";
 
