@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import payrollService from "../../../../service/payrollService";
 import { toast } from "react-hot-toast";
+import EmployeeDeclarationList from "./declaration_tab";
 
 const TdsTab = ({ onUpdate }) => {
   const [selectedYearId, setSelectedYearId] = useState(null);
@@ -10,6 +11,7 @@ const TdsTab = ({ onUpdate }) => {
   const [regimesList, setRegimesList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [fetching, setFetching] = useState(false);
+  const [activeView, setActiveView] = useState("TDS_CONFIG");
 
   const [tanNumber, setTanNumber] = useState("");
   const [tanCircle, setTanCircle] = useState("");
@@ -88,7 +90,6 @@ const TdsTab = ({ onUpdate }) => {
     }
   };
 
-  // Helper for the custom dropdown arrow
   const CustomArrow = () => (
     <div className="absolute inset-y-0 right-0 flex items-center px-3 pointer-events-none">
       <svg
@@ -132,7 +133,12 @@ const TdsTab = ({ onUpdate }) => {
         </div>
       </div>
 
-      {fetching ? (
+      {activeView === "DECLARATION_LIST" ? (
+        <EmployeeDeclarationList
+          financialYearId={selectedYearId}
+          onBack={() => setActiveView("TDS_CONFIG")}
+        />
+      ) : fetching ? (
         <div className="text-center py-10">Updating view...</div>
       ) : isEditing ? (
         <div className="bg-white rounded-lg border border-gray-200 p-6">
@@ -150,8 +156,6 @@ const TdsTab = ({ onUpdate }) => {
               className="border p-2 w-full rounded"
               placeholder="TAN Circle"
             />
-
-            {/* Updated Select with Custom Arrow */}
             <div className="relative w-full">
               <select
                 value={defaultRegimeId}
@@ -166,7 +170,6 @@ const TdsTab = ({ onUpdate }) => {
               </select>
               <CustomArrow />
             </div>
-
             <label className="flex items-center gap-2">
               <input
                 type="checkbox"
@@ -233,20 +236,18 @@ const TdsTab = ({ onUpdate }) => {
               </div>
             ))}
           </div>
-          {tdsData?.description && (
-            <div className="mt-6 text-xs bg-gray-50 p-3 rounded border border-gray-200 text-gray-600">
-              <span className="text-gray-700 font-semibold block mb-1">
-                Description:
-              </span>
-              {tdsData.description}
-            </div>
-          )}
-          <div className="mt-6">
+          <div className="mt-6 flex gap-3">
             <button
               onClick={handleStartEdit}
               className="px-5 py-1.5 border border-black rounded text-sm font-medium hover:bg-gray-50"
             >
               Update
+            </button>
+            <button
+              onClick={() => setActiveView("DECLARATION_LIST")}
+              className="px-5 py-1.5 bg-black text-white rounded text-sm font-medium"
+            >
+              Employee Declarations
             </button>
           </div>
         </div>

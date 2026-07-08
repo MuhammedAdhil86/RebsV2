@@ -5,6 +5,7 @@ import {
   updatePolicyStatus,
   getDifaultleavePolicy, // Retained matching naming convention
   postCloneLeavePolicy,
+  getDeclarationList,
   updateSalaryPayrollComponent,
   updatePayrollSalaryTemplate,
   getPayrollcomponents,
@@ -18,6 +19,8 @@ import {
   putUpsertPT,
   putUpsertTDS,
   getReimbursementList,
+  approveOrRejectDeclaration,
+  getTdsDeductionSections,
   updateReimbursementStatus,
   postLeaveBulkAllocation,
   deletePayrollTemplate,
@@ -165,15 +168,17 @@ const payrollService = {
     }
   },
 // Add this new method to fetch the active financial year
-  getActiveFinancialYear: async () => {
+getActiveFinancialYear: async () => {
     try {
       const res = await axiosInstance.get(getFinancialYears);
-      return res.data?.data || null;
+      // Based on your response: { "ok": true, "data": { ... } }
+      return res.data.data;
     } catch (err) {
-      console.error("Error fetching financial year:", err.response || err);
+      console.error("Error in getActiveFinancialYear:", err.response || err);
       throw err;
     }
   },
+
 
   // Update getTDS to accept the financialYearId
 getTDS: async (financialYearId) => {
@@ -303,6 +308,36 @@ upsertTDS: async (payload) => {
       };
     }
   },
+  getDeclarationList: async (queryParams = {}) => {
+    try {
+      // If you need to pass filters like status or fiscal year, 
+      // you can append them as query parameters
+      const res = await axiosInstance.get(getDeclarationList, { params: queryParams });
+      return res.data;
+    } catch (err) {
+      console.error("Error in getDeclarationList:", err.response || err);
+      throw err;
+    }
+  },
+approveOrRejectDeclaration: async (payload) => {
+  try {
+    // Remove the extra { declaration: ... } wrapper here
+    const res = await axiosInstance.put(approveOrRejectDeclaration, payload);
+    return res.data;
+  } catch (err) {
+    console.error("Error in approveOrRejectDeclaration:", err.response || err);
+    throw err;
+  }
+},
+  getTdsDeductionSections: async () => {
+    try {
+      const res = await axiosInstance.get(getTdsDeductionSections);
+      return res.data;
+    } catch (err) {
+      console.error("Error in getTdsDeductionSections:", err.response || err);
+      throw err;
+    }
+},
   getLWFStateRules: async () => {
     try {
       const res = await axiosInstance.get(getLwfStateRules);

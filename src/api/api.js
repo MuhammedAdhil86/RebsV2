@@ -353,10 +353,15 @@ export const postCreateSalaryComponent = "/api/payroll/components";
 export const getLwfStateRules = "/api/payroll/statutory/lwf/rules/states";
 export const getLwfRulesByState = "/api/payroll/statutory/lwf/rules";
 export const putUpsertPT = "/api/payroll/statutory/professional-tax/upsert";
-export const getTDS ="/api/payroll/tds/tds-settings";
-export const putUpsertTDS ="/api/payroll/tds/upsert/tds-settings";
+export const getTDS ="/api/payroll/tds/company-settings";
+export const putUpsertTDS ="/api/payroll/tds/upsert/company-settings";
 export const getTaxRegimes = "/api/payroll/tds/tax-regimes";
 export const getFinancialYears = "/api/payroll/tds/financial-year/active";
+export const getDeclarationList = "/api/payroll/tds/admin/list-declarations";
+export const approveOrRejectDeclaration = "/api/payroll/tds/admin/declarations/approve";
+export const DeleteDeclaration = "/api/payroll/tds/admin/delete-declarations";
+export const getTdsDeductionSections = "/api/payroll/tds/deduction-sections";
+export const getEmployeeUserProfile = "/api/payroll/tds/admin/employee/user-profile";
 // Attendance Policy
 export const postAttendancePolicyAdd = "/attendance-policy/add";
 
