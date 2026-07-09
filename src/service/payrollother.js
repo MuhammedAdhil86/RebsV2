@@ -1,5 +1,5 @@
-import axiosInstance from "./axiosInstance";
-import { getFinancialYears, getTdsDeductionSections,getEmployeeUserProfile,DeleteDeclaration } from "../api/api";
+import axiosInstance from "./axiosinstance";
+import { getFinancialYears, getTdsDeductionSections,getEmployeeUserProfile,overrideTaxProofile,DeleteDeclaration } from "../api/api";
 
 export const getTdsActiveFinancialYear = async () => {
   try {
@@ -33,7 +33,7 @@ export const getPayrollTdsDeductionSections = async () => {
   }
 };
 
-export const getEmployeeProfile = async (userId) => {
+export const fetchEmployeeProfile = async (userId) => {
   try {
     // Ensure getEmployeeUserProfile is the correct URL string
     console.log("Fetching profile for ID:", userId);
@@ -64,6 +64,27 @@ export const deleteDeclaration = async (userId, payload) => {
     return res.data;
   } catch (err) {
     console.error("Error in deleteDeclaration:", err.response?.data || err.message);
+    throw err;
+  }
+};
+
+export const overrideTaxProfile = async (userId, manualAnnualTax) => {
+  try {
+    // Standard payload structure
+    const payload = {
+      user_id: String(userId),
+      // We pass the number as-is. If the backend fails, 
+      // try changing this to String(manualAnnualTax)
+      manual_annual_tax: parseFloat(manualAnnualTax) 
+    };
+
+    // Use query param OR body based on your backend logs. 
+    // Most Go backends prefer the ID in the body for PUT/POST requests.
+    const res = await axiosInstance.put(overrideTaxProofile, payload);
+
+    return res.data;
+  } catch (err) {
+    console.error("Error in overrideTaxProfile:", err.response?.data || err.message);
     throw err;
   }
 };

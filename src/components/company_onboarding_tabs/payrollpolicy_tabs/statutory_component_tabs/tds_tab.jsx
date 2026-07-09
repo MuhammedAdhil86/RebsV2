@@ -113,25 +113,27 @@ const TdsTab = ({ onUpdate }) => {
 
   return (
     <div className="space-y-6">
-      <div className="bg-white p-4 border border-gray-200 rounded-lg">
-        <label className="block text-xs font-medium text-gray-600 mb-2">
-          Financial Year
-        </label>
-        <div className="relative w-full max-w-xs">
-          <select
-            value={selectedYearId || ""}
-            onChange={(e) => setSelectedYearId(e.target.value)}
-            className="appearance-none border border-gray-300 rounded-md p-2 w-full text-xs bg-white pr-10 focus:ring-1 focus:ring-black outline-none"
-          >
-            {financialYears.map((fy) => (
-              <option key={fy.id} value={fy.id}>
-                {fy.name}
-              </option>
-            ))}
-          </select>
-          <CustomArrow />
+      {activeView === "TDS_CONFIG" && (
+        <div className="bg-white p-4 border border-gray-200 rounded-lg">
+          <label className="block text-xs font-medium text-gray-600 mb-2">
+            Financial Year
+          </label>
+          <div className="relative w-full max-w-xs">
+            <select
+              value={selectedYearId || ""}
+              onChange={(e) => setSelectedYearId(e.target.value)}
+              className="appearance-none border border-gray-300 rounded-md p-2 w-full text-xs bg-white pr-10 focus:ring-1 focus:ring-black outline-none"
+            >
+              {financialYears.map((fy) => (
+                <option key={fy.id} value={fy.id}>
+                  {fy.name}
+                </option>
+              ))}
+            </select>
+            <CustomArrow />
+          </div>
         </div>
-      </div>
+      )}
 
       {activeView === "DECLARATION_LIST" ? (
         <EmployeeDeclarationList

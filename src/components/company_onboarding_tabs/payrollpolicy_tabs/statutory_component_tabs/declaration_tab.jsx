@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { MoreHorizontal } from "lucide-react";
-import { toast, Toaster } from "react-hot-toast";
+import { toast } from "react-hot-toast"; // Toaster removed from here
 import payrollService from "../../../../service/payrollService";
-import { deleteDeclaration } from "../../../../service/payrollother"; // Ensure this matches your service file location
+import { deleteDeclaration } from "../../../../service/payrollother";
 import PayrollTable from "../../../../ui/payrolltable";
 import UpdateDeclarationModal from "../../../../ui/updatedelarationmodal";
 import DeleteConfirmationModal from "../../../../ui/deletemodal";
@@ -66,7 +66,6 @@ const EmployeeDeclarationList = ({ financialYearId, onBack }) => {
     };
 
     try {
-      // Using the updated service method requiring user_id and payload
       await deleteDeclaration(selectedRow.user_id, payload);
       toast.success("Deleted successfully");
       setIsDeleteModalOpen(false);
@@ -104,7 +103,7 @@ const EmployeeDeclarationList = ({ financialYearId, onBack }) => {
 
   return (
     <div className="bg-white rounded-lg border p-6">
-      <Toaster />
+      {/* Toaster removed from here; it is now handled globally in App.js */}
       <div className="flex justify-between mb-6">
         <h2 className="text-sm font-medium">Employee Declarations</h2>
         <button onClick={onBack} className="text-xs text-blue-600 underline">
@@ -118,6 +117,7 @@ const EmployeeDeclarationList = ({ financialYearId, onBack }) => {
         <PayrollTable columns={columns} data={data} />
       )}
 
+      {/* ... rest of your portal and modals remain the same ... */}
       {menuPosition &&
         createPortal(
           <div

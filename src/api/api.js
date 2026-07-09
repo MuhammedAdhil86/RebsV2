@@ -362,6 +362,7 @@ export const approveOrRejectDeclaration = "/api/payroll/tds/admin/declarations/a
 export const DeleteDeclaration = "/api/payroll/tds/admin/delete-declarations";
 export const getTdsDeductionSections = "/api/payroll/tds/deduction-sections";
 export const getEmployeeUserProfile = "/api/payroll/tds/admin/employee/user-profile";
+export const overrideTaxProofile = "/api/payroll/tds/admin/employee/tax-profile/override";
 // Attendance Policy
 export const postAttendancePolicyAdd = "/attendance-policy/add";
 
