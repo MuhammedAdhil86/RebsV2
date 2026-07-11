@@ -1,4 +1,3 @@
-// src/page/payslip.jsx
 import React, { useRef, useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { FiArrowLeft, FiBell } from "react-icons/fi";
@@ -35,22 +34,43 @@ const Payslip = () => {
   const activeCompanyLogo = logo || hLogo || avatar;
 
   // ================= PDF DOWNLOAD =================
+
   const handleDownloadPDF = () => {
     const element = payslipRef.current;
+    if (!element) return;
+
     const baseOpt = getPdfOptions(employee);
 
-    // Explicitly configure html2pdf to drop classes with 'html2pdf-ignore'
+    // Dynamic filename logic: Name_Month_Year_Payslip
+    const { consolidated_summary } = employee || {};
+    const monthName = new Date(
+      consolidated_summary?.year,
+      consolidated_summary?.month - 1,
+    ).toLocaleString("default", { month: "long" });
+
+    const employeeName =
+      employee?.full_name?.replace(/\s+/g, "_") || "Employee";
+    const fileName = `${employeeName}_${monthName}_${consolidated_summary?.year}_Payslip.pdf`;
+
+    // Explicitly configure html2pdf
     const opt = {
       ...baseOpt,
+      filename: fileName,
+      image: { type: "jpeg", quality: 0.98 },
       html2canvas: {
         ...baseOpt?.html2canvas,
         useCORS: true,
+        scale: 2, // High resolution scaling
+        logging: false,
       },
-      pagebreak: { mode: ["avoid-all"] },
-      ignoreClass: "html2pdf-ignore",
+      jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+      pagebreak: { mode: ["avoid-all", "css", "legacy"] },
     };
 
-    html2pdf().set(opt).from(element).save();
+    // Use a slight timeout to ensure DOM nodes are ready for capture
+    setTimeout(() => {
+      html2pdf().set(opt).from(element).save();
+    }, 300);
   };
 
   const renderContent = () => {
@@ -112,10 +132,33 @@ const Payslip = () => {
         name: "ESI",
         monthly_amount: employee.esi || statutory?.esi_employee || 0,
       },
-    ].filter((d) => Number(d.monthly_amount) > 0);
+      {
+        name: "Labour Welfare Fund (LWF)",
+        monthly_amount: statutory?.lwf_employee || 0,
+      },
+    ].filter((d) => Number(d.monthly_amount) >= 0);
+
+    // ================= TDS ITEMS =================
+    const tdsFields = [
+      { name: "Tax Regime", val: statutory?.tds?.tax_regime || "N/A" },
+      {
+        name: "Taxable Income",
+        val: formatINR(statutory?.tds?.taxable_income || 0),
+      },
+      { name: "Annual Tax", val: formatINR(statutory?.tds?.annual_tax || 0) },
+      {
+        name: "Ded. Claimed",
+        val: formatINR(statutory?.tds?.deduction_claimed || 0),
+      },
+      { name: "Monthly TDS", val: formatINR(statutory?.tds?.monthly_tds || 0) },
+    ];
 
     // ================= MAX ROWS =================
-    const maxRows = Math.max(earnings.length, allDeductions.length);
+    const maxRows = Math.max(
+      earnings.length,
+      allDeductions.length,
+      tdsFields.length,
+    );
 
     // ================= GENERATE PRINTED TIMESTAMP =================
     const currentTimestamp = new Date().toLocaleString("en-GB", {
@@ -148,7 +191,7 @@ const Payslip = () => {
               </div>
 
               <div>
-                <h1 className="text-2xl  text-gray-800">{companyName}</h1>
+                <h1 className="text-2xl text-gray-800">{companyName}</h1>
                 <p className="text-sm text-gray-500 mt-1 leading-relaxed max-w-md">
                   {companyAddress}
                 </p>
@@ -159,7 +202,7 @@ const Payslip = () => {
               <p className="text-xs uppercase tracking-widest text-gray-400">
                 Payslip For The Month
               </p>
-              <h2 className="text-2xl  text-gray-800 mt-1">
+              <h2 className="text-2xl text-gray-800 mt-1">
                 {monthName} {consolidated_summary?.year}
               </h2>
             </div>
@@ -171,10 +214,8 @@ const Payslip = () => {
               <h2 className="text-xs uppercase tracking-[0.2em] text-gray-400">
                 Employee Summary
               </h2>
-              {/* ✅ Bulb icon removed from this content row heading block */}
             </div>
 
-            {/* Custom Professional Notice Banner - Stripped from PDF rendering loop via html2pdf-ignore class */}
             {showNote && (
               <div
                 data-html2pdf-ignore="true"
@@ -182,46 +223,44 @@ const Payslip = () => {
               >
                 <AlertCircle size={15} className="text-amber-600 shrink-0" />
                 <p>
-                  <span className="font-semibold">Important Note:</span> If data
-                  attributes appear incorrect or out of sync, please re-run the
-                  payroll processing system to update configurations.
+                  <span className="">Important Note:</span> If data attributes
+                  appear incorrect or out of sync, please re-run the payroll
+                  processing system to update configurations.
                 </p>
               </div>
             )}
 
             <div className="flex flex-col lg:flex-row gap-8">
-              {/* LEFT */}
               <div className="flex-1 grid grid-cols-2 gap-y-3 text-sm">
                 <span className="text-gray-500">Employee Name</span>
-                <span className=" text-gray-800">
+                <span className="text-gray-800">
                   : {employee.full_name || "N/A"}
                 </span>
 
                 <span className="text-gray-500">Employee ID</span>
-                <span className=" text-gray-800">: {employee.user_id}</span>
+                <span className="text-gray-800">: {employee.user_id}</span>
 
                 <span className="text-gray-500">Designation</span>
-                <span className=" text-gray-800">
+                <span className="text-gray-800">
                   : {bank_info?.designation || "N/A"}
                 </span>
 
                 <span className="text-gray-500">Department</span>
-                <span className=" text-gray-800">
+                <span className="text-gray-800">
                   : {bank_info?.department || "N/A"}
                 </span>
 
                 <span className="text-gray-500">Pay Period</span>
-                <span className=" text-gray-800">
+                <span className="text-gray-800">
                   : {monthName} {consolidated_summary?.year}
                 </span>
 
                 <span className="text-gray-500">Pay Date</span>
-                <span className=" text-gray-800">: {formattedPayDate}</span>
+                <span className="text-gray-800">: {formattedPayDate}</span>
               </div>
 
-              {/* RIGHT */}
               <div className="w-full lg:w-80 bg-green-50 border border-green-200 rounded-2xl p-6">
-                <p className="text-3xl  text-gray-800">
+                <p className="text-3xl text-gray-800">
                   {formatINR(employee.net_monthly)}
                 </p>
                 <p className="text-xs uppercase tracking-widest text-green-700 mt-1">
@@ -248,99 +287,107 @@ const Payslip = () => {
             </div>
           </div>
 
-          {/* ================= EXTRA DETAILS ================= */}
+          {/* ================= FIXED BANK DETAILS ================= */}
           <div className="grid grid-cols-2 md:grid-cols-3 gap-6 border-y border-dashed py-8 mb-8 text-sm">
             <div>
               <p className="text-gray-400 uppercase text-[10px] mb-1">
                 Bank Name
               </p>
-              <p className=" text-gray-800">{employee.bank_name || "N/A"}</p>
+              <p className="text-gray-800">{bank_info?.bank_name || "N/A"}</p>
             </div>
-
             <div>
               <p className="text-gray-400 uppercase text-[10px] mb-1">
                 Account Number
               </p>
-              <p className=" text-gray-800">{employee.account_no || "N/A"}</p>
+              <p className="text-gray-800">
+                {bank_info?.account_number || "N/A"}
+              </p>
             </div>
-
             <div>
               <p className="text-gray-400 uppercase text-[10px] mb-1">IFSC</p>
-              <p className=" text-gray-800">{employee.ifsc || "N/A"}</p>
+              <p className="text-gray-800">{bank_info?.ifsc || "N/A"}</p>
             </div>
-
             <div>
               <p className="text-gray-400 uppercase text-[10px] mb-1">UAN</p>
-              <p className=" text-gray-800">{bank_info?.uan_number || "N/A"}</p>
+              <p className="text-gray-800">{bank_info?.uan_number || "N/A"}</p>
             </div>
-
             <div>
               <p className="text-gray-400 uppercase text-[10px] mb-1">PAN</p>
-              <p className=" text-gray-800">{bank_info?.pan_number || "N/A"}</p>
+              <p className="text-gray-800">{bank_info?.pan_number || "N/A"}</p>
             </div>
-
             <div>
               <p className="text-gray-400 uppercase text-[10px] mb-1">
                 ESI Number
               </p>
-              <p className=" text-gray-800">{bank_info?.esi_number || "N/A"}</p>
+              <p className="text-gray-800">{bank_info?.esi_number || "N/A"}</p>
             </div>
           </div>
 
           {/* ================= TABLE ================= */}
           <div className="border border-gray-200 rounded-xl overflow-hidden mb-10">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm table-fixed">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  <th className="px-5 py-4 text-center  text-gray-700 uppercase">
+                  <th className="w-[20%] px-2 py-4 text-center text-gray-700 uppercase">
                     Earnings
                   </th>
-                  <th className="px-5 py-4 text-center  text-gray-700 uppercase">
+                  <th className="w-[15%] px-2 py-4 text-center text-gray-700 uppercase">
                     Amount
                   </th>
-                  <th className="px-5 py-4 text-center  text-gray-700 uppercase border-l">
-                    Deductions
+                  <th className="w-[20%] px-2 py-4 text-center text-gray-700 uppercase border-l">
+                    Statutory
                   </th>
-                  <th className="px-5 py-4 text-center  text-gray-700 uppercase">
+                  <th className="w-[15%] px-2 py-4 text-center text-gray-700 uppercase">
+                    Amount
+                  </th>
+                  <th className="w-[20%] px-2 py-4 text-center text-gray-700 uppercase border-l">
+                    TDS
+                  </th>
+                  <th className="w-[10%] px-2 py-4 text-center text-gray-700 uppercase">
                     Amount
                   </th>
                 </tr>
               </thead>
-
               <tbody>
                 {[...Array(maxRows)].map((_, idx) => {
                   const earning = earnings[idx];
                   const deduction = allDeductions[idx];
+                  const tdsItem = tdsFields[idx];
 
                   return (
                     <tr key={idx} className="border-b border-gray-100">
-                      <td className="px-5 py-3 text-center text-gray-700">
+                      <td className="px-2 py-3 text-center text-gray-700 truncate">
                         {earning?.name || ""}
                       </td>
-                      <td className="px-5 py-3 text-center  text-gray-800">
+                      <td className="px-2 py-3 text-center text-gray-800">
                         {earning ? formatINR(earning.monthly_amount) : ""}
                       </td>
-                      <td className="px-5 py-3 text-center border-l text-gray-700">
+                      <td className="px-2 py-3 text-center border-l text-gray-700 truncate">
                         {deduction?.name || ""}
                       </td>
-                      <td className="px-5 py-3 text-center text-red-500">
+                      <td className="px-2 py-3 text-center text-red-500">
                         {deduction ? formatINR(deduction.monthly_amount) : ""}
+                      </td>
+                      <td className="px-2 py-3 text-center border-l text-gray-700 truncate">
+                        {tdsItem?.name || ""}
+                      </td>
+                      <td className="px-2 py-3 text-center text-gray-800">
+                        {tdsItem?.val || ""}
                       </td>
                     </tr>
                   );
                 })}
               </tbody>
-
-              <tfoot className="bg-gray-50  border-t border-gray-200">
+              <tfoot className="bg-gray-50 border-t border-gray-200">
                 <tr>
-                  <td className="px-5 py-4 text-center">Gross Earnings</td>
-                  <td className="px-5 py-4 text-center text-indigo-700">
+                  <td className="px-2 py-4 text-center ">Gross</td>
+                  <td className="px-2 py-4 text-center text-indigo-700 ">
                     {formatINR(employee.gross_monthly)}
                   </td>
-                  <td className="px-5 py-4 text-center border-l">
-                    Total Deductions
+                  <td className="px-2 py-4 text-center border-l ">
+                    Total Stat.
                   </td>
-                  <td className="px-5 py-4 text-center text-red-600">
+                  <td className="px-2 py-4 text-center text-red-600 ">
                     {formatINR(employee.total_deductions)}
                   </td>
                 </tr>
@@ -358,13 +405,12 @@ const Payslip = () => {
                 Gross Earnings - Total Deductions
               </p>
             </div>
-
             <h2 className="text-3xl text-gray-800">
               {formatINR(employee.net_monthly)}
             </h2>
           </div>
 
-          {/* ================= FOOTER / TIMESTAMPS ================= */}
+          {/* ================= FOOTER ================= */}
           <div className="flex justify-between items-center mt-10 text-[11px] text-gray-400 italic">
             <p>This is a system generated payslip.</p>
             <p>Printed on: {currentTimestamp}</p>
@@ -378,48 +424,16 @@ const Payslip = () => {
     <DashboardLayout userName="Admin" onLogout={() => {}}>
       <style>
         {`
-          .no-scrollbar::-webkit-scrollbar {
-            display: none;
-          }
-
-          @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(-4px); }
-            to { opacity: 1; transform: translateY(0); }
-          }
-          .animate-fadeIn {
-            animation: fadeIn 0.2s ease-out forwards;
-          }
-
-          /* Global Printing Optimization Layer */
+          .no-scrollbar::-webkit-scrollbar { display: none; }
+          @keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+          .animate-fadeIn { animation: fadeIn 0.2s ease-out forwards; }
           @media print {
-            body {
-              background: white;
-              -webkit-print-color-adjust: exact !important;
-              print-color-adjust: exact !important;
-            }
-
-            tr {
-              page-break-inside: avoid !important;
-              break-inside: avoid !important;
-            }
-            thead {
-              display: table-header-group !important;
-            }
-            tfoot {
-              display: table-footer-group !important;
-            }
-            .bg-green-50, .grid, table {
-              page-break-inside: avoid !important;
-              break-inside: avoid !important;
-            }
-
-            /* Explicit print mode rule hiding target view objects inside the layout container */
-            .html2pdf-ignore {
-              display: none !important;
-              visibility: hidden !important;
-              opacity: 0 !important;
-              height: 0 !important;
-            }
+            body { background: white; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            tr { page-break-inside: avoid !important; break-inside: avoid !important; }
+            thead { display: table-header-group !important; }
+            tfoot { display: table-footer-group !important; }
+            .bg-green-50, .grid, table { page-break-inside: avoid !important; break-inside: avoid !important; }
+            .html2pdf-ignore { display: none !important; visibility: hidden !important; opacity: 0 !important; height: 0 !important; }
           }
         `}
       </style>
@@ -427,12 +441,10 @@ const Payslip = () => {
       {/* ================= TOPBAR ================= */}
       <div className="bg-white pt-4 px-4 pb-0 w-full print:hidden">
         <div className="flex justify-between items-center border-b border-gray-200 pb-4 mb-5 flex-wrap gap-4">
-          {/* LEFT SIDE HEADER WITH ARROW BACK BUTTON */}
           <div className="flex items-center gap-3">
             <button
               onClick={() => navigate(-1)}
               className="w-9 h-9 rounded-full border border-gray-300 flex items-center justify-center hover:bg-gray-50 active:bg-gray-100 transition-colors"
-              title="Go Back"
             >
               <FiArrowLeft size={16} className="text-gray-600" />
             </button>
@@ -447,12 +459,9 @@ const Payslip = () => {
               <Download size={15} />
               Download PDF
             </button>
-
             <div className="w-10 h-10 rounded-full border border-gray-300 flex items-center justify-center">
               <FiBell className="text-gray-600" />
             </div>
-
-            {/* ✅ Toggleable Bulb Icon safely maintained inside Top Bar Row Actions */}
             <button
               onClick={() => setShowNote(!showNote)}
               className={`w-10 h-10 rounded-full border flex items-center justify-center transition-colors cursor-pointer ${
@@ -460,18 +469,15 @@ const Payslip = () => {
                   ? "bg-amber-100 border-amber-300"
                   : "border-gray-300 hover:bg-gray-50"
               }`}
-              title="Toggle System Alert Configuration Notice"
             >
               <Lightbulb
                 size={18}
                 className={`text-amber-500 ${showNote ? "fill-amber-300" : ""}`}
               />
             </button>
-
             <button className="border border-gray-300 px-5 py-2 rounded-full text-sm text-gray-700">
               Settings
             </button>
-
             <div className="w-10 h-10 rounded-full overflow-hidden border border-gray-300">
               <img
                 src={avatar}
@@ -483,7 +489,6 @@ const Payslip = () => {
         </div>
       </div>
 
-      {/* ================= CONTENT ================= */}
       <div className="w-full overflow-auto no-scrollbar">{renderContent()}</div>
     </DashboardLayout>
   );

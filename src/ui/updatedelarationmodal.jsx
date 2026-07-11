@@ -111,9 +111,8 @@ const UpdateDeclarationModal = ({
             <p className="text-[11px] text-blue-800 leading-relaxed">
               <strong>Submission Guidelines:</strong> Please ensure the
               Financial Year and Section Code are correctly mapped to the
-              employee's declaration. Both fields are <strong>mandatory</strong>
-              to process the update. Incomplete information will result in a
-              validation error.
+              employee's declaration. Both fields are mandatory to process the
+              update. Incomplete information will result in a validation error.
             </p>
           </div>
         )}

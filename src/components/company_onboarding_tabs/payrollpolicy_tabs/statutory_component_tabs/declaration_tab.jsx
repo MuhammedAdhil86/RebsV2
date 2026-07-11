@@ -160,7 +160,7 @@ const EmployeeDeclarationList = ({ financialYearId, onBack }) => {
         isOpen={isDeleteModalOpen}
         onClose={() => setIsDeleteModalOpen(false)}
         onConfirm={handleDelete}
-        itemName={selectedRow?.section_code || "this declaration"}
+        itemName={"this declaration"}
       />
 
       <UpdateDeclarationModal
