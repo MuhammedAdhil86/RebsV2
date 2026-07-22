@@ -308,11 +308,12 @@ upsertTDS: async (payload) => {
       };
     }
   },
-  getDeclarationList: async (queryParams = {}) => {
+getDeclarationList: async (queryParams = {}) => {
     try {
       // If you need to pass filters like status or fiscal year, 
       // you can append them as query parameters
       const res = await axiosInstance.get(getDeclarationList, { params: queryParams });
+      console.log("Declaration List Data:", res.data);
       return res.data;
     } catch (err) {
       console.error("Error in getDeclarationList:", err.response || err);

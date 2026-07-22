@@ -3,7 +3,8 @@ import { Icon } from "@iconify/react";
 import dashboardService from "../../service/dashboardService";
 import AnnouncementModal from "./announcement";
 import AdminLeaveModal from "../../ui/addleavemodal";
-import HeaderGolbal from "../../ui/headerglobal"; // ✅ Added global header import
+import HeaderGolbal from "../../ui/headerglobal";
+import HappinessModal from "../../ui/happiness";
 
 function DashboardHead({ userName, activeTab, setActiveTab }) {
   const [dashboardData, setDashboardData] = useState({
@@ -19,10 +20,13 @@ function DashboardHead({ userName, activeTab, setActiveTab }) {
   // Modal & Sidebar State
   const [isAnnounceModalOpen, setIsAnnounceModalOpen] = useState(false);
   const [isAdminLeaveModalOpen, setIsAdminLeaveModalOpen] = useState(false);
+  const [isHappinessModalOpen, setIsHappinessModalOpen] = useState(false);
+  const [happinessData, setHappinessData] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState(null);
 
-  // State to manage version tag visibility
-  const [showVersion, setShowVersion] = useState(false);
+  // Hover Popover State for Happiness Card
+  const [isHappinessHovered, setIsHappinessHovered] = useState(false);
+  const [hoverHappinessData, setHoverHappinessData] = useState(null);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -38,6 +42,32 @@ function DashboardHead({ userName, activeTab, setActiveTab }) {
     };
     fetchDashboardData();
   }, []);
+
+  // Fetch data specifically for hover card preview
+  const handleHappinessMouseEnter = async () => {
+    setIsHappinessHovered(true);
+    try {
+      const response = await dashboardService.fetchHappinessRating();
+      setHoverHappinessData(response?.data || null);
+    } catch (err) {
+      console.error("Error fetching hover happiness data:", err);
+    }
+  };
+
+  const handleHappinessMouseLeave = () => {
+    setIsHappinessHovered(false);
+  };
+
+  // Fetch data when card is clicked to open the modal
+  const handleHappinessClick = async () => {
+    try {
+      const response = await dashboardService.fetchHappinessRating();
+      setHappinessData(response?.data || null);
+      setIsHappinessModalOpen(true);
+    } catch (err) {
+      console.error("Error fetching happiness rating for modal:", err);
+    }
+  };
 
   if (loading)
     return (
@@ -101,7 +131,7 @@ function DashboardHead({ userName, activeTab, setActiveTab }) {
       value: dashboardData.happiness_rate,
       bg: "#FFFBDB",
       icon: "cil:smile",
-      isClickable: false,
+      isClickable: true,
     },
     {
       id: "absent_today",
@@ -115,11 +145,8 @@ function DashboardHead({ userName, activeTab, setActiveTab }) {
 
   return (
     <div className="w-full bg-white font-poppins relative">
-      {/* --- UNIVERSAL HEADER --- */}
-      {/* ✅ Cleanly integrated HeaderGolbal component instance context layout */}
       <HeaderGolbal userName={userName} />
 
-      {/* --- DASHBOARD TITLE --- */}
       <div className="w-full sm:px-6 mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <p className="text-lg sm:text-2xl font-medium">
@@ -132,8 +159,7 @@ function DashboardHead({ userName, activeTab, setActiveTab }) {
         <div className="flex flex-wrap gap-2">
           <GlowButton onClick={() => setIsAnnounceModalOpen(true)}>
             <div className="flex items-center gap-2">
-              <Icon icon="mdi:bullhorn" className="w-4 h-4" />
-              Announce
+              <Icon icon="mdi:bullhorn" className="w-4 h-4" /> Announce
             </div>
           </GlowButton>
           <button
@@ -145,35 +171,74 @@ function DashboardHead({ userName, activeTab, setActiveTab }) {
         </div>
       </div>
 
-      {/* --- KPI CARDS --- */}
       <section className="grid grid-cols-2 sm:grid-cols-5 gap-4 w-full px-4 sm:px-6 mt-4">
-        {kpiCards.map((card, idx) => (
-          <div
-            key={idx}
-            onClick={() => card.isClickable && setSelectedCategory(card)}
-            className={`shadow-sm rounded-lg p-3 flex items-center gap-3 transition-all ${
-              card.isClickable
-                ? "cursor-pointer hover:shadow-md border border-transparent hover:border-gray-200"
-                : "cursor-default"
-            }`}
-            style={{ backgroundColor: card.bg }}
-          >
-            <div className="flex items-center justify-center min-w-10 h-10 rounded-full bg-black text-white">
-              <Icon icon={card.icon} className="w-5 h-5" />
+        {kpiCards.map((card, idx) => {
+          const isHappiness = card.id === "happiness";
+
+          return (
+            <div
+              key={idx}
+              onClick={() => {
+                if (isHappiness) {
+                  handleHappinessClick();
+                } else if (card.isClickable) {
+                  setSelectedCategory(card);
+                }
+              }}
+              onMouseEnter={isHappiness ? handleHappinessMouseEnter : undefined}
+              onMouseLeave={isHappiness ? handleHappinessMouseLeave : undefined}
+              className={`shadow-sm rounded-lg p-3 flex items-center gap-3 transition-all relative ${
+                card.isClickable
+                  ? "cursor-pointer hover:shadow-md border border-transparent hover:border-gray-200"
+                  : "cursor-default"
+              }`}
+              style={{ backgroundColor: card.bg }}
+            >
+              <div className="flex items-center justify-center min-w-10 h-10 rounded-full bg-black text-white">
+                <Icon icon={card.icon} className="w-5 h-5" />
+              </div>
+              <div className="overflow-hidden">
+                <p className="text-gray-500 text-[10px] sm:text-xs truncate uppercase font-semibold">
+                  {card.label}
+                </p>
+                <h2 className="text-lg sm:text-xl font-medium text-gray-800">
+                  {card.value ?? 0}
+                </h2>
+              </div>
+
+              {/* Hover Preview Card / Tooltip for Happiness Feedback */}
+              {isHappiness && isHappinessHovered && (
+                <div className="absolute top-full left-0 mt-2 w-72 bg-white rounded-lg shadow-xl border border-gray-100 p-3 z-50 text-xs">
+                  <p className="font-semibold text-gray-800 mb-2 border-b pb-1">
+                    Today's Feedback Preview
+                  </p>
+                  {hoverHappinessData?.submitted_today &&
+                  hoverHappinessData?.data?.length > 0 ? (
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                      {hoverHappinessData.data.map((item, i) => (
+                        <div key={i} className="bg-gray-50 p-2 rounded border">
+                          <p className="font-bold text-gray-700">
+                            Rating: {item.rating}/5
+                          </p>
+                          <p className="text-gray-600 truncate">
+                            {item.feedback}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-gray-400 py-2 text-center">
+                      No feedback submitted today.
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
-            <div className="overflow-hidden">
-              <p className="text-gray-500 text-[10px] sm:text-xs truncate uppercase font-semibold">
-                {card.label}
-              </p>
-              <h2 className="text-lg sm:text-xl font-medium text-gray-800">
-                {card.value ?? 0}
-              </h2>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </section>
 
-      {/* --- SIDEBAR MENU --- */}
+      {/* Sidebar for regular employee lists */}
       <div
         className={`fixed top-0 right-0 h-full w-full sm:w-[450px] bg-white shadow-[-10px_0_30px_rgba(0,0,0,0.1)] z-50 transform transition-transform duration-300 ease-in-out ${
           selectedCategory ? "translate-x-0" : "translate-x-full"
@@ -244,7 +309,6 @@ function DashboardHead({ userName, activeTab, setActiveTab }) {
         )}
       </div>
 
-      {/* --- OVERLAY --- */}
       {selectedCategory && (
         <div
           className="fixed inset-0 bg-black/30 backdrop-blur-[2px] z-40"
@@ -252,7 +316,6 @@ function DashboardHead({ userName, activeTab, setActiveTab }) {
         />
       )}
 
-      {/* --- TABS --- */}
       <section className="bg-white mt-4 sm:mt-6 w-full px-4 sm:px-6">
         <div className="border-b flex flex-wrap gap-4 sm:gap-6 pt-4 text-sm">
           {[
@@ -277,7 +340,12 @@ function DashboardHead({ userName, activeTab, setActiveTab }) {
         </div>
       </section>
 
-      {/* --- MODALS --- */}
+      <HappinessModal
+        isOpen={isHappinessModalOpen}
+        onClose={() => setIsHappinessModalOpen(false)}
+        data={happinessData}
+      />
+
       <AnnouncementModal
         isOpen={isAnnounceModalOpen}
         onClose={() => setIsAnnounceModalOpen(false)}

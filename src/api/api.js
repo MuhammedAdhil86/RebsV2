@@ -26,7 +26,9 @@ export const putLeaveApproval = "/admin/leave/change-status/:leave_id"
 //staffstatus
 
 export const getDashboard = "/admin/dashboard/list"
-
+export const getHappinessRating = "employee/attendance/happiness-rating/today";
+export const getDashboardList = "/admin/dashboard/list"
+export const getAdminAttendanceHappinessGraph = "/admin/staff/attendance/happiness-index/graph"
 //LOG
 
 export const getLog = "/admin/stafflog/list"

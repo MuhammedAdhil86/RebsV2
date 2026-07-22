@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { MoreHorizontal } from "lucide-react";
-import { toast } from "react-hot-toast"; // Toaster removed from here
+import { toast } from "react-hot-toast";
 import payrollService from "../../../../service/payrollService";
 import { deleteDeclaration } from "../../../../service/payrollother";
 import PayrollTable from "../../../../ui/payrolltable";
@@ -76,7 +76,7 @@ const EmployeeDeclarationList = ({ financialYearId, onBack }) => {
   };
 
   const columns = [
-    { label: "User ID", key: "user_id" },
+    { label: "Name", key: "user_name" },
     { label: "Financial Year", key: "financial_year" },
     { label: "Section", key: "section_code" },
     { label: "Declared Amount", key: "declared_amount" },
@@ -103,7 +103,6 @@ const EmployeeDeclarationList = ({ financialYearId, onBack }) => {
 
   return (
     <div className="bg-white rounded-lg border p-6">
-      {/* Toaster removed from here; it is now handled globally in App.js */}
       <div className="flex justify-between mb-6">
         <h2 className="text-sm font-medium">Employee Declarations</h2>
         <button onClick={onBack} className="text-xs text-blue-600 underline">
@@ -117,7 +116,6 @@ const EmployeeDeclarationList = ({ financialYearId, onBack }) => {
         <PayrollTable columns={columns} data={data} />
       )}
 
-      {/* ... rest of your portal and modals remain the same ... */}
       {menuPosition &&
         createPortal(
           <div
