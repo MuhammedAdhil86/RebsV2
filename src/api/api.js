@@ -44,8 +44,13 @@ export const getStaff = "/master/staff"
 //manageEmployee
 export const getEmployeeDetails = "/staff/get"
 
-//assetManager
 
+// Add these insurance API endpoints to your service/API file
+
+export const getEmployeeInsuranceDetails = (uuid) => `/admin/insurance/fetch/employee-settings?user_id=${uuid}`;
+export const updateEmployeeInsurance = `/admin/insurance/update`; 
+
+//assetManager
 export const getAssetstype = "/master/asset-type"
 export const getAssetDashboard = "/admin/asset/dashboard"
 export const postCreateAsset = "/admin/asset/add"

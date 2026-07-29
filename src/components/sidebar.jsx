@@ -96,6 +96,12 @@ function SideBar({ isCollapsed, toggleSidebar }) {
           path: `/requests`,
           icon: icons.workfromhome,
         },
+
+        {
+          title: "Insurance",
+          path: `/insurance`,
+          icon: icons.insurance,
+        },
       ],
     },
     {

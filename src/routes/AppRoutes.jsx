@@ -29,7 +29,8 @@ import AssetManager from "../page/assetmanager";
 import Events from "../page/event";
 import Letter from "../page/letter";
 import JobEnquiry from "../page/jobenquiry";
-
+import manageinsurance from "../page/manageinsurance";
+import InsuranceDetails from "../page/insurancedetails";
 function AppRoutes() {
   return (
     <Routes>
@@ -44,7 +45,6 @@ function AppRoutes() {
         path="/newpassword"
         element={<PublicRoute element={NewPasswordUI} />}
       />
-
       {/* --- Protected Routes (Logged-out users CANNOT access) --- */}
       <Route
         path="/dashboard"
@@ -59,11 +59,16 @@ function AppRoutes() {
         path="/manageemployee"
         element={<ProtectedRoute element={ManageEmployees} />}
       />
-      <Route path="/test" element={<ProtectedRoute element={LogPage} />} />
       <Route
-        path="/details/:id"
-        element={<ProtectedRoute element={EmployeeProfile} />}
+        path="/insurance"
+        element={<ProtectedRoute element={manageinsurance} />}
       />
+      <Route
+        path="/insurance-details/:id"
+        element={<ProtectedRoute element={InsuranceDetails} />}
+      />
+      <Route path="/test" element={<ProtectedRoute element={LogPage} />} />
+      <Route path="/insurance-details/:uuid" element={<InsuranceDetails />} />
       <Route
         path="/consoildate"
         element={<ProtectedRoute element={ConsolidatedData} />}
@@ -99,7 +104,6 @@ function AppRoutes() {
         path="/jobenquiry"
         element={<ProtectedRoute element={JobEnquiry} />}
       />
-
       {/* Catch-all fallback */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
