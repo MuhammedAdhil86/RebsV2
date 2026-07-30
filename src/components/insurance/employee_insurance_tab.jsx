@@ -14,7 +14,7 @@ import InsuanceDetailsForm from "./sections/insurancedetailsform";
 import BeneficiaryDetailsCard from "./sections/beneficiarydetailscard";
 import DependensCovearedCard from "./sections/dependentscoveredcard";
 import InsuranceDocumentCard from "./sections/insurancedocumentcard";
-import ClaimInformationCard from "./sections/claimInformationcard";
+import ClaimInformationCard from "./sections/claiminformationcard";
 import AuditInformationCard from "./sections/auditinformationcard";
 import GlowButton from "../ui/glowbutton";
 
