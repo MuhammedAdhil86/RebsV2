@@ -10,7 +10,7 @@ import {
 
 // Import modular sections
 import EmployeeInfoCard from "./sections/employeeunfocard";
-import InsuranceDetailsForm from "./sections/InsuranceDetailsForm";
+import InsuanceDetailsForm from "./sections/insurancedetailsform";
 import BeneficiaryDetailsCard from "./sections/BeneficiaryDetailsCard";
 import DependentsCoveredCard from "./sections/DependentsCoveredCard";
 import InsuranceDocumentCard from "./sections/insurancedocumentcard";
