@@ -10,12 +10,12 @@ import {
 
 // Import modular sections with verified component names
 import EmployeeInfoCard from "./sections/employeeunfocard";
-import InsuranceDetailsForm from "./sections/InsuranceDetailsForm";
+import InsuranceDetailsForm from "./sections/insurancedetailsform";
 import BeneficiaryDetailsCard from "./sections/beneficiarydetailscard";
 import DependentsCoveredCard from "./sections/dependentscoveredcard";
 import InsuranceDocumentCard from "./sections/insurancedocumentcard";
-import ClaimInformationCard from "./sections/claimInformation_card";
-import AuditInformationCard from "./sections/auditInformation_card";
+import ClaimInformationCard from "./sections/claiminformation_card";
+import AuditInformationCard from "./sections/auditinformation_card";
 import GlowButton from "../../components/helpers/glowbutton";
 
 export default function EmployeeInsuranceTab({
