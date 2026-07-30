@@ -5,14 +5,14 @@ import {
   fetchEmployeeInsuranceDetails,
   fetchInsuranceProviders,
   fetchInsuranceTypes,
-  fetchInsuranceCoverageTypes, // 👈 Imported coverage types service
+  fetchInsuranceCoverageTypes,
 } from "../../service/insuranceservice";
 
-// Import modular sections
+// Import modular sections with verified component names
 import EmployeeInfoCard from "./sections/employeeunfocard";
-import InsuanceDetailsForm from "./sections/insurancedetailsform";
+import InsuranceDetailsForm from "./sections/InsuranceDetailsForm";
 import BeneficiaryDetailsCard from "./sections/beneficiarydetailscard";
-import DependensCovearedCard from "./sections/dependentscoveredcard";
+import DependentsCoveredCard from "./sections/dependentscoveredcard";
 import InsuranceDocumentCard from "./sections/insurancedocumentcard";
 import ClaimInformationCard from "./sections/claimInformation_card";
 import AuditInformationCard from "./sections/auditInformation_card";
@@ -32,7 +32,7 @@ export default function EmployeeInsuranceTab({
   const [claims, setClaims] = useState([]);
   const [providers, setProviders] = useState([]);
   const [insuranceTypes, setInsuranceTypes] = useState([]);
-  const [coverageTypes, setCoverageTypes] = useState([]); // 🛡️ State to store coverage types
+  const [coverageTypes, setCoverageTypes] = useState([]);
 
   const [formData, setFormData] = useState({
     insuranceProvider: "",
@@ -65,13 +65,12 @@ export default function EmployeeInsuranceTab({
       try {
         setLoading(true);
 
-        // Fetch employee details, providers, types, and coverage types concurrently
         const [insuranceData, providersData, typesData, coverageData] =
           await Promise.all([
             fetchEmployeeInsuranceDetails(uuid),
             fetchInsuranceProviders().catch(() => []),
             fetchInsuranceTypes().catch(() => []),
-            fetchInsuranceCoverageTypes().catch(() => []), // 🛡️ Fallback array if coverage types fail
+            fetchInsuranceCoverageTypes().catch(() => []),
           ]);
 
         if (providersData) {
@@ -83,7 +82,7 @@ export default function EmployeeInsuranceTab({
         }
 
         if (coverageData) {
-          setCoverageTypes(coverageData); // 🛡️ Set coverage types state
+          setCoverageTypes(coverageData);
         }
 
         if (insuranceData) {
@@ -180,7 +179,7 @@ export default function EmployeeInsuranceTab({
             handleChange={handleChange}
             providers={providers}
             insuranceTypes={insuranceTypes}
-            coverageTypes={coverageTypes} // 🛡️ Passed coverage types array here
+            coverageTypes={coverageTypes}
           />
         </div>
 
@@ -207,7 +206,6 @@ export default function EmployeeInsuranceTab({
 
       {/* Bottom Right Action Buttons */}
       <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200 bg-white p-4 rounded-lg shadow-sm">
-        {/* Cancel Button: White BG with Black Border */}
         <button
           type="button"
           onClick={() => navigate(-1)}
@@ -216,7 +214,6 @@ export default function EmployeeInsuranceTab({
           Cancel
         </button>
 
-        {/* Save Insurance Button: GlowButton Component */}
         <GlowButton onClick={handleSave}>Save Insurance</GlowButton>
       </div>
     </div>

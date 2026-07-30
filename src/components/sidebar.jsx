@@ -46,6 +46,7 @@ function SideBar({ isCollapsed, toggleSidebar }) {
         width="20"
       />
     ),
+    insurance: <Icon icon="solar:shield-user-outline" width="20" />, // 🛡️ Added insurance icon
     organisationonboard: <Icon icon="octicon:organization-24" width="20" />,
     employeeOnboard: <Icon icon="clarity:employee-line" width="20" />,
     Hiring: <Icon icon="hugeicons:job-link" width="20" />,
