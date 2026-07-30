@@ -14,8 +14,8 @@ import InsuranceDetailsForm from "./sections/insurancedetailsform";
 import BeneficiaryDetailsCard from "./sections/beneficiarydetailscard";
 import DependentsCoveredCard from "./sections/dependentscoveredcard";
 import InsuranceDocumentCard from "./sections/insurancedocumentcard";
-import ClaimInformationCard from "./sections/claiminformationcard";
-import AuditInformationCard from "./sections/auditinformationcard";
+import ClaimInformationCard from "./sections/claimInformation_card";
+import AuditInformationCard from "./sections/auditInformation_card";
 import GlowButton from "../../components/helpers/glowbutton";
 
 export default function EmployeeInsuranceTab({
