@@ -48,7 +48,7 @@ export default function HeaderGlobal() {
       <div className="font-normal">
         <p className="text-sm text-gray-600 font-normal">
           Hi, <span className="font-semibold text-gray-800">{displayName}</span>
-          !Welcome back. Hope you're having a great day!
+          ! Welcome back. Hope you're having a great day!
         </p>
       </div>
 
