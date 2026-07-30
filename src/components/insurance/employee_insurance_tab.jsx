@@ -12,7 +12,7 @@ import {
 import EmployeeInfoCard from "./sections/employeeunfocard";
 import InsuanceDetailsForm from "./sections/insurancedetailsform";
 import BeneficiaryDetailsCard from "./sections/beneficiarydetailscard";
-import DependentsCoveredCard from "./sections/dependentcoveredcard";
+import DependensCovearedCard from "./sections/dependentscoveredcard";
 import InsuranceDocumentCard from "./sections/insurancedocumentcard";
 import ClaimInformationCard from "./sections/claiminformationcard";
 import AuditInformationCard from "./sections/auditinformationcard";
