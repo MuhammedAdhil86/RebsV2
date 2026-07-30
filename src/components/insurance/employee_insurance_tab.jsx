@@ -16,7 +16,7 @@ import DependensCovearedCard from "./sections/dependentscoveredcard";
 import InsuranceDocumentCard from "./sections/insurancedocumentcard";
 import ClaimInformationCard from "./sections/claimInformation_card";
 import AuditInformationCard from "./sections/auditInformation_card";
-import GlowButton from "../ui/glowbutton";
+import GlowButton from "../../ui/glowbutton";
 
 export default function EmployeeInsuranceTab({
   uuid: propUuid,
