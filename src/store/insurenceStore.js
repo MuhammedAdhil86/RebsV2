@@ -8,6 +8,8 @@ const useInsuranceStore = create((set) => ({
   error: null,
 
   // Action to fetch details by UUID or ID
+
+  
   getInsuranceDetails: async (uuid) => {
     if (!uuid) return;
     set({ loading: true, error: null });
@@ -20,6 +22,7 @@ const useInsuranceStore = create((set) => ({
       set({ error, loading: false });
     }
   },
+  
 
   // Optional: Clear data when switching profiles
   clearInsuranceData: () => set({ insuranceData: null }),

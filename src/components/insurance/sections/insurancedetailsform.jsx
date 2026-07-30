@@ -1,6 +1,13 @@
 import React from "react";
+import { ChevronDown } from "lucide-react";
 
-export default function InsuranceDetailsForm({ formData, handleChange }) {
+export default function InsuranceDetailsForm({
+  formData,
+  handleChange,
+  providers = [],
+  insuranceTypes = [],
+  coverageTypes = [],
+}) {
   return (
     <div className="bg-white shadow-sm rounded-lg p-5 border border-gray-200 space-y-4">
       <h3 className="text-xs font-bold text-blue-900 uppercase tracking-wider">
@@ -8,18 +15,35 @@ export default function InsuranceDetailsForm({ formData, handleChange }) {
       </h3>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-        <div>
+        {/* Insurance Provider Dropdown mapped to provider_name */}
+        <div className="relative">
           <label className="block text-gray-600 font-medium mb-1">
             Insurance Provider <span className="text-red-500">*</span>
           </label>
-          <input
-            type="text"
-            name="insuranceProvider"
-            value={formData.insuranceProvider}
-            onChange={handleChange}
-            className="w-full border border-gray-300 rounded-md p-2 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-          />
+          <div className="relative flex items-center">
+            <select
+              name="insuranceProvider"
+              value={formData.insuranceProvider}
+              onChange={handleChange}
+              className="w-full border border-gray-300 rounded-md p-2 bg-white appearance-none focus:outline-none focus:ring-1 focus:ring-blue-500 text-gray-800 pr-8 cursor-pointer"
+            >
+              <option value="">Select Insurance Provider</option>
+              {providers.map((provider) => {
+                const name = provider.provider_name;
+                return (
+                  <option key={provider.id} value={name}>
+                    {name}
+                  </option>
+                );
+              })}
+            </select>
+            <ChevronDown
+              size={14}
+              className="absolute right-2.5 text-gray-400 pointer-events-none"
+            />
+          </div>
         </div>
+
         <div>
           <label className="block text-gray-600 font-medium mb-1">
             Policy Number <span className="text-red-500">*</span>
@@ -32,31 +56,65 @@ export default function InsuranceDetailsForm({ formData, handleChange }) {
             className="w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
         </div>
-        <div>
+
+        {/* Insurance Type Dropdown mapped to type_name */}
+        <div className="relative">
           <label className="block text-gray-600 font-medium mb-1">
             Insurance Type <span className="text-red-500">*</span>
           </label>
-          <input
-            type="text"
-            name="insuranceType"
-            value={formData.insuranceType}
-            onChange={handleChange}
-            className="w-full border border-gray-300 rounded-md p-2 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-          />
+          <div className="relative flex items-center">
+            <select
+              name="insuranceType"
+              value={formData.insuranceType}
+              onChange={handleChange}
+              className="w-full border border-gray-300 rounded-md p-2 bg-white appearance-none focus:outline-none focus:ring-1 focus:ring-blue-500 text-gray-800 pr-8 cursor-pointer"
+            >
+              <option value="">Select Insurance Type</option>
+              {insuranceTypes.map((typeItem) => {
+                const typeName = typeItem.type_name;
+                return (
+                  <option key={typeItem.id} value={typeName}>
+                    {typeName}
+                  </option>
+                );
+              })}
+            </select>
+            <ChevronDown
+              size={14}
+              className="absolute right-2.5 text-gray-400 pointer-events-none"
+            />
+          </div>
         </div>
 
-        <div>
+        {/* Coverage Type Dropdown mapped to coverage_name */}
+        <div className="relative">
           <label className="block text-gray-600 font-medium mb-1">
             Coverage Type <span className="text-red-500">*</span>
           </label>
-          <input
-            type="text"
-            name="coverageType"
-            value={formData.coverageType}
-            onChange={handleChange}
-            className="w-full border border-gray-300 rounded-md p-2 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-          />
+          <div className="relative flex items-center">
+            <select
+              name="coverageType"
+              value={formData.coverageType}
+              onChange={handleChange}
+              className="w-full border border-gray-300 rounded-md p-2 bg-white appearance-none focus:outline-none focus:ring-1 focus:ring-blue-500 text-gray-800 pr-8 cursor-pointer"
+            >
+              <option value="">Select Coverage Type</option>
+              {coverageTypes.map((coverage) => {
+                const coverageName = coverage.coverage_name;
+                return (
+                  <option key={coverage.id} value={coverageName}>
+                    {coverageName}
+                  </option>
+                );
+              })}
+            </select>
+            <ChevronDown
+              size={14}
+              className="absolute right-2.5 text-gray-400 pointer-events-none"
+            />
+          </div>
         </div>
+
         <div>
           <label className="block text-gray-600 font-medium mb-1">
             Sum Insured <span className="text-red-500">*</span>

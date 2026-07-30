@@ -1,7 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
-import { fetchEmployeeInsuranceDetails } from "../../service/insuranceservice";
+import {
+  fetchEmployeeInsuranceDetails,
+  fetchInsuranceProviders,
+  fetchInsuranceTypes,
+  fetchInsuranceCoverageTypes, // 👈 Imported coverage types service
+} from "../../service/insuranceservice";
 
 // Import modular sections
 import EmployeeInfoCard from "./sections/employeeunfocard";
@@ -11,7 +16,7 @@ import DependentsCoveredCard from "./sections/DependentsCoveredCard";
 import InsuranceDocumentCard from "./sections/insurancedocumentcard";
 import ClaimInformationCard from "./sections/claiminformationcard";
 import AuditInformationCard from "./sections/auditinformationcard";
-import InsuranceFormActions from "./sections/insuranceformactions";
+import GlowButton from "../helpers/glowbutton";
 
 export default function EmployeeInsuranceTab({
   uuid: propUuid,
@@ -25,6 +30,9 @@ export default function EmployeeInsuranceTab({
   const [employeeInfo, setEmployeeInfo] = useState(null);
   const [dependents, setDependents] = useState([]);
   const [claims, setClaims] = useState([]);
+  const [providers, setProviders] = useState([]);
+  const [insuranceTypes, setInsuranceTypes] = useState([]);
+  const [coverageTypes, setCoverageTypes] = useState([]); // 🛡️ State to store coverage types
 
   const [formData, setFormData] = useState({
     insuranceProvider: "",
@@ -49,21 +57,42 @@ export default function EmployeeInsuranceTab({
   });
 
   useEffect(() => {
-    const loadInsuranceData = async () => {
+    const loadData = async () => {
       if (!uuid) {
         setLoading(false);
         return;
       }
       try {
         setLoading(true);
-        const data = await fetchEmployeeInsuranceDetails(uuid);
-        if (data) {
-          setEmployeeInfo(data.employee);
-          setDependents(data.dependents || []);
-          setClaims(data.claims || []);
 
-          const ins = data.insurance || {};
-          const primaryBeneficiary = data.beneficiaries?.[0] || {};
+        // Fetch employee details, providers, types, and coverage types concurrently
+        const [insuranceData, providersData, typesData, coverageData] =
+          await Promise.all([
+            fetchEmployeeInsuranceDetails(uuid),
+            fetchInsuranceProviders().catch(() => []),
+            fetchInsuranceTypes().catch(() => []),
+            fetchInsuranceCoverageTypes().catch(() => []), // 🛡️ Fallback array if coverage types fail
+          ]);
+
+        if (providersData) {
+          setProviders(providersData);
+        }
+
+        if (typesData) {
+          setInsuranceTypes(typesData);
+        }
+
+        if (coverageData) {
+          setCoverageTypes(coverageData); // 🛡️ Set coverage types state
+        }
+
+        if (insuranceData) {
+          setEmployeeInfo(insuranceData.employee);
+          setDependents(insuranceData.dependents || []);
+          setClaims(insuranceData.claims || []);
+
+          const ins = insuranceData.insurance || {};
+          const primaryBeneficiary = insuranceData.beneficiaries?.[0] || {};
 
           setFormData({
             insuranceProvider: ins.provider_name || "",
@@ -98,14 +127,14 @@ export default function EmployeeInsuranceTab({
           });
         }
       } catch (error) {
-        console.error("❌ Failed to load employee insurance details:", error);
+        console.error("❌ Failed to load employee insurance data:", error);
         toast.error("Failed to fetch employee insurance details.");
       } finally {
         setLoading(false);
       }
     };
 
-    loadInsuranceData();
+    loadData();
   }, [uuid]);
 
   const backendBaseUrl = "https://rebs.blr1.digitaloceanspaces.com/";
@@ -149,6 +178,9 @@ export default function EmployeeInsuranceTab({
           <InsuranceDetailsForm
             formData={formData}
             handleChange={handleChange}
+            providers={providers}
+            insuranceTypes={insuranceTypes}
+            coverageTypes={coverageTypes} // 🛡️ Passed coverage types array here
           />
         </div>
 
@@ -163,7 +195,7 @@ export default function EmployeeInsuranceTab({
         </div>
       </div>
 
-      {/* Bottom Section: Claim Information matching Insurance Details width (span 2) */}
+      {/* Bottom Section: Claim Information (span 2) & Audit Information (span 1) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-2">
         <div className="lg:col-span-2 space-y-2">
           <ClaimInformationCard claims={claims} />
@@ -171,6 +203,21 @@ export default function EmployeeInsuranceTab({
         <div className="space-y-2">
           <AuditInformationCard />
         </div>
+      </div>
+
+      {/* Bottom Right Action Buttons */}
+      <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200 bg-white p-4 rounded-lg shadow-sm">
+        {/* Cancel Button: White BG with Black Border */}
+        <button
+          type="button"
+          onClick={() => navigate(-1)}
+          className="px-5 py-2.5 bg-white border border-black text-black rounded-lg text-xs font-medium hover:bg-gray-50 transition"
+        >
+          Cancel
+        </button>
+
+        {/* Save Insurance Button: GlowButton Component */}
+        <GlowButton onClick={handleSave}>Save Insurance</GlowButton>
       </div>
     </div>
   );

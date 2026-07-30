@@ -48,6 +48,9 @@ export const getEmployeeDetails = "/staff/get"
 // Add these insurance API endpoints to your service/API file
 
 export const getEmployeeInsuranceDetails = (uuid) => `/admin/insurance/fetch/employee-settings?user_id=${uuid}`;
+export const getInsuranceProviders = "/admin/insurance/providers";
+export const getInsuranceTypes = "/admin/insurance/types";
+export const getCoverageTypes = "/admin/insurance/coverage-types";
 export const updateEmployeeInsurance = `/admin/insurance/update`; 
 
 //assetManager
