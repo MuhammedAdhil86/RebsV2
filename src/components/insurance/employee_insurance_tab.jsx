@@ -11,12 +11,12 @@ import {
 // Import modular sections
 import EmployeeInfoCard from "./sections/employeeunfocard";
 import InsuanceDetailsForm from "./sections/insurancedetailsform";
-import BeneficiaryDetailsCard from "./sections/BeneficiaryDetailsCard";
-import DependentsCoveredCard from "./sections/DependentsCoveredCard";
+import BeneficiaryDetailsCard from "./sections/beneficiarydetailscard";
+import DependentsCoveredCard from "./sections/dependentcoveredcard";
 import InsuranceDocumentCard from "./sections/insurancedocumentcard";
 import ClaimInformationCard from "./sections/claiminformationcard";
 import AuditInformationCard from "./sections/auditinformationcard";
-import GlowButton from "../helpers/glowbutton";
+import GlowButton from "../ui/glowbutton";
 
 export default function EmployeeInsuranceTab({
   uuid: propUuid,
