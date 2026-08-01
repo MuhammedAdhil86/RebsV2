@@ -28,11 +28,14 @@ export default function EmployeeInsuranceTab({
 
   const [loading, setLoading] = useState(true);
   const [employeeInfo, setEmployeeInfo] = useState(null);
+  const [beneficiaries, setBeneficiaries] = useState([]);
   const [dependents, setDependents] = useState([]);
   const [claims, setClaims] = useState([]);
   const [providers, setProviders] = useState([]);
   const [insuranceTypes, setInsuranceTypes] = useState([]);
   const [coverageTypes, setCoverageTypes] = useState([]);
+  const [auditData, setAuditData] = useState([]);
+  const [documents, setDocuments] = useState([]);
 
   const [formData, setFormData] = useState({
     insuranceProvider: "",
@@ -54,7 +57,28 @@ export default function EmployeeInsuranceTab({
     relationship: "",
     contactNumber: "",
     email: "",
+    is_primary: false,
+    beneficiaryId: "",
   });
+
+  // 🆕 Re-fetch method passed down to handle updating dropdown lists immediately upon item creations
+  const handleRefreshDropdowns = async () => {
+    try {
+      const [providersData, typesData, coverageData] = await Promise.all([
+        fetchInsuranceProviders().catch(() => []),
+        fetchInsuranceTypes().catch(() => []),
+        fetchInsuranceCoverageTypes().catch(() => []),
+      ]);
+      if (providersData) setProviders(providersData);
+      if (typesData) setInsuranceTypes(typesData);
+      if (coverageData) setCoverageTypes(coverageData);
+    } catch (error) {
+      console.error(
+        "❌ Failed to refresh insurance system configurations details:",
+        error,
+      );
+    }
+  };
 
   useEffect(() => {
     const loadData = async () => {
@@ -87,11 +111,17 @@ export default function EmployeeInsuranceTab({
 
         if (insuranceData) {
           setEmployeeInfo(insuranceData.employee);
+          setBeneficiaries(insuranceData.beneficiaries || []);
           setDependents(insuranceData.dependents || []);
           setClaims(insuranceData.claims || []);
+          setAuditData(insuranceData.audit_information || []);
+          setDocuments(insuranceData.documents || []);
 
           const ins = insuranceData.insurance || {};
-          const primaryBeneficiary = insuranceData.beneficiaries?.[0] || {};
+          const primaryBeneficiary =
+            insuranceData.beneficiaries?.find((b) => b.is_primary) ||
+            insuranceData.beneficiaries?.[0] ||
+            {};
 
           setFormData({
             insuranceProvider: ins.provider_name || "",
@@ -123,6 +153,8 @@ export default function EmployeeInsuranceTab({
             relationship: primaryBeneficiary.relationship || "",
             contactNumber: primaryBeneficiary.contact_number || "",
             email: primaryBeneficiary.email || "",
+            is_primary: primaryBeneficiary.is_primary || false,
+            beneficiaryId: primaryBeneficiary.id || "",
           });
         }
       } catch (error) {
@@ -180,6 +212,7 @@ export default function EmployeeInsuranceTab({
             providers={providers}
             insuranceTypes={insuranceTypes}
             coverageTypes={coverageTypes}
+            onRefreshDropdowns={handleRefreshDropdowns} // 🆕 Action passed to update the choices arrays dynamically
           />
         </div>
 
@@ -188,9 +221,10 @@ export default function EmployeeInsuranceTab({
           <BeneficiaryDetailsCard
             formData={formData}
             handleChange={handleChange}
+            beneficiaries={beneficiaries}
           />
           <DependentsCoveredCard dependents={dependents} />
-          <InsuranceDocumentCard />
+          <InsuranceDocumentCard documentData={documents} />
         </div>
       </div>
 
@@ -200,7 +234,7 @@ export default function EmployeeInsuranceTab({
           <ClaimInformationCard claims={claims} />
         </div>
         <div className="space-y-2">
-          <AuditInformationCard />
+          <AuditInformationCard auditData={auditData} />
         </div>
       </div>
 

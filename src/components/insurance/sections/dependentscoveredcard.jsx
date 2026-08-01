@@ -5,7 +5,7 @@ export default function DependentsCoveredCard({ dependents }) {
   return (
     <div className="bg-white shadow-sm rounded-lg p-5 border border-gray-200 space-y-3">
       <div className="flex justify-between items-center">
-        <h3 className="text-xs font-bold text-blue-900 uppercase tracking-wider">
+        <h3 className="text-xs font-bold text-blue-600 uppercase tracking-wider">
           Dependents Covered
         </h3>
         <button
@@ -28,7 +28,7 @@ export default function DependentsCoveredCard({ dependents }) {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50 text-gray-700">
-            {dependents.length > 0 ? (
+            {dependents && dependents.length > 0 ? (
               dependents.map((dep, index) => (
                 <tr key={dep.id || index}>
                   <td className="py-2.5">{index + 1}</td>
@@ -36,7 +36,14 @@ export default function DependentsCoveredCard({ dependents }) {
                   <td className="py-2.5">{dep.relationship}</td>
                   <td className="py-2.5">
                     {dep.date_of_birth && !dep.date_of_birth.startsWith("0001")
-                      ? new Date(dep.date_of_birth).toLocaleDateString("en-GB")
+                      ? new Date(dep.date_of_birth).toLocaleDateString(
+                          "en-GB",
+                          {
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric",
+                          },
+                        )
                       : "N/A"}
                   </td>
                   <td className="py-2.5 text-center">

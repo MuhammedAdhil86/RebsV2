@@ -1,23 +1,51 @@
 import React, { useRef } from "react";
-import { Download, RefreshCw, Trash2 } from "lucide-react";
+import { Download, RefreshCw } from "lucide-react";
 
 export default function InsuranceDocumentCard({
   documentData,
   onDownload,
   onReplace,
-  onDelete,
 }) {
   const fileInputRef = useRef(null);
 
+  const doc = Array.isArray(documentData) ? documentData[0] : documentData;
+
+  const getFileName = (url) => {
+    if (!url) return "insurance_card.pdf";
+    try {
+      const cleanUrl = url.split("?")[0];
+      const name = cleanUrl.substring(cleanUrl.lastIndexOf("/") + 1);
+      return name || "insurance_card.pdf";
+    } catch {
+      return "insurance_card.pdf";
+    }
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString || dateString.startsWith("0001")) return "N/A";
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleString("en-GB", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    } catch {
+      return dateString;
+    }
+  };
+
   const fileName =
-    documentData?.file_name || documentData?.name || "insurance_card.pdf";
-  const fileSize = documentData?.file_size || "1.2 MB";
-  const uploadDate = documentData?.uploaded_on || "01 Apr 2024";
-  const fileUrl = documentData?.file_url || documentData?.url;
+    doc?.document_name || doc?.file_name || getFileName(doc?.file_url);
+  const fileSize = doc?.file_size || "1.2 MB";
+  const uploadDate = formatDate(doc?.uploaded_at);
+  const fileUrl = doc?.file_url || doc?.url;
 
   const handleDownloadClick = () => {
     if (onDownload) {
-      onDownload(documentData);
+      onDownload(doc);
     } else if (fileUrl) {
       window.open(fileUrl, "_blank");
     }
@@ -33,7 +61,7 @@ export default function InsuranceDocumentCard({
 
   return (
     <div className="bg-white shadow-sm rounded-lg p-3 border border-gray-200 space-y-6">
-      <h3 className="text-xs font-bold text-blue-900 uppercase tracking-wider">
+      <h3 className="text-xs font-bold text-blue-600 uppercase tracking-wider">
         Insurance Document
       </h3>
 
@@ -44,7 +72,10 @@ export default function InsuranceDocumentCard({
             PDF
           </div>
           <div className="text-xs truncate">
-            <span className="font-semibold text-gray-800 block truncate max-w-[140px] sm:max-w-[180px]">
+            <span
+              title={fileName}
+              className="font-semibold text-gray-800 block truncate max-w-[140px] sm:max-w-[180px] cursor-pointer"
+            >
               {fileName}
             </span>
             <span className="text-gray-400 text-[10px]">
@@ -81,15 +112,6 @@ export default function InsuranceDocumentCard({
           >
             <RefreshCw size={11} />
             <span className="hidden sm:inline">Replace</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => onDelete && onDelete()}
-            className="p-1 border border-gray-200 rounded text-red-500 hover:bg-red-50 transition"
-            title="Delete Document"
-          >
-            <Trash2 size={12} />
           </button>
         </div>
       </div>
