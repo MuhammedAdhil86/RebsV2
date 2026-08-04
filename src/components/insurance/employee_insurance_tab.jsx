@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
+
 import {
   fetchEmployeeInsuranceDetails,
   fetchInsuranceProviders,
@@ -8,7 +9,8 @@ import {
   fetchInsuranceCoverageTypes,
 } from "../../service/insuranceservice";
 
-// Import modular sections with verified component names
+import { saveEmployeeInsuranceUpdate } from "../../service/insurance";
+
 import EmployeeInfoCard from "./sections/employeeunfocard";
 import InsuranceDetailsForm from "./sections/insurancedetailsform";
 import BeneficiaryDetailsCard from "./sections/beneficiarydetailscard";
@@ -27,15 +29,20 @@ export default function EmployeeInsuranceTab({
   const navigate = useNavigate();
 
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [employeeInfo, setEmployeeInfo] = useState(null);
+
   const [beneficiaries, setBeneficiaries] = useState([]);
   const [dependents, setDependents] = useState([]);
+  const [documents, setDocuments] = useState([]);
+  const [rawFiles, setRawFiles] = useState([]);
+
   const [claims, setClaims] = useState([]);
   const [providers, setProviders] = useState([]);
   const [insuranceTypes, setInsuranceTypes] = useState([]);
   const [coverageTypes, setCoverageTypes] = useState([]);
   const [auditData, setAuditData] = useState([]);
-  const [documents, setDocuments] = useState([]);
+  const [policyRecordId, setPolicyRecordId] = useState(0);
 
   const [formData, setFormData] = useState({
     insuranceProvider: "",
@@ -53,15 +60,8 @@ export default function EmployeeInsuranceTab({
     renewalReminder: "",
     policyStatus: "",
     notes: "",
-    beneficiaryName: "",
-    relationship: "",
-    contactNumber: "",
-    email: "",
-    is_primary: false,
-    beneficiaryId: "",
   });
 
-  // 🆕 Re-fetch method passed down to handle updating dropdown lists immediately upon item creations
   const handleRefreshDropdowns = async () => {
     try {
       const [providersData, typesData, coverageData] = await Promise.all([
@@ -97,17 +97,9 @@ export default function EmployeeInsuranceTab({
             fetchInsuranceCoverageTypes().catch(() => []),
           ]);
 
-        if (providersData) {
-          setProviders(providersData);
-        }
-
-        if (typesData) {
-          setInsuranceTypes(typesData);
-        }
-
-        if (coverageData) {
-          setCoverageTypes(coverageData);
-        }
+        if (providersData) setProviders(providersData);
+        if (typesData) setInsuranceTypes(typesData);
+        if (coverageData) setCoverageTypes(coverageData);
 
         if (insuranceData) {
           setEmployeeInfo(insuranceData.employee);
@@ -118,16 +110,13 @@ export default function EmployeeInsuranceTab({
           setDocuments(insuranceData.documents || []);
 
           const ins = insuranceData.insurance || {};
-          const primaryBeneficiary =
-            insuranceData.beneficiaries?.find((b) => b.is_primary) ||
-            insuranceData.beneficiaries?.[0] ||
-            {};
+          setPolicyRecordId(ins.id || 0);
 
           setFormData({
-            insuranceProvider: ins.provider_name || "",
+            insuranceProvider: ins.provider_id || "",
             policyNumber: ins.policy_number || "",
-            insuranceType: ins.insurance_type || "",
-            coverageType: ins.coverage_type || "",
+            insuranceType: ins.insurance_type_id || "",
+            coverageType: ins.coverage_type_id || "",
             sumInsured: ins.sum_insured ? `₹ ${ins.sum_insured}` : "",
             premiumAmount: ins.premium_amount ? `₹ ${ins.premium_amount}` : "",
             premiumPaidBy: ins.premium_paid_by || "",
@@ -145,16 +134,10 @@ export default function EmployeeInsuranceTab({
               : "",
             coverageDuration: "365 Days",
             renewalReminder: ins.renewal_reminder_days
-              ? `${ins.renewal_reminder_days} Days`
+              ? `${ins.renewal_reminder_days}`
               : "",
             policyStatus: ins.policy_status || "",
             notes: ins.notes || "",
-            beneficiaryName: primaryBeneficiary.beneficiary_name || "",
-            relationship: primaryBeneficiary.relationship || "",
-            contactNumber: primaryBeneficiary.contact_number || "",
-            email: primaryBeneficiary.email || "",
-            is_primary: primaryBeneficiary.is_primary || false,
-            beneficiaryId: primaryBeneficiary.id || "",
           });
         }
       } catch (error) {
@@ -181,8 +164,134 @@ export default function EmployeeInsuranceTab({
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleSave = () => {
-    toast.success("Insurance details saved successfully!");
+  const cleanNumericString = (val) => {
+    if (!val) return 0;
+    const cleanStr = String(val).replace(/[₹\s,]/g, "");
+    return Number(cleanStr) || 0;
+  };
+
+  const handleDocumentChange = (updatedDocs, freshlySelectedFiles = []) => {
+    setDocuments(updatedDocs);
+    if (freshlySelectedFiles.length > 0) {
+      setRawFiles((prev) => [...prev, ...freshlySelectedFiles]);
+    }
+  };
+
+  const handleSave = async () => {
+    try {
+      setSaving(true);
+
+      const premium = cleanNumericString(formData.premiumAmount);
+      let companyShare = cleanNumericString(formData.companyContribution);
+      let employeeShare = cleanNumericString(formData.employeeContribution);
+
+      if (formData.premiumPaidBy === "Company") {
+        companyShare = premium;
+        employeeShare = 0;
+      } else if (formData.premiumPaidBy === "Employee") {
+        companyShare = 0;
+        employeeShare = premium;
+      }
+
+      if (premium > 0 && companyShare + employeeShare !== premium) {
+        toast.error(
+          `Premium allocation fault! Company Share (${companyShare}) + Employee Share (${employeeShare}) must equal Total Premium (${premium}).`,
+        );
+        setSaving(false);
+        return false;
+      }
+
+      if (beneficiaries.length > 0) {
+        const totalAllocation = beneficiaries.reduce(
+          (sum, b) => sum + (Number(b.allocation_percentage) || 0),
+          0,
+        );
+        if (totalAllocation !== 100) {
+          toast.error(
+            `Invalid beneficiary configurations! Total shares equal ${totalAllocation}%, but must sum up to exactly 100%.`,
+          );
+          setSaving(false);
+          return false;
+        }
+      }
+
+      const insurancePayload = {
+        ...(policyRecordId && policyRecordId !== 0
+          ? { id: policyRecordId }
+          : {}),
+        staff_id: employeeInfo?.staff_id || uuid,
+
+        ...(formData.insuranceProvider && !isNaN(formData.insuranceProvider)
+          ? { provider_id: Number(formData.insuranceProvider) }
+          : {}),
+        ...(formData.insuranceType && !isNaN(formData.insuranceType)
+          ? { insurance_type_id: Number(formData.insuranceType) }
+          : {}),
+        ...(formData.coverageType && !isNaN(formData.coverageType)
+          ? { coverage_type_id: Number(formData.coverageType) }
+          : {}),
+
+        policy_number: formData.policyNumber,
+        sum_insured: cleanNumericString(formData.sumInsured),
+        premium_amount: premium,
+        premium_paid_by: formData.premiumPaidBy,
+        company_contribution: companyShare,
+        employee_contribution: employeeShare,
+        policy_start_date: formData.policyStartDate
+          ? `${formData.policyStartDate}T00:00:00Z`
+          : null,
+        policy_end_date: formData.policyEndDate
+          ? `${formData.policyEndDate}T00:00:00Z`
+          : null,
+        renewal_reminder_days: parseInt(formData.renewalReminder) || 30,
+        notes: formData.notes,
+
+        beneficiaries: beneficiaries.map((b) => ({
+          ...(b.id && b.id !== 0 ? { id: b.id } : {}),
+          beneficiary_name: b.beneficiary_name,
+          relationship: b.relationship,
+          contact_number: b.contact_number,
+          email: b.email,
+          allocation_percentage: Number(b.allocation_percentage) || 0,
+          is_primary: !!b.is_primary,
+        })),
+
+        dependents: dependents.map((d) => ({
+          ...(d.id && d.id !== 0 ? { id: d.id } : {}),
+          dependent_name: d.dependent_name,
+          relationship: d.relationship,
+          date_of_birth: d.date_of_birth
+            ? d.date_of_birth.includes("T")
+              ? d.date_of_birth
+              : `${d.date_of_birth}T00:00:00Z`
+            : null,
+          is_covered: !!d.is_covered,
+        })),
+
+        documents: documents
+          .filter((doc) => doc.file_url || (doc.id && doc.id !== 0))
+          .map((doc) => ({
+            ...(doc.id && doc.id !== 0 ? { id: doc.id } : {}),
+            document_name: doc.document_name,
+            file_url: doc.file_url || "",
+          })),
+      };
+
+      await saveEmployeeInsuranceUpdate(insurancePayload, rawFiles);
+      toast.success("Insurance configurations synchronized successfully!");
+      setRawFiles([]);
+      return true;
+    } catch (error) {
+      console.error("❌ Submission Sync Failure:", error);
+      toast.error(
+        error.response?.data?.message ||
+          error.message ||
+          "Failed to finalize updates.",
+      );
+      return false;
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (loading) {
@@ -194,61 +303,63 @@ export default function EmployeeInsuranceTab({
   }
 
   return (
-    <div className="space-y-4 pb-6">
-      {/* 1. Employee Info Section */}
+    <div className="space-y-4 pb-6 font-poppins">
       <EmployeeInfoCard
         uuid={uuid}
         employeeInfo={employeeInfo}
         finalImageSrc={finalImageSrc}
       />
 
-      {/* Main Grid: Left Form Details & Right Side Cards */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-2">
-        {/* Left Column (Span 2): Insurance Details Form */}
-        <div className="lg:col-span-2 space-y-2">
+      {/* Primary Section: Flexbox Height Matching Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 items-stretch">
+        <div className="lg:col-span-2 flex flex-col h-full">
           <InsuranceDetailsForm
             formData={formData}
             handleChange={handleChange}
             providers={providers}
             insuranceTypes={insuranceTypes}
             coverageTypes={coverageTypes}
-            onRefreshDropdowns={handleRefreshDropdowns} // 🆕 Action passed to update the choices arrays dynamically
+            onRefreshDropdowns={handleRefreshDropdowns}
+            onSave={handleSave}
+            saving={saving}
           />
         </div>
 
-        {/* Right Column (Span 1): Beneficiary, Dependents & Insurance Document */}
-        <div className="space-y-2">
+        <div className="flex flex-col gap-3 justify-between h-full">
           <BeneficiaryDetailsCard
-            formData={formData}
-            handleChange={handleChange}
             beneficiaries={beneficiaries}
+            setBeneficiaries={setBeneficiaries}
+            onSave={handleSave}
+            saving={saving}
           />
-          <DependentsCoveredCard dependents={dependents} />
-          <InsuranceDocumentCard documentData={documents} />
+          <DependentsCoveredCard
+            dependents={dependents}
+            setDependents={setDependents}
+            onSave={handleSave}
+            saving={saving}
+          />
+          <InsuranceDocumentCard
+            documentData={documents}
+            onDocumentChange={handleDocumentChange}
+            onSave={handleSave}
+            saving={saving}
+          />
         </div>
       </div>
 
-      {/* Bottom Section: Claim Information (span 2) & Audit Information (span 1) */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-2">
-        <div className="lg:col-span-2 space-y-2">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+        <div className="lg:col-span-2">
           <ClaimInformationCard claims={claims} />
         </div>
-        <div className="space-y-2">
+        <div className="flex flex-col justify-between">
           <AuditInformationCard auditData={auditData} />
+
+          <div className="flex justify-end pt-4">
+            <GlowButton onClick={handleSave} disabled={saving}>
+              {saving ? "Synchronizing Data..." : "Save Adjustments"}
+            </GlowButton>
+          </div>
         </div>
-      </div>
-
-      {/* Bottom Right Action Buttons */}
-      <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200 bg-white p-4 rounded-lg shadow-sm">
-        <button
-          type="button"
-          onClick={() => navigate(-1)}
-          className="px-5 py-2.5 bg-white border border-black text-black rounded-lg text-xs font-medium hover:bg-gray-50 transition"
-        >
-          Cancel
-        </button>
-
-        <GlowButton onClick={handleSave}>Save Insurance</GlowButton>
       </div>
     </div>
   );

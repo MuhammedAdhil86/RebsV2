@@ -54,7 +54,8 @@ export const getCoverageTypes = "/admin/insurance/coverage-types";
 export const upsertInsuranceProvider = "/admin/insurance/upsert/providers";
 export const upsertInsuranceType = "/admin/insurance/upsert/types";
 export const upsertCoverageType = "/admin/insurance/upsert/coverage-types";
-export const updateEmployeeInsurance = `/admin/insurance/update`; 
+export const updateEmployeeInsurance = `/admin/insurance/upsert/employee-settings`; 
+export const cancelInsurance = "/admin/insurance/settings/{insurance_id}/cancel";
 
 //assetManager
 export const getAssetstype = "/master/asset-type"
