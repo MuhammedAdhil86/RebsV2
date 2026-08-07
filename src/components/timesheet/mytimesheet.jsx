@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { fetchEmployeeTimesheets } from "../../service/timesheetService";
+import { fetchEmployeeTimesheets } from "../../service/timesheetservice";
 import toast from "react-hot-toast";
 
 import TimeSheetFilter from "./timesheetfilters";
