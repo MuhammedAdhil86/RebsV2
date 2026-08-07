@@ -45,28 +45,19 @@ export const saveEmployeeInsuranceUpdate = async (payload, rawFiles = []) => {
 };
 
 /**
- * Cancels an active employee insurance record by its ID.
- * Replaces the `{insurance_id}` path parameter with the provided ID.
- * 
- * @param {string|number} insuranceId - The ID of the insurance policy to cancel
- * @param {Object} [reasonPayload] - Optional payload (e.g., reason for cancellation)
+ * Cancel an active employee insurance policy.
+ * Exact endpoint matching your Postman test: PATCH /admin/insurance/settings/{insurance_id}/cancel
+ *
+ * @param {number|string} insuranceId - ID of the insurance policy to terminate.
  */
-// Example API function using FormData (or standard JSON depending on your backend endpoint)
 export const cancelEmployeeInsurance = async (insuranceId) => {
-  try {
-    const formData = new FormData();
-    formData.append("insurance_id", insuranceId);
-    formData.append("status", "Cancelled");
-
-    // Make your existing API call here (e.g., via fetch or axios)
-    const response = await fetch(`/api/employee-insurance/${insuranceId}/cancel/`, {
-      method: "POST",
-      body: formData, // Bypassing standard axios transform as per your existing FormData strategy
-    });
-
-    return await response.json();
-  } catch (error) {
-    console.error("Failed to cancel insurance policy:", error);
-    return { success: false };
+  if (!insuranceId) {
+    throw new Error("Insurance Policy ID is required for cancellation.");
   }
+
+  const response = await axiosInstance.patch(
+    `/admin/insurance/settings/${insuranceId}/cancel`
+  );
+
+  return response.data;
 };

@@ -103,6 +103,11 @@ function SideBar({ isCollapsed, toggleSidebar }) {
           path: `/insurance`,
           icon: icons.insurance,
         },
+        {
+          title: "Timesheet",
+          path: `/timesheet`,
+          icon: icons.timesheet,
+        },
       ],
     },
     {

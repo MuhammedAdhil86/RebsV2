@@ -31,6 +31,7 @@ import Letter from "../page/letter";
 import JobEnquiry from "../page/jobenquiry";
 import manageinsurance from "../page/manageinsurance";
 import InsuranceDetails from "../page/insurancedetails";
+import Timesheet from "../page/timesheet";
 function AppRoutes() {
   return (
     <Routes>
@@ -62,6 +63,10 @@ function AppRoutes() {
       <Route
         path="/insurance"
         element={<ProtectedRoute element={manageinsurance} />}
+      />
+      <Route
+        path="/timesheet"
+        element={<ProtectedRoute element={Timesheet} />}
       />
       <Route
         path="/insurance-details/:id"

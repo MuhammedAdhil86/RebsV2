@@ -45,8 +45,13 @@ export const getStaff = "/master/staff"
 export const getEmployeeDetails = "/staff/get"
 
 
+// TimeSheet
+export const getEmployeeTimesheets = (params = {}) => {
+  const query = new URLSearchParams(params).toString();
+  return `/employee/timesheet/fetch${query ? `?${query}` : ''}`;};
+export const upsertTimeSheet = "/employee/timesheet/upsert";
+export const getTimesheetStatuses = "/employee/timesheet/statuses";
 //  insurance 
-
 export const getEmployeeInsuranceDetails = (uuid) => `/admin/insurance/fetch/employee-settings?user_id=${uuid}`;
 export const getInsuranceProviders = "/admin/insurance/providers";
 export const getInsuranceTypes = "/admin/insurance/types";
@@ -56,7 +61,8 @@ export const upsertInsuranceType = "/admin/insurance/upsert/types";
 export const upsertCoverageType = "/admin/insurance/upsert/coverage-types";
 export const updateEmployeeInsurance = `/admin/insurance/upsert/employee-settings`; 
 export const cancelInsurance = "/admin/insurance/settings/{insurance_id}/cancel";
-
+export const getinsuranceClaimList = "/admin/insurance/list-claims";
+export const updateInsuranceClaimDecision = (claimId) => `/admin/insurance/claims/${claimId}/decision`;
 //assetManager
 export const getAssetstype = "/master/asset-type"
 export const getAssetDashboard = "/admin/asset/dashboard"

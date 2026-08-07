@@ -57,14 +57,14 @@ const CancelConfirmationModal = ({ isOpen, onClose, onConfirm, itemName }) => {
         <div className="bg-gray-50 px-6 py-4 flex gap-3 justify-end">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 rounded-lg transition-colors"
+            className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 rounded-lg transition-colors cursor-pointer"
           >
             Keep
           </button>
 
           <button
             onClick={onConfirm}
-            className="px-4 py-2 text-sm font-medium text-white bg-orange-600 hover:bg-orange-700 rounded-lg shadow-sm transition-colors"
+            className="px-4 py-2 text-sm font-medium text-white bg-orange-600 hover:bg-orange-700 rounded-lg shadow-sm transition-colors cursor-pointer"
           >
             Cancel Insurance
           </button>
@@ -127,12 +127,13 @@ export default function InsuranceDetailsForm({
 
   const handleConfirmCancelPolicy = async () => {
     if (onCancelPolicy) {
-      // Passes policy ID (uses formData.id or formData.insuranceId, fallback to 2 from fetch payload)
-      const insuranceId = formData.id || formData.insuranceId || 2;
+      const insuranceId = formData.id || formData.insuranceId;
       await onCancelPolicy(insuranceId);
     }
     setIsCancelModalOpen(false);
   };
+
+  const isCancelled = formData.policyStatus === "Cancelled";
 
   return (
     <div className="bg-white shadow-sm rounded-lg p-5 border border-gray-200 space-y-4 font-poppins relative transition-all duration-300 h-full flex flex-col justify-between">
@@ -554,8 +555,18 @@ export default function InsuranceDetailsForm({
               Policy Status
             </label>
             <div className="flex items-center gap-2 mt-2">
-              <span className="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5"></span>{" "}
+              <span
+                className={`inline-flex items-center px-2.5 py-0.5 rounded text-xs font-medium border ${
+                  isCancelled
+                    ? "bg-red-50 text-red-700 border-red-200"
+                    : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                }`}
+              >
+                <span
+                  className={`w-1.5 h-1.5 rounded-full mr-1.5 ${
+                    isCancelled ? "bg-red-500" : "bg-emerald-500"
+                  }`}
+                ></span>{" "}
                 {formData.policyStatus || "Active"}
               </span>
 
@@ -579,11 +590,10 @@ export default function InsuranceDetailsForm({
                       Policy Metadata
                     </p>
                     <p>
-                      • Policy ID: {formData.id || formData.insuranceId || 2}
+                      • Policy ID:{" "}
+                      {formData.id || formData.insuranceId || "N/A"}
                     </p>
-                    <p>
-                      • Policy No: {formData.policyNumber || "SH-2027-0001"}
-                    </p>
+                    <p>• Policy No: {formData.policyNumber || "N/A"}</p>
                     <p>
                       • Renewal Window: {formData.renewalReminder || 30} days
                       prior
@@ -592,8 +602,8 @@ export default function InsuranceDetailsForm({
                 )}
               </div>
 
-              {/* Cancel Policy Action Button (EXCLUSIVELY shown in READ-ONLY mode) */}
-              {!isEditMode && (
+              {/* Cancel Policy Action Button (Shown only in READ-ONLY mode and if NOT cancelled) */}
+              {!isEditMode && !isCancelled && (
                 <button
                   type="button"
                   onClick={() => setIsCancelModalOpen(true)}
@@ -601,7 +611,7 @@ export default function InsuranceDetailsForm({
                   title="Cancel Policy"
                 >
                   <Ban size={13} className="text-orange-600" />
-                  <span>Cancel </span>
+                  <span>Cancel Policy</span>
                 </button>
               )}
 
@@ -641,7 +651,7 @@ export default function InsuranceDetailsForm({
         isOpen={isCancelModalOpen}
         onClose={() => setIsCancelModalOpen(false)}
         onConfirm={handleConfirmCancelPolicy}
-        itemName={formData.policyNumber || "Star Health Insurance"}
+        itemName={formData.policyNumber || "Selected Insurance Policy"}
       />
 
       {/* Configuration modal overlays containers */}

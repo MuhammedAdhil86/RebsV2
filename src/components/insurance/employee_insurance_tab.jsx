@@ -9,7 +9,10 @@ import {
   fetchInsuranceCoverageTypes,
 } from "../../service/insuranceservice";
 
-import { saveEmployeeInsuranceUpdate } from "../../service/insurance";
+import {
+  saveEmployeeInsuranceUpdate,
+  cancelEmployeeInsurance,
+} from "../../service/insurance";
 
 import EmployeeInfoCard from "./sections/employeeunfocard";
 import InsuranceDetailsForm from "./sections/insurancedetailsform";
@@ -45,6 +48,7 @@ export default function EmployeeInsuranceTab({
   const [policyRecordId, setPolicyRecordId] = useState(0);
 
   const [formData, setFormData] = useState({
+    id: "",
     insuranceProvider: "",
     policyNumber: "",
     insuranceType: "",
@@ -80,76 +84,111 @@ export default function EmployeeInsuranceTab({
     }
   };
 
+  const loadData = async () => {
+    if (!uuid) {
+      setLoading(false);
+      return;
+    }
+    try {
+      setLoading(true);
+
+      const [insuranceData, providersData, typesData, coverageData] =
+        await Promise.all([
+          fetchEmployeeInsuranceDetails(uuid),
+          fetchInsuranceProviders().catch(() => []),
+          fetchInsuranceTypes().catch(() => []),
+          fetchInsuranceCoverageTypes().catch(() => []),
+        ]);
+
+      if (providersData) setProviders(providersData);
+      if (typesData) setInsuranceTypes(typesData);
+      if (coverageData) setCoverageTypes(coverageData);
+
+      if (insuranceData) {
+        setEmployeeInfo(insuranceData.employee);
+        setBeneficiaries(insuranceData.beneficiaries || []);
+        setDependents(insuranceData.dependents || []);
+        setClaims(insuranceData.claims || []);
+        setAuditData(insuranceData.audit_information || []);
+        setDocuments(insuranceData.documents || []);
+
+        const ins = insuranceData.insurance || {};
+        const activePolicyId = ins.id || 0;
+        setPolicyRecordId(activePolicyId);
+
+        setFormData({
+          id: activePolicyId,
+          insuranceProvider: ins.provider_id || "",
+          policyNumber: ins.policy_number || "",
+          insuranceType: ins.insurance_type_id || "",
+          coverageType: ins.coverage_type_id || "",
+          sumInsured: ins.sum_insured ? `₹ ${ins.sum_insured}` : "",
+          premiumAmount: ins.premium_amount ? `₹ ${ins.premium_amount}` : "",
+          premiumPaidBy: ins.premium_paid_by || "",
+          companyContribution: ins.company_contribution
+            ? `₹ ${ins.company_contribution}`
+            : "",
+          employeeContribution: ins.employee_contribution
+            ? `₹ ${ins.employee_contribution}`
+            : "",
+          policyStartDate: ins.policy_start_date
+            ? ins.policy_start_date.split("T")[0]
+            : "",
+          policyEndDate: ins.policy_end_date
+            ? ins.policy_end_date.split("T")[0]
+            : "",
+          coverageDuration: "365 Days",
+          renewalReminder: ins.renewal_reminder_days
+            ? `${ins.renewal_reminder_days}`
+            : "",
+          policyStatus: ins.policy_status || "",
+          notes: ins.notes || "",
+        });
+      }
+    } catch (error) {
+      console.error("❌ Failed to load employee insurance data:", error);
+      toast.error("Failed to fetch employee insurance details.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const loadData = async () => {
-      if (!uuid) {
-        setLoading(false);
-        return;
-      }
-      try {
-        setLoading(true);
-
-        const [insuranceData, providersData, typesData, coverageData] =
-          await Promise.all([
-            fetchEmployeeInsuranceDetails(uuid),
-            fetchInsuranceProviders().catch(() => []),
-            fetchInsuranceTypes().catch(() => []),
-            fetchInsuranceCoverageTypes().catch(() => []),
-          ]);
-
-        if (providersData) setProviders(providersData);
-        if (typesData) setInsuranceTypes(typesData);
-        if (coverageData) setCoverageTypes(coverageData);
-
-        if (insuranceData) {
-          setEmployeeInfo(insuranceData.employee);
-          setBeneficiaries(insuranceData.beneficiaries || []);
-          setDependents(insuranceData.dependents || []);
-          setClaims(insuranceData.claims || []);
-          setAuditData(insuranceData.audit_information || []);
-          setDocuments(insuranceData.documents || []);
-
-          const ins = insuranceData.insurance || {};
-          setPolicyRecordId(ins.id || 0);
-
-          setFormData({
-            insuranceProvider: ins.provider_id || "",
-            policyNumber: ins.policy_number || "",
-            insuranceType: ins.insurance_type_id || "",
-            coverageType: ins.coverage_type_id || "",
-            sumInsured: ins.sum_insured ? `₹ ${ins.sum_insured}` : "",
-            premiumAmount: ins.premium_amount ? `₹ ${ins.premium_amount}` : "",
-            premiumPaidBy: ins.premium_paid_by || "",
-            companyContribution: ins.company_contribution
-              ? `₹ ${ins.company_contribution}`
-              : "",
-            employeeContribution: ins.employee_contribution
-              ? `₹ ${ins.employee_contribution}`
-              : "",
-            policyStartDate: ins.policy_start_date
-              ? ins.policy_start_date.split("T")[0]
-              : "",
-            policyEndDate: ins.policy_end_date
-              ? ins.policy_end_date.split("T")[0]
-              : "",
-            coverageDuration: "365 Days",
-            renewalReminder: ins.renewal_reminder_days
-              ? `${ins.renewal_reminder_days}`
-              : "",
-            policyStatus: ins.policy_status || "",
-            notes: ins.notes || "",
-          });
-        }
-      } catch (error) {
-        console.error("❌ Failed to load employee insurance data:", error);
-        toast.error("Failed to fetch employee insurance details.");
-      } finally {
-        setLoading(false);
-      }
-    };
-
     loadData();
   }, [uuid]);
+
+  // Handler for PATCH cancellation endpoint
+  const handleCancelPolicy = async (insuranceId) => {
+    const targetId = insuranceId || policyRecordId;
+    if (!targetId || targetId === 0) {
+      toast.error("Invalid insurance policy ID.");
+      return;
+    }
+
+    try {
+      setSaving(true);
+      await cancelEmployeeInsurance(targetId);
+      toast.success("Insurance policy cancelled successfully!");
+
+      // Update status badge UI dynamically
+      setFormData((prev) => ({
+        ...prev,
+        policyStatus: "Cancelled",
+      }));
+
+      // Reload fresh state from backend
+      await loadData();
+    } catch (error) {
+      console.error("❌ Cancellation Failure:", error);
+      toast.error(
+        error.response?.data?.message ||
+          error.message ||
+          "Failed to cancel insurance policy.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const backendBaseUrl = "https://rebs.blr1.digitaloceanspaces.com/";
   const rawImage = employeeImage || employeeInfo?.image;
@@ -310,7 +349,6 @@ export default function EmployeeInsuranceTab({
         finalImageSrc={finalImageSrc}
       />
 
-      {/* Primary Section: Flexbox Height Matching Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 items-stretch">
         <div className="lg:col-span-2 flex flex-col h-full">
           <InsuranceDetailsForm
@@ -321,6 +359,7 @@ export default function EmployeeInsuranceTab({
             coverageTypes={coverageTypes}
             onRefreshDropdowns={handleRefreshDropdowns}
             onSave={handleSave}
+            onCancelPolicy={handleCancelPolicy}
             saving={saving}
           />
         </div>

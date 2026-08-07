@@ -2,12 +2,11 @@ import React, { useState, useEffect, useRef } from "react";
 import {
   Download,
   Plus,
-  Edit2,
   Check,
   X,
-  Trash2,
+  RefreshCw,
+  Pencil,
   Loader2,
-  Upload,
   FileText,
 } from "lucide-react";
 
@@ -18,13 +17,16 @@ export default function InsuranceDocumentCard({
   saving = false,
 }) {
   const [isEditMode, setIsEditMode] = useState(false);
-  const [localDocs, setLocalDocs] = useState(
-    Array.isArray(documentData) ? documentData : [documentData],
-  );
+  const [localDocs, setLocalDocs] = useState([]);
   const fileInputRef = useRef(null);
 
   useEffect(() => {
-    setLocalDocs(Array.isArray(documentData) ? documentData : [documentData]);
+    const parsed = Array.isArray(documentData)
+      ? documentData
+      : documentData
+        ? [documentData]
+        : [];
+    setLocalDocs(parsed);
   }, [documentData]);
 
   const getFileName = (doc) => {
@@ -65,16 +67,23 @@ export default function InsuranceDocumentCard({
   };
 
   const handleEditClick = () => {
-    setLocalDocs(Array.isArray(documentData) ? documentData : [documentData]);
+    const parsed = Array.isArray(documentData)
+      ? documentData
+      : documentData
+        ? [documentData]
+        : [];
+    setLocalDocs(parsed);
     setIsEditMode(true);
   };
 
   const handleCancelAction = () => {
     const resetDocs = Array.isArray(documentData)
       ? documentData
-      : [documentData];
+      : documentData
+        ? [documentData]
+        : [];
     setLocalDocs(resetDocs);
-    if (onDocumentChange) onDocumentChange(resetDocs, []);
+    if (onDocumentChange) onDocumentChange(resetDocs);
     setIsEditMode(false);
   };
 
@@ -87,36 +96,49 @@ export default function InsuranceDocumentCard({
     }
   };
 
-  const handleFileSelect = (e) => {
+  /**
+   * Handles multi-file creation (id: 0) and specific index replacement (retains existing id)
+   */
+  const handleFileSelect = (e, replaceIndex = null) => {
     const selectedFiles = Array.from(e.target.files);
     if (selectedFiles.length === 0) return;
 
-    const newDocs = selectedFiles.map((file) => ({
-      id: 0,
-      document_name: file.name,
-      file_url: "",
-      file_size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
-      uploaded_at: new Date().toISOString(),
-      file: file,
-    }));
+    let updatedList = [...localDocs];
 
-    const updatedList = [...localDocs, ...newDocs];
+    if (replaceIndex !== null) {
+      // REPLACE: Retain original ID (e.g. 1) to inform backend to replace existing
+      const existingDoc = localDocs[replaceIndex];
+      const newFile = selectedFiles[0];
+
+      updatedList[replaceIndex] = {
+        id: existingDoc?.id ?? 0,
+        document_name: newFile.name,
+        file_url: "",
+        file_size: `${(newFile.size / (1024 * 1024)).toFixed(1)} MB`,
+        uploaded_at: new Date().toISOString(),
+        file: newFile, // Attach binary file directly to doc object
+      };
+    } else {
+      // ADD NEW: Create entry with id: 0 for each selected file
+      const newDocs = selectedFiles.map((file) => ({
+        id: 0,
+        document_name: file.name,
+        file_url: "",
+        file_size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
+        uploaded_at: new Date().toISOString(),
+        file: file, // Attach binary file directly to doc object
+      }));
+
+      updatedList = [...updatedList, ...newDocs];
+    }
+
     setLocalDocs(updatedList);
 
     if (onDocumentChange) {
-      onDocumentChange(updatedList, selectedFiles);
+      onDocumentChange(updatedList);
     }
 
     e.target.value = "";
-  };
-
-  const handleRemoveDoc = (index) => {
-    const updatedList = localDocs.filter((_, idx) => idx !== index);
-    setLocalDocs(updatedList);
-
-    if (onDocumentChange) {
-      onDocumentChange(updatedList, []);
-    }
   };
 
   const handleDownload = (doc) => {
@@ -145,7 +167,7 @@ export default function InsuranceDocumentCard({
         <div className="flex items-center gap-1.5">
           {isEditMode ? (
             <>
-              {/* Trigger Hidden File Input */}
+              {/* Trigger multi-file file browser */}
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
@@ -155,7 +177,7 @@ export default function InsuranceDocumentCard({
                 <span>Upload Document</span>
               </button>
 
-              {/* Cancel Changes */}
+              {/* Cancel Action */}
               <button
                 type="button"
                 disabled={saving}
@@ -166,7 +188,7 @@ export default function InsuranceDocumentCard({
                 <X size={15} className="stroke-[2.5]" />
               </button>
 
-              {/* Save Changes */}
+              {/* Save Action */}
               <button
                 type="button"
                 disabled={saving}
@@ -191,36 +213,37 @@ export default function InsuranceDocumentCard({
               className="p-1.5 rounded-full border bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100 transition-all shadow-sm cursor-pointer focus:outline-none"
               title="Edit Documents"
             >
-              <Edit2 size={15} className="stroke-[2.5]" />
+              <Pencil size={15} className="stroke-[2.5]" />
             </button>
           )}
         </div>
       </div>
 
-      {/* Hidden File Input */}
+      {/* Hidden File Input (supports multi-file creation) */}
       <input
         type="file"
         ref={fileInputRef}
-        onChange={handleFileSelect}
+        onChange={(e) => handleFileSelect(e, null)}
         multiple
         accept=".pdf,.jpg,.jpeg,.png"
         className="hidden"
       />
 
-      {/* Document List View / Edit Grid */}
+      {/* Document Items List */}
       <div className="space-y-2">
         {listToRender && listToRender.length > 0 ? (
           listToRender.map((doc, index) => {
             const name = getFileName(doc);
             const ext = getFileExtension(name);
             const hasUrl = !!(doc.file_url || doc.url);
+            const isNewDoc = doc.id === 0;
 
             return (
               <div
-                key={doc.id || index}
+                key={doc.id ? `doc-${doc.id}-${index}` : `new-${index}`}
                 className="flex items-center justify-between border border-gray-200 rounded-lg p-2.5 gap-2 bg-gray-50/50 hover:bg-gray-50 transition"
               >
-                {/* Left: Extension Badge + Metadata */}
+                {/* File Extension & Metadata */}
                 <div className="flex items-center space-x-3 overflow-hidden">
                   <div
                     className={`w-9 h-9 rounded flex items-center justify-center font-bold text-[10px] border flex-shrink-0 ${
@@ -239,21 +262,23 @@ export default function InsuranceDocumentCard({
                       {name}
                     </span>
                     <span className="text-gray-400 text-[10px]">
-                      {doc.uploaded_at
-                        ? `Uploaded ${formatDate(doc.uploaded_at)}`
-                        : "Pending Save"}{" "}
+                      {isNewDoc
+                        ? "New Document (id: 0)"
+                        : !hasUrl
+                          ? `Replaces Document (id: ${doc.id})`
+                          : `Uploaded ${formatDate(doc.uploaded_at)}`}{" "}
                       {doc.file_size ? `• ${doc.file_size}` : ""}
                     </span>
                   </div>
                 </div>
 
-                {/* Right: Actions */}
+                {/* Actions */}
                 <div className="flex items-center space-x-1 flex-shrink-0">
                   {hasUrl && (
                     <button
                       type="button"
                       onClick={() => handleDownload(doc)}
-                      className="flex items-center gap-1 px-2.5 py-1 border border-gray-200 rounded text-[11px] text-gray-700 bg-white hover:bg-gray-100 transition"
+                      className="flex items-center gap-1 px-2.5 py-1 border border-gray-200 rounded text-[11px] text-gray-700 bg-white hover:bg-gray-100 transition cursor-pointer"
                       title="Download Document"
                     >
                       <Download size={12} />
@@ -262,14 +287,18 @@ export default function InsuranceDocumentCard({
                   )}
 
                   {isEditMode && (
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveDoc(index)}
-                      className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition cursor-pointer"
-                      title="Remove Document"
+                    <label
+                      className="p-1.5 text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded transition cursor-pointer"
+                      title={`Replace document preserving id: ${doc.id}`}
                     >
-                      <Trash2 size={15} />
-                    </button>
+                      <RefreshCw size={14} />
+                      <input
+                        type="file"
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        className="hidden"
+                        onChange={(e) => handleFileSelect(e, index)}
+                      />
+                    </label>
                   )}
                 </div>
               </div>

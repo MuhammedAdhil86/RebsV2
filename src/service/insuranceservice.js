@@ -1,5 +1,5 @@
 import axiosInstance from "./axiosinstance";
-import { getEmployeeInsuranceDetails, getInsuranceProviders, getInsuranceTypes, getCoverageTypes } from "../api/api";
+import { getEmployeeInsuranceDetails, getInsuranceProviders,updateInsuranceClaimDecision, getInsuranceTypes,getinsuranceClaimList, getCoverageTypes } from "../api/api";
 
 export const fetchEmployeeInsuranceDetails = async (uuid) => {
   try {
@@ -102,6 +102,27 @@ export const submitUpsertCoverageType = async (payload) => {
     return response.data?.data || response.data;
   } catch (error) {
     console.error("❌ Error upserting insurance coverage type:", error);
+    throw error;
+  }
+};
+
+export const fetchInsuranceClaimList = async () => {
+  try {
+    const response = await axiosInstance.get(getinsuranceClaimList);
+    return response.data?.data?.claims || response.data?.claims || response.data;
+  } catch (error) {
+    console.error("❌ Error fetching insurance claim list:", error);
+    throw error;
+  }
+};
+
+export const patchInsuranceClaimDecision = async (claimId, payload) => {
+  try {
+    const endpoint = updateInsuranceClaimDecision(claimId);
+    const response = await axiosInstance.patch(endpoint, payload);
+    return response.data?.data || response.data;
+  } catch (error) {
+    console.error(`❌ Error patching claim decision for ID ${claimId}:`, error);
     throw error;
   }
 };
