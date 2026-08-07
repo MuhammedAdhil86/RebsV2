@@ -1,4 +1,4 @@
-import axiosInstance from "./axiosInstance"; 
+import axiosInstance from "./axiosinstance"; 
 import { cancelInsurance } from "../api/api";
 /**
  * Sends insurance payload and associated binary documents using your existing axiosInstance.
