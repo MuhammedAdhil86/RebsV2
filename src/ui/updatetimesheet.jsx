@@ -4,7 +4,7 @@ import {
   fetchTimesheetStatuses,
 } from "../service/timesheetservice";
 import toast from "react-hot-toast";
-import { ArrowLeft, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Trash2 } from "lucide-react";
 
 export default function UpdateTimeSheet({ initialData, onBack, onSuccess }) {
   const workDate = initialData?.workDate || "";
@@ -58,23 +58,6 @@ export default function UpdateTimeSheet({ initialData, onBack, onSuccess }) {
     };
     loadStatuses();
   }, []);
-
-  // Add an additional task to the current date (id starts at 0 for new tasks)
-  const handleAddEntryRow = () => {
-    const defaultStatus = statusOptions.length > 0 ? statusOptions[0].id : 1;
-    setEntries((prev) => [
-      ...prev,
-      {
-        id: 0,
-        project: "",
-        task: "",
-        startTime: "09:00",
-        endTime: "11:00",
-        status_id: defaultStatus,
-        remarks: "",
-      },
-    ]);
-  };
 
   // Remove entry row
   const handleRemoveEntryRow = (index) => {
@@ -187,8 +170,7 @@ export default function UpdateTimeSheet({ initialData, onBack, onSuccess }) {
             >
               <div className="flex justify-between items-center border-b border-gray-200 pb-2">
                 <span className="text-xs font-normal text-black">
-                  Entry #{index + 1}{" "}
-                  {entry.id > 0 ? `(ID: #${entry.id})` : "(New)"}
+                  Entry #{index + 1} {entry.id > 0 ? `(ID: #${entry.id})` : ""}
                 </span>
                 {entries.length > 1 && (
                   <button
@@ -308,15 +290,6 @@ export default function UpdateTimeSheet({ initialData, onBack, onSuccess }) {
             </div>
           ))}
         </div>
-
-        <button
-          type="button"
-          onClick={handleAddEntryRow}
-          className="flex items-center gap-1.5 border border-dashed border-gray-300 hover:border-black text-gray-700 font-normal px-4 py-2 rounded-lg text-xs w-full justify-center transition-colors bg-white"
-        >
-          <Plus size={14} />
-          Add Another Entry
-        </button>
 
         <div className="flex items-center justify-end gap-2 pt-4 border-t">
           <button

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import DashboardLayout from "../ui/pagelayout";
-import HeaderGlobal from "../ui/headerglobal"; // ✅ Imported global navbar layout component
+import HeaderGlobal from "../ui/headerglobal";
 
 // Reports
 import AttendanceReports from "../components/reports_tab/attendance_reports";
@@ -8,14 +8,15 @@ import LeaveReports from "../components/reports/leavereport";
 import UnapprovedAbsentReports from "../components/reports_tab/unapprovedleaves_tab";
 import PayrollAttendanceReport from "../components/reports_tab/payrollattendancereport";
 import AttendanceFineRecordsReport from "../components/reports_tab/finereport_tab";
+import FeedbackReports from "../components/reports_tab/feedbacksreports"; // 🆕 Added import
 
 export default function Reports() {
-  // ✅ Lazy-initialize state from localStorage to prevent flash of wrong default tab on reload
+  // Lazy-initialize state from localStorage
   const [activeTab, setActiveTab] = useState(() => {
     return localStorage.getItem("activeReportTab") || "Attendance Reports";
   });
 
-  // ✅ Write active tab transformations natively back to localStorage cache memory
+  // Persist active tab selection
   useEffect(() => {
     localStorage.setItem("activeReportTab", activeTab);
   }, [activeTab]);
@@ -37,6 +38,9 @@ export default function Reports() {
       case "Fine Reports":
         return <AttendanceFineRecordsReport />;
 
+      case "Feedback Reports": // 🆕 Added switch case
+        return <FeedbackReports />;
+
       default:
         return null;
     }
@@ -44,8 +48,7 @@ export default function Reports() {
 
   return (
     <DashboardLayout>
-      <div className="w-full ">
-        {/* ✅ Replaced raw header structure with global shared navbar element */}
+      <div className="w-full">
         <HeaderGlobal userName="Admin" />
 
         {/* ================= TABS ================= */}
@@ -57,8 +60,7 @@ export default function Reports() {
               "Unapproved Leaves",
               "Payroll Attendance Report",
               "Fine Reports",
-              "Compliance Reports",
-              "Miscellaneous Reports",
+              "Feedback Reports", // 🆕 Added tab item
             ].map((tab) => (
               <button
                 key={tab}

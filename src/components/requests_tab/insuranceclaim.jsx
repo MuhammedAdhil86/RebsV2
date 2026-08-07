@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import UniversalTable from "../../ui/universal_table";
 import InsuranceApprovalModal from "../../ui/insurancestatusmodal";
-import { fetchInsuranceClaimList } from "../../service/insuranceService";
+import { fetchInsuranceClaimList } from "../../service/insuranceservice";
 
 const statusColors = {
   Pending: "bg-yellow-100 text-yellow-700",

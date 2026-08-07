@@ -129,14 +129,15 @@ export default function MyTimeSheet() {
     setOpenSections((prev) => ({ ...prev, [date]: !prev[date] }));
   };
 
+  // Formats UTC ISO time directly into 24-Hour HH:MM:SS format
   const formatIsoTime = (isoString) => {
     if (!isoString) return "—";
     try {
       const date = new Date(isoString);
-      return date.toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      });
+      const hours = String(date.getUTCHours()).padStart(2, "0");
+      const minutes = String(date.getUTCMinutes()).padStart(2, "0");
+      const seconds = String(date.getUTCSeconds()).padStart(2, "0");
+      return `${hours}:${minutes}:${seconds}`;
     } catch {
       return "—";
     }
@@ -198,7 +199,7 @@ export default function MyTimeSheet() {
         </div>
       )}
 
-      {/* 2. CREATE VIEW (New Entries) */}
+      {/* 2. CREATE VIEW */}
       {activeSubTab === "create" && (
         <CreateTimeSheet
           onBack={() => setActiveSubTab("list")}
@@ -209,7 +210,7 @@ export default function MyTimeSheet() {
         />
       )}
 
-      {/* 3. UPDATE VIEW (Existing Entries) */}
+      {/* 3. UPDATE VIEW */}
       {activeSubTab === "update" && (
         <UpdateTimeSheet
           initialData={editGroupData}

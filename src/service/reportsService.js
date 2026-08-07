@@ -7,6 +7,7 @@ import {
   attendanceFullReport,
   getFetchAttendanceFineRecords,
   getUnapprovedAbsentReport,
+  getHappinessIndexReport,
 } from "../api/api";
 
 /**
@@ -176,5 +177,24 @@ export const fetchUnapprovedAbsentReport = async (from, to) => {
     return Array.isArray(records) ? records : [];
   } catch (err) {
     throw new Error(err.response?.data?.message || err.response?.data?.error || err.message);
+  }
+};
+
+export const fetchHappinessReport = async (filterData) => {
+  try {
+    if (!filterData || (!filterData.date && !filterData.week)) {
+      throw new Error("Validation Error: Either date or week filter must be provided.");
+    }
+
+    const payload = {
+      ...(filterData.date && { date: filterData.date }),
+      ...(filterData.week && { week: Number(filterData.week) }),
+    };
+
+    const response = await axiosInstance.post(getHappinessIndexReport, payload);
+    return response.data?.data ?? [];
+  } catch (error) {
+    console.error("Error fetching happiness index report:", error.response?.data || error.message);
+    throw error;
   }
 };
