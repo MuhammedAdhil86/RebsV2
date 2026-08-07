@@ -8,7 +8,7 @@ import {
   UserCheck,
 } from "lucide-react";
 import toast from "react-hot-toast";
-import { patchInsuranceClaimDecision } from "../service/insuranceService";
+import { patchInsuranceClaimDecision } from "../service/insuranceservice";
 
 const formatExactTime12h = (isoString) => {
   if (
