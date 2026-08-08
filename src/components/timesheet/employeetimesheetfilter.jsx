@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Search, RotateCcw, Info } from "lucide-react";
 
 export default function EmployeeTimeSheetFilter({
@@ -16,6 +16,17 @@ export default function EmployeeTimeSheetFilter({
   onApply,
   onReset,
 }) {
+  const [isGlowing, setIsGlowing] = useState(true);
+
+  // Timer: Glow for 10 seconds, then transition to static styles
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsGlowing(false);
+    }, 10000);
+
+    return () => clearTimeout(timer);
+  }, []);
+
   const MONTHS_LIST = [
     { value: "1", label: "January (01)" },
     { value: "2", label: "February (02)" },
@@ -168,11 +179,30 @@ export default function EmployeeTimeSheetFilter({
         </div>
       </div>
 
-      <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-600 font-normal">
-        <Info size={15} className="text-gray-500 shrink-0" />
+      {/* Info Banner with 10s Timer & Animated Text */}
+      <div
+        className={`flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2 text-xs font-normal transition-colors duration-500 ${
+          isGlowing ? "border border-orange-500" : "border border-gray-500"
+        }`}
+      >
+        <Info
+          size={15}
+          className={`shrink-0 transition-colors duration-500 ${
+            isGlowing ? "text-orange-500" : "text-gray-600"
+          }`}
+        />
         <span>
-          Filter employee timesheets by Year, Month, Week, or Date for selected
-          staff.
+          {isGlowing ? (
+            <span className="font-medium bg-gradient-to-r from-orange-500 via-yellow-400 via-blue-500 to-emerald-500 bg-[length:200%_auto] bg-clip-text text-transparent animate-[rainbow_3s_linear_infinite]">
+              Filter employee timesheets by Year, Month, Week, or Date for
+              selected staff.
+            </span>
+          ) : (
+            <span className="font-normal text-gray-600">
+              Filter employee timesheets by Year, Month, Week, or Date for
+              selected staff.
+            </span>
+          )}
         </span>
       </div>
     </div>

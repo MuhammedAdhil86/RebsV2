@@ -4,7 +4,7 @@ import {
   fetchTimesheetStatuses,
 } from "../service/timesheetservice";
 import toast from "react-hot-toast";
-import { ArrowLeft, Plus, Trash2, RotateCcw } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, RotateCcw, Info } from "lucide-react";
 
 export default function CreateTimeSheet({ onBack, onSuccess }) {
   const getTodayFormatted = () => {
@@ -15,12 +15,22 @@ export default function CreateTimeSheet({ onBack, onSuccess }) {
     return `${year}-${month}-${day}`;
   };
 
-  const [workDate, setWorkDate] = useState(getTodayFormatted());
+  const todayDateStr = getTodayFormatted();
+  const [workDate, setWorkDate] = useState(todayDateStr);
   const [submitting, setSubmitting] = useState(false);
+  const [isGlowing, setIsGlowing] = useState(true);
 
   // Dynamic statuses loaded from API
   const [statusOptions, setStatusOptions] = useState([]);
   const [loadingStatuses, setLoadingStatuses] = useState(false);
+
+  // 10 second glow timer for Info icon
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsGlowing(false);
+    }, 10000);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Dynamic Multi-entry rows state
   const [entries, setEntries] = useState([
@@ -52,7 +62,6 @@ export default function CreateTimeSheet({ onBack, onSuccess }) {
   }, []);
 
   const handleAddEntryRow = () => {
-    // Default status_id to first fetched option or 1
     const defaultStatus = statusOptions.length > 0 ? statusOptions[0].id : 1;
     setEntries((prev) => [
       ...prev,
@@ -76,13 +85,13 @@ export default function CreateTimeSheet({ onBack, onSuccess }) {
     setEntries((prev) => prev.filter((_, idx) => idx !== index));
   };
 
-  // ✅ Reset Row Feature
+  // Reset Row Feature (Single Row)
   const handleResetEntryRow = (index) => {
     const defaultStatus = statusOptions.length > 0 ? statusOptions[0].id : 1;
     setEntries((prev) => {
       const updated = [...prev];
       updated[index] = {
-        id: updated[index].id, // keep existing ID if editing
+        id: updated[index].id,
         project: "",
         task: "",
         startTime: "09:00",
@@ -93,6 +102,24 @@ export default function CreateTimeSheet({ onBack, onSuccess }) {
       return updated;
     });
     toast.success(`Entry #${index + 1} reset successfully.`);
+  };
+
+  // Global Reset Feature (Resets ALL Rows)
+  const handleResetAllEntries = () => {
+    const defaultStatus = statusOptions.length > 0 ? statusOptions[0].id : 1;
+    setEntries([
+      {
+        id: 0,
+        project: "",
+        task: "",
+        startTime: "09:00",
+        endTime: "11:00",
+        status_id: defaultStatus,
+        remarks: "",
+      },
+    ]);
+    setWorkDate(todayDateStr);
+    toast.success("All timesheet entries reset successfully.");
   };
 
   const handleInputChange = (index, field, value) => {
@@ -109,6 +136,16 @@ export default function CreateTimeSheet({ onBack, onSuccess }) {
     for (let i = 0; i < entries.length; i++) {
       if (!entries[i].project.trim() || !entries[i].task.trim()) {
         toast.error(`Please complete Project and Task for entry #${i + 1}`);
+        return;
+      }
+
+      // Check Start Time & End Time partial completion rules
+      const hasStart = Boolean(entries[i].startTime);
+      const hasEnd = Boolean(entries[i].endTime);
+      if ((hasStart && !hasEnd) || (!hasStart && hasEnd)) {
+        toast.error(
+          `Entry #${i + 1} is invalid: Provide both Start & End Time, or leave both empty.`,
+        );
         return;
       }
     }
@@ -163,32 +200,90 @@ export default function CreateTimeSheet({ onBack, onSuccess }) {
             <ArrowLeft size={16} />
           </button>
           <div>
-            <h2 className="text-base font-normal text-gray-900">
-              Create New Timesheet Entry
-            </h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-base font-normal text-gray-900">
+                Create New Timesheet Entry
+              </h2>
+
+              {/* Hoverable Info Icon (Clean Icon Only, 10s Glow) */}
+              <div className="relative group inline-flex items-center">
+                <Info
+                  size={16}
+                  className={`cursor-pointer transition-colors duration-300 ${
+                    isGlowing
+                      ? "text-orange-500 animate-pulse"
+                      : "text-gray-400 hover:text-gray-700"
+                  }`}
+                />
+
+                {/* Popover Card on Hover */}
+                <div className="absolute left-0 top-full mt-2 hidden group-hover:block w-80 p-4 bg-gray-900 text-white text-xs rounded-xl shadow-xl z-50 space-y-2 pointer-events-none">
+                  <div className="font-medium text-orange-400 border-b border-gray-700 pb-1.5 text-xs">
+                    How to fill timesheet entries
+                  </div>
+                  <p className="text-gray-300">
+                    You must provide both Start Time and End Time, or provide
+                    neither of them.
+                  </p>
+                  <ul className="list-disc pl-4 text-gray-300 space-y-1 text-[11px]">
+                    <li>
+                      If both Start Time and End Time are provided, Time Taken
+                      (minutes) will be calculated automatically by the system.
+                    </li>
+                    <li>
+                      If both Start Time and End Time are left empty, you must
+                      enter Time Taken (minutes) manually.
+                    </li>
+                    <li>
+                      If either Start Time or End Time is provided (only one of
+                      them), the entry will be invalid.
+                    </li>
+                  </ul>
+                  <p className="text-gray-400 pt-1 border-t border-gray-800 text-[10px]">
+                    You can add multiple entries for the same date.
+                  </p>
+                </div>
+              </div>
+            </div>
+
             <p className="text-xs text-gray-500 font-normal">
-              Log multiple tasks for a selected date
+              Log multiple tasks for today's date
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <label className="text-xs font-normal text-gray-700">
-            Work Date:
-          </label>
-          <input
-            type="date"
-            value={workDate}
-            onChange={(e) => setWorkDate(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-1.5 text-xs font-normal focus:ring-1 focus:ring-black focus:outline-none"
-          />
+        <div className="flex items-center gap-3">
+          {/* Global Reset Button */}
+          <button
+            type="button"
+            onClick={handleResetAllEntries}
+            className="flex items-center gap-1.5 border border-gray-300 hover:bg-gray-50 text-gray-700 font-normal px-3 py-1.5 rounded-lg text-xs transition-colors"
+            title="Reset All Entries and Date"
+          >
+            <RotateCcw size={13} />
+            Reset All
+          </button>
+
+          <div className="flex items-center gap-2">
+            <label className="text-xs font-normal text-gray-700">
+              Work Date:
+            </label>
+            {/* Restricted strictly to today's date only */}
+            <input
+              type="date"
+              value={workDate}
+              min={todayDateStr}
+              max={todayDateStr}
+              onChange={(e) => setWorkDate(e.target.value)}
+              className="border border-gray-300 rounded-lg px-3 py-1.5 text-xs font-normal focus:ring-1 focus:ring-black focus:outline-none bg-gray-50 cursor-not-allowed"
+            />
+          </div>
         </div>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="space-y-4">
           {entries.map((entry, index) => {
-            // Find current selected status object to extract color
             const currentStatusObj = statusOptions.find(
               (st) => String(st.id) === String(entry.status_id),
             );
@@ -203,7 +298,7 @@ export default function CreateTimeSheet({ onBack, onSuccess }) {
                     Entry #{index + 1}
                   </span>
 
-                  {/* Actions: Reset & Remove */}
+                  {/* Actions: Reset Single & Remove */}
                   <div className="flex items-center gap-1">
                     <button
                       type="button"
@@ -260,7 +355,7 @@ export default function CreateTimeSheet({ onBack, onSuccess }) {
                     />
                   </div>
 
-                  {/* Dynamic Statuses Dropdown with Dynamic Colors */}
+                  {/* Dynamic Statuses Dropdown */}
                   <div>
                     <label className="block text-xs font-normal text-gray-700 mb-1">
                       Status

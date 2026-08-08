@@ -5,13 +5,15 @@ import MyTimeSheet from "../components/timesheet/mytimesheet";
 import EmployeeTimeSheet from "../components/timesheet/employeetimesheet";
 
 const TABS = [
-  { id: "my_timesheet", label: "My TimeSheet" },
   { id: "employees_timesheets", label: "Employees TimeSheets" },
+  { id: "my_timesheet", label: "My TimeSheet" },
 ];
 
 export default function TimeSheet() {
   const [activeTab, setActiveTab] = useState(() => {
-    return localStorage.getItem("timesheet_active_tab") || "my_timesheet";
+    return (
+      localStorage.getItem("timesheet_active_tab") || "employees_timesheets"
+    );
   });
 
   useEffect(() => {
@@ -52,8 +54,8 @@ export default function TimeSheet() {
 
         {/* Tab Content Display */}
         <div className="mt-2">
-          {activeTab === "my_timesheet" && <MyTimeSheet />}
           {activeTab === "employees_timesheets" && <EmployeeTimeSheet />}
+          {activeTab === "my_timesheet" && <MyTimeSheet />}
         </div>
       </div>
     </DashboardLayout>

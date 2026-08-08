@@ -1,8 +1,8 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Search, RotateCcw, Info } from "lucide-react";
 
 export default function TimeSheetFilter({
-  viewBy,
+  viewBy = "Year",
   setViewBy,
   selectedDate,
   setSelectedDate,
@@ -13,6 +13,27 @@ export default function TimeSheetFilter({
   onApply,
   onReset,
 }) {
+  const [isGlowing, setIsGlowing] = useState(true);
+
+  // Timer: Glow for 10 seconds, then transition to static gray styles
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsGlowing(false);
+    }, 10000);
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  // When switching to 'Date' view, auto-fill present date if empty
+  useEffect(() => {
+    if (viewBy === "Date" && !selectedDate) {
+      const today = new Date().toISOString().split("T")[0];
+      if (typeof setSelectedDate === "function") {
+        setSelectedDate(today);
+      }
+    }
+  }, [viewBy, selectedDate, setSelectedDate]);
+
   const MONTHS_LIST = [
     { value: "1", label: "January (01)" },
     { value: "2", label: "February (02)" },
@@ -41,7 +62,17 @@ export default function TimeSheetFilter({
               <button
                 key={type}
                 type="button"
-                onClick={() => setViewBy(type)}
+                onClick={() => {
+                  if (typeof setViewBy === "function") {
+                    setViewBy(type);
+                  }
+                  if (type === "Date" && !selectedDate) {
+                    const today = new Date().toISOString().split("T")[0];
+                    if (typeof setSelectedDate === "function") {
+                      setSelectedDate(today);
+                    }
+                  }
+                }}
                 className={`px-4 py-1.5 text-xs font-normal rounded-md transition-all ${
                   viewBy === type
                     ? "bg-black text-white"
@@ -62,8 +93,10 @@ export default function TimeSheetFilter({
             </label>
             <input
               type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
+              value={selectedDate || new Date().toISOString().split("T")[0]}
+              onChange={(e) =>
+                setSelectedDate && setSelectedDate(e.target.value)
+              }
               className="w-40 border border-gray-300 rounded-lg px-3 py-1.5 text-xs font-normal focus:ring-1 focus:ring-black focus:outline-none"
             />
           </div>
@@ -77,7 +110,9 @@ export default function TimeSheetFilter({
             </label>
             <select
               value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
+              onChange={(e) =>
+                setSelectedMonth && setSelectedMonth(e.target.value)
+              }
               className="w-40 border border-gray-300 rounded-lg px-3 py-1.5 text-xs font-normal focus:ring-1 focus:ring-black focus:outline-none bg-white"
             >
               {MONTHS_LIST.map((m) => (
@@ -97,7 +132,9 @@ export default function TimeSheetFilter({
             </label>
             <select
               value={selectedWeek}
-              onChange={(e) => setSelectedWeek(e.target.value)}
+              onChange={(e) =>
+                setSelectedWeek && setSelectedWeek(e.target.value)
+              }
               className="w-28 border border-gray-300 rounded-lg px-3 py-1.5 text-xs font-normal focus:ring-1 focus:ring-black focus:outline-none bg-white"
             >
               <option value="1">Week 1</option>
@@ -129,12 +166,30 @@ export default function TimeSheetFilter({
         </div>
       </div>
 
-      {/* Info Banner */}
-      <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-600 font-normal">
-        <Info size={15} className="text-gray-500 shrink-0" />
+      {/* Info Banner with 10s Timer Logic */}
+      <div
+        className={`flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2 text-xs font-normal transition-colors duration-500 ${
+          isGlowing ? "border border-orange-500" : "border border-gray-500"
+        }`}
+      >
+        <Info
+          size={15}
+          className={`shrink-0 transition-colors duration-500 ${
+            isGlowing ? "text-orange-500" : "text-gray-600"
+          }`}
+        />
         <span>
-          You can view your timesheets by Year, Month, Week or any specific
-          Date.
+          {isGlowing ? (
+            <span className="font-medium bg-gradient-to-r from-orange-500 via-yellow-400 via-blue-500 to-emerald-500 bg-[length:200%_auto] bg-clip-text text-transparent animate-[rainbow_3s_linear_infinite]">
+              You can view your timesheets by Year, Month, Week or any specific
+              Date.
+            </span>
+          ) : (
+            <span className="font-normal text-gray-600">
+              You can view your timesheets by Year, Month, Week or any specific
+              Date.
+            </span>
+          )}
         </span>
       </div>
     </div>
