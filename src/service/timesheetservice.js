@@ -1,5 +1,5 @@
 import axiosInstance from "./axiosinstance";
-import { getEmployeeTimesheets, upsertTimeSheet,getTimesheetStatuses } from "../api/api";
+import { getEmployeeTimesheets, upsertTimeSheet,getTimesheetStatuses,getAdminTimesheets } from "../api/api";
 /**
  * Fetch employee timesheets based on filter parameters
  * @param {Object} params - Query filters (e.g., { view: 'month', month: 8, year: 2026 })
@@ -46,6 +46,47 @@ export const fetchTimesheetStatuses = async () => {
     return Array.isArray(result) ? result : [];
   } catch (error) {
     console.error("❌ Axios request failed for timesheet statuses fetch:", error.message);
+    throw error;
+  }
+};
+
+export const fetchEmployeesList = async () => {
+  try {
+    const response = await axiosInstance.get(getEmployeesList);
+    console.log("🔍 RAW EMPLOYEES LIST RESPONSE:", response);
+
+    const result = response?.data?.data || response?.data || response;
+    return Array.isArray(result) ? result : [];
+  } catch (error) {
+    console.error("❌ Axios request failed for employees list fetch:", error.message);
+    throw error;
+  }
+};
+
+export const fetchTeamTimesheets = async (params = {}) => {
+  try {
+    // Clean up empty/undefined/null keys before generating query string
+    const cleanedParams = Object.fromEntries(
+      Object.entries(params).filter(
+        ([_, value]) =>
+          value !== "" &&
+          value !== null &&
+          value !== undefined &&
+          value !== "all"
+      )
+    );
+
+    // Fixed function invocation here
+    const endpoint = getAdminTimesheets(cleanedParams);
+    const response = await axiosInstance.get(endpoint);
+
+    console.log("🔍 RAW TEAM TIMESHEET AXIOS RESPONSE:", response);
+    return response.data?.data || response.data || response;
+  } catch (error) {
+    console.error(
+      "❌ Axios request failed for team timesheet fetch:",
+      error.message
+    );
     throw error;
   }
 };

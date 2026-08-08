@@ -9,7 +9,7 @@ import {
   Plus,
 } from "lucide-react";
 
-export default function TimeSheetEntriesList({
+export default function EmployeeTimeSheetEntriesList({
   timesheetData,
   loading,
   error,
@@ -40,7 +40,7 @@ export default function TimeSheetEntriesList({
     <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm space-y-4 font-poppins font-normal text-gray-700 text-sm">
       <div className="flex justify-between items-center">
         <h2 className="text-base font-normal text-gray-900">
-          Timesheet Entries
+          Employees Timesheet Entries
         </h2>
 
         <div className="flex items-center gap-2">
@@ -66,7 +66,7 @@ export default function TimeSheetEntriesList({
 
       {loading && (
         <div className="p-8 text-center text-gray-500 text-xs font-normal">
-          Loading timesheet data...
+          Loading employee timesheet data...
         </div>
       )}
 
@@ -135,6 +135,7 @@ export default function TimeSheetEntriesList({
                         <thead>
                           <tr className="border-b border-gray-100 bg-white text-gray-500 font-normal">
                             <th className="p-3 w-10 font-normal">#</th>
+                            <th className="p-3 font-normal">Employee</th>
                             <th className="p-3 font-normal">Project</th>
                             <th className="p-3 font-normal">Task</th>
                             <th className="p-3 font-normal">Start Time</th>
@@ -151,7 +152,35 @@ export default function TimeSheetEntriesList({
                         </thead>
                         <tbody className="divide-y divide-gray-100 text-gray-700 font-normal">
                           {entriesList.map((item, idx) => {
-                            // Entry Time Taken formatting: e.g. 872 mins (14h 32m)
+                            const empObj = item.employee || item.user || {};
+
+                            const firstName =
+                              item.first_name || empObj.first_name || "";
+                            const lastName =
+                              item.last_name || empObj.last_name || "";
+                            const joinedName = [firstName, lastName]
+                              .filter(Boolean)
+                              .join(" ");
+
+                            const fullName =
+                              item.employee_name ||
+                              item.full_name ||
+                              empObj.name ||
+                              empObj.full_name ||
+                              (joinedName.length > 0 ? joinedName : null) ||
+                              item.nick_name ||
+                              "—";
+
+                            const empCode =
+                              item.employee_code ||
+                              item.employee_id ||
+                              empObj.employee_code ||
+                              empObj.code ||
+                              item.uuid ||
+                              item.id ||
+                              "";
+
+                            // Entry Time Taken formatting
                             const entryMins = item.time_taken_minutes || 0;
                             const entryHoursFormatted =
                               formatMinutesToHours(entryMins);
@@ -174,6 +203,16 @@ export default function TimeSheetEntriesList({
                               >
                                 <td className="p-3 text-gray-500 font-normal">
                                   {idx + 1}
+                                </td>
+                                <td className="p-3 font-normal text-gray-900">
+                                  <div className="font-medium text-gray-900">
+                                    {fullName}
+                                  </div>
+                                  {empCode && (
+                                    <div className="text-[11px] text-gray-400 font-normal">
+                                      ({empCode})
+                                    </div>
+                                  )}
                                 </td>
                                 <td className="p-3 font-normal text-gray-900">
                                   {item.project || "—"}

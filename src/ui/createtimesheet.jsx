@@ -4,7 +4,7 @@ import {
   fetchTimesheetStatuses,
 } from "../service/timesheetservice";
 import toast from "react-hot-toast";
-import { ArrowLeft, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, RotateCcw } from "lucide-react";
 
 export default function CreateTimeSheet({ onBack, onSuccess }) {
   const getTodayFormatted = () => {
@@ -74,6 +74,25 @@ export default function CreateTimeSheet({ onBack, onSuccess }) {
       return;
     }
     setEntries((prev) => prev.filter((_, idx) => idx !== index));
+  };
+
+  // ✅ Reset Row Feature
+  const handleResetEntryRow = (index) => {
+    const defaultStatus = statusOptions.length > 0 ? statusOptions[0].id : 1;
+    setEntries((prev) => {
+      const updated = [...prev];
+      updated[index] = {
+        id: updated[index].id, // keep existing ID if editing
+        project: "",
+        task: "",
+        startTime: "09:00",
+        endTime: "11:00",
+        status_id: defaultStatus,
+        remarks: "",
+      };
+      return updated;
+    });
+    toast.success(`Entry #${index + 1} reset successfully.`);
   };
 
   const handleInputChange = (index, field, value) => {
@@ -168,133 +187,164 @@ export default function CreateTimeSheet({ onBack, onSuccess }) {
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="space-y-4">
-          {entries.map((entry, index) => (
-            <div
-              key={index}
-              className="p-4 border border-gray-200 rounded-xl bg-gray-50/50 space-y-3 relative"
-            >
-              <div className="flex justify-between items-center border-b border-gray-200 pb-2">
-                <span className="text-xs font-normal text-black">
-                  Entry #{index + 1}
-                </span>
-                {entries.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveEntryRow(index)}
-                    className="p-1 text-gray-400 hover:text-red-600 transition-colors rounded"
-                    title="Remove Entry"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                )}
-              </div>
+          {entries.map((entry, index) => {
+            // Find current selected status object to extract color
+            const currentStatusObj = statusOptions.find(
+              (st) => String(st.id) === String(entry.status_id),
+            );
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-xs font-normal text-gray-700 mb-1">
-                    Project *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Payroll"
-                    value={entry.project}
-                    onChange={(e) =>
-                      handleInputChange(index, "project", e.target.value)
-                    }
-                    className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-xs font-normal focus:ring-1 focus:ring-black focus:outline-none bg-white"
-                  />
-                </div>
+            return (
+              <div
+                key={index}
+                className="p-4 border border-gray-200 rounded-xl bg-gray-50/50 space-y-3 relative"
+              >
+                <div className="flex justify-between items-center border-b border-gray-200 pb-2">
+                  <span className="text-xs font-normal text-black">
+                    Entry #{index + 1}
+                  </span>
 
-                <div>
-                  <label className="block text-xs font-normal text-gray-700 mb-1">
-                    Task *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Implemented Timesheet API"
-                    value={entry.task}
-                    onChange={(e) =>
-                      handleInputChange(index, "task", e.target.value)
-                    }
-                    className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-xs font-normal focus:ring-1 focus:ring-black focus:outline-none bg-white"
-                  />
-                </div>
+                  {/* Actions: Reset & Remove */}
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => handleResetEntryRow(index)}
+                      className="p-1 text-gray-400 hover:text-amber-600 transition-colors rounded"
+                      title="Reset Entry Inputs"
+                    >
+                      <RotateCcw size={14} />
+                    </button>
 
-                {/* Dynamic Statuses Dropdown */}
-                <div>
-                  <label className="block text-xs font-normal text-gray-700 mb-1">
-                    Status
-                  </label>
-                  <select
-                    value={entry.status_id}
-                    onChange={(e) =>
-                      handleInputChange(index, "status_id", e.target.value)
-                    }
-                    disabled={loadingStatuses}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-xs font-normal focus:ring-1 focus:ring-black focus:outline-none bg-white"
-                  >
-                    {statusOptions.length > 0 ? (
-                      statusOptions.map((st) => (
-                        <option key={st.id} value={st.id}>
-                          {st.status_name}
-                        </option>
-                      ))
-                    ) : (
-                      <>
-                        <option value={1}>In Progress</option>
-                        <option value={2}>Completed</option>
-                      </>
+                    {entries.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveEntryRow(index)}
+                        className="p-1 text-gray-400 hover:text-red-600 transition-colors rounded"
+                        title="Remove Entry"
+                      >
+                        <Trash2 size={14} />
+                      </button>
                     )}
-                  </select>
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-normal text-gray-700 mb-1">
-                    Start Time
-                  </label>
-                  <input
-                    type="time"
-                    value={entry.startTime}
-                    onChange={(e) =>
-                      handleInputChange(index, "startTime", e.target.value)
-                    }
-                    className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-xs font-normal focus:ring-1 focus:ring-black focus:outline-none bg-white"
-                  />
-                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs font-normal text-gray-700 mb-1">
+                      Project *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Payroll"
+                      value={entry.project}
+                      onChange={(e) =>
+                        handleInputChange(index, "project", e.target.value)
+                      }
+                      className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-xs font-normal focus:ring-1 focus:ring-black focus:outline-none bg-white"
+                    />
+                  </div>
 
-                <div>
-                  <label className="block text-xs font-normal text-gray-700 mb-1">
-                    End Time
-                  </label>
-                  <input
-                    type="time"
-                    value={entry.endTime}
-                    onChange={(e) =>
-                      handleInputChange(index, "endTime", e.target.value)
-                    }
-                    className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-xs font-normal focus:ring-1 focus:ring-black focus:outline-none bg-white"
-                  />
-                </div>
+                  <div>
+                    <label className="block text-xs font-normal text-gray-700 mb-1">
+                      Task *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Implemented Timesheet API"
+                      value={entry.task}
+                      onChange={(e) =>
+                        handleInputChange(index, "task", e.target.value)
+                      }
+                      className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-xs font-normal focus:ring-1 focus:ring-black focus:outline-none bg-white"
+                    />
+                  </div>
 
-                <div>
-                  <label className="block text-xs font-normal text-gray-700 mb-1">
-                    Remarks
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Completed API"
-                    value={entry.remarks}
-                    onChange={(e) =>
-                      handleInputChange(index, "remarks", e.target.value)
-                    }
-                    className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-xs font-normal focus:ring-1 focus:ring-black focus:outline-none bg-white"
-                  />
+                  {/* Dynamic Statuses Dropdown with Dynamic Colors */}
+                  <div>
+                    <label className="block text-xs font-normal text-gray-700 mb-1">
+                      Status
+                    </label>
+                    <select
+                      value={entry.status_id}
+                      onChange={(e) =>
+                        handleInputChange(index, "status_id", e.target.value)
+                      }
+                      disabled={loadingStatuses}
+                      style={{
+                        color: currentStatusObj?.color || "#000000",
+                      }}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-xs font-semibold focus:ring-1 focus:ring-black focus:outline-none bg-white"
+                    >
+                      {statusOptions.length > 0 ? (
+                        statusOptions.map((st) => (
+                          <option
+                            key={st.id}
+                            value={st.id}
+                            style={{ color: st.color || "#000000" }}
+                          >
+                            {st.status_name}
+                          </option>
+                        ))
+                      ) : (
+                        <>
+                          <option value={1} style={{ color: "#2563EB" }}>
+                            In Progress
+                          </option>
+                          <option value={2} style={{ color: "#16A34A" }}>
+                            Completed
+                          </option>
+                        </>
+                      )}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-normal text-gray-700 mb-1">
+                      Start Time
+                    </label>
+                    <input
+                      type="time"
+                      value={entry.startTime}
+                      onChange={(e) =>
+                        handleInputChange(index, "startTime", e.target.value)
+                      }
+                      className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-xs font-normal focus:ring-1 focus:ring-black focus:outline-none bg-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-normal text-gray-700 mb-1">
+                      End Time
+                    </label>
+                    <input
+                      type="time"
+                      value={entry.endTime}
+                      onChange={(e) =>
+                        handleInputChange(index, "endTime", e.target.value)
+                      }
+                      className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-xs font-normal focus:ring-1 focus:ring-black focus:outline-none bg-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-normal text-gray-700 mb-1">
+                      Remarks
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Completed API"
+                      value={entry.remarks}
+                      onChange={(e) =>
+                        handleInputChange(index, "remarks", e.target.value)
+                      }
+                      className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-xs font-normal focus:ring-1 focus:ring-black focus:outline-none bg-white"
+                    />
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         <button

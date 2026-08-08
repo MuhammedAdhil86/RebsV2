@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import DashboardLayout from "../ui/pagelayout";
 import HeaderGlobal from "../ui/headerglobal";
 import MyTimeSheet from "../components/timesheet/mytimesheet";
+import EmployeeTimeSheet from "../components/timesheet/employeetimesheet";
 
 const TABS = [
   { id: "my_timesheet", label: "My TimeSheet" },
@@ -52,11 +53,7 @@ export default function TimeSheet() {
         {/* Tab Content Display */}
         <div className="mt-2">
           {activeTab === "my_timesheet" && <MyTimeSheet />}
-          {activeTab === "employees_timesheets" && (
-            <div className="bg-white p-6 rounded-b-lg shadow-sm border border-gray-100 text-xs text-gray-500 font-normal">
-              Employees TimeSheets view under construction.
-            </div>
-          )}
+          {activeTab === "employees_timesheets" && <EmployeeTimeSheet />}
         </div>
       </div>
     </DashboardLayout>

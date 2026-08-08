@@ -53,6 +53,11 @@ export const getEmployeeTimesheets = (params = {}) => {
   return `/employee/timesheet/fetch${query ? `?${query}` : ''}`;};
 export const upsertTimeSheet = "/employee/timesheet/upsert";
 export const getTimesheetStatuses = "/employee/timesheet/statuses";
+// Admin Timesheets Endpoint Builder
+export const getAdminTimesheets = (params = {}) => {
+  const query = new URLSearchParams(params).toString();
+  return `/admin/timesheet/fetch${query ? `?${query}` : ''}`;
+};
 //  insurance 
 export const getEmployeeInsuranceDetails = (uuid) => `/admin/insurance/fetch/employee-settings?user_id=${uuid}`;
 export const getInsuranceProviders = "/admin/insurance/providers";
