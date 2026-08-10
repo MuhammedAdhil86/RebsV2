@@ -185,6 +185,8 @@ export default function MyTimeSheet() {
 
           <TimeSheetEntriesList
             timesheetData={timesheetData}
+            summary={summary}
+            viewBy={viewBy}
             loading={loading}
             error={error}
             openSections={openSections}

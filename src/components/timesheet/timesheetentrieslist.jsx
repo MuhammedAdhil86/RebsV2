@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   Calendar,
   Download,
@@ -7,10 +7,17 @@ import {
   ChevronRight,
   Pencil,
   Plus,
+  FileText,
+  FileSpreadsheet,
+  FileCode,
 } from "lucide-react";
+
+import { exportTimesheetReport } from "../../components/helpers/timesheetExportService";
 
 export default function TimeSheetEntriesList({
   timesheetData,
+  summary,
+  viewBy,
   loading,
   error,
   openSections,
@@ -19,7 +26,31 @@ export default function TimeSheetEntriesList({
   onEditClick,
   onCreateClick,
 }) {
-  // Guard against null/undefined API responses for dates
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const dropdownRef = useRef(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setShowExportMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleDownload = (fileType) => {
+    setShowExportMenu(false);
+    exportTimesheetReport({
+      fileType,
+      timesheetData,
+      summary,
+      viewBy,
+      formatIsoTime,
+    });
+  };
+
   const safeTimesheetData = Array.isArray(timesheetData)
     ? timesheetData
     : Array.isArray(timesheetData?.dates)
@@ -28,7 +59,6 @@ export default function TimeSheetEntriesList({
         ? timesheetData.data.dates
         : [];
 
-  // Helper function to format minutes into "Xh Ym"
   const formatMinutesToHours = (totalMins = 0) => {
     const minsNum = Number(totalMins) || 0;
     const hours = Math.floor(minsNum / 60);
@@ -54,13 +84,47 @@ export default function TimeSheetEntriesList({
               Create Entry
             </button>
           )}
-          <button
-            type="button"
-            className="flex items-center gap-1.5 border border-gray-300 hover:bg-gray-50 text-gray-700 font-normal px-3 py-1.5 rounded-lg text-xs transition-colors"
-          >
-            <Download size={14} />
-            Export
-          </button>
+
+          {/* Export Dropdown Button */}
+          <div className="relative" ref={dropdownRef}>
+            <button
+              type="button"
+              onClick={() => setShowExportMenu((prev) => !prev)}
+              className="flex items-center gap-1.5 border border-gray-300 hover:bg-gray-50 text-gray-700 font-normal px-3 py-1.5 rounded-lg text-xs transition-colors"
+            >
+              <Download size={14} />
+              Export
+            </button>
+
+            {showExportMenu && (
+              <div className="absolute right-0 mt-2 w-44 bg-white border border-gray-100 rounded-lg shadow-lg z-50 py-1 font-poppins text-xs">
+                <button
+                  type="button"
+                  onClick={() => handleDownload("xlsx")}
+                  className="w-full text-left px-3 py-2 hover:bg-gray-50 flex items-center gap-2 text-gray-700 transition-colors"
+                >
+                  <FileSpreadsheet size={14} className="text-emerald-600" />
+                  Excel (.xlsx)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDownload("csv")}
+                  className="w-full text-left px-3 py-2 hover:bg-gray-50 flex items-center gap-2 text-gray-700 transition-colors"
+                >
+                  <FileCode size={14} className="text-blue-600" />
+                  CSV (.csv)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDownload("pdf")}
+                  className="w-full text-left px-3 py-2 hover:bg-gray-50 flex items-center gap-2 text-gray-700 transition-colors"
+                >
+                  <FileText size={14} className="text-red-500" />
+                  PDF Document (.pdf)
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -89,7 +153,6 @@ export default function TimeSheetEntriesList({
                 ? group.entries
                 : [];
 
-              // Group Header Day Total: e.g. 1742 mins (29h 2m)
               const groupTotalMins = group.total_minutes || 0;
               const groupHoursFormatted = formatMinutesToHours(groupTotalMins);
 
@@ -151,7 +214,6 @@ export default function TimeSheetEntriesList({
                         </thead>
                         <tbody className="divide-y divide-gray-100 text-gray-700 font-normal">
                           {entriesList.map((item, idx) => {
-                            // Entry Time Taken formatting: e.g. 872 mins (14h 32m)
                             const entryMins = item.time_taken_minutes || 0;
                             const entryHoursFormatted =
                               formatMinutesToHours(entryMins);
@@ -164,7 +226,6 @@ export default function TimeSheetEntriesList({
                               return timeStr || "—";
                             };
 
-                            // Dynamic Status Color Logic from API
                             const statusColor = item.status_color;
 
                             return (
