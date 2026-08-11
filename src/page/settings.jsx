@@ -1,14 +1,38 @@
-import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState, useEffect, useRef } from "react";
 import toast from "react-hot-toast";
-import { useAuthStore } from "../store/authStore";
+import { useNavigate } from "react-router-dom";
 import DashboardLayout from "../ui/pagelayout";
+import HeaderGlobal from "../ui/headerglobal";
 import avatar from "../assets/img/avatar.svg";
-import { FiUser, FiLock, FiInfo, FiLogOut } from "react-icons/fi";
+import { FiUser, FiInfo, FiLogOut, FiCamera } from "react-icons/fi";
+import {
+  getMyPersonalProfile,
+  updateMyPersonalProfile,
+  updateProfileImage,
+} from "../service/employeeService";
+import SettingsProfile from "../components/settingsprofile";
+import LogoutConfirmationModal from "../ui/conformationmodal";
+import { useAuthStore } from "../store/authStore";
 
 function Settings() {
-  const [activeTab, setActiveTab] = useState("personal");
+  const navigate = useNavigate();
+  const logout = useAuthStore((state) => state.logout);
+
+  const [activeTab, setActiveTab] = useState(() => {
+    const saved = localStorage.getItem("settings_active_tab");
+    return saved && saved !== "password" ? saved : "personal";
+  });
+
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [userId, setUserId] = useState(null);
+
+  // Avatar Image Upload States
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const fileInputRef = useRef(null);
 
   const [formData, setFormData] = useState({
     firstName: "",
@@ -17,58 +41,222 @@ function Settings() {
     jobTitle: "",
     company: "",
     phone: "",
+    image: "",
+    uan: "",
+    aadhar: "",
+    pan: "",
+    epfNumber: "",
+    esiNumber: "",
+    dateOfBirth: "",
+    maritalStatus: "",
+    presentAddress: "",
+    permanentAddress: "",
+    bloodGroup: "",
   });
 
-  const { user, logout } = useAuthStore();
-  const navigate = useNavigate();
+  useEffect(() => {
+    localStorage.setItem("settings_active_tab", activeTab);
+  }, [activeTab]);
 
-  const handleLogout = () => {
-    logout();
-    toast.success("Logged out successfully", {
-      duration: 3000,
-      style: { background: "#333", color: "#fff", borderRadius: "8px" },
-    });
-    setTimeout(() => navigate("/"), 800);
+  const fetchProfile = async () => {
+    try {
+      setLoading(true);
+      const response = await getMyPersonalProfile();
+      const data = response.data || response;
+
+      if (data) {
+        setUserId(data._id || data.id);
+        setFormData({
+          firstName: data.first_name || "",
+          lastName: data.last_name || "",
+          email: data.email || "",
+          jobTitle: data.job_title || data.designation || "",
+          company: data.company || "",
+          phone: data.phone_number || data.ph_no || "",
+          image: data.image || "",
+          uan: data.uan || "",
+          aadhar: data.aadhar || "",
+          pan: data.pan || "",
+          epfNumber: data.epf_number || "",
+          esiNumber: data.esi_number || "",
+          dateOfBirth: data.date_of_birth
+            ? data.date_of_birth.split("T")[0]
+            : "",
+          maritalStatus: data.marital_status || "",
+          presentAddress: data.present_address || "",
+          permanentAddress:
+            data.permanant_address || data.permanent_address || "",
+          bloodGroup: data.blood_group || "",
+        });
+      }
+    } catch (error) {
+      console.error("Error fetching personal profile:", error);
+      toast.error("Failed to load profile data");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // Load user data into form
   useEffect(() => {
-    if (user) {
-      const u = user.user || user;
-      setFormData({
-        firstName: u.first_name || "",
-        lastName: u.last_name || "",
-        email: u.email || "",
-        jobTitle: u.designation || "",
-        company: u.company || "",
-        phone: u.ph_no || "",
-      });
+    fetchProfile();
+  }, []);
+
+  // --- PROFILE IMAGE HANDLERS ---
+  const handleAvatarClick = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
     }
-  }, [user]);
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select a valid image file");
+      return;
+    }
+
+    setSelectedFile(file);
+    setImagePreview(URL.createObjectURL(file));
+  };
+
+  const handleImageUpload = async () => {
+    if (!selectedFile) return;
+
+    try {
+      setUploadingImage(true);
+      const res = await updateProfileImage(selectedFile);
+      const newImageUrl = res?.data?.image || res?.image || res?.url;
+
+      if (newImageUrl) {
+        setFormData((prev) => ({
+          ...prev,
+          image: newImageUrl,
+        }));
+      } else {
+        await fetchProfile();
+      }
+
+      toast.success("Profile photo updated successfully");
+    } catch (error) {
+      toast.error(error.message || "Failed to upload image");
+    } finally {
+      setUploadingImage(false);
+      setSelectedFile(null);
+      setImagePreview(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  };
+
+  const handleCancelImage = () => {
+    setSelectedFile(null);
+    setImagePreview(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  // --- PERSONAL PROFILE UPDATE HANDLER ---
+  const handleUpdate = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+
+    const rawPayload = {
+      first_name: formData.firstName.trim(),
+      last_name: formData.lastName.trim(),
+      email: formData.email.trim(),
+      phone_number: formData.phone.trim(),
+      uan: formData.uan.trim(),
+      aadhar: formData.aadhar.trim(),
+      pan: formData.pan.trim(),
+      epf_number: formData.epfNumber.trim(),
+      esi_number: formData.esiNumber.trim(),
+      date_of_birth: formData.dateOfBirth
+        ? `${formData.dateOfBirth}T00:00:00Z`
+        : null,
+      marital_status: formData.maritalStatus.trim(),
+      present_address: formData.presentAddress.trim(),
+      permanant_address: formData.permanentAddress.trim(),
+      blood_group: formData.bloodGroup.trim(),
+    };
+
+    const payload = {};
+    Object.keys(rawPayload).forEach((key) => {
+      if (rawPayload[key] !== "" && rawPayload[key] !== null) {
+        payload[key] = rawPayload[key];
+      }
+    });
+
+    console.log(
+      "📤 Sending Payload to Backend:",
+      JSON.stringify(payload, null, 2),
+    );
+
+    try {
+      const res = await updateMyPersonalProfile(payload);
+      console.log("📥 Received Response from Backend:", res);
+
+      const updatedData = res?.data || res;
+
+      setFormData((prev) => ({
+        ...prev,
+        firstName: updatedData.first_name || prev.firstName,
+        lastName: updatedData.last_name || prev.lastName,
+        email: updatedData.email || prev.email,
+        phone: updatedData.phone_number || prev.phone,
+        uan: updatedData.uan || prev.uan,
+        aadhar: updatedData.aadhar || prev.aadhar,
+        pan: updatedData.pan || prev.pan,
+        epfNumber: updatedData.epf_number || prev.epfNumber,
+        esiNumber: updatedData.esi_number || prev.esiNumber,
+        dateOfBirth: updatedData.date_of_birth
+          ? updatedData.date_of_birth.split("T")[0]
+          : prev.dateOfBirth,
+        maritalStatus: updatedData.marital_status || prev.maritalStatus,
+        presentAddress: updatedData.present_address || prev.presentAddress,
+        permanentAddress:
+          updatedData.permanant_address ||
+          updatedData.permanent_address ||
+          prev.permanentAddress,
+        bloodGroup: updatedData.blood_group || prev.bloodGroup,
+      }));
+
+      toast.success("Profile updated successfully!");
+    } catch (error) {
+      console.error("❌ Error updating profile:", error);
+      if (error?.response) {
+        console.error("❌ Backend Response Body:", error.response.data);
+      }
+      const errorMsg =
+        error?.response?.data?.message ||
+        error?.response?.data?.error ||
+        "Failed to update profile";
+      toast.error(errorMsg);
+      throw error;
+    }
+  };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleUpdate = (e) => {
-    e.preventDefault();
-    toast.success("Profile updated successfully (demo)", {
-      duration: 3000,
-      style: { background: "#333", color: "#fff" },
-    });
+  // --- LOGOUT HANDLERS ---
+  const handleLogoutConfirm = () => {
+    setShowLogoutModal(false);
+    logout();
+    navigate("/", { replace: true });
   };
 
-  // DELETE USER ACCOUNT
   const handleDeleteAccount = async () => {
     try {
-      const userId = user.user?._id || user._id;
+      if (!userId) throw new Error("User ID not found");
 
       const res = await fetch(
         `${import.meta.env.VITE_API}/delete-user/${userId}`,
-        {
-          method: "DELETE",
-        }
+        { method: "DELETE" },
       );
 
       if (!res.ok) throw new Error("Failed to delete account");
@@ -79,8 +267,7 @@ function Settings() {
       });
 
       logout();
-      navigate("/");
-
+      navigate("/", { replace: true });
     } catch (err) {
       toast.error(err.message || "Something went wrong", {
         duration: 3000,
@@ -89,245 +276,217 @@ function Settings() {
     }
   };
 
+  const fullName =
+    `${formData.firstName} ${formData.lastName}`.trim() || "User";
+  const displayAvatar = imagePreview || formData.image || avatar;
+
   return (
-    <DashboardLayout userName={formData.firstName || "User"} onLogout={handleLogout}>
-      <div className="bg-white h-[567px] rounded-2xl p-6 overflow-auto">
+    <DashboardLayout
+      userName={fullName}
+      onLogout={() => setShowLogoutModal(true)}
+    >
+      <div className="w-full space-y-4">
+        <HeaderGlobal
+          userName={fullName}
+          userImage={formData.image || avatar}
+        />
 
-        {/* Header */}
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-lg font-semibold text-gray-800">Settings</h1>
-          <div className="w-9 h-9 rounded-full overflow-hidden border">
-            <img src={avatar} alt="User" className="w-full h-full object-cover" />
-          </div>
-        </div>
-
-        <div className="flex gap-6">
-
-          {/* LEFT MENU */}
-          <div className="w-72 bg-white border border-gray-200 rounded-2xl p-6 flex flex-col items-center shadow-sm">
-
-            <div className="w-24 h-24 rounded-full overflow-hidden mb-4">
-              <img src={avatar} alt="User Avatar" className="w-full h-full object-cover" />
+        <div className="bg-white min-h-[567px] rounded-2xl p-6 shadow-sm border border-gray-100">
+          {loading ? (
+            <div className="flex justify-center items-center h-[400px]">
+              <p className="text-gray-500 text-sm font-normal">
+                Loading profile settings...
+              </p>
             </div>
-
-            <h2 className="text-lg font-semibold text-gray-800">
-              {formData.firstName} {formData.lastName}
-            </h2>
-            <p className="text-sm text-gray-500 mb-6">{formData.email}</p>
-
-            <div className="w-full space-y-2">
-
-              {/* Personal Info */}
-              <button
-                onClick={() => setActiveTab("personal")}
-                className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg text-sm ${
-                  activeTab === "personal"
-                    ? "bg-black text-white"
-                    : "text-gray-700 hover:bg-gray-100"
-                }`}
-              >
-                <FiUser className="text-lg" /> Personal Info
-              </button>
-
-              {/* Change Password */}
-              <button
-                onClick={() => setActiveTab("password")}
-                className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg text-sm ${
-                  activeTab === "password"
-                    ? "bg-black text-white"
-                    : "text-gray-700 hover:bg-gray-100"
-                }`}
-              >
-                <FiLock className="text-lg" /> Change Password
-              </button>
-
-              {/* About */}
-              <button
-                onClick={() => setActiveTab("about")}
-                className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg text-sm ${
-                  activeTab === "about"
-                    ? "bg-black text-white"
-                    : "text-gray-700 hover:bg-gray-100"
-                }`}
-              >
-                <FiInfo className="text-lg" /> About Us
-              </button>
-
-              {/* Delete Account */}
-              <button
-                onClick={() => setActiveTab("delete")}
-                className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg text-sm ${
-                  activeTab === "delete"
-                    ? "bg-red-600 text-white"
-                    : "text-red-600 hover:bg-red-100"
-                }`}
-              >
-                🗑 Delete Account
-              </button>
-
-              {/* Logout */}
-              <button
-                onClick={handleLogout}
-                className="w-full flex items-center gap-3 px-4 py-2 rounded-lg text-sm text-gray-700 hover:bg-gray-100"
-              >
-                <FiLogOut className="text-lg" /> Logout
-              </button>
-            </div>
-          </div>
-
-          {/* RIGHT CONTENT */}
-          <div className="flex-1 bg-white rounded-2xl border border-gray-200 p-8 shadow-sm">
-
-            {/* PERSONAL INFO */}
-            {activeTab === "personal" && (
-              <form onSubmit={handleUpdate} className="grid grid-cols-2 gap-6">
-
-                <div>
-                  <label className="block text-sm text-gray-600 mb-2">First name</label>
-                  <input
-                    type="text"
-                    name="firstName"
-                    value={formData.firstName}
-                    onChange={handleChange}
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-black"
+          ) : (
+            <div className="flex flex-col md:flex-row gap-6">
+              {/* LEFT NAVIGATION MENU */}
+              <div className="w-full md:w-72 bg-white border border-gray-200 rounded-2xl p-6 flex flex-col items-center shadow-sm">
+                {/* AVATAR WITH HOVER OVERLAY */}
+                <div
+                  onClick={handleAvatarClick}
+                  className="relative w-24 h-24 rounded-full overflow-hidden mb-3 border border-gray-200 group cursor-pointer"
+                >
+                  <img
+                    src={displayAvatar}
+                    alt="User Avatar"
+                    className="w-full h-full object-cover"
                   />
+                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col items-center justify-center text-white text-xs font-normal">
+                    <FiCamera className="text-lg mb-0.5" />
+                    <span>Change</span>
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm text-gray-600 mb-2">Last name</label>
-                  <input
-                    type="text"
-                    name="lastName"
-                    value={formData.lastName}
-                    onChange={handleChange}
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-black"
-                  />
-                </div>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileChange}
+                  accept="image/*"
+                  className="hidden"
+                />
 
-                <div>
-                  <label className="block text-sm text-gray-600 mb-2">Email ID</label>
-                  <input
-                    type="email"
-                    name="email"
-                    value={formData.email}
-                    onChange={handleChange}
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-black"
-                  />
-                </div>
+                {/* INLINE IMAGE UPDATE & CANCEL BUTTONS */}
+                {selectedFile && (
+                  <div className="flex items-center gap-2 mb-4">
+                    <button
+                      type="button"
+                      onClick={handleImageUpload}
+                      disabled={uploadingImage}
+                      className="bg-black text-white px-3 py-1 rounded text-xs font-normal hover:bg-gray-800 transition-all disabled:opacity-50"
+                    >
+                      {uploadingImage ? "Updating..." : "Update Image"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleCancelImage}
+                      disabled={uploadingImage}
+                      className="px-3 py-1 rounded text-xs font-normal border border-gray-300 text-gray-700 hover:bg-gray-100 transition-all"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
 
-                <div>
-                  <label className="block text-sm text-gray-600 mb-2">Job Title</label>
-                  <input
-                    type="text"
-                    name="jobTitle"
-                    value={formData.jobTitle}
-                    onChange={handleChange}
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-black"
-                  />
-                </div>
+                <h2 className="text-lg text-gray-800 text-center font-normal">
+                  {fullName}
+                </h2>
+                <p className="text-sm text-gray-500 mb-6 text-center font-normal">
+                  {formData.email}
+                </p>
 
-                <div>
-                  <label className="block text-sm text-gray-600 mb-2">Company</label>
-                  <input
-                    type="text"
-                    name="company"
-                    value={formData.company}
-                    disabled
-                    className="w-full border border-gray-300 bg-gray-100 rounded-md px-3 py-2 text-sm"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm text-gray-600 mb-2">Phone number</label>
-                  <input
-                    type="text"
-                    name="phone"
-                    value={formData.phone}
-                    onChange={handleChange}
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-black"
-                  />
-                </div>
-
-                <div className="col-span-2 flex justify-end">
+                <div className="w-full space-y-2">
                   <button
-                    type="submit"
-                    className="bg-black text-white px-6 py-2 rounded-md text-sm hover:bg-gray-800 transition"
+                    type="button"
+                    onClick={() => setActiveTab("personal")}
+                    className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm transition-all font-normal ${
+                      activeTab === "personal"
+                        ? "bg-black text-white"
+                        : "text-gray-700 hover:bg-gray-100"
+                    }`}
                   >
-                    Update
+                    <FiUser className="text-lg" /> Personal Info
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("about")}
+                    className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm transition-all font-normal ${
+                      activeTab === "about"
+                        ? "bg-black text-white"
+                        : "text-gray-700 hover:bg-gray-100"
+                    }`}
+                  >
+                    <FiInfo className="text-lg" /> About Us
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("delete")}
+                    className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm transition-all font-normal ${
+                      activeTab === "delete"
+                        ? "bg-red-600 text-white"
+                        : "text-red-600 hover:bg-red-50"
+                    }`}
+                  >
+                    🗑 Delete Account
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowLogoutModal(true)}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-normal text-gray-700 hover:bg-gray-100 transition-all"
+                  >
+                    <FiLogOut className="text-lg" /> Logout
                   </button>
                 </div>
-              </form>
-            )}
-
-            {/* PASSWORD TAB */}
-            {activeTab === "password" && (
-              <div>
-                <h2 className="text-lg font-semibold text-gray-800 mb-6">Change Password</h2>
-                <p className="text-gray-600 text-sm">
-                  This section allows users to update their passwords.
-                </p>
               </div>
-            )}
 
-            {/* ABOUT TAB */}
-            {activeTab === "about" && (
-              <div>
-                <h2 className="text-lg font-semibold text-gray-800 mb-6">About Us</h2>
-                <p className="text-gray-600 text-sm">
-                  REBS HR System is a comprehensive employee management platform
-                  built for efficiency and user-friendliness.
-                </p>
-              </div>
-            )}
+              {/* RIGHT CONTENT TAB PANELS */}
+              <div className="flex-1 bg-white rounded-2xl border border-gray-200 p-8 shadow-sm">
+                {activeTab === "personal" && (
+                  <SettingsProfile
+                    formData={formData}
+                    handleChange={handleChange}
+                    handleUpdate={handleUpdate}
+                  />
+                )}
 
-            {/* DELETE ACCOUNT */}
-            {activeTab === "delete" && (
-              <div>
-                <h2 className="text-lg font-semibold text-red-600 mb-4">Delete Account</h2>
+                {activeTab === "about" && (
+                  <div>
+                    <h2 className="text-lg text-gray-800 mb-4 font-normal">
+                      About Us
+                    </h2>
+                    <p className="text-gray-600 text-sm font-normal">
+                      REBS HR System is a comprehensive employee management
+                      platform built for efficiency and user-friendliness.
+                    </p>
+                  </div>
+                )}
 
-                <p className="text-sm text-gray-700 mb-6">
-                  This action is <strong>permanent</strong>. All your data will be deleted and cannot be recovered.
-                </p>
+                {activeTab === "delete" && (
+                  <div>
+                    <h2 className="text-lg text-red-600 mb-4 font-normal">
+                      Delete Account
+                    </h2>
+                    <p className="text-sm text-gray-700 mb-6 font-normal">
+                      This action is permanent. All your data will be deleted
+                      and cannot be recovered.
+                    </p>
 
-                <button
-                  onClick={() => setShowDeleteConfirm(true)}
-                  className="bg-red-600 text-white px-6 py-2 rounded-md text-sm hover:bg-red-700 transition"
-                >
-                  Delete My Account
-                </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowDeleteConfirm(true)}
+                      className="bg-red-600 text-white px-6 py-2 rounded-md text-sm hover:bg-red-700 transition-all font-normal"
+                    >
+                      Delete My Account
+                    </button>
 
-                {showDeleteConfirm && (
-                  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-                    <div className="bg-white rounded-xl p-6 w-96 shadow-lg">
-                      <h3 className="text-lg font-semibold text-gray-800 mb-3">Confirm Delete</h3>
-                      <p className="text-sm text-gray-600 mb-6">
-                        Are you sure you want to delete your account? This action cannot be undone.
-                      </p>
+                    {showDeleteConfirm && (
+                      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                        <div className="bg-white rounded-xl p-6 w-96 shadow-lg">
+                          <h3 className="text-lg text-gray-800 mb-3 font-normal">
+                            Confirm Delete
+                          </h3>
+                          <p className="text-sm text-gray-600 mb-6 font-normal">
+                            Are you sure you want to delete your account? This
+                            action cannot be undone.
+                          </p>
 
-                      <div className="flex justify-end gap-3">
-                        <button
-                          onClick={() => setShowDeleteConfirm(false)}
-                          className="px-4 py-2 text-sm rounded-md border"
-                        >
-                          Cancel
-                        </button>
+                          <div className="flex justify-end gap-3">
+                            <button
+                              type="button"
+                              onClick={() => setShowDeleteConfirm(false)}
+                              className="px-4 py-2 text-sm rounded-md border hover:bg-gray-50 font-normal"
+                            >
+                              Cancel
+                            </button>
 
-                        <button
-                          onClick={handleDeleteAccount}
-                          className="px-4 py-2 text-sm rounded-md bg-red-600 text-white hover:bg-red-700"
-                        >
-                          Yes, Delete
-                        </button>
+                            <button
+                              type="button"
+                              onClick={handleDeleteAccount}
+                              className="px-4 py-2 text-sm rounded-md bg-red-600 text-white hover:bg-red-700 font-normal"
+                            >
+                              Yes, Delete
+                            </button>
+                          </div>
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </div>
                 )}
               </div>
-            )}
-
-          </div>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* REUSABLE LOGOUT CONFIRMATION MODAL */}
+      <LogoutConfirmationModal
+        isOpen={showLogoutModal}
+        onClose={() => setShowLogoutModal(false)}
+        onConfirm={handleLogoutConfirm}
+      />
     </DashboardLayout>
   );
 }

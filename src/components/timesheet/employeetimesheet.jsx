@@ -172,6 +172,12 @@ export default function EmployeeTimeSheet() {
         openSections={openSections}
         toggleSection={toggleSection}
         formatIsoTime={formatIsoTime}
+        summary={summary}
+        viewBy={viewBy}
+        selectedDate={selectedDate}
+        selectedMonth={selectedMonth}
+        selectedWeek={selectedWeek}
+        selectedEmployee={selectedEmployee}
       />
     </div>
   );

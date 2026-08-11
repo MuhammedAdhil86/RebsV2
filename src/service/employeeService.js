@@ -26,7 +26,9 @@ getEmployeeCalendar,
 getEmployeeShifts,
 getDeleteUser,
 getEmployeePolicy,
-
+getMypersonalProfile,
+uploadProfileImage,
+updateMypersonalProfile,
   getMaritalStatus// make sure you export this from your api.js
 } from "../api/api";
 import axiosInstance from "../service/axiosinstance";
@@ -524,3 +526,62 @@ export const fetchDeletedUsers = async (params = {}) => {
     throw error;
   }
 };
+
+/**
+ * Fetch personal profile for the current logged-in user
+ * @param {Object} [params] - Optional query parameters
+ * @returns {Promise<any>} - Resolves to user profile data
+ */
+export const getMyPersonalProfile = async (params = {}) => {
+  try {
+    const response = await axiosInstance.get(getMypersonalProfile, { params });
+    console.log("Personal profile response:", response.data);
+    return response.data.data || response.data;
+  } catch (error) {
+    console.error("❌ Error fetching personal profile:", error);
+    throw error;
+  }
+};
+
+/**
+ * Upload profile image for staff
+ * @param {File} imageFile - The image File object from an input element
+ * @returns {Promise<any>} - Resolves to the uploaded image response data
+ */
+export const updateProfileImage = async (imageFile) => {
+  try {
+    const formData = new FormData();
+    formData.append("image", imageFile);
+
+    const response = await axiosInstance.put(uploadProfileImage, formData, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    });
+
+    console.log("Profile image upload response:", response.data);
+    return response.data.data || response.data;
+  } catch (error) {
+    console.error("❌ Error uploading profile image:", error);
+    throw error;
+  }
+};
+
+/**
+ * Update personal profile details for the logged-in staff member
+ * @param {Object} profilePayload - The updated profile object matching backend schema
+ * @returns {Promise<any>} - Resolves to updated profile response
+ */
+export const updateMyPersonalProfile = async (profilePayload) => {
+  try {
+    const response = await axiosInstance.put(
+      updateMypersonalProfile,
+      profilePayload
+    );
+    console.log("Updated personal profile response:", response.data);
+    return response.data.data || response.data;
+  } catch (error) {
+    console.error("❌ Error updating personal profile:", error);
+    throw error;
+  }
+}

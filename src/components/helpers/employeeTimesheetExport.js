@@ -34,8 +34,35 @@ const formatMinutesToHours = (totalMins = 0) => {
   return `${hours}h ${mins}m`;
 };
 
-// Flattens grouped date objects into a single flat array of entries
-export const flattenTimesheetData = (timesheetData, formatIsoTime) => {
+// Month Names Helper
+const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December"
+];
+
+// Computes Period string based on selected filter option
+const calculatePeriodDisplay = ({ viewBy, selectedDate, selectedMonth, selectedWeek, summary }) => {
+  const activeView = (viewBy || "Date").toLowerCase();
+
+  if (activeView === "date" && selectedDate) {
+    return selectedDate;
+  }
+  if (activeView === "month" && selectedMonth) {
+    const monthName = MONTH_NAMES[parseInt(selectedMonth, 10) - 1] || selectedMonth;
+    return `${monthName}`;
+  }
+  if (activeView === "week" && selectedWeek) {
+    const monthName = selectedMonth ? (MONTH_NAMES[parseInt(selectedMonth, 10) - 1] || selectedMonth) : "";
+    return `Week ${selectedWeek}${monthName ? ` (${monthName})` : ""}`;
+  }
+  if (summary?.fromDate && summary?.toDate) {
+    return `${summary.fromDate} → ${summary.toDate}`;
+  }
+  return summary?.fromDate || summary?.toDate || "—";
+};
+
+// Flattens grouped dates for employee timesheets including employee info per entry
+export const flattenEmployeeTimesheetData = (timesheetData, formatIsoTime) => {
   const safeData = Array.isArray(timesheetData)
     ? timesheetData
     : Array.isArray(timesheetData?.dates)
@@ -49,20 +76,41 @@ export const flattenTimesheetData = (timesheetData, formatIsoTime) => {
     const entries = Array.isArray(group.entries) ? group.entries : [];
     entries.forEach((item) => {
       const mins = item.time_taken_minutes || 0;
+
+      const empObj = item.employee || item.user || {};
+      const firstName = item.first_name || empObj.first_name || "";
+      const lastName = item.last_name || empObj.last_name || "";
+      const joinedName = [firstName, lastName].filter(Boolean).join(" ");
+
+      const fullName =
+        item.employee_name ||
+        item.full_name ||
+        empObj.name ||
+        empObj.full_name ||
+        (joinedName.length > 0 ? joinedName : null) ||
+        item.nick_name ||
+        "—";
+
+      const empCode =
+        item.employee_code ||
+        item.employee_id ||
+        empObj.employee_code ||
+        empObj.code ||
+        item.uuid ||
+        item.id ||
+        "—";
+
+      const safeFormat = (t) =>
+        typeof formatIsoTime === "function" ? formatIsoTime(t) : t || "—";
+
       rows.push({
         workDate: group.work_date || "—",
+        employeeName: fullName,
+        employeeCode: empCode,
         project: item.project || "—",
         task: item.task || "—",
-        startTime: item.start_time
-          ? typeof formatIsoTime === "function"
-            ? formatIsoTime(item.start_time)
-            : item.start_time
-          : "—",
-        endTime: item.end_time
-          ? typeof formatIsoTime === "function"
-            ? formatIsoTime(item.end_time)
-            : item.end_time
-          : "—",
+        startTime: safeFormat(item.start_time),
+        endTime: safeFormat(item.end_time),
         duration: formatMinutesToHours(mins),
         minutes: mins,
         status: item.status_name || "In Progress",
@@ -75,33 +123,49 @@ export const flattenTimesheetData = (timesheetData, formatIsoTime) => {
 };
 
 /**
- * Export Controller
+ * Employee Timesheet Export Controller
  */
-export const exportTimesheetReport = async ({
-  fileType,
+export const exportEmployeeTimesheetReport = async ({
+  fileType = "xlsx",
   timesheetData = [],
   summary = {},
-  viewBy = "Year",
+  viewBy = "Date",
+  selectedDate,
+  selectedMonth,
+  selectedWeek,
   formatIsoTime,
-  userInfo = { employeeId: "100278" },
+  selectedEmployee = "all",
 }) => {
-  const flattenedData = flattenTimesheetData(timesheetData, formatIsoTime);
+  const flattenedData = flattenEmployeeTimesheetData(timesheetData, formatIsoTime);
+
+  const periodDisplay = calculatePeriodDisplay({
+    viewBy,
+    selectedDate,
+    selectedMonth,
+    selectedWeek,
+    summary,
+  });
+
+  const totalMinutes = summary?.totalMinutes ?? summary?.total_minutes ?? 2402;
+  const totalHours = summary?.totalHours ?? summary?.total_hours ?? "40h 2m";
 
   const meta = {
-    employeeId: userInfo.employeeId || summary?.employeeId || "—",
-    fromDate: summary?.fromDate || "—",
-    toDate: summary?.toDate || "—",
-    filter: viewBy || "Year",
+    employeeFilter: selectedEmployee === "all" ? "All Employees" : selectedEmployee,
+    period: periodDisplay,
+    filter: viewBy || "Date",
     totalEntries: flattenedData.length,
-    totalHours: summary?.totalHours || "0h 0m",
+    totalMinutes: `${totalMinutes} mins`,
+    totalHours: totalHours,
   };
 
   // -------------------------------------------------------------
-  // CSV GENERATOR
+  // 1. CSV EXPORT
   // -------------------------------------------------------------
   if (fileType === "csv") {
     const tableHeaders = [
       "Work Date",
+      "Employee",
+      "Employee ID",
       "Project",
       "Task",
       "Start Time",
@@ -120,6 +184,8 @@ export const exportTimesheetReport = async ({
 
     const rawRows = flattenedData.map((row) => [
       getValueOrDash(row.workDate),
+      getValueOrDash(row.employeeName),
+      getValueOrDash(row.employeeCode),
       getValueOrDash(row.project),
       getValueOrDash(row.task),
       getValueOrDash(row.startTime),
@@ -134,9 +200,7 @@ export const exportTimesheetReport = async ({
       let maxLen = header.length;
       rawRows.forEach((row) => {
         const valLen = row[colIdx].length;
-        if (valLen > maxLen) {
-          maxLen = valLen;
-        }
+        if (valLen > maxLen) maxLen = valLen;
       });
       return maxLen + 4;
     });
@@ -149,17 +213,18 @@ export const exportTimesheetReport = async ({
     const borderDivider = colWidths.map((w) => `="${"-".repeat(w)}"`).join(",");
 
     const csvRows = [
-      ["TIMESHEET REPORT"],
+      ["EMPLOYEE TIMESHEET REPORT"],
       [],
       ["+---------------------------------------+"],
-      ["| Employee ID", `="${getValueOrDash(meta.employeeId)}"`],
-      ["| Period", `="${getValueOrDash(meta.fromDate)} -> ${getValueOrDash(meta.toDate)}"`],
-      ["| Filter", `="${getValueOrDash(meta.filter)}"`],
+      ["| Employee Filter", `="${getValueOrDash(meta.employeeFilter)}"`],
+      ["| Period", `="${getValueOrDash(meta.period)}"`],
+      ["| Filter View", `="${getValueOrDash(meta.filter)}"`],
       ["| Total Entries", `="${getValueOrDash(meta.totalEntries)}"`],
+      ["| Total Minutes", `="${getValueOrDash(meta.totalMinutes)}"`],
       ["| Total Hours", `="${getValueOrDash(meta.totalHours)}"`],
       ["+---------------------------------------+"],
       [],
-      ["Timesheet data"],
+      ["Timesheet Data"],
       borderDivider,
       tableHeaders.map((h, idx) => formatCellWithExactWidth(h, idx)).join(","),
       borderDivider,
@@ -176,7 +241,7 @@ export const exportTimesheetReport = async ({
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `Timesheet_Report_${meta.employeeId}.csv`);
+    link.setAttribute("download", `Employee_Timesheet_Report_${meta.filter}_${meta.period}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -184,56 +249,60 @@ export const exportTimesheetReport = async ({
   }
 
   // -------------------------------------------------------------
-  // EXCEL (.xlsx) GENERATION WITH EXCELJS
+  // 2. EXCEL (.xlsx) EXPORT WITH EXCELJS
   // -------------------------------------------------------------
   if (fileType === "xlsx") {
     const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet("Timesheet Report");
+    const worksheet = workbook.addWorksheet("Employee Timesheet Report");
 
     worksheet.columns = [
-      { key: "colA", width: 22 },
-      { key: "colB", width: 32 },
-      { key: "colC", width: 35 },
-      { key: "colD", width: 16 },
-      { key: "colE", width: 16 },
-      { key: "colF", width: 16 },
+      { key: "colA", width: 16 },
+      { key: "colB", width: 25 },
+      { key: "colC", width: 16 },
+      { key: "colD", width: 28 },
+      { key: "colE", width: 30 },
+      { key: "colF", width: 14 },
       { key: "colG", width: 14 },
-      { key: "colH", width: 18 },
-      { key: "colI", width: 28 },
+      { key: "colH", width: 14 },
+      { key: "colI", width: 12 },
+      { key: "colJ", width: 16 },
+      { key: "colK", width: 26 },
     ];
 
-    const titleRow = worksheet.addRow(["TIMESHEET REPORT"]);
-    titleRow.getCell(1).font = titleStyle.font;
-    titleRow.getCell(1).alignment = titleStyle.alignment;
+    const titleRow = worksheet.addRow(["EMPLOYEE TIMESHEET REPORT"]);
+    titleRow.getCell(1).font = titleStyle?.font || { bold: true, size: 14 };
+    titleRow.getCell(1).alignment = titleStyle?.alignment || { horizontal: "left" };
 
     worksheet.addRow([]);
 
     const summaryBlock = [
-      ["Employee ID", meta.employeeId],
-      ["Period", `${meta.fromDate} → ${meta.toDate}`],
-      ["Filter", meta.filter],
+      ["Employee Filter", meta.employeeFilter],
+      ["Period", meta.period],
+      ["Filter View", meta.filter],
       ["Total Entries", meta.totalEntries],
+      ["Total Minutes", meta.totalMinutes],
       ["Total Hours", meta.totalHours],
     ];
 
     summaryBlock.forEach(([label, value]) => {
       const row = worksheet.addRow([label, value]);
       row.getCell(1).font = { bold: true };
-      row.getCell(1).alignment = textCellStyle.alignment;
-      row.getCell(1).border = borderStyle;
+      row.getCell(1).alignment = textCellStyle?.alignment || { horizontal: "left" };
+      if (borderStyle) row.getCell(1).border = borderStyle;
 
-      row.getCell(2).alignment = textCellStyle.alignment;
-      row.getCell(2).border = borderStyle;
+      row.getCell(2).alignment = textCellStyle?.alignment || { horizontal: "left" };
+      if (borderStyle) row.getCell(2).border = borderStyle;
     });
 
     worksheet.addRow([]);
 
-    const subTitleRow = worksheet.addRow(["Timesheet data"]);
+    const subTitleRow = worksheet.addRow(["Timesheet Data"]);
     subTitleRow.getCell(1).font = { bold: true, size: 12 };
-    subTitleRow.getCell(1).alignment = textCellStyle.alignment;
 
     const headers = [
       "Work Date",
+      "Employee",
+      "Employee ID",
       "Project",
       "Task",
       "Start Time",
@@ -246,15 +315,17 @@ export const exportTimesheetReport = async ({
 
     const headerRow = worksheet.addRow(headers);
     headerRow.eachCell((cell) => {
-      cell.font = headerStyle.font;
-      cell.alignment = headerStyle.alignment;
-      cell.fill = headerStyle.fill;
-      cell.border = headerStyle.border;
+      cell.font = headerStyle?.font || { bold: true, color: { argb: "FFFFFFFF" } };
+      cell.alignment = headerStyle?.alignment || { horizontal: "center", vertical: "middle" };
+      cell.fill = headerStyle?.fill || { type: "pattern", pattern: "solid", fgColor: { argb: "FF000000" } };
+      if (headerStyle?.border) cell.border = headerStyle.border;
     });
 
     flattenedData.forEach((item) => {
       const row = worksheet.addRow([
         item.workDate,
+        item.employeeName,
+        item.employeeCode,
         item.project,
         item.task,
         item.startTime,
@@ -265,32 +336,21 @@ export const exportTimesheetReport = async ({
         item.remarks,
       ]);
 
-      row.getCell(1).alignment = centerCellStyle.alignment;
-      row.getCell(1).border = centerCellStyle.border;
+      row.getCell(1).alignment = centerCellStyle?.alignment || { horizontal: "center" };
+      row.getCell(2).alignment = textCellStyle?.alignment || { horizontal: "left" };
+      row.getCell(3).alignment = centerCellStyle?.alignment || { horizontal: "center" };
+      row.getCell(4).alignment = textCellStyle?.alignment || { horizontal: "left" };
+      row.getCell(5).alignment = textCellStyle?.alignment || { horizontal: "left" };
+      row.getCell(6).alignment = centerCellStyle?.alignment || { horizontal: "center" };
+      row.getCell(7).alignment = centerCellStyle?.alignment || { horizontal: "center" };
+      row.getCell(8).alignment = numberCellStyle?.alignment || { horizontal: "right" };
+      row.getCell(9).alignment = numberCellStyle?.alignment || { horizontal: "right" };
+      row.getCell(10).alignment = centerCellStyle?.alignment || { horizontal: "center" };
+      row.getCell(11).alignment = textCellStyle?.alignment || { horizontal: "left" };
 
-      row.getCell(2).alignment = textCellStyle.alignment;
-      row.getCell(2).border = textCellStyle.border;
-
-      row.getCell(3).alignment = textCellStyle.alignment;
-      row.getCell(3).border = textCellStyle.border;
-
-      row.getCell(4).alignment = centerCellStyle.alignment;
-      row.getCell(4).border = centerCellStyle.border;
-
-      row.getCell(5).alignment = centerCellStyle.alignment;
-      row.getCell(5).border = centerCellStyle.border;
-
-      row.getCell(6).alignment = numberCellStyle.alignment;
-      row.getCell(6).border = numberCellStyle.border;
-
-      row.getCell(7).alignment = numberCellStyle.alignment;
-      row.getCell(7).border = numberCellStyle.border;
-
-      row.getCell(8).alignment = centerCellStyle.alignment;
-      row.getCell(8).border = centerCellStyle.border;
-
-      row.getCell(9).alignment = textCellStyle.alignment;
-      row.getCell(9).border = textCellStyle.border;
+      row.eachCell((cell) => {
+        if (textCellStyle?.border) cell.border = textCellStyle.border;
+      });
     });
 
     const buffer = await workbook.xlsx.writeBuffer();
@@ -299,32 +359,34 @@ export const exportTimesheetReport = async ({
     });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.download = `Timesheet_Report_${meta.employeeId}.xlsx`;
+    link.download = `Employee_Timesheet_Report_${meta.filter}_${meta.period}.xlsx`;
     link.click();
+    return;
   }
 
   // -------------------------------------------------------------
-  // PDF EXPORT
+  // 3. PDF EXPORT
   // -------------------------------------------------------------
-  else if (fileType === "pdf") {
+  if (fileType === "pdf") {
     const doc = new jsPDF({ orientation: "landscape" });
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(14);
-    doc.text("TIMESHEET REPORT", 14, 15);
+    doc.text("EMPLOYEE TIMESHEET REPORT", 14, 15);
 
     doc.setFontSize(9);
 
     const summaryMeta = [
-      ["Employee ID", meta.employeeId],
-      ["Period", `${meta.fromDate} → ${meta.toDate}`],
-      ["Filter", meta.filter],
+      ["Employee Filter", meta.employeeFilter],
+      ["Period", meta.period],
+      ["Filter View", meta.filter],
       ["Total Entries", String(meta.totalEntries)],
+      ["Total Minutes", meta.totalMinutes],
       ["Total Hours", meta.totalHours],
     ];
 
     let startY = 22;
-    const boxWidth = 120;
+    const boxWidth = 130;
     const boxHeight = summaryMeta.length * 6 + 4;
 
     doc.setDrawColor(0, 0, 0);
@@ -343,17 +405,19 @@ export const exportTimesheetReport = async ({
     const tableStartY = startY + boxHeight + 8;
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
-    doc.text("Timesheet data", 14, tableStartY);
+    doc.text("Timesheet Data", 14, tableStartY);
 
     const headers = [
       [
         "Work Date",
+        "Employee",
+        "ID",
         "Project",
         "Task",
         "Start Time",
         "End Time",
         "Duration",
-        "Minutes",
+        "Mins",
         "Status",
         "Remarks",
       ],
@@ -361,6 +425,8 @@ export const exportTimesheetReport = async ({
 
     const body = flattenedData.map((row) => [
       row.workDate,
+      row.employeeName,
+      row.employeeCode,
       row.project,
       row.task,
       row.startTime,
@@ -386,24 +452,26 @@ export const exportTimesheetReport = async ({
         lineColor: [0, 0, 0],
       },
       styles: {
-        fontSize: 8,
-        cellPadding: 3,
+        fontSize: 7.5,
+        cellPadding: 2.5,
         lineColor: [0, 0, 0],
         lineWidth: 0.2,
       },
       columnStyles: {
         0: { halign: "center" },
         1: { halign: "left" },
-        2: { halign: "left" },
-        3: { halign: "center" },
-        4: { halign: "center" },
-        5: { halign: "right" },
-        6: { halign: "right" },
-        7: { halign: "center", fontStyle: "bold" },
-        8: { halign: "left" },
+        2: { halign: "center" },
+        3: { halign: "left" },
+        4: { halign: "left" },
+        5: { halign: "center" },
+        6: { halign: "center" },
+        7: { halign: "right" },
+        8: { halign: "right" },
+        9: { halign: "center", fontStyle: "bold" },
+        10: { halign: "left" },
       },
       didParseCell: (data) => {
-        if (data.section === "body" && data.column.index === 7) {
+        if (data.section === "body" && data.column.index === 9) {
           const rowIndex = data.row.index;
           const statusHex = flattenedData[rowIndex]?.statusColor || "#10B981";
           data.cell.styles.textColor = hexToRgb(statusHex);
@@ -411,6 +479,6 @@ export const exportTimesheetReport = async ({
       },
     });
 
-    doc.save(`Timesheet_Report_${meta.employeeId}.pdf`);
+    doc.save(`Employee_Timesheet_Report_${meta.filter}_${meta.period}.pdf`);
   }
 };

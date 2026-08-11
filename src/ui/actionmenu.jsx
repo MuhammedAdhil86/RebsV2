@@ -97,17 +97,6 @@ const ActionMenu = ({ row, refreshTemplates, isPresetTab, onDeleteClick }) => {
               <button
                 onClick={() => {
                   setOpen(false);
-                  // Add your View Logic or Modal here if needed
-                  console.log("View:", row.name);
-                }}
-                className="w-full flex items-center gap-3 px-4 py-2.5 text-[12px] text-gray-700 hover:bg-gray-50 transition-colors"
-              >
-                <Eye size={14} /> View
-              </button>
-
-              <button
-                onClick={() => {
-                  setOpen(false);
                   setEditModalOpen(true);
                 }}
                 className="w-full flex items-center gap-3 px-4 py-2.5 text-[12px] text-gray-700 hover:bg-gray-50 transition-colors"

@@ -13,7 +13,9 @@ export const addComment = (id) => `/announcement/comment/add/${id}`;
 export const addEmoji = (id) => `/announcement/emojis/add/${id}`;
 export const addLike = (id) => `/announcement/like/add/${id}`;
 //Employeelist
-
+export const uploadProfileImage = "staff/uploadimage";
+export const getMypersonalProfile = "/staff/getmypersonalprofile"
+export const updateMypersonalProfile = "staff/updatemypersonalprofile";
 export const getTotalEmployee = "/admin/staffstatus/list"
 export const putStatusUpdate = "/admin/attendance/status/update"
 

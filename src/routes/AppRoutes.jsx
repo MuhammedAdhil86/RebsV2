@@ -62,6 +62,10 @@ function AppRoutes() {
         element={<ProtectedRoute element={ManageEmployees} />}
       />
       <Route
+        path="/details/:id"
+        element={<ProtectedRoute element={EmployeeProfile} />}
+      />
+      <Route
         path="/insurance"
         element={<ProtectedRoute element={manageinsurance} />}
       />
