@@ -18,9 +18,7 @@ const OrganizationalPolicy = () => {
   const tabs = [
     { id: "work-shift", label: "Work Shift" },
     { id: "leaves-holidays", label: "Leaves & Holidays" },
-    { id: "letter-templates", label: "Letter Templates" },
     { id: "email-templates", label: "Email Templates" },
-    { id: "staff-onboarding", label: "Staff Onboarding" },
     { id: "employee-code", label: "Employee Code" },
     // Removed "Holidays" from here since it's now a sub-tab
   ];

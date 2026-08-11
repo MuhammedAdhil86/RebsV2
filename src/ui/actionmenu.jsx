@@ -4,6 +4,20 @@ import UpdateEmailTemplateModal from "./updateemailmodal";
 import { cloneDefaultEmailTemplate } from "../service/mainServices";
 import toast from "react-hot-toast";
 
+// Helper to safely extract backend error messages across all payload formats
+const extractErrorMessage = (error, defaultMsg) => {
+  if (typeof error === "string") return error;
+  return (
+    error?.response?.data?.error ||
+    error?.response?.data?.message ||
+    error?.error || // Catches root-level { error: "An active email template..." }
+    error?.data?.error ||
+    error?.data?.message ||
+    error?.message ||
+    defaultMsg
+  );
+};
+
 const ActionMenu = ({ row, refreshTemplates, isPresetTab, onDeleteClick }) => {
   const [open, setOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -30,12 +44,15 @@ const ActionMenu = ({ row, refreshTemplates, isPresetTab, onDeleteClick }) => {
 
   const handleClone = async () => {
     setOpen(false);
+    const loadingToast = toast.loading("Cloning preset...");
     try {
       await cloneDefaultEmailTemplate(row.id);
-      toast.success("Template cloned successfully!");
-      if (refreshTemplates) refreshTemplates();
+      toast.success("Template cloned successfully!", { id: loadingToast });
+      if (refreshTemplates) await refreshTemplates();
     } catch (err) {
-      toast.error("Failed to clone template");
+      toast.error(extractErrorMessage(err, "Failed to clone template"), {
+        id: loadingToast,
+      });
     }
   };
 

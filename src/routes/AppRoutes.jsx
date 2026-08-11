@@ -32,6 +32,7 @@ import JobEnquiry from "../page/jobenquiry";
 import manageinsurance from "../page/manageinsurance";
 import InsuranceDetails from "../page/insurancedetails";
 import Timesheet from "../page/timesheet";
+import EmailTemplates from "../page/email";
 function AppRoutes() {
   return (
     <Routes>
@@ -104,6 +105,10 @@ function AppRoutes() {
         element={<ProtectedRoute element={AssetManager} />}
       />
       <Route path="/letter" element={<ProtectedRoute element={Letter} />} />
+      <Route
+        path="/email"
+        element={<ProtectedRoute element={EmailTemplates} />}
+      />
       <Route path="/events" element={<ProtectedRoute element={Events} />} />
       <Route
         path="/jobenquiry"

@@ -49,9 +49,26 @@ const Letter = () => {
   const [isActionModalOpen, setIsActionModalOpen] = useState(false);
   const menuRef = useRef(null);
 
+  // Helper to extract detailed backend error messages (Axios/Fetch/Custom Error responses)
+  const extractErrorMessage = (error, defaultMsg) => {
+    return (
+      error?.response?.data?.message ||
+      error?.response?.data?.error ||
+      error?.data?.message ||
+      error?.message ||
+      defaultMsg
+    );
+  };
+
   useEffect(() => {
-    loadDefaultTemplates();
-    loadTemplates();
+    const fetchInitialData = async () => {
+      try {
+        await Promise.all([loadDefaultTemplates(), loadTemplates()]);
+      } catch (error) {
+        toast.error(extractErrorMessage(error, "Failed to load templates"));
+      }
+    };
+    fetchInitialData();
   }, [loadDefaultTemplates, loadTemplates]);
 
   useEffect(() => {
@@ -79,7 +96,9 @@ const Letter = () => {
       }
       setIsActionModalOpen(false);
     } catch (error) {
-      toast.error(error.message || "Failed to process request", { id: loader });
+      toast.error(extractErrorMessage(error, "Failed to process request"), {
+        id: loader,
+      });
     }
   };
 
@@ -103,10 +122,25 @@ const Letter = () => {
       await cloneDefaultEmailTemplate(id);
       toast.success("Cloned to My Templates!", { id: loadingToast });
       setSubTab("my-templates");
-      loadTemplates();
+      await loadTemplates();
       setViewMode("table");
     } catch (error) {
-      toast.error("Clone failed", { id: loadingToast });
+      toast.error(extractErrorMessage(error, "Clone failed"), {
+        id: loadingToast,
+      });
+    }
+  };
+
+  const handleDeleteTemplate = async (id) => {
+    const loadingToast = toast.loading("Deleting template...");
+    try {
+      await removeTemplate(id);
+      setDeleteModal({ show: false, id: null });
+      toast.success("Deleted successfully!", { id: loadingToast });
+    } catch (error) {
+      toast.error(extractErrorMessage(error, "Failed to delete template"), {
+        id: loadingToast,
+      });
     }
   };
 
@@ -239,11 +273,7 @@ const Letter = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={async () => {
-                    await removeTemplate(deleteModal.id);
-                    setDeleteModal({ show: false, id: null });
-                    toast.success("Deleted");
-                  }}
+                  onClick={() => handleDeleteTemplate(deleteModal.id)}
                   className="flex-1 px-4 py-2 bg-black text-white rounded-xl text-[12px] font-normal transition-colors"
                 >
                   Delete
@@ -342,7 +372,11 @@ const Letter = () => {
               initialData={initialData}
               onBack={() => {
                 setViewMode("table");
-                loadTemplates();
+                loadTemplates().catch((err) =>
+                  toast.error(
+                    extractErrorMessage(err, "Failed to refresh templates"),
+                  ),
+                );
               }}
               availablePlaceholders={[
                 "FirstName",

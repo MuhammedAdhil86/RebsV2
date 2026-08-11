@@ -35,6 +35,7 @@ function SideBar({ isCollapsed, toggleSidebar }) {
     hr: <Icon icon="si:dashboard-line" width="20" />,
     muster: <Icon icon="mynaui:table" width="20" />,
     events: <Icon icon="carbon:event" width="20" />,
+    email: <Icon icon="ic:outline-email" width="20" />,
     announcement: <Icon icon="lucide:megaphone" width="20" />,
     payroll: <Icon icon="fluent:payment-20-regular" width="20" />,
     reports: <Icon icon="iconoir:reports" width="20" />,
@@ -65,6 +66,11 @@ function SideBar({ isCollapsed, toggleSidebar }) {
           title: "Letter",
           path: "/letter",
           icon: icons.muster,
+        },
+        {
+          title: "Email",
+          path: "/email",
+          icon: icons.email, // ✉️ Using icons.email
         },
         {
           title: "Events",

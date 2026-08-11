@@ -2,11 +2,27 @@ import { create } from "zustand";
 import {
   fetchEmailTemplates,
   fetchDefaultEmailTemplates,
-  deleteEmailTemplateService, // ✅ Added import
+  deleteEmailTemplateService,
 } from "../service/mainServices";
 
 /**
- * Zustand store for fetching email templates
+ * Helper to safely extract backend error messages across Axios, fetch, or custom objects
+ */
+const extractErrorMessage = (error, defaultMsg) => {
+  if (typeof error === "string") return error;
+  return (
+    error?.response?.data?.error ||
+    error?.response?.data?.message ||
+    error?.error ||
+    error?.data?.error ||
+    error?.data?.message ||
+    error?.message ||
+    defaultMsg
+  );
+};
+
+/**
+ * Zustand store for fetching and managing email templates
  */
 const useEmailTemplateStore = create((set) => ({
   // -------------------------------
@@ -18,7 +34,7 @@ const useEmailTemplateStore = create((set) => ({
   error: null,
 
   // -------------------------------
-  // FETCH ALL EMAIL TEMPLATES (Untouched)
+  // FETCH ALL EMAIL TEMPLATES
   // -------------------------------
   loadTemplates: async () => {
     set({ loading: true, error: null });
@@ -28,17 +44,23 @@ const useEmailTemplateStore = create((set) => ({
         templates: Array.isArray(data) ? data : [],
         loading: false,
       });
+      return data;
     } catch (error) {
+      const errorMsg = extractErrorMessage(
+        error,
+        "Failed to fetch email templates",
+      );
       console.error("Error fetching email templates:", error);
       set({
-        error: error.message || "Failed to fetch email templates",
+        error: errorMsg,
         loading: false,
       });
+      throw error;
     }
   },
 
   // -------------------------------
-  // FETCH DEFAULT EMAIL TEMPLATES (Untouched)
+  // FETCH DEFAULT EMAIL TEMPLATES
   // -------------------------------
   loadDefaultTemplates: async () => {
     set({ loading: true, error: null });
@@ -48,17 +70,23 @@ const useEmailTemplateStore = create((set) => ({
         defaultTemplates: Array.isArray(data) ? data : [],
         loading: false,
       });
+      return data;
     } catch (error) {
+      const errorMsg = extractErrorMessage(
+        error,
+        "Failed to fetch default email templates",
+      );
       console.error("Error fetching default email templates:", error);
       set({
-        error: error.message || "Failed to fetch default email templates",
+        error: errorMsg,
         loading: false,
       });
+      throw error;
     }
   },
 
   // -------------------------------
-  // DELETE EMAIL TEMPLATE ✅ NEW LOGIC
+  // DELETE EMAIL TEMPLATE
   // -------------------------------
   removeTemplate: async (id) => {
     try {
@@ -69,7 +97,9 @@ const useEmailTemplateStore = create((set) => ({
       }));
       return { success: true };
     } catch (error) {
+      const errorMsg = extractErrorMessage(error, "Failed to delete template");
       console.error("Error deleting template:", error);
+      set({ error: errorMsg });
       throw error;
     }
   },

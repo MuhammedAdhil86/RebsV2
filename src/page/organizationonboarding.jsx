@@ -90,13 +90,6 @@ const OrganizationOnboarding = () => {
               >
                 Basic Details
               </button>
-              <button
-                type="button"
-                onClick={() => setDetailsTab("bank")}
-                className={`transition-colors ${detailsTab === "bank" ? "text-blue-600 font-bold" : "hover:text-gray-800"}`}
-              >
-                Bank Info
-              </button>
             </div>
           )}
 
