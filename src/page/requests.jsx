@@ -89,7 +89,7 @@ function Requests() {
                 : "text-gray-500 hover:text-black"
             }`}
           >
-            Device Request
+            Change Device
           </button>
 
           <button
@@ -101,7 +101,7 @@ function Requests() {
                 : "text-gray-500 hover:text-black"
             }`}
           >
-            Claims Request
+            Expense Claim
           </button>
 
           <button

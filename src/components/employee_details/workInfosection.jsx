@@ -196,9 +196,9 @@ export default function WorkInfoSection() {
       ? "N/A"
       : val;
 
-  // Data structure for rendering
+  // Added `readOnly: true` property to employeeRef
   const fields = [
-    { label: "Employee Reference", key: "employeeRef", type: "text" },
+    { label: "Employee Reference", key: "employeeRef", type: "text", readOnly: true },
     { label: "Branch", key: "branchId", type: "select", list: branches, nameField: "branchName" },
     { label: "Department", key: "departmentId", type: "select", list: departments, nameField: "departmentName" },
     { label: "Designation / Role", key: "designationId", type: "select", list: designations, nameField: "designationName" },
@@ -249,7 +249,7 @@ export default function WorkInfoSection() {
 
             {/* Value/Input right */}
             <span className="font-medium text-gray-800 text-right min-w-[160px] break-words text-[13px]">
-              {isEditing ? (
+              {isEditing && !field.readOnly ? (
                 field.type === "select" ? (
                   <select
                     value={localEdits[field.key] || ""}

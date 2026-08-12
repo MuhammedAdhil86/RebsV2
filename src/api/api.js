@@ -3,6 +3,9 @@
 export const getLeave = "/admin/leave/get"
 export const AddUser = "/user/createstaff"
 export const postLeaveBulkAllocation = "/leave-policy/allocate/staffs"
+export const getEmployeeReferenceNo = "/employee-ref-no/rule/get"
+export const updateEmployeeReferenceNo = (id) => `/employee-ref-no/rule/update/${id}`;
+export const createEmployeeReferenceNoUrl = "/employee-ref-no/rule/add";
 //AnnouncementService
 
 export const postAnnouncement = "/admin/announcement/add"

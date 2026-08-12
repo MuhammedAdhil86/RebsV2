@@ -29,10 +29,13 @@ getEmployeePolicy,
 getMypersonalProfile,
 uploadProfileImage,
 updateMypersonalProfile,
+getEmployeeReferenceNo,
+// updateEmployeeReferenceNo,
+// createEmployeeReferenceNoUrl,
   getMaritalStatus// make sure you export this from your api.js
 } from "../api/api";
 import axiosInstance from "../service/axiosinstance";
-
+import { extractErrorMessage } from "../utils/errorUtils";
 // Fetch all staff details
 export const getStaffDetails = async () => {
   try {
@@ -585,3 +588,80 @@ export const updateMyPersonalProfile = async (profilePayload) => {
     throw error;
   }
 }
+
+export const fetchEmployeeReferenceNo = async () => {
+  try {
+    const response = await axiosInstance.get(getEmployeeReferenceNo);
+    console.log("Employee reference number rule response:", response.data);
+    return response.data.data || response.data;
+  } catch (error) {
+    console.error("❌ Error fetching employee reference number rule:", error);
+    throw error;
+  }
+};
+export const updateEmployeeReferenceNo = (id) => `/employee-ref-no/rule/update/${id}`;
+
+export const editEmployeeReferenceNo = async (id, payload) => {
+  if (!id) throw new Error("Rule ID is required to perform update.");
+
+  try {
+    const response = await axiosInstance.put(
+      updateEmployeeReferenceNo(id), 
+      payload,
+      {
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }
+    );
+    return response.data;
+  } catch (error) {
+    const message = extractErrorMessage(error, "Failed to update employee reference rule.");
+    throw new Error(message);
+  }
+};
+
+// Declare as a string constant
+export const createEmployeeReferenceNoUrl = "/employee-ref-no/rule/add";
+
+// API Service
+// export const createEmployeeReferenceNo = async (payload) => {
+//   try {
+//     const response = await axiosInstance.post(
+//       createEmployeeReferenceNoUrl,
+//       payload,
+//       {
+//         headers: {
+//           "Content-Type": "application/json",
+//         },
+//       }
+//     );
+//     return response.data;
+//   } catch (error) {
+//     const message =
+//       error?.response?.data?.message ||
+//       error?.response?.data?.error ||
+//       error?.message ||
+//       "Failed to create employee reference rule.";
+//     throw new Error(message);
+//   }
+// };
+
+
+// 2. CREATE RULE API (POST)
+export const createEmployeeReferenceNo = async (payload) => {
+  try {
+    const response = await axiosInstance.post(
+      createEmployeeReferenceNoUrl,
+      payload,
+      {
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }
+    );
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+};

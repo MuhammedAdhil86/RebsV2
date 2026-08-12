@@ -7,20 +7,35 @@ import AttendancePolicy from "./workshifts/attendancepolicy";
 import LeavesAndVacations from "./leaves_and_vacations/leavepolicy";
 import WeekendsAndOffDays from "./leaves_and_vacations/weeklyoff";
 import EmailTemplates from "./email_template/emailtemplate";
-// Assuming you have a Holidays component or want to render a placeholder
+import Holidays from "./leaves_and_vacations/holidays";
+
+/* Imported Employee Code Sub-Component */
+import EmployeeCodeConfig from "./leaves_and_vacations/employeecodeconfig";
 
 /* Reusable TabsSwitch Component */
 import TabsSwitch from "../../ui/tabswitch";
-import Holidays from "./leaves_and_vacations/holidays";
 
 const OrganizationalPolicy = () => {
+  /* API Data Payload */
+  const employeeCodeData = {
+    id: 6,
+    rule_name: "Employee Code",
+    code: "EMP",
+    color: "#3B82F6",
+    starting_number: 1,
+    placeholder_digits: 4,
+    prefixes: ["EMP", "STAFF"],
+    suffixes: ["2026", "IND"],
+    reuse_starting_number: false,
+    created_at: "2026-08-12T10:16:54.501616Z",
+  };
+
   /* ----------------- Main Tabs ----------------- */
   const tabs = [
     { id: "work-shift", label: "Work Shift" },
     { id: "leaves-holidays", label: "Leaves & Holidays" },
     { id: "email-templates", label: "Email Templates" },
     { id: "employee-code", label: "Employee Code" },
-    // Removed "Holidays" from here since it's now a sub-tab
   ];
 
   /* ----------------- Sub-Tabs States ----------------- */
@@ -68,7 +83,6 @@ const OrganizationalPolicy = () => {
       {activeTab === "leaves-holidays" && (
         <>
           <div className="flex gap-4 border-b border-gray-200 mb-4">
-            {/* Added "Holidays" to this array */}
             {["Leave Policy", "WeeklyOff", "Holidays"].map((subTab) => (
               <button
                 key={subTab}
@@ -89,7 +103,6 @@ const OrganizationalPolicy = () => {
           <div>
             {activeLeaveTab === "Leave Policy" && <LeavesAndVacations />}
             {activeLeaveTab === "WeeklyOff" && <WeekendsAndOffDays />}
-            {/* Logic to render Holidays content */}
             {activeLeaveTab === "Holidays" && <Holidays />}
           </div>
         </>
@@ -120,10 +133,18 @@ const OrganizationalPolicy = () => {
         </>
       )}
 
+      {/* ===== EMPLOYEE CODE ===== */}
+      {activeTab === "employee-code" && (
+        <EmployeeCodeConfig initialData={employeeCodeData} />
+      )}
+
       {/* ===== OTHER PLACEHOLDERS ===== */}
-      {!["work-shift", "leaves-holidays", "email-templates"].includes(
-        activeTab,
-      ) && (
+      {![
+        "work-shift",
+        "leaves-holidays",
+        "email-templates",
+        "employee-code",
+      ].includes(activeTab) && (
         <div className="py-10 text-center text-gray-400 italic">
           {tabs.find((t) => t.id === activeTab)?.label} content is under
           development.
