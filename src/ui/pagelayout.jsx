@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import SideBar from "../components/sidebar";
-import MarkHappinessModal from "./MarkHappinessModal";
+import MarkHappinessModal from "./markhappinessmodal";
 import dashboardService from "../service/dashboardService";
 
 function DashboardLayout({ userName, onLogout, children }) {
