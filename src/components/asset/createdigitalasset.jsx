@@ -23,11 +23,10 @@ const CreateDigitalAssetDrawer = ({ open, onClose, onAssetCreated }) => {
     account_url: "",
     authentication_mode: "",
     passkey: "",
-    account_status: "available", // Default set to lowercase
+    account_status: "available",
     image: null,
   });
 
-  // Custom styling for the select arrow to ensure perfect positioning
   const selectStyle = `
     appearance-none 
     bg-no-repeat 
@@ -36,8 +35,52 @@ const CreateDigitalAssetDrawer = ({ open, onClose, onAssetCreated }) => {
     w-full bg-white border border-gray-300 rounded-2xl px-5 py-4 outline-none focus:ring-1 focus:ring-black text-gray-700
   `;
 
-  // Standard SVG for the down arrow
   const arrowIcon = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%239ca3af' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7' /%3E%3C/svg%3E")`;
+
+  const parseBackendError = (err) => {
+    if (!err) return "An unknown error occurred";
+
+    // Direct error thrown from service
+    if (err.message && !err.response) {
+      return err.message;
+    }
+
+    let raw =
+      err.response?.data ||
+      err.responseText ||
+      err.response?.request?.responseText ||
+      err.message ||
+      err;
+
+    if (typeof raw === "string") {
+      const trimmed = raw.trim();
+      if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+        try {
+          raw = JSON.parse(trimmed);
+        } catch (e) {
+          return trimmed;
+        }
+      } else {
+        return trimmed;
+      }
+    }
+
+    if (typeof raw === "object" && raw !== null) {
+      const msg = raw.message || raw.error || "";
+      const detail = raw.data;
+
+      if (msg && detail) {
+        const formattedDetail =
+          typeof detail === "object" ? JSON.stringify(detail) : detail;
+        return `${msg}: ${formattedDetail}`;
+      }
+      if (msg) return msg;
+      if (detail)
+        return typeof detail === "object" ? JSON.stringify(detail) : detail;
+    }
+
+    return String(raw);
+  };
 
   useEffect(() => {
     if (open) {
@@ -50,7 +93,7 @@ const CreateDigitalAssetDrawer = ({ open, onClose, onAssetCreated }) => {
           setAccountTypes(types || []);
           setAuthenticators(auths || []);
         } catch (err) {
-          toast.error("Failed to load metadata");
+          toast.error(parseBackendError(err));
         }
       };
       loadMetadata();
@@ -59,7 +102,6 @@ const CreateDigitalAssetDrawer = ({ open, onClose, onAssetCreated }) => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    // Logic: Force lowercase for status so backend is happy
     const finalValue = name === "account_status" ? value.toLowerCase() : value;
     setFormData((prev) => ({ ...prev, [name]: finalValue }));
   };
@@ -84,7 +126,7 @@ const CreateDigitalAssetDrawer = ({ open, onClose, onAssetCreated }) => {
     payload.append("account_url", formData.account_url);
     payload.append("authentication_mode", formData.authentication_mode);
     payload.append("passkey", formData.passkey);
-    payload.append("account_status", formData.account_status); // Lowercase
+    payload.append("account_status", formData.account_status);
     payload.append("created_date", new Date().toISOString().split("T")[0]);
 
     if (formData.image) {
@@ -97,8 +139,8 @@ const CreateDigitalAssetDrawer = ({ open, onClose, onAssetCreated }) => {
       onAssetCreated();
       handleClose();
     } catch (err) {
-      const errorMsg = err.response?.data?.message || "Internal Server Error";
-      toast.error(`Push Failed: ${errorMsg}`);
+      const errorMessage = parseBackendError(err);
+      toast.error(errorMessage, { duration: 6000 });
     } finally {
       setIsSubmitting(false);
     }
@@ -139,6 +181,7 @@ const CreateDigitalAssetDrawer = ({ open, onClose, onAssetCreated }) => {
             </p>
           </div>
           <button
+            type="button"
             onClick={handleClose}
             className="p-2 hover:bg-gray-100 rounded-full text-gray-400"
           >
@@ -244,7 +287,7 @@ const CreateDigitalAssetDrawer = ({ open, onClose, onAssetCreated }) => {
             </div>
           </div>
 
-          {/* Account Status - ADDED */}
+          {/* Account Status */}
           <div className="space-y-2">
             <label className="text-gray-400 text-[10px] tracking-widest uppercase font-bold ml-1">
               Account Status

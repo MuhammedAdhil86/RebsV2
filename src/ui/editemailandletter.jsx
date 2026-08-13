@@ -22,20 +22,36 @@ const EditEmailTemplateView = ({
   const quillRef = useRef(null);
 
   // --- Form States ---
-  const [templateTitle, setTemplateTitle] = useState(initialData?.name || "");
-  const [subject, setSubject] = useState(initialData?.subject || "");
-  const [content, setContent] = useState(initialData?.body || "");
+  const [templateTitle, setTemplateTitle] = useState("");
+  const [subject, setSubject] = useState("");
+  const [content, setContent] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPlaceholderMenu, setShowPlaceholderMenu] = useState(false);
+
+  // ✅ Keep state in sync with initialData whenever it populates/changes
+  useEffect(() => {
+    if (initialData) {
+      setTemplateTitle(initialData.name || "");
+      setSubject(initialData.subject || "");
+      // Handles both body_html (from API response) and body (fallback)
+      setContent(initialData.body_html || initialData.body || "");
+    }
+  }, [initialData]);
 
   const handleUndo = () => quillRef.current?.getEditor().history.undo();
   const handleRedo = () => quillRef.current?.getEditor().history.redo();
 
   const insertPlaceholder = (placeholder) => {
     const editor = quillRef.current?.getEditor();
+    if (!editor) return;
+
     const range = editor.getSelection(true);
     const token = `{{.${placeholder}}}`;
-    editor.insertText(range?.index || 0, token, "user");
+    const insertIndex = range ? range.index : editor.getLength();
+
+    editor.insertText(insertIndex, token, "user");
+    // Move cursor past inserted placeholder
+    editor.setSelection(insertIndex + token.length);
     setShowPlaceholderMenu(false);
   };
 
@@ -48,13 +64,14 @@ const EditEmailTemplateView = ({
     setLoading(true);
     try {
       await updateEmailTemplateService({
-        purpose: initialData?.purpose, // Using original purpose (Immutable)
+        id: initialData?.id,
+        purpose: initialData?.purpose, // Original immutable purpose
         name: templateTitle,
         subject: subject,
         body_html: content,
       });
       toast.success("Template updated successfully!");
-      setTimeout(() => onBack(), 1000); // Back to list
+      setTimeout(() => onBack(), 1000); // Navigate back to list view
     } catch (err) {
       toast.error(err.message || "Failed to update template");
     } finally {
@@ -70,6 +87,7 @@ const EditEmailTemplateView = ({
       <div className="flex items-center justify-between p-5 border-b border-gray-100">
         <div className="flex items-center gap-3">
           <button
+            type="button"
             onClick={onBack}
             className="p-2 hover:bg-gray-50 rounded-full transition-colors"
           >
@@ -147,6 +165,7 @@ const EditEmailTemplateView = ({
             </div>
             <div className="relative">
               <button
+                type="button"
                 onClick={() => setShowPlaceholderMenu(!showPlaceholderMenu)}
                 className="flex items-center gap-1 text-[11px] text-gray-600 font-semibold uppercase tracking-tight"
               >
@@ -156,6 +175,7 @@ const EditEmailTemplateView = ({
                 <div className="absolute right-0 mt-2 w-60 bg-white border border-gray-100 rounded-xl shadow-2xl z-50 max-h-56 overflow-y-auto py-2">
                   {availablePlaceholders.map((item) => (
                     <button
+                      type="button"
                       key={item}
                       onClick={() => insertPlaceholder(item)}
                       className="w-full text-left px-4 py-2 text-[12px] hover:bg-blue-50 hover:text-blue-600 transition-colors border-b border-gray-50 last:border-0"
@@ -180,6 +200,7 @@ const EditEmailTemplateView = ({
       {/* --- FOOTER --- */}
       <div className="p-5 bg-white border-t border-gray-100 flex justify-end items-center gap-4">
         <button
+          type="button"
           onClick={onBack}
           className="px-6 py-2.5 text-[12px] font-semibold text-gray-500 hover:text-gray-800 transition-colors"
         >

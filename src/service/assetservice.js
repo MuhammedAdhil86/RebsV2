@@ -99,7 +99,7 @@ export const fetchDashboard = async () => {
 
 export const createAsset = async (assetData) => {
   try {
-    const { data } = await axiosInstance.post(
+    const response = await axiosInstance.post(
       postCreateAsset, 
       assetData, 
       {
@@ -108,9 +108,39 @@ export const createAsset = async (assetData) => {
         },
       }
     );
-    return data?.data ?? data;
+
+    let resData = response?.data ?? response;
+
+    // 1. If backend returned stringified JSON, parse it safely
+    if (typeof resData === "string") {
+      try {
+        resData = JSON.parse(resData.trim());
+      } catch (e) {
+        // Keep as plain string if it's not JSON
+      }
+    }
+
+    // 2. Check for in-body error status codes (even if HTTP status was 200)
+    if (
+      resData &&
+      typeof resData === "object" &&
+      (resData.status_code >= 400 || resData.status >= 400)
+    ) {
+      const msg = resData.message || "Failed to create asset";
+      const detail = resData.data ? `: ${resData.data}` : "";
+
+      const customErr = new Error(`${msg}${detail}`);
+      customErr.backendResponse = resData;
+      throw customErr;
+    }
+
+    return resData?.data ?? resData;
   } catch (error) {
-    handleError(error, "createAsset");
+    // 3. Delegate to global handler if needed, then re-throw so the UI catch block receives it
+    if (typeof handleError === "function") {
+      handleError(error, "createAsset");
+    }
+    throw error;
   }
 };
 export const assetType = async () => {
@@ -213,20 +243,50 @@ export const fetchDigitalDashboard = async () => {
   }
 };
 
+// service/assetservice.js
+
 export const createDigitalAsset = async (digitalData) => {
   try {
-    const { data } = await axiosInstance.post(
+    const response = await axiosInstance.post(
       postCreateDigitalAsset, 
-      digitalData, // This must be the FormData object from your component
+      digitalData, 
       {
         headers: {
           "Content-Type": "multipart/form-data",
         },
       }
     );
-    return data?.data ?? data;
+
+    let resData = response?.data ?? response;
+
+    // 1. If backend returned a raw stringified JSON string, parse it
+    if (typeof resData === "string") {
+      try {
+        resData = JSON.parse(resData.trim());
+      } catch (e) {
+        // keep as string
+      }
+    }
+
+    // 2. CHECK FOR IN-BODY ERROR STATUS CODES (even if HTTP status was 200)
+    if (
+      resData &&
+      typeof resData === "object" &&
+      (resData.status_code >= 400 || resData.status >= 400)
+    ) {
+      const msg = resData.message || "Failed to process asset";
+      const detail = resData.data ? `: ${resData.data}` : "";
+      
+      // Force throw so it goes directly to the drawer's catch block!
+      const customErr = new Error(`${msg}${detail}`);
+      customErr.backendResponse = resData;
+      throw customErr;
+    }
+
+    return resData;
   } catch (error) {
-    handleError(error, "createDigitalAsset");
+    // Force re-throw so CreateDigitalAssetDrawer can catch it
+    throw error;
   }
 };
 export const fetchAccountTypes = async () => {

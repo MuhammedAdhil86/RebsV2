@@ -11,7 +11,7 @@ const CreateAssetDrawer = ({ open, onClose, onAssetCreated }) => {
   const [imagePreview, setImagePreview] = useState(null);
   const [errors, setErrors] = useState({});
 
-  // New states for the Asset Type Modal
+  // States for the Asset Type Modal
   const [isTypeModalOpen, setIsTypeModalOpen] = useState(false);
   const [newTypeName, setNewTypeName] = useState("");
   const [isAddingType, setIsAddingType] = useState(false);
@@ -36,12 +36,58 @@ const CreateAssetDrawer = ({ open, onClose, onAssetCreated }) => {
 
   const arrowIcon = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%239ca3af' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7' /%3E%3C/svg%3E")`;
 
+  // Parse errors from stringified JSON, responseText, or Error instances
+  const parseBackendError = (err) => {
+    if (!err) return "An unknown error occurred";
+
+    // Direct error thrown from service
+    if (err.message && !err.response) {
+      return err.message;
+    }
+
+    let raw =
+      err.response?.data ||
+      err.responseText ||
+      err.response?.request?.responseText ||
+      err.message ||
+      err;
+
+    if (typeof raw === "string") {
+      const trimmed = raw.trim();
+      if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+        try {
+          raw = JSON.parse(trimmed);
+        } catch (e) {
+          return trimmed;
+        }
+      } else {
+        return trimmed;
+      }
+    }
+
+    if (typeof raw === "object" && raw !== null) {
+      const msg = raw.message || raw.error || "";
+      const detail = raw.data;
+
+      if (msg && detail) {
+        const formattedDetail =
+          typeof detail === "object" ? JSON.stringify(detail) : detail;
+        return `${msg}: ${formattedDetail}`;
+      }
+      if (msg) return msg;
+      if (detail)
+        return typeof detail === "object" ? JSON.stringify(detail) : detail;
+    }
+
+    return String(raw);
+  };
+
   const loadTypes = async () => {
     try {
       const res = await assetType();
       setAssetTypes(res || []);
     } catch (err) {
-      toast.error("Failed to load asset types");
+      toast.error(parseBackendError(err));
     }
   };
 
@@ -67,7 +113,6 @@ const CreateAssetDrawer = ({ open, onClose, onAssetCreated }) => {
   };
 
   const handleAddAssetType = async (e) => {
-    // Prevent event bubbling if triggered by button click inside a form
     if (e) e.preventDefault();
     if (!newTypeName.trim()) return toast.error("Please enter a type name");
 
@@ -79,7 +124,7 @@ const CreateAssetDrawer = ({ open, onClose, onAssetCreated }) => {
       setIsTypeModalOpen(false);
       await loadTypes();
     } catch (err) {
-      toast.error("Failed to add asset type");
+      toast.error(parseBackendError(err));
     } finally {
       setIsAddingType(false);
     }
@@ -103,7 +148,15 @@ const CreateAssetDrawer = ({ open, onClose, onAssetCreated }) => {
 
     try {
       const res = await createAsset(payload);
-      toast.success(res?.data?.message || "Physical Asset added successfully");
+
+      if (res && (res.status_code >= 400 || res.status >= 400)) {
+        const msg = res.message || "Failed to add physical asset";
+        const detail = res.data ? `: ${res.data}` : "";
+        toast.error(`${msg}${detail}`, { duration: 6000 });
+        return;
+      }
+
+      toast.success(res?.message || "Physical Asset added successfully");
       onAssetCreated();
       handleClose();
     } catch (err) {
@@ -112,9 +165,10 @@ const CreateAssetDrawer = ({ open, onClose, onAssetCreated }) => {
         setErrors(errorData.errors);
         Object.values(errorData.errors)
           .flat()
-          .forEach((msg) => toast.error(msg));
+          .forEach((msg) => toast.error(msg, { duration: 6000 }));
       } else {
-        toast.error("Push Failed");
+        const errorMessage = parseBackendError(err);
+        toast.error(errorMessage, { duration: 6000 });
       }
     } finally {
       setIsSubmitting(false);
@@ -142,7 +196,6 @@ const CreateAssetDrawer = ({ open, onClose, onAssetCreated }) => {
         anchor="right"
         open={open}
         onClose={handleClose}
-        // Disable enforceFocus so we can type in the nested modal
         disableEnforceFocus
         PaperProps={{
           className: "w-full max-w-[500px] border-none shadow-2xl",
@@ -159,6 +212,7 @@ const CreateAssetDrawer = ({ open, onClose, onAssetCreated }) => {
               </p>
             </div>
             <button
+              type="button"
               onClick={handleClose}
               className="p-2 hover:bg-gray-100 rounded-full text-gray-400"
             >
@@ -230,7 +284,6 @@ const CreateAssetDrawer = ({ open, onClose, onAssetCreated }) => {
                   onChange={(e) => {
                     if (e.target.value === "ADD_NEW") {
                       setIsTypeModalOpen(true);
-                      // Reset select value so "Add New" isn't permanently stuck
                       e.target.value = "";
                     } else {
                       handleChange(e);
@@ -341,7 +394,7 @@ const CreateAssetDrawer = ({ open, onClose, onAssetCreated }) => {
         </div>
       </Drawer>
 
-      {/* FIXED ASSET TYPE MODAL */}
+      {/* ASSET TYPE MODAL */}
       {isTypeModalOpen && (
         <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
           <div

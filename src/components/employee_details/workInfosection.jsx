@@ -8,7 +8,10 @@ import {
   getDepartmentData,
   getDesignationData,
 } from "../../service/companyService";
-import { fetchEmployeeStatus, fetchEmployeeType } from "../../service/employeeService";
+import {
+  fetchEmployeeStatus,
+  fetchEmployeeType,
+} from "../../service/employeeService";
 
 export default function WorkInfoSection() {
   const { selectedEmployee, setSelectedEmployee } = useEmployeeStore();
@@ -37,6 +40,7 @@ export default function WorkInfoSection() {
     employeeType: "",
     totalExperience: "",
     joiningDate: "",
+    location: "Panampilly Nagar", // Default / Initialized location
   });
 
   // Fetch dropdowns
@@ -63,7 +67,7 @@ export default function WorkInfoSection() {
     fetchDropdowns();
   }, []);
 
-  // Initialize localEdits
+  // Initialize localEdits from selectedEmployee
   useEffect(() => {
     if (!selectedEmployee) return;
     setLocalEdits({
@@ -84,6 +88,7 @@ export default function WorkInfoSection() {
       joiningDate: selectedEmployee.date_of_join
         ? selectedEmployee.date_of_join.split("T")[0]
         : "",
+      location: selectedEmployee.location || "Panampilly Nagar",
     });
   }, [selectedEmployee]);
 
@@ -91,17 +96,14 @@ export default function WorkInfoSection() {
     setLocalEdits((prev) => ({ ...prev, [field]: value }));
   }, []);
 
-  const handleSelectChange = useCallback(
-    (fieldId, fieldName, list, value) => {
-      const selected = list.find((item) => String(item.id) === String(value));
-      setLocalEdits((prev) => ({
-        ...prev,
-        [fieldId]: value,
-        [fieldName]: selected ? selected.name : "",
-      }));
-    },
-    []
-  );
+  const handleSelectChange = useCallback((fieldId, fieldName, list, value) => {
+    const selected = list.find((item) => String(item.id) === String(value));
+    setLocalEdits((prev) => ({
+      ...prev,
+      [fieldId]: value,
+      [fieldName]: selected ? selected.name : "",
+    }));
+  }, []);
 
   const getStaffId = () =>
     selectedEmployee?.staff_id || selectedEmployee?.id || null;
@@ -114,7 +116,7 @@ export default function WorkInfoSection() {
       company: localEdits.companyId || null,
       branch_id: localEdits.branchId || null,
       department_id: localEdits.departmentId || null,
-      location: "",
+      location: localEdits.location || "Panampilly Nagar",
       role: localEdits.designationName || "",
       employee_type_id: localEdits.employeeTypeId || null,
       designation_id: localEdits.designationId || null,
@@ -137,24 +139,23 @@ export default function WorkInfoSection() {
         ...selectedEmployee,
         ...payload,
         branch:
-          branches.find(
-            (b) => String(b.id) === String(payload.branch_id)
-          )?.name || "Head Office",
+          branches.find((b) => String(b.id) === String(payload.branch_id))
+            ?.name || "Head Office",
         department:
           departments.find(
-            (d) => String(d.id) === String(payload.department_id)
+            (d) => String(d.id) === String(payload.department_id),
           )?.name || "",
         designation:
           designations.find(
-            (d) => String(d.id) === String(payload.designation_id)
+            (d) => String(d.id) === String(payload.designation_id),
           )?.name || "",
         employment_status:
           employmentStatusList.find(
-            (s) => String(s.id) === String(payload.employment_status_id)
+            (s) => String(s.id) === String(payload.employment_status_id),
           )?.name || "",
         employee_type:
           employmentTypeList.find(
-            (t) => String(t.id) === String(payload.employee_type_id)
+            (t) => String(t.id) === String(payload.employee_type_id),
           )?.name || "",
       };
 
@@ -177,6 +178,7 @@ export default function WorkInfoSection() {
         joiningDate: updatedEmployee.date_of_join
           ? updatedEmployee.date_of_join.split("T")[0]
           : "",
+        location: updatedEmployee.location || "Panampilly Nagar",
       });
 
       toast.success("Work information updated successfully!");
@@ -196,15 +198,50 @@ export default function WorkInfoSection() {
       ? "N/A"
       : val;
 
-  // Added `readOnly: true` property to employeeRef
   const fields = [
-    { label: "Employee Reference", key: "employeeRef", type: "text", readOnly: true },
-    { label: "Branch", key: "branchId", type: "select", list: branches, nameField: "branchName" },
-    { label: "Department", key: "departmentId", type: "select", list: departments, nameField: "departmentName" },
-    { label: "Designation / Role", key: "designationId", type: "select", list: designations, nameField: "designationName" },
+    {
+      label: "Employee Reference",
+      key: "employeeRef",
+      type: "text",
+      readOnly: true,
+    },
+    {
+      label: "Branch",
+      key: "branchId",
+      type: "select",
+      list: branches,
+      nameField: "branchName",
+    },
+    {
+      label: "Department",
+      key: "departmentId",
+      type: "select",
+      list: departments,
+      nameField: "departmentName",
+    },
+    {
+      label: "Designation / Role",
+      key: "designationId",
+      type: "select",
+      list: designations,
+      nameField: "designationName",
+    },
+    { label: "Location", key: "location", type: "text" },
     { label: "Source of Hiring", key: "sourceOfHiring", type: "text" },
-    { label: "Employment Status", key: "employmentStatusId", type: "select", list: employmentStatusList, nameField: "employmentStatus" },
-    { label: "Employment Type", key: "employeeTypeId", type: "select", list: employmentTypeList, nameField: "employeeType" },
+    {
+      label: "Employment Status",
+      key: "employmentStatusId",
+      type: "select",
+      list: employmentStatusList,
+      nameField: "employmentStatus",
+    },
+    {
+      label: "Employment Type",
+      key: "employeeTypeId",
+      type: "select",
+      list: employmentTypeList,
+      nameField: "employeeType",
+    },
     { label: "Total Experience", key: "totalExperience", type: "number" },
     { label: "Date of Joining", key: "joiningDate", type: "date" },
   ];
@@ -258,7 +295,7 @@ export default function WorkInfoSection() {
                         field.key,
                         field.nameField,
                         field.list,
-                        e.target.value
+                        e.target.value,
                       )
                     }
                     className="border border-gray-300 rounded px-2 py-1 text-gray-800 w-full max-w-[160px]"
@@ -283,7 +320,7 @@ export default function WorkInfoSection() {
                 ) : (
                   <input
                     type={field.type}
-                    value={localEdits[field.key]}
+                    value={localEdits[field.key] || ""}
                     onChange={(e) => setField(field.key, e.target.value)}
                     className="border border-gray-300 rounded px-2 py-1 text-gray-800 w-full max-w-[160px]"
                   />

@@ -175,7 +175,7 @@ const ConfigView = ({ fetchApi, updateApi, onCreateClick }) => {
     "0",
   );
   const sampleCode = `${prefixStr}${numberStr}${suffixStr}`;
-  const isOverLengthLimit = sampleCode.length > 13;
+  const isOverLengthLimit = sampleCode.length > 20;
 
   if (fetchingData) {
     return (
@@ -222,7 +222,7 @@ const ConfigView = ({ fetchApi, updateApi, onCreateClick }) => {
                 : "bg-blue-50 text-blue-700 border-blue-200"
             }`}
           >
-            {sampleCode} ({sampleCode.length}/13)
+            {sampleCode} ({sampleCode.length}/20)
           </span>
 
           <button

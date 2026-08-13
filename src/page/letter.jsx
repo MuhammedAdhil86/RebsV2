@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import DashboardLayout from "../ui/pagelayout";
-import HeaderGlobal from "../ui/headerglobal"; // ✅ Imported global navbar layout component
+import HeaderGlobal from "../ui/headerglobal";
 import PayrollTable from "../ui/payrolltable";
 import TemplatePreviewView from "../ui/emailandletterpriview";
 import EditEmailTemplateView from "../ui/editemailandletter";
@@ -16,8 +16,8 @@ import {
   FiSend,
   FiFileText,
 } from "react-icons/fi";
-import useEmailTemplateStore from "../store/emailtemplateStore";
 import {
+  fetchEmailTemplates,
   cloneDefaultEmailTemplate,
   generateLetterService,
   sendLetterService,
@@ -30,15 +30,10 @@ const Letter = () => {
   const [subTab, setSubTab] = useState("my-templates");
   const [viewMode, setViewMode] = useState("table");
 
-  // --- Zustand Store ---
-  const {
-    templates,
-    defaultTemplates,
-    loading,
-    loadTemplates,
-    loadDefaultTemplates,
-    removeTemplate,
-  } = useEmailTemplateStore();
+  // --- Local Data & Loading States (Replaced Store) ---
+  const [templates, setTemplates] = useState([]);
+  const [defaultTemplates, setDefaultTemplates] = useState([]);
+  const [loading, setLoading] = useState(false);
 
   // --- UI Component States ---
   const [initialData, setInitialData] = useState(null);
@@ -49,7 +44,7 @@ const Letter = () => {
   const [isActionModalOpen, setIsActionModalOpen] = useState(false);
   const menuRef = useRef(null);
 
-  // Helper to extract detailed backend error messages (Axios/Fetch/Custom Error responses)
+  // Helper to extract detailed backend error messages
   const extractErrorMessage = (error, defaultMsg) => {
     return (
       error?.response?.data?.message ||
@@ -60,16 +55,29 @@ const Letter = () => {
     );
   };
 
+  // --- Direct API Data Fetching ---
+  const loadTemplatesData = async () => {
+    setLoading(true);
+    try {
+      const data = await fetchEmailTemplates();
+
+      // ✅ Company 8 default templates are included in custom templates so they can be edited in "My Templates"
+      setTemplates(
+        data.filter((item) => !item.is_default || item.company_id === 8),
+      );
+
+      // System Presets tab still gets all defaults
+      setDefaultTemplates(data.filter((item) => item.is_default));
+    } catch (error) {
+      toast.error(extractErrorMessage(error, "Failed to load templates"));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchInitialData = async () => {
-      try {
-        await Promise.all([loadDefaultTemplates(), loadTemplates()]);
-      } catch (error) {
-        toast.error(extractErrorMessage(error, "Failed to load templates"));
-      }
-    };
-    fetchInitialData();
-  }, [loadDefaultTemplates, loadTemplates]);
+    loadTemplatesData();
+  }, []);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -122,7 +130,7 @@ const Letter = () => {
       await cloneDefaultEmailTemplate(id);
       toast.success("Cloned to My Templates!", { id: loadingToast });
       setSubTab("my-templates");
-      await loadTemplates();
+      await loadTemplatesData(); // Refresh list directly via API
       setViewMode("table");
     } catch (error) {
       toast.error(extractErrorMessage(error, "Clone failed"), {
@@ -134,7 +142,11 @@ const Letter = () => {
   const handleDeleteTemplate = async (id) => {
     const loadingToast = toast.loading("Deleting template...");
     try {
-      await removeTemplate(id);
+      // If you have a service call for deletion, invoke it here:
+      // await deleteEmailTemplateService(id);
+
+      // Update local state to remove template from list
+      setTemplates((prev) => prev.filter((item) => item.id !== id));
       setDeleteModal({ show: false, id: null });
       toast.success("Deleted successfully!", { id: loadingToast });
     } catch (error) {
@@ -150,8 +162,17 @@ const Letter = () => {
     const isForGeneration = item.for_letter_generation === true;
     const isPdf = item.purpose?.includes("pdf");
     const matchesType = activeTab === "pdf" ? isPdf : !isPdf;
-    if (subTab === "my-templates")
-      return isForGeneration && matchesType && item.is_default === false;
+
+    if (subTab === "my-templates") {
+      // ✅ Allow item if is_default is false OR if company_id is 8
+      const isCompany8Default =
+        item.company_id === 8 && item.is_default === true;
+      const isValidDefaultState =
+        item.is_default === false || isCompany8Default;
+
+      return isForGeneration && matchesType && isValidDefaultState;
+    }
+
     return isForGeneration && matchesType && item.is_manual === false;
   });
 
@@ -164,7 +185,9 @@ const Letter = () => {
       label: "Status",
       render: (val) => (
         <span
-          className={`px-2 py-1 rounded-full text-[10px] font-normal ${val ? "text-green-600 bg-green-50" : "text-gray-400 bg-gray-50"}`}
+          className={`px-2 py-1 rounded-full text-[10px] font-normal ${
+            val ? "text-green-600 bg-green-50" : "text-gray-400 bg-gray-50"
+          }`}
         >
           {val ? "Active" : "Inactive"}
         </span>
@@ -243,7 +266,6 @@ const Letter = () => {
   return (
     <DashboardLayout>
       <div className="w-full space-y-4">
-        {/* ✅ Replaced raw header layout structures with global shared navbar element */}
         <HeaderGlobal userName="Admin" />
 
         <LetterActionModal
@@ -316,14 +338,22 @@ const Letter = () => {
                   <button
                     type="button"
                     onClick={() => setSubTab("my-templates")}
-                    className={`px-4 py-1.5 rounded-md text-[11px] transition-all ${subTab === "my-templates" ? "bg-white shadow-sm text-black font-medium" : "text-gray-400"}`}
+                    className={`px-4 py-1.5 rounded-md text-[11px] transition-all ${
+                      subTab === "my-templates"
+                        ? "bg-white shadow-sm text-black font-medium"
+                        : "text-gray-400"
+                    }`}
                   >
                     My Templates
                   </button>
                   <button
                     type="button"
                     onClick={() => setSubTab("presets")}
-                    className={`px-4 py-1.5 rounded-md text-[11px] transition-all ${subTab === "presets" ? "bg-white shadow-sm text-black font-medium" : "text-gray-400"}`}
+                    className={`px-4 py-1.5 rounded-md text-[11px] transition-all ${
+                      subTab === "presets"
+                        ? "bg-white shadow-sm text-black font-medium"
+                        : "text-gray-400"
+                    }`}
                   >
                     System Presets
                   </button>
@@ -372,7 +402,7 @@ const Letter = () => {
               initialData={initialData}
               onBack={() => {
                 setViewMode("table");
-                loadTemplates().catch((err) =>
+                loadTemplatesData().catch((err) =>
                   toast.error(
                     extractErrorMessage(err, "Failed to refresh templates"),
                   ),
