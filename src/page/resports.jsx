@@ -23,22 +23,22 @@ export default function Reports() {
 
   const renderTab = () => {
     switch (activeTab) {
-      case "Attendance Reports":
+      case "Attendance":
         return <AttendanceReports />;
 
-      case "Leave Reports":
+      case "Leave ":
         return <LeaveReports />;
 
       case "Unapproved Leaves":
         return <UnapprovedAbsentReports />;
 
-      case "Payroll Attendance Report":
+      case "Payroll Attendance ":
         return <PayrollAttendanceReport />;
 
-      case "Fine Reports":
+      case "Fine":
         return <AttendanceFineRecordsReport />;
 
-      case "Feedback Reports": // 🆕 Added switch case
+      case "Feedback": // 🆕 Added switch case
         return <FeedbackReports />;
 
       default:
@@ -55,12 +55,12 @@ export default function Reports() {
         <div className="bg-white pt-4 px-4 rounded-lg shadow-sm">
           <div className="flex gap-6 border-b border-gray-200 overflow-x-auto pb-1 select-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {[
-              "Attendance Reports",
-              "Leave Reports",
+              "Attendance",
+              "Leave ",
               "Unapproved Leaves",
-              "Payroll Attendance Report",
-              "Fine Reports",
-              "Feedback Reports", // 🆕 Added tab item
+              "Payroll Attendance ",
+              "Fine",
+              "Feedback", // 🆕 Added tab item
             ].map((tab) => (
               <button
                 key={tab}
