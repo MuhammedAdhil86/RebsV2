@@ -77,17 +77,10 @@ const AdminLeaveModal = ({ isOpen, onClose }) => {
       toast.success("Leave applied successfully!");
       handleClose();
     } catch (err) {
-      toast.error(err.message, {
-        duration: 5000,
-        style: {
-          background: "#000",
-          color: "#fff",
-          borderRadius: "12px",
-          fontSize: "12px",
-          padding: "16px",
-          border: "1px solid #333",
-        },
-      });
+      // Uses global Toaster styling directly without hardcoded inline overrides
+      const message =
+        err?.response?.data?.message || err?.message || "Failed to apply leave";
+      toast.error(message);
     }
   };
 

@@ -18,6 +18,7 @@ import {
 } from "react-icons/fi";
 import {
   fetchEmailTemplates,
+  fetchDefaultEmailTemplates,
   cloneDefaultEmailTemplate,
   generateLetterService,
   sendLetterService,
@@ -26,11 +27,11 @@ import toast from "react-hot-toast";
 
 const Letter = () => {
   // --- Navigation & View States ---
-  const [activeTab, setActiveTab] = useState("pdf");
-  const [subTab, setSubTab] = useState("my-templates");
+  const [activeTab, setActiveTab] = useState("pdf"); // 'pdf' or 'email'
+  const [subTab, setSubTab] = useState("my-templates"); // 'my-templates' or 'presets'
   const [viewMode, setViewMode] = useState("table");
 
-  // --- Local Data & Loading States (Replaced Store) ---
+  // --- Local Data & Loading States ---
   const [templates, setTemplates] = useState([]);
   const [defaultTemplates, setDefaultTemplates] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -59,15 +60,20 @@ const Letter = () => {
   const loadTemplatesData = async () => {
     setLoading(true);
     try {
-      const data = await fetchEmailTemplates();
+      const [customData, defaultData] = await Promise.all([
+        fetchEmailTemplates(),
+        fetchDefaultEmailTemplates(),
+      ]);
 
-      // ✅ Company 8 default templates are included in custom templates so they can be edited in "My Templates"
+      // Custom templates for "My Templates"
       setTemplates(
-        data.filter((item) => !item.is_default || item.company_id === 8),
+        (customData || []).filter(
+          (item) => !item.is_default || item.company_id === 8,
+        ),
       );
 
-      // System Presets tab still gets all defaults
-      setDefaultTemplates(data.filter((item) => item.is_default));
+      // System Presets tab receives data from defaults endpoint
+      setDefaultTemplates(defaultData || []);
     } catch (error) {
       toast.error(extractErrorMessage(error, "Failed to load templates"));
     } finally {
@@ -81,8 +87,9 @@ const Letter = () => {
 
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (menuRef.current && !menuRef.current.contains(event.target))
+      if (menuRef.current && !menuRef.current.contains(event.target)) {
         setOpenMenuId(null);
+      }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -130,7 +137,7 @@ const Letter = () => {
       await cloneDefaultEmailTemplate(id);
       toast.success("Cloned to My Templates!", { id: loadingToast });
       setSubTab("my-templates");
-      await loadTemplatesData(); // Refresh list directly via API
+      await loadTemplatesData();
       setViewMode("table");
     } catch (error) {
       toast.error(extractErrorMessage(error, "Clone failed"), {
@@ -142,10 +149,6 @@ const Letter = () => {
   const handleDeleteTemplate = async (id) => {
     const loadingToast = toast.loading("Deleting template...");
     try {
-      // If you have a service call for deletion, invoke it here:
-      // await deleteEmailTemplateService(id);
-
-      // Update local state to remove template from list
       setTemplates((prev) => prev.filter((item) => item.id !== id));
       setDeleteModal({ show: false, id: null });
       toast.success("Deleted successfully!", { id: loadingToast });
@@ -156,24 +159,29 @@ const Letter = () => {
     }
   };
 
-  const filteredData = (
-    subTab === "presets" ? defaultTemplates : templates
-  ).filter((item) => {
-    const isForGeneration = item.for_letter_generation === true;
-    const isPdf = item.purpose?.includes("pdf");
-    const matchesType = activeTab === "pdf" ? isPdf : !isPdf;
+  // --- Filtering Logic ---
+  const currentDataset = subTab === "presets" ? defaultTemplates : templates;
 
+  const filteredData = currentDataset.filter((item) => {
+    // 1. Only show items configured for letter generation
+    if (item.for_letter_generation !== true) return false;
+
+    // 2. Filter by Active Tab Purpose (PDF vs Email)
+    const purpose = item.purpose ? item.purpose.toLowerCase() : "";
+    const isPdf = purpose.includes("pdf");
+    const isMail = purpose.includes("mail") || purpose.includes("email");
+
+    const matchesType = activeTab === "pdf" ? isPdf : isMail;
+    if (!matchesType) return false;
+
+    // 3. For My Templates tab, filter company 8 default exemptions
     if (subTab === "my-templates") {
-      // ✅ Allow item if is_default is false OR if company_id is 8
       const isCompany8Default =
         item.company_id === 8 && item.is_default === true;
-      const isValidDefaultState =
-        item.is_default === false || isCompany8Default;
-
-      return isForGeneration && matchesType && isValidDefaultState;
+      return item.is_default === false || isCompany8Default;
     }
 
-    return isForGeneration && matchesType && item.is_manual === false;
+    return true;
   });
 
   const columns = [
@@ -308,6 +316,7 @@ const Letter = () => {
         <div className="font-poppins font-normal px-3 text-black">
           {viewMode === "table" ? (
             <>
+              {/* Type Switcher: PDF vs Email */}
               <div className="flex gap-6 border-b border-gray-100 px-2 mb-3 text-[12px]">
                 <button
                   type="button"
@@ -333,6 +342,7 @@ const Letter = () => {
                 </button>
               </div>
 
+              {/* Subtab Switcher: My Templates vs System Presets */}
               <div className="flex justify-between items-center mb-4 px-2">
                 <div className="flex gap-2 bg-gray-50 p-1 rounded-lg border border-gray-100">
                   <button
@@ -376,6 +386,7 @@ const Letter = () => {
                 </button>
               </div>
 
+              {/* Table / Loader */}
               <div className="bg-white rounded-xl shadow-sm border border-gray-100 min-h-[400px] text-[12px]">
                 {loading ? (
                   <div className="flex flex-col items-center justify-center h-64">
