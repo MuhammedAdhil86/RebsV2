@@ -165,14 +165,19 @@ function EmailTemplates() {
     [activeTab, fetchCurrentTabData],
   );
 
-  // Search filtering logic
+  // Search filtering logic — excludes letter generation templates
   const filteredData = useMemo(() => {
     const dataSource = activeTab === "all" ? templates : defaultTemplates;
     const query = searchQuery.trim().toLowerCase();
 
-    if (!query) return dataSource || [];
+    // Filter to only include email templates (for_letter_generation === false)
+    const emailOnlyTemplates = (dataSource || []).filter(
+      (item) => !item.for_letter_generation,
+    );
 
-    return (dataSource || []).filter((item) =>
+    if (!query) return emailOnlyTemplates;
+
+    return emailOnlyTemplates.filter((item) =>
       item?.name?.toLowerCase().includes(query),
     );
   }, [templates, defaultTemplates, searchQuery, activeTab]);

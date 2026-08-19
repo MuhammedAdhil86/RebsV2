@@ -6,17 +6,26 @@ import GlowButton from "../components/helpers/glowbutton";
 import { toast } from "react-hot-toast";
 
 const AdminLeaveModal = ({ isOpen, onClose }) => {
-  const { applyLeaveAdmin, loading } = useLeaveStore();
+  const {
+    applyLeaveAdmin,
+    fetchEmployeeLeavePolicies,
+    employeeLeavePolicies = [],
+    loading,
+  } = useLeaveStore();
+
   const [staffList, setStaffList] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
+  const [fetchingPolicies, setFetchingPolicies] = useState(false);
 
   const [formData, setFormData] = useState({
     employeeUuid: "",
+    leave_policy: "",
     reason: "",
     leave_date: [{ date: "", half_day: false, half_day_type: 0 }],
     cc: [],
   });
 
+  // Fetch staff list when modal opens
   useEffect(() => {
     if (isOpen) {
       const fetchStaff = async () => {
@@ -30,6 +39,32 @@ const AdminLeaveModal = ({ isOpen, onClose }) => {
       fetchStaff();
     }
   }, [isOpen]);
+
+  // Handle employee selection and fetch their leave policies
+  const handleEmployeeChange = async (employeeId) => {
+    setFormData((prev) => ({
+      ...prev,
+      employeeUuid: employeeId,
+      leave_policy: "",
+    }));
+
+    if (!employeeId) return;
+
+    setFetchingPolicies(true);
+    try {
+      const policies = await fetchEmployeeLeavePolicies(employeeId);
+      if (Array.isArray(policies) && policies.length > 0) {
+        setFormData((prev) => ({
+          ...prev,
+          leave_policy: policies[0].id,
+        }));
+      }
+    } catch (err) {
+      toast.error("Failed to load leave policies for selected employee");
+    } finally {
+      setFetchingPolicies(false);
+    }
+  };
 
   const addDateRow = () => {
     setFormData((prev) => ({
@@ -60,6 +95,7 @@ const AdminLeaveModal = ({ isOpen, onClose }) => {
   const handleClose = () => {
     setFormData({
       employeeUuid: "",
+      leave_policy: "",
       reason: "",
       leave_date: [{ date: "", half_day: false, half_day_type: 0 }],
       cc: [],
@@ -71,13 +107,23 @@ const AdminLeaveModal = ({ isOpen, onClose }) => {
   const handleSubmit = async (e) => {
     if (e) e.preventDefault();
     if (!formData.employeeUuid) return toast.error("Please select an employee");
+    if (!formData.leave_policy)
+      return toast.error("Please select a leave policy");
+
+    const hasInvalidDates = formData.leave_date.some((item) => !item.date);
+    if (hasInvalidDates) return toast.error("Please select all leave dates");
 
     try {
-      await applyLeaveAdmin(formData.employeeUuid, formData);
+      await applyLeaveAdmin(formData.employeeUuid, {
+        leave_date: formData.leave_date,
+        reason: formData.reason,
+        leave_policy: Number(formData.leave_policy),
+        cc: formData.cc,
+      });
+
       toast.success("Leave applied successfully!");
       handleClose();
     } catch (err) {
-      // Uses global Toaster styling directly without hardcoded inline overrides
       const message =
         err?.response?.data?.message || err?.message || "Failed to apply leave";
       toast.error(message);
@@ -116,9 +162,7 @@ const AdminLeaveModal = ({ isOpen, onClose }) => {
             </label>
             <select
               value={formData.employeeUuid}
-              onChange={(e) =>
-                setFormData({ ...formData, employeeUuid: e.target.value })
-              }
+              onChange={(e) => handleEmployeeChange(e.target.value)}
               className="w-full bg-white border border-gray-300 rounded-2xl px-5 py-4 outline-none focus:ring-2 focus:ring-black transition-all text-[12px] appearance-none"
             >
               <option value="">Select Staff Member</option>
@@ -127,6 +171,41 @@ const AdminLeaveModal = ({ isOpen, onClose }) => {
                   {s.full_name || s.name}
                 </option>
               ))}
+            </select>
+          </div>
+
+          {/* Leave Policy Selection */}
+          <div>
+            <label className="block text-[10px] text-gray-400 tracking-widest uppercase mb-2 ml-1">
+              Leave Policy / Type
+            </label>
+            <select
+              value={formData.leave_policy}
+              disabled={!formData.employeeUuid || fetchingPolicies}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  leave_policy: Number(e.target.value),
+                })
+              }
+              className="w-full bg-white border border-gray-300 rounded-2xl px-5 py-4 outline-none focus:ring-2 focus:ring-black transition-all text-[12px] appearance-none disabled:bg-gray-50 disabled:text-gray-400"
+            >
+              <option value="">
+                {fetchingPolicies
+                  ? "Loading policies..."
+                  : !formData.employeeUuid
+                    ? "Select an employee first"
+                    : !employeeLeavePolicies ||
+                        employeeLeavePolicies.length === 0
+                      ? "No policies found"
+                      : "Select Leave Policy"}
+              </option>
+              {Array.isArray(employeeLeavePolicies) &&
+                employeeLeavePolicies.map((policy) => (
+                  <option key={policy.id} value={policy.id}>
+                    {policy.name}
+                  </option>
+                ))}
             </select>
           </div>
 
@@ -159,6 +238,9 @@ const AdminLeaveModal = ({ isOpen, onClose }) => {
                       onChange={(e) => {
                         const newDates = [...formData.leave_date];
                         newDates[index].half_day = e.target.checked;
+                        newDates[index].half_day_type = e.target.checked
+                          ? 1
+                          : 0;
                         setFormData({ ...formData, leave_date: newDates });
                       }}
                     />
@@ -249,7 +331,10 @@ const AdminLeaveModal = ({ isOpen, onClose }) => {
             >
               Cancel
             </button>
-            <GlowButton onClick={handleSubmit} disabled={loading}>
+            <GlowButton
+              onClick={handleSubmit}
+              disabled={loading || fetchingPolicies}
+            >
               <span className="text-white">
                 {loading ? "Processing..." : "Confirm Leave"}
               </span>

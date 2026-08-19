@@ -199,6 +199,8 @@ export const getMaritalStatus = "/admin/marital-status/get"
 export const getEmploymentType = "/admin/applicability-category/get"
 export const getClubbingPolicy = "/master/leavetype"
 export const getAllLeavePolicy = "/leave-policy/fetch-all"
+export const getLeaveTypesbyUser = "/leave-policy/allocated/get"
+export const getLeavePolicyByEmployee = (userId) => `/leave-policy/employees/${userId}`;
 
 
 //Week Off
