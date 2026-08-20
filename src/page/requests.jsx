@@ -7,6 +7,7 @@ import RegularizationTab from "../components/requests_tab/regularization_tab";
 import DeviceRequestTab from "../components/requests_tab/device_tab";
 import ClaimsRequestTab from "../components/requests_tab/claims_tab";
 import InsuranceClaimTab from "../components/requests_tab/insuranceclaim";
+import LeaveRequestes from "../components/tables/leaverequests";
 import DeviceApprovalModal from "../ui/devicestatusmodal";
 import InsuranceApprovalModal from "../ui/insurancestatusmodal";
 
@@ -70,6 +71,18 @@ function Requests() {
 
           <button
             type="button"
+            onClick={() => setActiveTab("leave")}
+            className={`pb-2 px-1 transition-all relative font-medium whitespace-nowrap ${
+              activeTab === "leave"
+                ? "text-black font-semibold after:content-[''] after:absolute after:bottom-0 after:left-0 after:w-full after:h-[2px] after:bg-black"
+                : "text-gray-500 hover:text-black"
+            }`}
+          >
+            Leave Requests
+          </button>
+
+          <button
+            type="button"
             onClick={() => setActiveTab("regularization")}
             className={`pb-2 px-1 transition-all relative font-medium whitespace-nowrap ${
               activeTab === "regularization"
@@ -120,6 +133,7 @@ function Requests() {
         {/* Tab Panels Display Wrapper Container */}
         <div className="mt-2">
           {activeTab === "wfh" && <WfhTab />}
+          {activeTab === "leave" && <LeaveRequestes />}
           {activeTab === "regularization" && <RegularizationTab />}
           {activeTab === "device" && (
             <DeviceRequestTab

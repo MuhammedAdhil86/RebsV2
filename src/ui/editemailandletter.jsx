@@ -9,6 +9,7 @@ import {
   ArrowLeft,
   Lock,
   Save,
+  Info,
 } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
 import { updateEmailTemplateService } from "../service/mainServices";
@@ -83,6 +84,21 @@ const EditEmailTemplateView = ({
     <div className="w-full bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col font-poppins animate-in slide-in-from-bottom-2 duration-300">
       <Toaster position="top-right" />
 
+      {/* Hidden Scrollbar Styles */}
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
+            .no-scrollbar::-webkit-scrollbar {
+              display: none;
+            }
+            .no-scrollbar {
+              -ms-overflow-style: none;
+              scrollbar-width: none;
+            }
+          `,
+        }}
+      />
+
       {/* --- HEADER --- */}
       <div className="flex items-center justify-between p-5 border-b border-gray-100">
         <div className="flex items-center gap-3">
@@ -108,7 +124,7 @@ const EditEmailTemplateView = ({
       </div>
 
       {/* --- FORM BODY --- */}
-      <div className="p-8 flex flex-col gap-6 max-h-[75vh] overflow-y-auto bg-[#FAFBFC]">
+      <div className="p-8 flex flex-col gap-6 max-h-[75vh] overflow-y-auto no-scrollbar bg-[#FAFBFC]">
         {/* Row 1: Read-Only Purpose Display */}
         <div className="flex flex-col gap-1.5">
           <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider ml-1">
@@ -121,11 +137,97 @@ const EditEmailTemplateView = ({
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          {/* Template Title */}
+          {/* Template Title with Info Icon */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider ml-1">
-              Template Name
-            </label>
+            <div className="flex items-center justify-between px-1">
+              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">
+                Template Name
+              </label>
+
+              {/* Info Icon with Bouncing Animation and Hover Tooltip */}
+              <div className="relative group flex items-center">
+                <div className="cursor-pointer p-0.5 rounded-full hover:bg-gray-100 transition-colors animate-bounce">
+                  <Info size={16} className="text-blue-500" />
+                </div>
+
+                {/* Tooltip Content */}
+                <div className="absolute right-0 top-full mt-2 w-[420px] max-h-96 overflow-y-auto no-scrollbar hidden group-hover:block bg-white text-black text-[13px] font-normal rounded-xl p-5 shadow-2xl border border-gray-200 z-[100] transition-all normal-case tracking-normal">
+                  <div className="text-[15px] font-normal mb-2 text-black">
+                    Template Placeholder Guidelines
+                  </div>
+                  <p className="text-black mb-2.5 leading-relaxed font-normal">
+                    When customizing a template, you can use the available
+                    placeholders shown in the <em>Placeholder</em> dropdown.
+                  </p>
+                  <p className="text-black mb-2.5 leading-relaxed font-normal">
+                    <em>Important:</em> The dropdown contains placeholders from
+                    all templates available in the system. Please use{" "}
+                    <em>
+                      only the placeholders that are applicable to the specific
+                      template you are currently editing
+                    </em>
+                    .
+                  </p>
+                  <p className="text-black mb-3 leading-relaxed font-normal">
+                    Each template has its own set of relevant placeholders, and
+                    placeholders are named according to their intended template
+                    purpose to help you identify the correct ones.
+                  </p>
+
+                  <div className="text-[14px] font-normal mt-3 mb-2 text-black">
+                    How to use placeholders
+                  </div>
+                  <ul className="list-disc pl-5 space-y-1 text-black font-normal mb-3 leading-relaxed">
+                    <li>
+                      Select a placeholder from the dropdown and insert it into
+                      the <em>Subject/Function</em> or <em>Body HTML</em> where
+                      required.
+                    </li>
+                    <li>
+                      Use only placeholders relevant to the current template.
+                    </li>
+                    <li>
+                      Do not manually modify the placeholder name or syntax.
+                    </li>
+                    <li>
+                      Placeholders must be used in the format{" "}
+                      <span>{"{{.PlaceholderName}}"}</span>.
+                    </li>
+                    <li>
+                      Generic placeholders may be available for use across
+                      multiple templates where applicable.
+                    </li>
+                    <li>
+                      Using a placeholder that is not supported by the current
+                      template may result in the value not being populated
+                      correctly when the template is generated or sent.
+                    </li>
+                  </ul>
+
+                  <div className="text-black font-normal mt-2 mb-1">
+                    <em>Example:</em>
+                  </div>
+                  <p className="text-black mb-2 leading-relaxed font-normal">
+                    If you are editing an <em>Employee Leave Approval</em>{" "}
+                    template, use placeholders provided for leave-related
+                    information such as employee name, leave dates, leave type,
+                    etc.
+                  </p>
+                  <p className="text-black mb-3 leading-relaxed font-normal">
+                    Do not use placeholders that belong specifically to
+                    unrelated templates such as payroll, onboarding, attendance,
+                    or other modules.
+                  </p>
+
+                  <div className="border-l-2 border-gray-300 pl-3 py-1 bg-gray-50 rounded-r-md text-black font-normal text-[12px] leading-relaxed">
+                    <em>Tip:</em> Always select placeholders from the dropdown
+                    instead of typing them manually. The placeholder name and
+                    syntax should remain exactly as provided.
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <input
               type="text"
               className="w-full px-5 py-3 bg-white border border-gray-200 rounded-xl text-[12px] focus:ring-1 focus:ring-black outline-none transition-all"
@@ -172,7 +274,7 @@ const EditEmailTemplateView = ({
                 Insert Placeholder <ChevronDown size={14} />
               </button>
               {showPlaceholderMenu && (
-                <div className="absolute right-0 mt-2 w-60 bg-white border border-gray-100 rounded-xl shadow-2xl z-50 max-h-56 overflow-y-auto py-2">
+                <div className="absolute right-0 mt-2 w-60 bg-white border border-gray-100 rounded-xl shadow-2xl z-50 max-h-56 overflow-y-auto no-scrollbar py-2">
                   {availablePlaceholders.map((item) => (
                     <button
                       type="button"
