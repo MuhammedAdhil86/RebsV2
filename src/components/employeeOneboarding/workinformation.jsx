@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from "react";
-import toast, { Toaster } from "react-hot-toast";
+import toast from "react-hot-toast";
 import CommonUploadActions from "../../ui/commonupload";
 import {
   fetchEmployeeStatus,
   fetchEmployeeType,
+  fetchEmployeeRoles, // Added role service
   addWorkInformation,
 } from "../../service/employeeService";
 import {
@@ -23,6 +24,7 @@ const WorkInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
     date_of_join: "",
     department: "",
     designation: "",
+    role: "", // Added role name key
     total_experience: "",
     source_of_hiring: "",
   });
@@ -32,6 +34,7 @@ const WorkInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
     employeeType: [],
     departments: [],
     designations: [],
+    roles: [], // Added roles list
     branches: [],
     organisations: [],
   });
@@ -43,27 +46,30 @@ const WorkInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
   useEffect(() => {
     const loadDropdowns = async () => {
       try {
-        // 1. Pre-check localStorage to prevent the service from throwing an error
         const storedUser = localStorage.getItem("userData");
         const userData = storedUser ? JSON.parse(storedUser) : null;
         const companyId = userData?.company?.id;
 
-        // 2. Fire all requests. If companyId is missing, we pass a resolved null for that specific call.
-        const [branchRes, orgRes, typeRes, statusRes, deptRes, desigRes] =
-          await Promise.allSettled([
-            getBranchData(),
-            companyId ? getOrganisationDetails() : Promise.resolve([]),
-            fetchEmployeeType(),
-            fetchEmployeeStatus(),
-            getDepartmentData(),
-            getDesignationData(),
-          ]);
+        const [
+          branchRes,
+          orgRes,
+          typeRes,
+          statusRes,
+          deptRes,
+          desigRes,
+          roleRes,
+        ] = await Promise.allSettled([
+          getBranchData(),
+          companyId ? getOrganisationDetails() : Promise.resolve([]),
+          fetchEmployeeType(),
+          fetchEmployeeStatus(),
+          getDepartmentData(),
+          getDesignationData(),
+          fetchEmployeeRoles(), // Fetch role list
+        ]);
 
-        /** * Helper to safely extract arrays from the Settled Promises
-         */
         const extractData = (result) => {
           if (result.status === "fulfilled" && result.value) {
-            // Our service returns response.data.data directly now
             return Array.isArray(result.value) ? result.value : [];
           }
           return [];
@@ -76,9 +82,9 @@ const WorkInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
           employeeStatus: extractData(statusRes),
           departments: extractData(deptRes),
           designations: extractData(desigRes),
+          roles: extractData(roleRes),
         });
 
-        // Optional: Alert the user if the company ID was specifically missing
         if (!companyId) {
           console.warn("Company ID missing: Organisation details skipped.");
         }
@@ -118,6 +124,7 @@ const WorkInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
       employee_type_id: Number(formData.employee_type_id),
       department_id: Number(formData.department),
       designation_id: Number(formData.designation),
+      role: formData.role || "", // Role sent as string/name
     };
 
     // Date formatting to ISO string
@@ -157,12 +164,11 @@ const WorkInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
     }
   };
 
-  const { employeeStatus, employeeType, departments, designations } = dropdowns;
+  const { employeeStatus, employeeType, departments, designations, roles } =
+    dropdowns;
 
   return (
     <div className="flex-1 p-4 bg-gray-50">
-      <Toaster />
-
       {/* Header */}
       <div className="flex justify-between items-center mb-4">
         <div>
@@ -232,6 +238,16 @@ const WorkInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
               options={designations}
             />
 
+            {/* Role Field uses opt.name as the value */}
+            <SelectField
+              label="Role"
+              name="role"
+              value={formData.role}
+              onChange={handleChange}
+              options={roles}
+              valueKey="name"
+            />
+
             <InputField
               label="Total Experience"
               name="total_experience"
@@ -296,7 +312,14 @@ const InputField = ({
 );
 
 /** 🔹 Atomic Select Component */
-const SelectField = ({ label, name, value, onChange, options }) => (
+const SelectField = ({
+  label,
+  name,
+  value,
+  onChange,
+  options,
+  valueKey = "id", // Supports binding either ID or Name
+}) => (
   <div className="flex flex-col">
     <label className="text-sm font-medium text-gray-700 mb-1">{label}</label>
     <select
@@ -307,7 +330,7 @@ const SelectField = ({ label, name, value, onChange, options }) => (
     >
       <option value="">Select {label}</option>
       {options?.map((opt) => (
-        <option key={opt.id} value={opt.id}>
+        <option key={opt.id} value={opt[valueKey] || opt.id}>
           {opt.name || opt.title || "Unnamed Option"}
         </option>
       ))}

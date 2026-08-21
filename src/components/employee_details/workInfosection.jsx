@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { Icon } from "@iconify/react";
-import toast, { Toaster } from "react-hot-toast";
 import useEmployeeStore from "../../store/employeeStore";
 import axiosInstance from "../../service/axiosinstance";
 import {
@@ -11,9 +10,10 @@ import {
 import {
   fetchEmployeeStatus,
   fetchEmployeeType,
+  fetchEmployeeRoles,
 } from "../../service/employeeService";
 
-export default function WorkInfoSection() {
+export default function WorkInfoSection({ onSuccess, onError }) {
   const { selectedEmployee, setSelectedEmployee } = useEmployeeStore();
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -21,6 +21,7 @@ export default function WorkInfoSection() {
   const [branches, setBranches] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [designations, setDesignations] = useState([]);
+  const [roles, setRoles] = useState([]);
   const [employmentStatusList, setEmploymentStatusList] = useState([]);
   const [employmentTypeList, setEmploymentTypeList] = useState([]);
 
@@ -33,6 +34,7 @@ export default function WorkInfoSection() {
     departmentName: "",
     designationId: "",
     designationName: "",
+    role: "",
     sourceOfHiring: "",
     employmentStatusId: "",
     employmentStatus: "",
@@ -40,34 +42,36 @@ export default function WorkInfoSection() {
     employeeType: "",
     totalExperience: "",
     joiningDate: "",
-    location: "Panampilly Nagar", // Default / Initialized location
+    location: "Panampilly Nagar",
   });
 
-  // Fetch dropdowns
   useEffect(() => {
     const fetchDropdowns = async () => {
       try {
         const b = await getBranchData();
         const d = await getDepartmentData();
         const g = await getDesignationData();
+        const r = await fetchEmployeeRoles();
         const s = await fetchEmployeeStatus();
         const t = await fetchEmployeeType();
+
         const normalize = (res) =>
           res?.data?.data || (Array.isArray(res) ? res : []);
+
         setBranches(normalize(b));
         setDepartments(normalize(d));
         setDesignations(normalize(g));
+        setRoles(normalize(r));
         setEmploymentStatusList(normalize(s));
         setEmploymentTypeList(normalize(t));
       } catch (err) {
         console.error("Failed to fetch dropdowns:", err);
-        toast.error("Failed to load dropdowns");
+        if (onError) onError("Failed to load dropdowns");
       }
     };
     fetchDropdowns();
-  }, []);
+  }, [onError]);
 
-  // Initialize localEdits from selectedEmployee
   useEffect(() => {
     if (!selectedEmployee) return;
     setLocalEdits({
@@ -79,6 +83,7 @@ export default function WorkInfoSection() {
       departmentName: selectedEmployee.department || "",
       designationId: selectedEmployee.designation_id || "",
       designationName: selectedEmployee.designation || "",
+      role: selectedEmployee.role || "",
       sourceOfHiring: selectedEmployee.source_of_hiring || "",
       employmentStatusId: selectedEmployee.employment_status_id || "",
       employmentStatus: selectedEmployee.employment_status || "",
@@ -110,14 +115,17 @@ export default function WorkInfoSection() {
 
   const handleSave = async () => {
     const staffId = getStaffId();
-    if (!staffId) return toast.error("No valid staff ID found.");
+    if (!staffId) {
+      if (onError) onError("No valid staff ID found.");
+      return;
+    }
 
     const payload = {
       company: localEdits.companyId || null,
       branch_id: localEdits.branchId || null,
       department_id: localEdits.departmentId || null,
       location: localEdits.location || "Panampilly Nagar",
-      role: localEdits.designationName || "",
+      role: localEdits.role || "",
       employee_type_id: localEdits.employeeTypeId || null,
       designation_id: localEdits.designationId || null,
       source_of_hiring: localEdits.sourceOfHiring || "",
@@ -149,6 +157,7 @@ export default function WorkInfoSection() {
           designations.find(
             (d) => String(d.id) === String(payload.designation_id),
           )?.name || "",
+        role: payload.role,
         employment_status:
           employmentStatusList.find(
             (s) => String(s.id) === String(payload.employment_status_id),
@@ -169,6 +178,7 @@ export default function WorkInfoSection() {
         departmentName: updatedEmployee.department,
         designationId: updatedEmployee.designation_id,
         designationName: updatedEmployee.designation,
+        role: updatedEmployee.role,
         sourceOfHiring: updatedEmployee.source_of_hiring,
         employmentStatusId: updatedEmployee.employment_status_id,
         employmentStatus: updatedEmployee.employment_status,
@@ -181,13 +191,17 @@ export default function WorkInfoSection() {
         location: updatedEmployee.location || "Panampilly Nagar",
       });
 
-      toast.success("Work information updated successfully!");
+      if (onSuccess) {
+        onSuccess("Work information updated successfully!");
+      }
       setIsEditing(false);
     } catch (err) {
       console.error("Update failed:", err);
       const msg =
         err?.response?.data?.message || "Failed to update work information.";
-      toast.error(msg);
+      if (onError) {
+        onError(msg);
+      }
     } finally {
       setLoading(false);
     }
@@ -220,11 +234,17 @@ export default function WorkInfoSection() {
       nameField: "departmentName",
     },
     {
-      label: "Designation / Role",
+      label: "Designation",
       key: "designationId",
       type: "select",
       list: designations,
       nameField: "designationName",
+    },
+    {
+      label: "Role",
+      key: "role",
+      type: "select-value",
+      list: roles,
     },
     { label: "Location", key: "location", type: "text" },
     { label: "Source of Hiring", key: "sourceOfHiring", type: "text" },
@@ -248,7 +268,6 @@ export default function WorkInfoSection() {
 
   return (
     <div className="bg-white p-4 rounded-xl shadow-sm border w-full">
-      {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <h3 className="font-medium text-gray-800 text-[14px]">
           Work Information
@@ -274,17 +293,14 @@ export default function WorkInfoSection() {
         </div>
       </div>
 
-      {/* Fields aligned top-to-bottom, left-right */}
       <div className="space-y-2 text-sm">
         {fields.map((field) => (
           <div
             key={field.key}
             className="flex justify-between items-center border-b border-gray-100 py-2"
           >
-            {/* Label left */}
             <span className="text-gray-500 text-[12px]">{field.label}</span>
 
-            {/* Value/Input right */}
             <span className="font-medium text-gray-800 text-right min-w-[160px] break-words text-[13px]">
               {isEditing && !field.readOnly ? (
                 field.type === "select" ? (
@@ -317,6 +333,19 @@ export default function WorkInfoSection() {
                       </option>
                     ))}
                   </select>
+                ) : field.type === "select-value" ? (
+                  <select
+                    value={localEdits[field.key] || ""}
+                    onChange={(e) => setField(field.key, e.target.value)}
+                    className="border border-gray-300 rounded px-2 py-1 text-gray-800 w-full max-w-[160px]"
+                  >
+                    <option value="">Select {field.label}</option>
+                    {field.list.map((item) => (
+                      <option key={item.id} value={item.name}>
+                        {item.name}
+                      </option>
+                    ))}
+                  </select>
                 ) : (
                   <input
                     type={field.type}
@@ -334,8 +363,6 @@ export default function WorkInfoSection() {
           </div>
         ))}
       </div>
-
-      <Toaster />
     </div>
   );
 }

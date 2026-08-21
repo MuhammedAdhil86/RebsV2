@@ -51,7 +51,7 @@ export const getStaff = "/master/staff"
 
 //manageEmployee
 export const getEmployeeDetails = "/staff/get"
-
+export const getEmployeeRole = "/master/role"
 
 // TimeSheet
 export const getEmployeeTimesheets = (params = {}) => {

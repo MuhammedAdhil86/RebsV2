@@ -8,39 +8,71 @@ import HierarchyInfoSection from "../employee_details/hierarchyInfosection";
 import EducationalDetailsSection from "../employee_details/educationaldetailssection";
 import DependantDetailsSection from "../employee_details/dependantdetailssection";
 
-export default function PersonalInfoTab({ employee }) {
+export default function PersonalInfoTab({ employee, onSuccess, onError }) {
   return (
     <div className="columns-1 sm:columns-2 gap-4 w-full">
       <div className="break-inside-avoid mb-4">
-        <BasicInfoSection employee={employee} />
+        <BasicInfoSection
+          employee={employee}
+          onSuccess={onSuccess}
+          onError={onError}
+        />
       </div>
 
       <div className="break-inside-avoid mb-4">
-        <WorkInfoSection employee={employee} />
+        <WorkInfoSection
+          employee={employee}
+          onSuccess={onSuccess}
+          onError={onError}
+        />
       </div>
 
       <div className="break-inside-avoid mb-4">
-        <BankInfoSection employee={employee} />
+        <BankInfoSection
+          employee={employee}
+          onSuccess={onSuccess}
+          onError={onError}
+        />
       </div>
 
       <div className="break-inside-avoid mb-4">
-        <PersonalInfoSection employee={employee} />
+        <PersonalInfoSection
+          employee={employee}
+          onSuccess={onSuccess}
+          onError={onError}
+        />
       </div>
 
       <div className="break-inside-avoid mb-4">
-        <ContactInfoSection employee={employee} />
+        <ContactInfoSection
+          employee={employee}
+          onSuccess={onSuccess}
+          onError={onError}
+        />
       </div>
 
       <div className="break-inside-avoid mb-4">
-        <HierarchyInfoSection employee={employee} />
+        <HierarchyInfoSection
+          employee={employee}
+          onSuccess={onSuccess}
+          onError={onError}
+        />
       </div>
 
       <div className="break-inside-avoid mb-4">
-        <EducationalDetailsSection employee={employee} />
+        <EducationalDetailsSection
+          employee={employee}
+          onSuccess={onSuccess}
+          onError={onError}
+        />
       </div>
 
       <div className="break-inside-avoid mb-4">
-        <DependantDetailsSection employee={employee} />
+        <DependantDetailsSection
+          employee={employee}
+          onSuccess={onSuccess}
+          onError={onError}
+        />
       </div>
     </div>
   );

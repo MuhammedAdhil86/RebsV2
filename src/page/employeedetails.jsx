@@ -4,7 +4,7 @@ import { ArrowLeft, Bell, X } from "lucide-react";
 import { Icon } from "@iconify/react";
 import DashboardLayout from "../ui/pagelayout";
 import avatar from "../assets/img/avatar.svg";
-import toast, { Toaster } from "react-hot-toast";
+import toast from "react-hot-toast"; // DO NOT import <Toaster /> here
 
 // Zustand Store
 import useEmployeeStore from "../store/employeeStore";
@@ -37,6 +37,10 @@ export default function EmployeeProfile() {
     selectedEmployee?.is_active === true ||
     selectedEmployee?.is_active === "true";
 
+  // Centralized Toast Handlers
+  const handleSuccess = (msg) => toast.success(msg);
+  const handleError = (err) => toast.error(err);
+
   const toggleStatus = async () => {
     if (!selectedEmployee?.uuid) return;
     try {
@@ -45,12 +49,12 @@ export default function EmployeeProfile() {
       await axiosInstance.put(
         `/staff/toggle-activate/${selectedEmployee.uuid}?activate=${newStatus}`,
       );
-      toast.success(
+      handleSuccess(
         `Employee ${newStatus ? "activated" : "deactivated"} successfully!`,
       );
       await fetchEmployeeById(selectedEmployee.id);
     } catch (err) {
-      toast.error("Status update failed");
+      handleError("Status update failed");
       console.error(err);
     } finally {
       setStatusUpdating(false);
@@ -59,7 +63,7 @@ export default function EmployeeProfile() {
 
   const handleDelete = async () => {
     if (!deleteReason.trim()) {
-      toast.error("Please provide a reason for deletion");
+      handleError("Please provide a reason for deletion");
       return;
     }
     try {
@@ -67,11 +71,11 @@ export default function EmployeeProfile() {
         data: { reason: deleteReason },
         headers: { "Content-Type": "application/json" },
       });
-      toast.success("Employee deleted successfully");
+      handleSuccess("Employee deleted successfully");
       setShowDeleteModal(false);
       setTimeout(() => navigate("/manageemployee"), 1500);
     } catch (err) {
-      toast.error("Failed to delete employee");
+      handleError("Failed to delete employee");
       console.error(err);
     }
   };
@@ -87,8 +91,6 @@ export default function EmployeeProfile() {
 
   return (
     <DashboardLayout userName={selectedEmployee?.first_name || "Employee"}>
-      <Toaster position="top-right" />
-
       <div className="bg-[#f9fafb] min-h-screen">
         <header className="flex items-center justify-between bg-white px-6 py-3 border-b shadow-sm rounded-xl mb-4">
           <div className="flex items-center gap-3">
@@ -117,14 +119,24 @@ export default function EmployeeProfile() {
 
         <div className="flex gap-3 p-3">
           <aside className="sticky top-4 h-fit w-60 bg-white border rounded-2xl p-6 flex flex-col items-center shadow-sm">
-            <span
-              className={`absolute top-2 right-2 px-2 py-1 text-[10px]  rounded flex items-center gap-1 ${isActive ? "bg-green-100 text-green-600" : "bg-red-100 text-red-500"}`}
+            <button
+              onClick={toggleStatus}
+              disabled={statusUpdating}
+              className={`absolute top-2 right-2 px-2 py-1 text-[10px] rounded flex items-center gap-1 cursor-pointer transition-opacity ${
+                statusUpdating ? "opacity-50 cursor-not-allowed" : ""
+              } ${
+                isActive
+                  ? "bg-green-100 text-green-600 hover:bg-green-200"
+                  : "bg-red-100 text-red-500 hover:bg-red-200"
+              }`}
             >
               <span
-                className={`w-1.5 h-1.5 rounded-full ${isActive ? "bg-green-500" : "bg-red-500"}`}
+                className={`w-1.5 h-1.5 rounded-full ${
+                  isActive ? "bg-green-500" : "bg-red-500"
+                }`}
               ></span>
               {isActive ? "Active" : "Deactivated"}
-            </span>
+            </button>
 
             <div className="w-24 h-24 rounded-full overflow-hidden mb-4 border-2 border-gray-50 mt-4 shadow-sm">
               <img
@@ -134,7 +146,7 @@ export default function EmployeeProfile() {
               />
             </div>
 
-            <h2 className="text-sm  text-gray-800 text-center">
+            <h2 className="text-sm font-medium text-gray-800 text-center">
               {selectedEmployee?.first_name} {selectedEmployee?.last_name}
             </h2>
             <p className="text-[12px] text-gray-400 mb-6">
@@ -146,7 +158,7 @@ export default function EmployeeProfile() {
                 <button
                   key={tab.name}
                   onClick={() => setActiveTab(tab.name)}
-                  className={`flex items-center gap-3 w-full text-left px-4 py-2.5 rounded-xl transition-all text-xs  ${
+                  className={`flex items-center gap-3 w-full text-left px-4 py-2.5 rounded-xl transition-all text-xs ${
                     activeTab === tab.name
                       ? "bg-black text-white shadow-md"
                       : "text-gray-500 hover:bg-gray-50"
@@ -165,7 +177,7 @@ export default function EmployeeProfile() {
 
               <button
                 onClick={() => setShowDeleteModal(true)}
-                className="flex items-center gap-3 w-full px-4 py-2.5 text-red-500 hover:bg-red-50 rounded-xl transition-all text-xs  mt-4"
+                className="flex items-center gap-3 w-full px-4 py-2.5 text-red-500 hover:bg-red-50 rounded-xl transition-all text-xs mt-4"
               >
                 <Icon icon="fluent:delete-20-regular" width="18" />
                 Delete User
@@ -175,20 +187,36 @@ export default function EmployeeProfile() {
 
           <main className="flex-1 overflow-y-auto max-h-[85vh] pr-2 scrollbar-none">
             {activeTab === "Activities" ? (
-              <ActivityTab employee={selectedEmployee} />
+              <ActivityTab
+                employee={selectedEmployee}
+                onSuccess={handleSuccess}
+                onError={handleError}
+              />
             ) : activeTab === "Personal Info" ? (
-              <PersonalInfoTab employee={selectedEmployee} />
+              <PersonalInfoTab
+                employee={selectedEmployee}
+                onSuccess={handleSuccess}
+                onError={handleError}
+              />
             ) : activeTab === "Attachments" ? (
               <AttachmentsTab
                 attachments={selectedEmployee?.attachments || []}
+                onSuccess={handleSuccess}
+                onError={handleError}
               />
             ) : activeTab === "Settings" ? (
               <SettingsTab
                 employee={selectedEmployee}
                 employeeUUID={selectedEmployee?.uuid}
+                onSuccess={handleSuccess}
+                onError={handleError}
               />
             ) : activeTab === "Manage Shift" ? (
-              <ManageShiftTab employeeUUID={selectedEmployee?.uuid} />
+              <ManageShiftTab
+                employeeUUID={selectedEmployee?.uuid}
+                onSuccess={handleSuccess}
+                onError={handleError}
+              />
             ) : (
               <div className="p-10 bg-white rounded-2xl border border-dashed border-gray-200 text-center text-gray-400 text-sm">
                 {activeTab} content coming soon...
@@ -197,7 +225,7 @@ export default function EmployeeProfile() {
           </main>
         </div>
 
-        {/* Delete Modal Logic remains the same */}
+        {/* Delete Modal */}
         {showDeleteModal && (
           <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 backdrop-blur-sm">
             <div className="bg-white rounded-2xl p-6 w-[400px] shadow-xl relative animate-in fade-in zoom-in duration-200">
@@ -207,7 +235,9 @@ export default function EmployeeProfile() {
               >
                 <X size={20} />
               </button>
-              <h2 className="text-lg  text-gray-800 mb-2">Confirm Deletion</h2>
+              <h2 className="text-lg font-medium text-gray-800 mb-2">
+                Confirm Deletion
+              </h2>
               <p className="text-xs text-gray-500 mb-4">
                 Provide a reason for deleting{" "}
                 <b>{selectedEmployee?.first_name}</b>.
@@ -222,13 +252,13 @@ export default function EmployeeProfile() {
               <div className="flex justify-end gap-3">
                 <button
                   onClick={() => setShowDeleteModal(false)}
-                  className="px-5 py-2 text-xs  text-gray-500 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                  className="px-5 py-2 text-xs text-gray-500 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleDelete}
-                  className="px-5 py-2 text-xs  bg-red-600 text-white rounded-lg hover:bg-red-700 shadow-lg shadow-red-200 transition-all"
+                  className="px-5 py-2 text-xs bg-red-600 text-white rounded-lg hover:bg-red-700 shadow-lg shadow-red-200 transition-all"
                 >
                   Confirm Delete
                 </button>

@@ -8,6 +8,7 @@ import {
   getEmployeeType,
   getGender,
   postBasicInformation,
+  getEmployeeRole,
   postAddBankInformation,
 updateWorkInformation,
 updateIDInfo,
@@ -662,6 +663,21 @@ export const createEmployeeReferenceNo = async (payload) => {
     );
     return response.data;
   } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * Fetch employee roles master data
+ * @returns {Promise<any>} - Resolves to the employee roles data
+ */
+export const fetchEmployeeRoles = async () => {
+  try {
+    const response = await axiosInstance.get(getEmployeeRole);
+    console.log("Employee roles response:", response);
+    return response.data.data;
+  } catch (error) {
+    console.error("Error fetching employee roles:", error);
     throw error;
   }
 };
