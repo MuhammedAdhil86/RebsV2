@@ -31,6 +31,8 @@ getMypersonalProfile,
 uploadProfileImage,
 updateMypersonalProfile,
 getEmployeeReferenceNo,
+getWorkFromHome,
+ updateStatus,
 // updateEmployeeReferenceNo,
 // createEmployeeReferenceNoUrl,
   getMaritalStatus// make sure you export this from your api.js
@@ -678,6 +680,44 @@ export const fetchEmployeeRoles = async () => {
     return response.data.data;
   } catch (error) {
     console.error("Error fetching employee roles:", error);
+    throw error;
+  }
+};
+
+export const fetchWfhRequests = async (status = "") => {
+  try {
+    const config = {};
+    if (status && status !== "All") {
+      config.params = { status };
+    }
+
+    const response = await axiosInstance.get(getWorkFromHome, config);
+
+    // ✅ Log the data to inspect the incoming array
+    console.log("Fetched WFH Requests Data:", response.data.data);
+
+    return response.data.data || [];
+  } catch (error) {
+    console.error("Error fetching WFH requests:", error);
+    return [];
+  }
+};
+
+// Update WFH request status (Approve / Reject)
+export const updateWfhStatus = async (id, status) => {
+  try {
+    const payload = {
+      id: String(id),
+      status, // "Approved" or "Rejected"
+    };
+
+    // Using PUT request to match: PUT /admin/wfh/update
+    const response = await axiosInstance.put(updateStatus, payload);
+    console.log("Updated WFH Request Status:", response.data);
+
+    return response.data;
+  } catch (error) {
+    console.error("Error updating WFH status:", error);
     throw error;
   }
 };

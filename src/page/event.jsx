@@ -15,7 +15,7 @@ import { format } from "date-fns";
 
 // Layout & UI
 import DashboardLayout from "../ui/pagelayout";
-import HeaderGlobal from "../ui/headerglobal"; // ✅ Added import path for unified HeaderGlobal
+import HeaderGlobal from "../ui/headerglobal";
 import EventCreate from "../components/events_ui/createevent";
 import EventDetailPage from "../components/events_ui/eventdetailpage";
 import AllEvents from "../components/events_ui/allevents";
@@ -50,6 +50,20 @@ const eventColors = {
 };
 
 const DEFAULT_AVATAR = "/person_img.jpg";
+
+const ChevronDownIcon = () => (
+  <svg
+    className="w-3.5 h-3.5 text-gray-500 pointer-events-none"
+    viewBox="0 0 20 20"
+    fill="currentColor"
+  >
+    <path
+      fillRule="evenodd"
+      d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.08 1.04l-4.25 4.25a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z"
+      clipRule="evenodd"
+    />
+  </svg>
+);
 
 const CustomToolbar = (props) => (
   <div className="flex justify-between items-center mb-6 p-2 font-poppins text-[12px]">
@@ -92,86 +106,64 @@ export default function Events({ userId, userName }) {
   const [branches, setBranches] = useState([]);
 
   useEffect(() => {
-    getBranchData().then((data) => {
-      console.log("➡️ API Response [getBranchData]:", data);
-      setBranches(Array.isArray(data) ? data : []);
-    });
+    let isMounted = true;
+    getBranchData()
+      .then((data) => {
+        if (isMounted) {
+          setBranches(Array.isArray(data) ? data : []);
+        }
+      })
+      .catch(() => {
+        if (isMounted) setBranches([]);
+      });
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
-  const handleInstantRefresh = () => {
-    console.log(
-      "🔄 Real-time Update Triggered: Invalidating stale runtime queries...",
-    );
-    queryClient.invalidateQueries(["allEvents"]);
-    queryClient.invalidateQueries(["dailyDetails"]);
+  const handleInstantRefresh = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: ["allEvents"],
+        refetchType: "all",
+      }),
+      queryClient.invalidateQueries({
+        queryKey: ["dailyDetails"],
+        refetchType: "all",
+      }),
+    ]);
   };
 
   const { data: allEvents = [] } = useQuery({
     queryKey: ["allEvents", currentMonth, currentYear],
-    queryFn: async () => {
-      const data = await fetchEvents(currentMonth, currentYear);
-      console.log(
-        `➡️ API Response [fetchEvents] for ${currentMonth}/${currentYear}:`,
-        data,
-      );
-      return data;
-    },
+    queryFn: () => fetchEvents(currentMonth, currentYear),
   });
 
   const { data: allLeaves = [] } = useQuery({
     queryKey: ["allLeaves", currentMonth, currentYear],
-    queryFn: async () => {
-      const data = await fetchMonthlyLeaves(currentMonth, currentYear);
-      console.log(
-        `➡️ API Response [fetchMonthlyLeaves] for ${currentMonth}/${currentYear}:`,
-        data,
-      );
-      return data;
-    },
+    queryFn: () => fetchMonthlyLeaves(currentMonth, currentYear),
   });
 
   const { data: holidays = [] } = useQuery({
     queryKey: ["holidays", currentYear, selectedBranch],
-    queryFn: async () => {
-      const data =
-        selectedBranch !== "all"
-          ? await fetchHolidaysByBranch(selectedBranch)
-          : await fetchAllHolidays();
-      console.log(
-        `➡️ API Response [Holidays] (Branch: ${selectedBranch}, Year: ${currentYear}):`,
-        data,
-      );
-      return data;
-    },
+    queryFn: () =>
+      selectedBranch !== "all"
+        ? fetchHolidaysByBranch(selectedBranch)
+        : fetchAllHolidays(),
   });
 
   const { data: weeklyOffs = [] } = useQuery({
     queryKey: ["weeklyOffs", currentYear, selectedBranch],
-    queryFn: async () => {
-      const data =
-        selectedBranch !== "all"
-          ? await getWeeklyOffByBranch(currentYear, selectedBranch)
-          : await getWeeklyOffByYear(currentYear);
-      console.log(
-        `➡️ API Response [Weekly Offs] (Branch: ${selectedBranch}, Year: ${currentYear}):`,
-        data,
-      );
-      return data;
-    },
+    queryFn: () =>
+      selectedBranch !== "all"
+        ? getWeeklyOffByBranch(currentYear, selectedBranch)
+        : getWeeklyOffByYear(currentYear),
     placeholderData: (prev) => prev,
   });
 
   const { data: dailyData } = useQuery({
     queryKey: ["dailyDetails", moment(selectedDate).format("YYYY-MM-DD")],
-    queryFn: async () => {
-      const targetDateStr = moment(selectedDate).format("YYYY-MM-DD");
-      const data = await fetchDailyDetails(targetDateStr);
-      console.log(
-        `➡️ API Response [fetchDailyDetails] for Date (${targetDateStr}):`,
-        data,
-      );
-      return data;
-    },
+    queryFn: () => fetchDailyDetails(moment(selectedDate).format("YYYY-MM-DD")),
   });
 
   const calendarEvents = useMemo(() => {
@@ -239,17 +231,7 @@ export default function Events({ userId, userName }) {
       },
     );
 
-    const mergedResults = [
-      ...events,
-      ...leaves,
-      ...holidayList,
-      ...weeklyOffList,
-    ];
-    console.log(
-      "📊 Computed Calendar Events Merged Core Array List:",
-      mergedResults,
-    );
-    return mergedResults;
+    return [...events, ...leaves, ...holidayList, ...weeklyOffList];
   }, [allEvents, allLeaves, holidays, weeklyOffs]);
 
   const handleNavigate = (newDate) => {
@@ -267,13 +249,12 @@ export default function Events({ userId, userName }) {
   return (
     <DashboardLayout userName={userName || "Admin"}>
       <div className="w-full">
-        {/* ✅ Global Header Component Integration */}
         <HeaderGlobal userName={userName || "Admin"} />
 
         {/* Action Controls & Info Center Bar */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 rounded-2xl border border-gray-100 shadow-sm font-poppins text-[12px]">
           <div>
-            <h2 className="text-sm  text-gray-900 tracking-wider uppercase">
+            <h2 className="text-sm text-gray-900 tracking-wider uppercase">
               Operation Center
             </h2>
             <p className="text-[10px] text-gray-400 uppercase tracking-wider mt-0.5">
@@ -282,22 +263,27 @@ export default function Events({ userId, userName }) {
           </div>
 
           <div className="flex items-center gap-4 flex-wrap w-full sm:w-auto justify-end">
-            <select
-              value={selectedBranch}
-              onChange={(e) => setSelectedBranch(e.target.value)}
-              className="bg-transparent text-gray-600 tracking-widest uppercase outline-none cursor-pointer border border-gray-200 rounded-lg px-3 py-1.5 focus:ring-0 font-normal"
-            >
-              <option value="all">All Branches</option>
-              {branches.map((b) => (
-                <option key={b.id || b.value} value={b.id || b.value}>
-                  {b.name || b.label}
-                </option>
-              ))}
-            </select>
+            <div className="relative">
+              <select
+                value={selectedBranch}
+                onChange={(e) => setSelectedBranch(e.target.value)}
+                className="appearance-none bg-transparent text-gray-600 tracking-widest uppercase outline-none cursor-pointer border border-gray-200 rounded-lg px-3 py-1.5 pr-8 focus:ring-0 font-normal"
+              >
+                <option value="all">All Branches</option>
+                {branches.map((b) => (
+                  <option key={b.id || b.value} value={b.id || b.value}>
+                    {b.name || b.label}
+                  </option>
+                ))}
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center">
+                <ChevronDownIcon />
+              </div>
+            </div>
 
             <button
               onClick={() => openDrawer("create")}
-              className="flex items-center gap-2 bg-black text-white px-5 py-2 rounded-xl tracking-widest hover:bg-gray-800 transition-all uppercase font-normal shadow-sm"
+              className="flex items-center gap-2 bg-black text-white px-5 py-2 rounded-xl tracking-widest hover:bg-gray-800 transition-all uppercase font-normal shadow-sm cursor-pointer"
             >
               <FiPlus size={14} /> New Event
             </button>
@@ -471,7 +457,7 @@ export default function Events({ userId, userName }) {
                 </h3>
                 <button
                   onClick={() => openDrawer("all")}
-                  className="text-[10px] text-gray-400 hover:text-black uppercase underline underline-offset-4"
+                  className="text-[10px] text-gray-400 hover:text-black uppercase underline underline-offset-4 cursor-pointer"
                 >
                   View All
                 </button>
@@ -518,7 +504,7 @@ export default function Events({ userId, userName }) {
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         PaperProps={{
-          className: "w-[549px] rounded-l-[40px] shadow-2xl border-none",
+          className: "w-[549px] shadow-2xl border-none",
         }}
       >
         <div className="p-6 h-full flex flex-col font-poppins text-[12px]">

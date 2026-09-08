@@ -12,39 +12,32 @@ import DeviceApprovalModal from "../ui/devicestatusmodal";
 import InsuranceApprovalModal from "../ui/insurancestatusmodal";
 
 function Requests() {
-  // Lazy state initialization from localStorage to remember tab choices across refreshes
   const [activeTab, setActiveTab] = useState(() => {
     return localStorage.getItem("requests_active_tab") || "wfh";
   });
 
-  // Modal State triggers for Device Requests
   const [selectedDeviceRow, setSelectedDeviceRow] = useState(null);
   const [isDeviceModalOpen, setIsDeviceModalOpen] = useState(false);
 
-  // Modal State triggers for Insurance Requests
   const [selectedInsuranceRow, setSelectedInsuranceRow] = useState(null);
   const [isInsuranceModalOpen, setIsInsuranceModalOpen] = useState(false);
 
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
-  // Synchronize activeTab choices inside localStorage
   useEffect(() => {
     localStorage.setItem("requests_active_tab", activeTab);
   }, [activeTab]);
 
-  // Row selection handler for Device Requests
   const handleDeviceRowClick = (rowData) => {
     setSelectedDeviceRow(rowData);
     setIsDeviceModalOpen(true);
   };
 
-  // Row selection handler for Insurance Requests
   const handleInsuranceRowClick = (rowData) => {
     setSelectedInsuranceRow(rowData);
     setIsInsuranceModalOpen(true);
   };
 
-  // Force silently reloading table data arrays on submission success
   const handleSuccessReload = () => {
     setRefreshTrigger((prev) => prev + 1);
   };
@@ -52,11 +45,16 @@ function Requests() {
   return (
     <DashboardLayout userName="Admin" onLogout={() => {}}>
       <div className="w-full space-y-4">
-        {/* Global shared navbar element */}
         <HeaderGlobal userName="Admin" />
 
-        {/* Navigation Tab Links Component Header Layout */}
-        <div className="flex gap-4 border-b px-4 text-[14px] bg-white pt-2 shadow-sm rounded-t-lg select-none overflow-x-auto">
+        {/* Tab Navigation Header with explicit inline & Tailwind scrollbar suppression */}
+        <div
+          style={{
+            scrollbarWidth: "none",
+            msOverflowStyle: "none",
+          }}
+          className="flex gap-4 border-b px-4 text-[14px] bg-white pt-2 shadow-sm rounded-t-lg select-none overflow-x-auto scrollbar-none [&::-webkit-scrollbar]:hidden"
+        >
           <button
             type="button"
             onClick={() => setActiveTab("wfh")}
@@ -130,7 +128,7 @@ function Requests() {
           </button>
         </div>
 
-        {/* Tab Panels Display Wrapper Container */}
+        {/* Tab Panels */}
         <div className="mt-2">
           {activeTab === "wfh" && <WfhTab />}
           {activeTab === "leave" && <LeaveRequestes />}

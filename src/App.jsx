@@ -9,18 +9,20 @@ function App() {
       {/* Global Loader */}
       <GlobalLoader />
 
-      {/* Scrollable App Content Container */}
-      <div className="h-screen w-screen overflow-auto scrollbar-hide relative">
-        {/* FIXED TOASTER CONFIGURATION:
-          We use position: "fixed" and an ultra-high z-index layer 
-          to force the alerts out of local component HTML stacking frames.
-        */}
+      {/* App Shell with Scrollbars Completely Suppressed */}
+      <div
+        style={{
+          scrollbarWidth: "none",
+          msOverflowStyle: "none",
+        }}
+        className="h-screen w-screen overflow-auto scrollbar-none [&::-webkit-scrollbar]:hidden relative"
+      >
         <Toaster
           position="top-right"
           reverseOrder={false}
           containerStyle={{
-            position: "fixed", // Bypasses local scrollable div container limits
-            zIndex: 999999, // Forces priority above your z-[999] modals
+            position: "fixed",
+            zIndex: 999999,
             top: "24px",
             right: "24px",
           }}
@@ -39,17 +41,6 @@ function App() {
 
         <AppRoutes />
       </div>
-
-      {/* CSS to hide scrollbars in all browsers */}
-      <style>{`
-        .scrollbar-hide::-webkit-scrollbar {
-          display: none;
-        }
-        .scrollbar-hide {
-          -ms-overflow-style: none;
-          scrollbar-width: none;
-        }
-      `}</style>
     </>
   );
 }
