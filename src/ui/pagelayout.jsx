@@ -1,14 +1,15 @@
-import React, { useState, useEffect } from "react";
+import React, { useState /*, useEffect */ } from "react";
 import SideBar from "../components/sidebar";
-import MarkHappinessModal from "./markhappinessmodal";
-import dashboardService from "../service/dashboardService";
+// import MarkHappinessModal from "./markhappinessmodal";
+// import dashboardService from "../service/dashboardService";
 
 function DashboardLayout({ userName, onLogout, children }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [showHappinessModal, setShowHappinessModal] = useState(false);
+  // const [showHappinessModal, setShowHappinessModal] = useState(false);
 
   const toggleSidebar = () => setIsCollapsed((prev) => !prev);
 
+  /*
   useEffect(() => {
     let timer;
 
@@ -36,15 +37,18 @@ function DashboardLayout({ userName, onLogout, children }) {
       if (timer) clearTimeout(timer);
     };
   }, []);
+  */
 
   return (
     <div className="flex h-screen w-screen bg-black overflow-hidden">
       {/* Global Happiness Rating Modal */}
+      {/* 
       <MarkHappinessModal
         isOpen={showHappinessModal}
         onClose={() => setShowHappinessModal(false)}
         onSuccess={() => setShowHappinessModal(false)}
-      />
+      /> 
+      */}
 
       {/* Sidebar - Fixed width based on state */}
       <SideBar
