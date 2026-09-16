@@ -12,6 +12,8 @@ import {
   allocateCompliance,
   getRoles,
   allocateRoles,
+  deleteDesignation,
+  updateDesignation,
   getPolicies,postLeaveBulkAllocation,
   getLeavePolicy,
   getAllowanceData,
@@ -26,6 +28,8 @@ import {
   postDepartment,
   updatePresetAttendanceTemplate,
   postDivision,
+  deleteBranchUrl,
+  updateBranchUrl,
   getPresetAttendanceTemplate,
   deleteAttendancePolicyUrl,
   postDesignation,
@@ -33,6 +37,8 @@ import {
   postShiftcreate,
   getWeeklyOffBranch,
   companyPreview,
+  updateDepartment,
+  deleteDepartment,
   deleteShiftUrl,
   getAttendancepolicy,
   getAllLeavePolicy
@@ -166,7 +172,25 @@ export const fetchPrivilegeAllowance = async (employeeUuid) => {
     throw error;
   }
 };
+export const editDepartmentData = async (id, data) => {
+  try {
+    const response = await axiosInstance.put(updateDepartment(id), data);
+    return response.data;
+  } catch (error) {
+    if (error.response?.data) throw error.response.data;
+    throw error;
+  }
+};
 
+export const deleteDepartmentData = async (id) => {
+  try {
+    const response = await axiosInstance.delete(deleteDepartment(id));
+    return response.data;
+  } catch (error) {
+    if (error.response?.data) throw error.response.data;
+    throw error;
+  }
+};
 
 export const allocateAllowanceData = async (uuid, allowanceData) => {
   try {
@@ -381,22 +405,61 @@ export const addBranch = async (branchData) => {
   }
 };
 
-export const editBranch = async (id, data) => {
-  try {
-    const response = await axiosInstance.put(`/branch/update/${id}`, data);
-    return response.data;
-  } catch (error) {
-    console.error("Error updating branch:", error);
-    throw error;
-  }
-};
-
 export const addDepartment = async (DepartmentData) => {
   try {
     const response = await axiosInstance.post(postDepartment, DepartmentData);
     return response.data;
   } catch (error) {
     console.error("Error adding department:", error);
+    throw error;
+  }
+};
+/**
+ * Throws only what the backend returned.
+ */
+const throwBackendError = (error) => {
+  // If the backend sent a response payload, reject with it directly
+  if (error.response?.data) {
+    throw error.response.data;
+  }
+  // If no server response exists (e.g., network timeout/offline)
+  throw error;
+};
+
+export const editBranch = async (id, data) => {
+  try {
+    const response = await axiosInstance.put(updateBranchUrl(id), data);
+    return response.data;
+  } catch (error) {
+    throwBackendError(error);
+  }
+};
+
+export const deleteBranch = async (id) => {
+  try {
+    const response = await axiosInstance.delete(deleteBranchUrl(id));
+    return response.data;
+  } catch (error) {
+    throwBackendError(error);
+  }
+};
+
+export const editDesignationData = async (id, data) => {
+  try {
+    const response = await axiosInstance.put(updateDesignation(id), data);
+    return response.data;
+  } catch (error) {
+    if (error.response?.data) throw error.response.data;
+    throw error;
+  }
+};
+
+export const deleteDesignationData = async (id) => {
+  try {
+    const response = await axiosInstance.delete(deleteDesignation(id));
+    return response.data;
+  } catch (error) {
+    if (error.response?.data) throw error.response.data;
     throw error;
   }
 };

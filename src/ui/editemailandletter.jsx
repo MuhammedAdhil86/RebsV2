@@ -1,8 +1,7 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import ReactQuill from "react-quill";
 import "react-quill/dist/quill.snow.css";
 import {
-  Mail,
   ChevronDown,
   Undo2,
   Redo2,
@@ -29,12 +28,10 @@ const EditEmailTemplateView = ({
   const [loading, setLoading] = useState(false);
   const [showPlaceholderMenu, setShowPlaceholderMenu] = useState(false);
 
-  // ✅ Keep state in sync with initialData whenever it populates/changes
   useEffect(() => {
     if (initialData) {
       setTemplateTitle(initialData.name || "");
       setSubject(initialData.subject || "");
-      // Handles both body_html (from API response) and body (fallback)
       setContent(initialData.body_html || initialData.body || "");
     }
   }, [initialData]);
@@ -51,7 +48,6 @@ const EditEmailTemplateView = ({
     const insertIndex = range ? range.index : editor.getLength();
 
     editor.insertText(insertIndex, token, "user");
-    // Move cursor past inserted placeholder
     editor.setSelection(insertIndex + token.length);
     setShowPlaceholderMenu(false);
   };
@@ -66,13 +62,13 @@ const EditEmailTemplateView = ({
     try {
       await updateEmailTemplateService({
         id: initialData?.id,
-        purpose: initialData?.purpose, // Original immutable purpose
+        purpose: initialData?.purpose,
         name: templateTitle,
         subject: subject,
         body_html: content,
       });
       toast.success("Template updated successfully!");
-      setTimeout(() => onBack(), 1000); // Navigate back to list view
+      setTimeout(() => onBack(), 1000);
     } catch (err) {
       toast.error(err.message || "Failed to update template");
     } finally {
@@ -80,20 +76,89 @@ const EditEmailTemplateView = ({
     }
   };
 
+  // --- Complete Quill Toolbar Configuration ---
+  const modules = useMemo(
+    () => ({
+      toolbar: [
+        [{ font: [] }, { size: ["small", false, "large", "huge"] }],
+        [{ header: [1, 2, 3, 4, 5, 6, false] }],
+        ["bold", "italic", "underline", "strike"],
+        // Empty array [] generates full spectrum color pickers
+        [{ color: [] }, { background: [] }],
+        [{ script: "sub" }, { script: "super" }],
+        [{ header: 1 }, { header: 2 }, "blockquote", "code-block"],
+        [
+          { list: "ordered" },
+          { list: "bullet" },
+          { indent: "-1" },
+          { indent: "+1" },
+        ],
+        [{ direction: "rtl" }, { align: [] }],
+        ["link", "image", "video"],
+        ["clean"],
+      ],
+      history: {
+        delay: 500,
+        maxStack: 100,
+        userOnly: true,
+      },
+    }),
+    [],
+  );
+
+  const formats = [
+    "font",
+    "size",
+    "header",
+    "bold",
+    "italic",
+    "underline",
+    "strike",
+    "color",
+    "background",
+    "script",
+    "blockquote",
+    "code-block",
+    "list",
+    "bullet",
+    "indent",
+    "direction",
+    "align",
+    "link",
+    "image",
+    "video",
+    "clean",
+  ];
+
   return (
     <div className="w-full bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col font-poppins animate-in slide-in-from-bottom-2 duration-300">
       <Toaster position="top-right" />
 
-      {/* Hidden Scrollbar Styles */}
+      {/* Editor & Scrollbar Polish */}
       <style
         dangerouslySetInnerHTML={{
           __html: `
-            .no-scrollbar::-webkit-scrollbar {
-              display: none;
+            .no-scrollbar::-webkit-scrollbar { display: none; }
+            .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+            
+            /* Quill Layout Tuning */
+            .ql-toolbar.ql-snow {
+              border: none !important;
+              border-bottom: 1px solid #e5e7eb !important;
+              padding: 10px 14px !important;
+              background-color: #fafbfc;
+              padding-right: 280px !important; /* Leaves breathing room for custom toolbar actions */
             }
-            .no-scrollbar {
-              -ms-overflow-style: none;
-              scrollbar-width: none;
+            .ql-container.ql-snow {
+              border: none !important;
+              font-family: inherit;
+              font-size: 13px;
+              min-height: 380px;
+            }
+            .ql-editor {
+              min-height: 380px;
+              line-height: 1.6;
+              padding: 18px;
             }
           `,
         }}
@@ -124,8 +189,8 @@ const EditEmailTemplateView = ({
       </div>
 
       {/* --- FORM BODY --- */}
-      <div className="p-8 flex flex-col gap-6 max-h-[75vh] overflow-y-auto no-scrollbar bg-[#FAFBFC]">
-        {/* Row 1: Read-Only Purpose Display */}
+      <div className="p-8 flex flex-col gap-6 max-h-[78vh] overflow-y-auto no-scrollbar bg-[#FAFBFC]">
+        {/* Row 1: Purpose */}
         <div className="flex flex-col gap-1.5">
           <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider ml-1">
             Category / Purpose
@@ -137,20 +202,17 @@ const EditEmailTemplateView = ({
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          {/* Template Title with Info Icon */}
+          {/* Template Title */}
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center justify-between px-1">
               <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">
                 Template Name
               </label>
 
-              {/* Info Icon with Bouncing Animation and Hover Tooltip */}
               <div className="relative group flex items-center">
                 <div className="cursor-pointer p-0.5 rounded-full hover:bg-gray-100 transition-colors animate-bounce">
                   <Info size={16} className="text-blue-500" />
                 </div>
-
-                {/* Tooltip Content */}
                 <div className="absolute right-0 top-full mt-2 w-[420px] max-h-96 overflow-y-auto no-scrollbar hidden group-hover:block bg-white text-black text-[13px] font-normal rounded-xl p-5 shadow-2xl border border-gray-200 z-[100] transition-all normal-case tracking-normal">
                   <div className="text-[15px] font-normal mb-2 text-black">
                     Template Placeholder Guidelines
@@ -161,69 +223,9 @@ const EditEmailTemplateView = ({
                   </p>
                   <p className="text-black mb-2.5 leading-relaxed font-normal">
                     <em>Important:</em> The dropdown contains placeholders from
-                    all templates available in the system. Please use{" "}
-                    <em>
-                      only the placeholders that are applicable to the specific
-                      template you are currently editing
-                    </em>
-                    .
+                    all templates. Use only relevant keys in the format{" "}
+                    <code>{"{{.PlaceholderName}}"}</code>.
                   </p>
-                  <p className="text-black mb-3 leading-relaxed font-normal">
-                    Each template has its own set of relevant placeholders, and
-                    placeholders are named according to their intended template
-                    purpose to help you identify the correct ones.
-                  </p>
-
-                  <div className="text-[14px] font-normal mt-3 mb-2 text-black">
-                    How to use placeholders
-                  </div>
-                  <ul className="list-disc pl-5 space-y-1 text-black font-normal mb-3 leading-relaxed">
-                    <li>
-                      Select a placeholder from the dropdown and insert it into
-                      the <em>Subject/Function</em> or <em>Body HTML</em> where
-                      required.
-                    </li>
-                    <li>
-                      Use only placeholders relevant to the current template.
-                    </li>
-                    <li>
-                      Do not manually modify the placeholder name or syntax.
-                    </li>
-                    <li>
-                      Placeholders must be used in the format{" "}
-                      <span>{"{{.PlaceholderName}}"}</span>.
-                    </li>
-                    <li>
-                      Generic placeholders may be available for use across
-                      multiple templates where applicable.
-                    </li>
-                    <li>
-                      Using a placeholder that is not supported by the current
-                      template may result in the value not being populated
-                      correctly when the template is generated or sent.
-                    </li>
-                  </ul>
-
-                  <div className="text-black font-normal mt-2 mb-1">
-                    <em>Example:</em>
-                  </div>
-                  <p className="text-black mb-2 leading-relaxed font-normal">
-                    If you are editing an <em>Employee Leave Approval</em>{" "}
-                    template, use placeholders provided for leave-related
-                    information such as employee name, leave dates, leave type,
-                    etc.
-                  </p>
-                  <p className="text-black mb-3 leading-relaxed font-normal">
-                    Do not use placeholders that belong specifically to
-                    unrelated templates such as payroll, onboarding, attendance,
-                    or other modules.
-                  </p>
-
-                  <div className="border-l-2 border-gray-300 pl-3 py-1 bg-gray-50 rounded-r-md text-black font-normal text-[12px] leading-relaxed">
-                    <em>Tip:</em> Always select placeholders from the dropdown
-                    instead of typing them manually. The placeholder name and
-                    syntax should remain exactly as provided.
-                  </div>
                 </div>
               </div>
             </div>
@@ -250,26 +252,33 @@ const EditEmailTemplateView = ({
           </div>
         </div>
 
-        {/* --- EDITOR --- */}
-        <div className="relative bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
-          <div className="absolute right-4 top-[10px] z-10 flex items-center gap-3 bg-white px-2 rounded-lg py-1 border border-gray-50 shadow-sm">
-            <div className="flex items-center gap-3 text-gray-300 border-r pr-3">
-              <Undo2
-                size={16}
-                className="cursor-pointer hover:text-black transition-colors"
+        {/* --- EDITOR CONTAINER --- */}
+        <div className="relative bg-white rounded-xl border border-gray-200 shadow-sm">
+          {/* Custom Action Group Mounted Over Toolbar Top-Right */}
+          <div className="absolute right-3 top-2 z-20 flex items-center gap-2 bg-white/90 backdrop-blur-sm px-2 py-1 rounded-lg border border-gray-200 shadow-sm">
+            <div className="flex items-center gap-2 text-gray-400 border-r border-gray-200 pr-2">
+              <button
+                type="button"
                 onClick={handleUndo}
-              />
-              <Redo2
-                size={16}
-                className="cursor-pointer hover:text-black transition-colors"
+                title="Undo"
+                className="hover:text-gray-700 transition-colors p-1"
+              >
+                <Undo2 size={15} />
+              </button>
+              <button
+                type="button"
                 onClick={handleRedo}
-              />
+                title="Redo"
+                className="hover:text-gray-700 transition-colors p-1"
+              >
+                <Redo2 size={15} />
+              </button>
             </div>
             <div className="relative">
               <button
                 type="button"
                 onClick={() => setShowPlaceholderMenu(!showPlaceholderMenu)}
-                className="flex items-center gap-1 text-[11px] text-gray-600 font-semibold uppercase tracking-tight"
+                className="flex items-center gap-1 text-[11px] text-gray-700 font-semibold uppercase tracking-tight hover:text-black py-0.5 px-1"
               >
                 Insert Placeholder <ChevronDown size={14} />
               </button>
@@ -289,12 +298,14 @@ const EditEmailTemplateView = ({
               )}
             </div>
           </div>
+
           <ReactQuill
             ref={quillRef}
             theme="snow"
             value={content}
             onChange={setContent}
-            className="min-h-[350px] text-[13px]"
+            modules={modules}
+            formats={formats}
           />
         </div>
       </div>

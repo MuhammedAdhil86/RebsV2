@@ -143,14 +143,18 @@ export const postBranch = "/branch/add"
 export const postDivision =(id)=> `/division/add/${id}`
 export const postDepartment = "/admin/department/add"
 export const postDesignation = "/admin/designation/add"
-export const getDepartment = "/admin/department/get"
-export const deleteDepartment = "/admin/department/delete/:id"
-
+export const getDepartment = "/admin/department/get";
+export const deleteBranchUrl = (id) => `/branch/delete/${id}`;
+export const updateBranchUrl = (id) => `/branch/update/${id}`;
+export const updateDesignation = (id) => `/admin/designation/update/${id}`;
+export const deleteDesignation = (id) => `/admin/designation/delete/${id}`;
+export const updateDepartment = (id) => `/admin/department/update/${id}`;
+export const deleteDepartment = (id) => `/admin/department/delete/${id}`;
 //Timeline api
 
 export const getwithDivision = "/branch/getwithdivision"
 export const getDesignations = "/admin/designation/get"
-export const deleteDesignation = "/admin/designation/delete/:id"
+
 
 // Organisational Policy
 
