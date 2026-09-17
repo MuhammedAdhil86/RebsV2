@@ -7,6 +7,7 @@ import AddDepartmentForm from "./corganizational_structure_tab/adddepartmentform
 import AddDesignationForm from "./corganizational_structure_tab/adddesignationform";
 
 import BranchView from "./viewdata/branchview";
+import DivisionView from "./viewdata/divisionview";
 import DepartmentView from "./viewdata/departmentview";
 import DesignationView from "./viewdata/designationview";
 
@@ -35,11 +36,7 @@ const OrganizationalStructure = () => {
         {activeTab === "division" && (
           <>
             <AddDivisionForm />
-            {showAdded && (
-              <div className="text-gray-500 text-center py-10">
-                Division Table Coming Soon...
-              </div>
-            )}
+            {showAdded && <DivisionView />}
           </>
         )}
 
@@ -72,7 +69,7 @@ const OrganizationalStructure = () => {
           extraButtons={(activeTab) => (
             <button
               onClick={() => setShowAdded((prev) => !prev)}
-              className={`px-3 h-[30px] text-xs rounded-md border  transition-all flex items-center justify-center`}
+              className="px-3 h-[30px] text-xs rounded-md border transition-all flex items-center justify-center cursor-pointer hover:bg-gray-50"
             >
               {showAdded
                 ? "Hide Added"

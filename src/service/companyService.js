@@ -11,6 +11,9 @@ import {
   allocateAllowance,
   allocateCompliance,
   getRoles,
+  getwithDivision,
+  updateDivision,
+  deleteDivision,
   allocateRoles,
   deleteDesignation,
   updateDesignation,
@@ -484,6 +487,24 @@ export const addDesignation = async (DesignationData) => {
     console.error("Error adding designation:", error);
     throw error;
   }
+};export const editDivisionData = async (divisionData) => {
+  try {
+    const response = await axiosInstance.put(updateDivision, divisionData);
+    return response.data;
+  } catch (error) {
+    if (error.response?.data) throw error.response.data;
+    throw error;
+  }
+};
+
+export const deleteDivisionData = async (id) => {
+  try {
+    const response = await axiosInstance.delete(deleteDivision(id));
+    return response.data;
+  } catch (error) {
+    if (error.response?.data) throw error.response.data;
+    throw error;
+  }
 };
 
 export const createShift = async (shiftData) => {
@@ -496,7 +517,15 @@ export const createShift = async (shiftData) => {
     throw error; // so the caller knows it failed
   }
 };
-
+export const getBranchWithDivisionData = async () => {
+  try {
+    const response = await axiosInstance.get(getwithDivision);
+    return response.data.data;
+  } catch (error) {
+    if (error.response?.data) throw error.response.data;
+    throw error;
+  }
+};
 export const getAttendancePolicyData = async () => {
   try {
     const res = await axiosInstance.get("attendance-policy/get"); // ✅ leading slash

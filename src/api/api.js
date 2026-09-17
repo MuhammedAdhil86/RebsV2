@@ -150,6 +150,8 @@ export const updateDesignation = (id) => `/admin/designation/update/${id}`;
 export const deleteDesignation = (id) => `/admin/designation/delete/${id}`;
 export const updateDepartment = (id) => `/admin/department/update/${id}`;
 export const deleteDepartment = (id) => `/admin/department/delete/${id}`;
+export const updateDivision = "/division/update";
+export const deleteDivision = (id) => `/division/delete/${id}`;
 //Timeline api
 
 export const getwithDivision = "/branch/getwithdivision"
@@ -252,7 +254,7 @@ export const deleteLeavePolicy = (id) => `/leave-policy/delete/${id}`;
 export const deleteAllowance = "/allowance/delete/:id"
 export const deleteCompliance = "/compliance/delete/:id"
 export const deleteBranch = "/branch/delete/:id"
-export const deleteDivision = "/division/delete/:id"
+
 
 export const postBulkUpload = "/staff/bulkupload"
 export const AddStudentApi = "/leads/addstudent"
