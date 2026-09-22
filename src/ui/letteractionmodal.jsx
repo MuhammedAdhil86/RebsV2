@@ -10,51 +10,141 @@ import {
   Plus,
 } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
-import { getStaffDetails } from "../service/employeeService";
+import { getActiveUsersLight } from "../service/employeeService";
+import { fetchEmailPurposes, sendLetterService } from "../service/mainServices";
+import { generateLetterService } from "../service/cloudflareLetterServices";
 
-const LetterActionModal = ({ isOpen, onClose, onExecute, activeTab }) => {
+const LetterActionModal = ({
+  isOpen,
+  onClose,
+  onExecute,
+  onSuccess,
+  activeTab,
+}) => {
   const [staff, setStaff] = useState([]);
+  const [purposes, setPurposes] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [purposesLoading, setPurposesLoading] = useState(false);
+  const [processing, setProcessing] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedEmp, setSelectedEmp] = useState(null);
 
-  // Form States
-  const [category, setCategory] = useState("1");
+  // Form States - purpose strictly stored as a string
+  const [purpose, setPurpose] = useState("");
   const [cc, setCc] = useState([]);
   const [bcc, setBcc] = useState([]);
   const [tempCc, setTempCc] = useState("");
   const [tempBcc, setTempBcc] = useState("");
 
+  // Fetch Staff and Purposes
   useEffect(() => {
-    if (isOpen) {
-      const fetchData = async () => {
-        setLoading(true);
-        try {
-          const res = await getStaffDetails();
-          const staffList =
-            res?.data?.data || res?.data || res?.responsedata || res || [];
-          setStaff(Array.isArray(staffList) ? staffList : []);
-        } catch (err) {
-          toast.error("Failed to load staff details");
-        } finally {
-          setLoading(false);
-        }
-      };
-      fetchData();
-    }
-  }, [isOpen]);
+    if (!isOpen) return;
 
+    const fetchData = async () => {
+      setLoading(true);
+      setPurposesLoading(true);
+
+      try {
+        const [staffRes, rawPurposesData] = await Promise.all([
+          getActiveUsersLight(),
+          fetchEmailPurposes(),
+        ]);
+
+        // 1. Process Staff List
+        const staffList = Array.isArray(staffRes)
+          ? staffRes
+          : staffRes?.data?.data || staffRes?.data || [];
+        setStaff(staffList);
+
+        // 2. Process Purposes Array: ["aaa_aaa_eewe", "adhil_adhil_pdf", ...]
+        const parsedPurposes = Array.isArray(rawPurposesData)
+          ? rawPurposesData
+          : rawPurposesData?.data || [];
+
+        // Ensure every item is a trimmed string
+        const cleanPurposes = parsedPurposes
+          .map((item) =>
+            typeof item === "string"
+              ? item.trim()
+              : item?.purpose || String(item),
+          )
+          .filter(Boolean);
+
+        setPurposes(cleanPurposes);
+
+        // Filter matched purposes for active tab
+        const matched = cleanPurposes.filter((p) => {
+          const key = p.toLowerCase();
+          return activeTab === "pdf"
+            ? key.endsWith("_pdf")
+            : key.endsWith("_mail") ||
+                key.includes("mail") ||
+                key.includes("email");
+        });
+
+        // Set default selection as raw string
+        if (matched.length > 0) {
+          setPurpose(matched[0]);
+        } else {
+          setPurpose("");
+        }
+      } catch (err) {
+        toast.error("Failed to load details");
+      } finally {
+        setLoading(false);
+        setPurposesLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [isOpen, activeTab]);
+
+  // Filter purposes by tab
+  const filteredPurposes = useMemo(() => {
+    return purposes.filter((p) => {
+      const key = String(p).toLowerCase().trim();
+      if (activeTab === "pdf") {
+        return key.endsWith("_pdf");
+      }
+      return (
+        key.endsWith("_mail") || key.includes("mail") || key.includes("email")
+      );
+    });
+  }, [purposes, activeTab]);
+
+  // Keep purpose selection in sync with tab changes
+  useEffect(() => {
+    if (filteredPurposes.length > 0) {
+      if (!purpose || !filteredPurposes.includes(purpose)) {
+        setPurpose(String(filteredPurposes[0]));
+      }
+    } else {
+      setPurpose("");
+    }
+  }, [filteredPurposes, purpose]);
+
+  // Filter staff by name or uuid
   const filteredStaff = useMemo(() => {
     return staff.filter((emp) => {
       const fullName = (
         emp.name || `${emp.first_name || ""} ${emp.last_name || ""}`
       ).toLowerCase();
-      return fullName.includes(searchTerm.toLowerCase());
+      const uuid = String(emp.uuid || "").toLowerCase();
+      return (
+        fullName.includes(searchTerm.toLowerCase()) ||
+        uuid.includes(searchTerm.toLowerCase())
+      );
     });
   }, [staff, searchTerm]);
 
+  // Handle purpose selection change - forces pure string assignment
+  const handlePurposeChange = (e) => {
+    const value = String(e.target.value || "").trim();
+    setPurpose(value);
+  };
+
   const handleAddEmail = (type) => {
-    const val = type === "cc" ? tempCc : tempBcc;
+    const val = type === "cc" ? tempCc.trim() : tempBcc.trim();
     if (val && !(type === "cc" ? cc : bcc).includes(val)) {
       if (type === "cc") {
         setCc([...cc, val]);
@@ -67,24 +157,91 @@ const LetterActionModal = ({ isOpen, onClose, onExecute, activeTab }) => {
   };
 
   const handleClose = () => {
+    if (processing) return;
     setSearchTerm("");
     setSelectedEmp(null);
     setCc([]);
     setBcc([]);
+    setPurpose("");
     onClose();
   };
 
-  const handleConfirm = () => {
-    if (!selectedEmp) return toast.error("Please select an employee");
-    const empId = selectedEmp.uuid || selectedEmp.id || selectedEmp.user_id;
-    onExecute({ userId: empId, letter_category: category, cc, bcc });
+  const handleConfirm = async () => {
+    if (!selectedEmp) {
+      return toast.error("Please select an employee");
+    }
+
+    // Ensure purpose is a non-empty string
+    const finalPurpose = String(purpose || filteredPurposes[0] || "").trim();
+    if (!finalPurpose) {
+      return toast.error("Please select a valid document purpose");
+    }
+
+    // Priority: uuid string ("2000" / "100003")
+    const empUuid = selectedEmp.uuid || selectedEmp.user_id || selectedEmp.id;
+    const userId = String(empUuid).trim();
+
+    setProcessing(true);
+    const toastId = toast.loading(
+      activeTab === "pdf" ? "Generating PDF..." : "Sending email...",
+    );
+
+    try {
+      if (activeTab === "pdf") {
+        const res = await generateLetterService(userId, finalPurpose);
+        toast.success(res?.message || "Successfully generated letter", {
+          id: toastId,
+        });
+
+        const fileUrl = res?.data?.file_url || res?.file_url;
+        if (fileUrl) {
+          window.open(fileUrl, "_blank", "noopener,noreferrer");
+        }
+
+        if (onSuccess) onSuccess(res);
+      } else {
+        const emailPayload = {
+          user_id: userId,
+          purpose: finalPurpose, // Clean string e.g. "appointment_letter_mail"
+          cc: cc.length > 0 ? cc : [""],
+          bcc: bcc.length > 0 ? bcc : [""],
+        };
+
+        const res = await sendLetterService(emailPayload);
+        toast.success(res?.message || "Email letter sent successfully!", {
+          id: toastId,
+        });
+
+        if (onSuccess) onSuccess(res);
+      }
+
+      if (onExecute) {
+        onExecute({
+          user_id: userId,
+          userId,
+          purpose: finalPurpose,
+          cc: cc.length > 0 ? cc : [""],
+          bcc: bcc.length > 0 ? bcc : [""],
+        });
+      }
+
+      handleClose();
+    } catch (error) {
+      const errMsg =
+        error?.response?.data?.message ||
+        error?.response?.data?.error ||
+        error?.message ||
+        "Failed to process letter request";
+      toast.error(errMsg, { id: toastId });
+    } finally {
+      setProcessing(false);
+    }
   };
 
   if (!isOpen) return null;
 
-  // Shared class for inputs and placeholders
   const inputBaseClass =
-    "w-full bg-white border border-gray-200 rounded-2xl px-5 py-3.5 outline-none focus:border-black text-[12px] transition-all text-black placeholder:text-black font-poppins font-normal";
+    "w-full bg-white border border-gray-200 rounded-2xl px-5 py-3.5 outline-none focus:border-black text-[12px] transition-all text-black placeholder:text-gray-400 font-poppins font-normal";
 
   return (
     <div className="fixed inset-0 z-[10001] flex items-center justify-center bg-black/40 backdrop-blur-sm font-poppins text-[12px]">
@@ -106,13 +263,15 @@ const LetterActionModal = ({ isOpen, onClose, onExecute, activeTab }) => {
                 {activeTab === "pdf" ? "Generate PDF" : "Send Email"}
               </h2>
               <p className="text-black/50 text-[9px] tracking-widest uppercase">
-                Select employee & category
+                Select employee & letter purpose
               </p>
             </div>
           </div>
           <button
+            type="button"
             onClick={handleClose}
-            className="p-2 hover:bg-gray-100 rounded-full text-black transition-colors"
+            disabled={processing}
+            className="p-2 hover:bg-gray-100 rounded-full text-black transition-colors cursor-pointer disabled:opacity-40"
           >
             <X size={20} />
           </button>
@@ -131,10 +290,11 @@ const LetterActionModal = ({ isOpen, onClose, onExecute, activeTab }) => {
               />
               <input
                 type="text"
-                placeholder="Search name..."
+                placeholder="Search name or ID..."
                 className={`${inputBaseClass} pl-10`}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
+                disabled={processing}
               />
             </div>
 
@@ -143,32 +303,67 @@ const LetterActionModal = ({ isOpen, onClose, onExecute, activeTab }) => {
                 <div className="flex justify-center py-4">
                   <Loader2 className="animate-spin text-black" />
                 </div>
+              ) : filteredStaff.length === 0 ? (
+                <div className="text-center py-4 text-gray-400 text-xs">
+                  No employee found
+                </div>
               ) : (
                 filteredStaff.map((emp) => {
                   const fullName =
                     emp.name ||
                     `${emp.first_name || ""} ${emp.last_name || ""}`;
                   const isSelected =
-                    selectedEmp?.id === emp.id ||
-                    selectedEmp?.uuid === emp.uuid;
+                    (emp.uuid && selectedEmp?.uuid === emp.uuid) ||
+                    (emp.id && selectedEmp?.id === emp.id);
+
                   return (
                     <div
                       key={emp.uuid || emp.id}
-                      onClick={() => setSelectedEmp(emp)}
-                      className={`flex items-center justify-between p-3 rounded-xl cursor-pointer transition-all mb-1 ${isSelected ? "bg-gray-50 border border-gray-100 shadow-sm" : "hover:bg-gray-50/50"}`}
+                      onClick={() => !processing && setSelectedEmp(emp)}
+                      className={`flex items-center justify-between p-3 rounded-xl cursor-pointer transition-all mb-1 ${
+                        isSelected
+                          ? "bg-gray-50 border border-gray-100 shadow-sm"
+                          : "hover:bg-gray-50/50"
+                      } ${processing ? "opacity-60 cursor-not-allowed" : ""}`}
                     >
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-black rounded-full flex items-center justify-center text-[10px] font-normal text-white uppercase">
-                          {fullName.charAt(0)}
+                        {emp.image ? (
+                          <img
+                            src={emp.image}
+                            alt={fullName}
+                            className="w-8 h-8 rounded-full object-cover border border-gray-200"
+                            onError={(e) => {
+                              e.target.style.display = "none";
+                            }}
+                          />
+                        ) : (
+                          <div className="w-8 h-8 bg-black rounded-full flex items-center justify-center text-[10px] font-normal text-white uppercase shrink-0">
+                            {fullName.charAt(0)}
+                          </div>
+                        )}
+                        <div className="flex flex-col text-left">
+                          <span
+                            className={`font-normal text-[12px] leading-tight ${
+                              isSelected
+                                ? "text-black font-medium"
+                                : "text-black/70"
+                            }`}
+                          >
+                            {fullName}
+                          </span>
+                          {emp.uuid && (
+                            <span className="text-[10px] text-gray-400 font-mono">
+                              #{emp.uuid}
+                            </span>
+                          )}
                         </div>
-                        <span
-                          className={`font-normal text-[12px] ${isSelected ? "text-black" : "text-black/70"}`}
-                        >
-                          {fullName}
-                        </span>
                       </div>
                       <div
-                        className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all ${isSelected ? "bg-black border-black text-white" : "bg-white border-gray-200"}`}
+                        className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all shrink-0 ${
+                          isSelected
+                            ? "bg-black border-black text-white"
+                            : "bg-white border-gray-200"
+                        }`}
                       >
                         {isSelected && <Check size={12} strokeWidth={3} />}
                       </div>
@@ -179,10 +374,10 @@ const LetterActionModal = ({ isOpen, onClose, onExecute, activeTab }) => {
             </div>
           </div>
 
-          {/* Category Selection */}
+          {/* Dynamic Purpose Dropdown */}
           <div className="space-y-2">
             <label className="block text-black ml-1 text-[10px] font-normal tracking-widest uppercase">
-              LETTER CATEGORY
+              DOCUMENT PURPOSE
             </label>
             <div className="relative">
               <Layers
@@ -190,21 +385,34 @@ const LetterActionModal = ({ isOpen, onClose, onExecute, activeTab }) => {
                 size={14}
               />
               <select
-                className={`${inputBaseClass} pl-10 appearance-none cursor-pointer`}
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
+                className={`${inputBaseClass} pl-10 appearance-none cursor-pointer font-mono`}
+                value={purpose}
+                onChange={handlePurposeChange}
+                disabled={purposesLoading || processing}
               >
-                <option value="1" className="text-black">
-                  Offer Letter
-                </option>
-                <option value="2" className="text-black">
-                  Appointment Letter
-                </option>
+                {purposesLoading ? (
+                  <option value="">Loading purposes...</option>
+                ) : filteredPurposes.length === 0 ? (
+                  <option value="">No templates available</option>
+                ) : (
+                  filteredPurposes.map((p) => {
+                    const stringKey = String(p);
+                    return (
+                      <option
+                        key={stringKey}
+                        value={stringKey}
+                        className="text-black font-mono"
+                      >
+                        {stringKey}
+                      </option>
+                    );
+                  })
+                )}
               </select>
             </div>
           </div>
 
-          {/* Email Settings */}
+          {/* Email Specific Settings */}
           {activeTab === "email" && (
             <div className="space-y-5 pt-4 border-t border-gray-100">
               {["cc", "bcc"].map((field) => (
@@ -218,16 +426,24 @@ const LetterActionModal = ({ isOpen, onClose, onExecute, activeTab }) => {
                       className={inputBaseClass}
                       placeholder={`Enter ${field} email...`}
                       value={field === "cc" ? tempCc : tempBcc}
+                      disabled={processing}
                       onChange={(e) =>
                         field === "cc"
                           ? setTempCc(e.target.value)
                           : setTempBcc(e.target.value)
                       }
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleAddEmail(field);
+                        }
+                      }}
                     />
                     <button
                       type="button"
                       onClick={() => handleAddEmail(field)}
-                      className="p-3 bg-black text-white rounded-xl hover:bg-gray-800 transition-colors"
+                      disabled={processing}
+                      className="p-3 bg-black text-white rounded-xl hover:bg-gray-800 transition-colors cursor-pointer disabled:opacity-40"
                     >
                       <Plus size={18} />
                     </button>
@@ -239,15 +455,17 @@ const LetterActionModal = ({ isOpen, onClose, onExecute, activeTab }) => {
                         className="bg-white border border-black text-[10px] px-2.5 py-1 rounded-lg flex items-center gap-2 text-black"
                       >
                         {email}
-                        <X
-                          size={12}
-                          className="cursor-pointer hover:text-red-600"
-                          onClick={() => {
-                            if (field === "cc")
-                              setCc(cc.filter((_, idx) => idx !== i));
-                            else setBcc(bcc.filter((_, idx) => idx !== i));
-                          }}
-                        />
+                        {!processing && (
+                          <X
+                            size={12}
+                            className="cursor-pointer hover:text-red-600"
+                            onClick={() => {
+                              if (field === "cc")
+                                setCc(cc.filter((_, idx) => idx !== i));
+                              else setBcc(bcc.filter((_, idx) => idx !== i));
+                            }}
+                          />
+                        )}
                       </span>
                     ))}
                   </div>
@@ -260,19 +478,36 @@ const LetterActionModal = ({ isOpen, onClose, onExecute, activeTab }) => {
         {/* Footer Actions */}
         <div className="p-8 bg-white border-t border-gray-50 flex items-center gap-4">
           <button
+            type="button"
             onClick={handleClose}
-            className="flex-1 py-4 text-black font-normal hover:bg-gray-50 rounded-2xl transition-colors uppercase tracking-widest text-[11px]"
+            disabled={processing}
+            className="flex-1 py-4 text-black font-normal hover:bg-gray-50 rounded-2xl transition-colors uppercase tracking-widest text-[11px] cursor-pointer disabled:opacity-40"
           >
             Cancel
           </button>
           <button
+            type="button"
             onClick={handleConfirm}
-            className="flex-[2] bg-black text-white py-4 rounded-2xl hover:bg-gray-900 transition-all shadow-xl shadow-gray-200 flex items-center justify-center gap-3 font-normal uppercase tracking-widest"
+            disabled={processing}
+            className="flex-[2] bg-black text-white py-4 rounded-2xl hover:bg-gray-900 transition-all shadow-xl shadow-gray-200 flex items-center justify-center gap-3 font-normal uppercase tracking-widest cursor-pointer disabled:opacity-50"
           >
-            <span className="text-[12px]">
-              {activeTab === "pdf" ? "Process PDF" : "Send Email"}
-            </span>
-            {activeTab === "pdf" ? <FileText size={16} /> : <Send size={16} />}
+            {processing ? (
+              <>
+                <Loader2 className="animate-spin" size={16} />
+                <span className="text-[12px]">Processing...</span>
+              </>
+            ) : (
+              <>
+                <span className="text-[12px]">
+                  {activeTab === "pdf" ? "Process PDF" : "Send Email"}
+                </span>
+                {activeTab === "pdf" ? (
+                  <FileText size={16} />
+                ) : (
+                  <Send size={16} />
+                )}
+              </>
+            )}
           </button>
         </div>
       </div>

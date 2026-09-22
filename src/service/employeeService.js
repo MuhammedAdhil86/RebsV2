@@ -2,6 +2,7 @@
 
 import { 
   getEmployeeDetails, 
+  getActiveUsersLightUrl,
   employeeDelete, 
   updateBasicInfo ,
   getEmployeeStatus,
@@ -50,7 +51,16 @@ export const getStaffDetails = async () => {
     throw error;
   }
 };
-
+export const getActiveUsersLight = async () => {
+  try {
+    const response = await axiosInstance.get(getActiveUsersLightUrl);
+    console.log("Active users light response:", response);
+    return response.data.data;
+  } catch (error) {
+    console.error("Error fetching active users light:", error);
+    throw error;
+  }
+};
 // Fetch bar attendance
 export const fetchBarAttendance = async () => {
   try {

@@ -2,25 +2,23 @@ import React, { useState, useRef, useEffect, useMemo } from "react";
 import ReactQuill from "react-quill";
 import "react-quill/dist/quill.snow.css";
 import {
-  ArrowLeft,
-  Mail,
   ChevronDown,
   Undo2,
   Redo2,
+  ArrowLeft,
+  Save,
+  Info,
+  FileText,
   Search,
   Loader2,
-  Info,
   ShieldCheck,
-  Save,
 } from "lucide-react";
 import toast from "react-hot-toast";
-import {
-  fetchEmailPurposes,
-  fetchEmailPlaceholders,
-  createEmailTemplate,
-} from "../service/mainServices";
+import GlowButton from "../components/helpers/glowbutton";
+import { createLetterPdfTemplate } from "../service/companyService";
+import { fetchEmailPlaceholders } from "../service/mainServices";
 
-// Universal color palette
+// Color palette with leading empty string for default color reset
 const COLOR_PALETTE = [
   "",
   "#000000",
@@ -60,16 +58,23 @@ const COLOR_PALETTE = [
   "#3d1466",
 ];
 
-const INITIAL_BODY = `<p>Your account has been created. Please activate your account.</p>`;
+const INITIAL_FORM = {
+  name: "Insurance Claim Confirmation Letter",
+  purpose: "insurance_claim_confirmation",
+  subject: "",
+  body_html: `<p>Dear {{.EmployeeName}},</p><p>This letter confirms that your insurance claim has been processed by {{.CompanyName}}.</p><p><strong>Insurance Policy Number:</strong> {{.InsurancePolicyNumber}}</p><p><strong>Claim Number:</strong> {{.InsuranceClaimNumber}}</p><p><strong>Claim Type:</strong> {{.InsuranceClaimType}}</p><p><strong>Claim Amount:</strong> {{.InsuranceClaimAmount}}</p><p><strong>Claim Status:</strong> {{.InsuranceClaimStatus}}</p><p><strong>Settlement Amount:</strong> {{.InsuranceSettlementAmount}}</p><p><strong>Settlement Date:</strong> {{.InsuranceSettlementDate}}</p><p><strong>Remarks:</strong> {{.InsuranceClaimRemarks}}</p><p>Regards,<br>{{.AdminName}}<br>{{.CompanyName}}</p>`,
+  template_type: "pdf",
+  is_default: false,
+};
 
-const CreateEmailTemplateView = ({
+export default function CreateLetterPdfTemplateForm({
   onBack,
   onSuccess,
   companyId: propCompanyId,
-}) => {
+}) {
   const quillRef = useRef(null);
 
-  // Detect current company ID
+  // Detect company ID (from props or local storage)
   const currentCompanyId = useMemo(() => {
     if (propCompanyId !== undefined && propCompanyId !== null) {
       return Number(propCompanyId);
@@ -86,65 +91,59 @@ const CreateEmailTemplateView = ({
 
   const isCompany8 = currentCompanyId === 8;
 
-  // Form Fields
-  const [templateTitle, setTemplateTitle] = useState(
-    "User Activation Template",
-  );
-  const [purpose, setPurpose] = useState("user_activation");
-  const [subject, setSubject] = useState("Activate Your Account");
-  const [content, setContent] = useState(INITIAL_BODY);
-  const [isManual, setIsManual] = useState(false);
-  // Default is true for Company 8 admin presets by default, false for regular companies
-  const [isDefault, setIsDefault] = useState(isCompany8);
+  // Form States
+  const [formData, setFormData] = useState(INITIAL_FORM);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Dropdowns & Placeholders
-  const [emailPurposes, setEmailPurposes] = useState([]);
-  const [purposesLoading, setPurposesLoading] = useState(false);
+  // Dynamic Placeholders
   const [placeholders, setPlaceholders] = useState([]);
   const [showPlaceholderMenu, setShowPlaceholderMenu] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [loadingPlaceholders, setLoadingPlaceholders] = useState(false);
 
-  const [loading, setLoading] = useState(false);
-
-  // ---------------- Load Purposes & Placeholders ----------------
+  /* ---------------- Fetch Dynamic Placeholders ---------------- */
   useEffect(() => {
-    const loadData = async () => {
-      setPurposesLoading(true);
+    const loadPlaceholders = async () => {
       setLoadingPlaceholders(true);
-
       try {
-        const [purposesData, placeholdersData] = await Promise.all([
-          fetchEmailPurposes(),
-          fetchEmailPlaceholders(),
-        ]);
-
-        setEmailPurposes(purposesData || []);
-
-        const placeholderList = (placeholdersData || []).map(
+        const data = await fetchEmailPlaceholders();
+        const placeholderList = (data || []).map(
           (item) => item.placeholder || item.label || item,
         );
         setPlaceholders(placeholderList);
-      } catch (error) {
-        console.error("Failed to load dependencies:", error);
+      } catch (err) {
+        console.error("Failed to load placeholders:", err);
       } finally {
-        setPurposesLoading(false);
         setLoadingPlaceholders(false);
       }
     };
-
-    loadData();
+    loadPlaceholders();
   }, []);
 
-  // ---------------- Editor & Placeholder Handlers ----------------
+  /* ---------------- Input Handlers ---------------- */
+  const handleChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: type === "checkbox" ? checked : value,
+    }));
+  };
+
+  // Convert spaces to underscores dynamically
+  const handlePurposeChange = (e) => {
+    const rawVal = e.target.value;
+    const formatted = rawVal.replace(/\s+/g, "_").toLowerCase();
+    setFormData((prev) => ({
+      ...prev,
+      purpose: formatted,
+    }));
+  };
+
+  /* ---------------- Editor History Helpers ---------------- */
   const handleUndo = () => quillRef.current?.getEditor().history.undo();
   const handleRedo = () => quillRef.current?.getEditor().history.redo();
 
-  const handlePurposeChange = (e) => {
-    const rawVal = e.target.value;
-    setPurpose(rawVal.replace(/\s+/g, "_").toLowerCase());
-  };
-
+  /* ---------------- Insert Placeholder at Cursor ---------------- */
   const insertPlaceholder = (placeholderKey) => {
     const editor = quillRef.current?.getEditor();
     if (!editor) return;
@@ -159,84 +158,87 @@ const CreateEmailTemplateView = ({
     toast.success(`Inserted ${token}`);
   };
 
-  // ---------------- Handle Submit ----------------
-  const handleSubmit = async (e) => {
-    if (e) e.preventDefault();
-
+  /* ---------------- Submit Handler ---------------- */
+  const handleSubmit = async () => {
     if (
-      !templateTitle.trim() ||
-      !purpose.trim() ||
-      !subject.trim() ||
-      !content.trim()
+      !formData.name.trim() ||
+      !formData.purpose.trim() ||
+      !formData.body_html.trim()
     ) {
-      toast.error("Please fill all required fields.");
+      toast.error("Template name, purpose, and content are required");
       return;
     }
 
-    setLoading(true);
-    const loadingToast = toast.loading("Creating email template...");
+    setIsSubmitting(true);
 
-    const trimmedContent = content.trim();
-    const finalHtml = trimmedContent.startsWith("<html>")
-      ? trimmedContent
-      : `<html><body>${trimmedContent}</body></html>`;
+    const content = formData.body_html.trim();
+    const finalHtml = content.startsWith("<html>")
+      ? content
+      : `<html><body>${content}</body></html>`;
 
     const payload = {
-      name: templateTitle.trim(),
-      purpose: purpose.trim(),
-      subject: subject.trim(),
+      name: formData.name.trim(),
+      purpose: formData.purpose.trim(),
+      subject: (formData.subject || "").trim(),
       body_html: finalHtml,
-      is_manual: Boolean(isManual),
-      // Only Company 8 can specify is_default; other companies are strictly false
-      is_default: isCompany8 ? Boolean(isDefault) : false,
+      template_type: "pdf",
     };
 
+    if (isCompany8) {
+      payload.is_default = Boolean(formData.is_default);
+    }
+
     try {
-      const response = await createEmailTemplate(payload);
-      toast.success(
-        response?.message || "Email template created successfully!",
-        { id: loadingToast },
-      );
+      const response = await createLetterPdfTemplate(payload);
+      toast.success(response?.message || "PDF template created successfully");
 
       if (onSuccess) {
         onSuccess(response);
       } else if (onBack) {
-        onBack();
+        setTimeout(() => onBack(), 800);
+      } else {
+        setFormData(INITIAL_FORM);
       }
-    } catch (error) {
-      console.error("Error creating email template:", error);
+    } catch (err) {
       toast.error(
-        error?.response?.data?.error ||
-          error?.response?.data?.message ||
-          error?.message ||
-          "Failed to create email template.",
-        { id: loadingToast },
+        err?.message ||
+          err?.error ||
+          err?.detail ||
+          "Failed to create PDF template",
       );
     } finally {
-      setLoading(false);
+      setIsSubmitting(false);
     }
   };
 
-  const modules = {
-    toolbar: [
-      [{ font: [] }, { size: ["small", false, "large", "huge"] }],
-      [{ header: [1, 2, 3, 4, 5, 6, false] }],
-      ["bold", "italic", "underline", "strike"],
-      [{ color: COLOR_PALETTE }, { background: COLOR_PALETTE }],
-      [{ script: "sub" }, { script: "super" }],
-      [{ header: 1 }, { header: 2 }, "blockquote", "code-block"],
-      [
-        { list: "ordered" },
-        { list: "bullet" },
-        { indent: "-1" },
-        { indent: "+1" },
+  /* ---------------- Quill Modules Configuration ---------------- */
+  const modules = useMemo(
+    () => ({
+      toolbar: [
+        [{ font: [] }, { size: ["small", false, "large", "huge"] }],
+        [{ header: [1, 2, 3, 4, 5, 6, false] }],
+        ["bold", "italic", "underline", "strike"],
+        [{ color: COLOR_PALETTE }, { background: COLOR_PALETTE }],
+        [{ script: "sub" }, { script: "super" }],
+        [{ header: 1 }, { header: 2 }, "blockquote", "code-block"],
+        [
+          { list: "ordered" },
+          { list: "bullet" },
+          { indent: "-1" },
+          { indent: "+1" },
+        ],
+        [{ direction: "rtl" }, { align: [] }],
+        ["link", "image", "video"],
+        ["clean"],
       ],
-      [{ direction: "rtl" }, { align: [] }],
-      ["link", "image", "video"],
-      ["clean"],
-    ],
-    history: { delay: 500, maxStack: 100, userOnly: true },
-  };
+      history: {
+        delay: 500,
+        maxStack: 100,
+        userOnly: true,
+      },
+    }),
+    [],
+  );
 
   const formats = [
     "font",
@@ -341,14 +343,14 @@ const CreateEmailTemplateView = ({
             <button
               type="button"
               onClick={onBack}
-              className="p-2 hover:bg-gray-50 rounded-full transition-colors cursor-pointer text-gray-500 hover:text-black"
+              className="p-2 hover:bg-gray-50 rounded-full transition-colors cursor-pointer"
             >
-              <ArrowLeft size={18} />
+              <ArrowLeft size={18} className="text-gray-500" />
             </button>
           )}
           <div className="flex items-center gap-2 border-l pl-3">
             <h2 className="text-[16px] font-semibold text-gray-800 tracking-tight">
-              Create Email Template
+              Create PDF Letter Template
             </h2>
           </div>
         </div>
@@ -362,10 +364,10 @@ const CreateEmailTemplateView = ({
               </span>
             </div>
           )}
-          <div className="flex items-center gap-2 px-3 py-1 bg-emerald-50 rounded-lg border border-emerald-100">
-            <Mail size={12} className="text-emerald-600" />
-            <span className="text-[10px] font-semibold text-emerald-700 uppercase">
-              Mail Template
+          <div className="flex items-center gap-2 px-3 py-1 bg-red-50 rounded-lg border border-red-100">
+            <FileText size={12} className="text-red-600" />
+            <span className="text-[10px] font-semibold text-red-700 uppercase">
+              PDF Template
             </span>
           </div>
         </div>
@@ -373,8 +375,13 @@ const CreateEmailTemplateView = ({
 
       {/* --- FORM BODY --- */}
       <div className="p-8 flex flex-col gap-6 max-h-[78vh] overflow-y-auto no-scrollbar bg-[#FAFBFC]">
-        {/* Row 1: Name & Purpose */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        {/* Row 1: Name, Purpose Key & Company 8 Flag */}
+        <div
+          className={`grid grid-cols-1 ${
+            isCompany8 ? "md:grid-cols-3" : "md:grid-cols-2"
+          } gap-5`}
+        >
+          {/* Template Name */}
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center justify-between px-1">
               <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">
@@ -383,18 +390,19 @@ const CreateEmailTemplateView = ({
 
               <div className="relative group flex items-center">
                 <div className="cursor-pointer p-0.5 rounded-full hover:bg-gray-100 transition-colors">
-                  <Info size={15} className="text-blue-500" />
+                  <Info size={16} className="text-blue-500" />
                 </div>
-                <div className="absolute right-0 top-full mt-2 w-[340px] max-h-72 overflow-y-auto no-scrollbar hidden group-hover:block bg-white text-black text-[12px] font-normal rounded-xl p-4 shadow-2xl border border-gray-200 z-[100] transition-all normal-case tracking-normal">
-                  <div className="text-[13px] font-semibold mb-1 text-black">
-                    Placeholder Tokens
+                <div className="absolute right-0 top-full mt-2 w-[380px] max-h-80 overflow-y-auto no-scrollbar hidden group-hover:block bg-white text-black text-[13px] font-normal rounded-xl p-5 shadow-2xl border border-gray-200 z-[100] transition-all normal-case tracking-normal">
+                  <div className="text-[14px] font-semibold mb-2 text-black">
+                    Template Placeholder Guidelines
                   </div>
                   <p className="text-gray-600 mb-2 leading-relaxed">
-                    Insert dynamic variables using the{" "}
-                    <em>Insert Placeholder</em> tool in the toolbar.
+                    Insert dynamic tags using the <em>Insert Placeholder</em>{" "}
+                    dropdown. These tokens will be automatically substituted
+                    when generating PDFs.
                   </p>
-                  <p className="text-gray-500 font-mono text-[11px]">
-                    Format: {"{{.FieldName}}"}
+                  <p className="text-gray-600 leading-relaxed font-mono text-xs">
+                    Format: {"{{.PlaceholderName}}"}
                   </p>
                 </div>
               </div>
@@ -402,103 +410,70 @@ const CreateEmailTemplateView = ({
 
             <input
               type="text"
-              placeholder="e.g. User Activation Template"
-              value={templateTitle}
-              onChange={(e) => setTemplateTitle(e.target.value)}
-              className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-[12px] focus:ring-1 focus:ring-black outline-none transition-all"
-              disabled={loading}
+              name="name"
+              placeholder="e.g. Insurance Claim Confirmation Letter"
+              className="w-full px-5 py-3 bg-white border border-gray-200 rounded-xl text-[12px] focus:ring-1 focus:ring-black outline-none transition-all"
+              value={formData.name}
+              onChange={handleChange}
             />
           </div>
 
+          {/* Purpose (Auto converts spaces to underscores) */}
           <div className="flex flex-col gap-1.5">
             <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider ml-1">
               Category / Purpose Key <span className="text-red-500">*</span>
             </label>
-            <div className="relative">
-              <input
-                type="text"
-                list="purposes-datalist"
-                placeholder="e.g. user_activation"
-                value={purpose}
-                onChange={handlePurposeChange}
-                className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-[12px] focus:ring-1 focus:ring-black outline-none transition-all"
-                disabled={loading || purposesLoading}
-              />
-              <datalist id="purposes-datalist">
-                {emailPurposes.map((p) => (
-                  <option key={p} value={p} />
-                ))}
-              </datalist>
-            </div>
+            <input
+              type="text"
+              name="purpose"
+              placeholder="e.g. insurance_claim_confirmation"
+              className="w-full px-5 py-3 bg-white border border-gray-200 rounded-xl text-[12px] focus:ring-1 focus:ring-black outline-none transition-all"
+              value={formData.purpose}
+              onChange={handlePurposeChange}
+            />
           </div>
+
+          {/* Company 8 Exclusive: Default Template Flag */}
+          {isCompany8 && (
+            <div className="flex flex-col justify-center gap-1.5 bg-white border border-amber-100 rounded-xl px-4 py-2.5">
+              <label className="text-[11px] font-bold text-amber-800 uppercase tracking-wider">
+                System Preset Configuration
+              </label>
+              <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  name="is_default"
+                  checked={Boolean(formData.is_default)}
+                  onChange={handleChange}
+                  className="w-4 h-4 rounded text-black border-gray-300 focus:ring-black cursor-pointer"
+                />
+                <span className="text-[12px] text-gray-700 font-medium">
+                  Set as Default Template (`is_default:{" "}
+                  {formData.is_default ? "true" : "false"}`)
+                </span>
+              </label>
+            </div>
+          )}
         </div>
 
-        {/* Row 2: Subject */}
+        {/* Row 2: Subject / Document Title (Optional for PDF) */}
         <div className="flex flex-col gap-1.5">
           <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider ml-1">
-            Email Subject <span className="text-red-500">*</span>
+            Subject / Document Header Title (Optional)
           </label>
           <input
             type="text"
-            placeholder="e.g. Activate Your Account"
-            value={subject}
-            onChange={(e) => setSubject(e.target.value)}
-            className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-[12px] focus:ring-1 focus:ring-black outline-none transition-all"
-            disabled={loading}
+            name="subject"
+            placeholder="e.g. Insurance Claim Confirmation (optional)"
+            className="w-full px-5 py-3 bg-white border border-gray-200 rounded-xl text-[12px] focus:ring-1 focus:ring-black outline-none transition-all"
+            value={formData.subject}
+            onChange={handleChange}
           />
         </div>
 
-        {/* Row 3: Flags Configuration */}
-        <div
-          className={`grid grid-cols-1 ${
-            isCompany8 ? "md:grid-cols-2" : "md:grid-cols-1"
-          } gap-4`}
-        >
-          {/* Default Template Flag - ONLY VISIBLE FOR COMPANY 8 */}
-          {isCompany8 && (
-            <div className="flex items-center justify-between bg-white border border-amber-100 rounded-xl px-4 py-2.5 shadow-2xs">
-              <div>
-                <span className="text-[12px] text-amber-900 font-medium block">
-                  System Preset Default
-                </span>
-                <span className="text-[10px] text-gray-400 block">
-                  Save as system-wide default (`is_default`)
-                </span>
-              </div>
-              <input
-                type="checkbox"
-                id="isDefault"
-                checked={Boolean(isDefault)}
-                onChange={(e) => setIsDefault(e.target.checked)}
-                className="w-4 h-4 rounded text-black border-gray-300 focus:ring-black cursor-pointer"
-                disabled={loading}
-              />
-            </div>
-          )}
-
-          {/* Manual Template Flag */}
-          <div className="flex items-center justify-between bg-white border border-gray-200 rounded-xl px-4 py-2.5 shadow-2xs">
-            <div>
-              <span className="text-[12px] text-gray-800 font-medium block">
-                Manual Dispatch
-              </span>
-              <span className="text-[10px] text-gray-400 block">
-                Allow manual send triggering (`is_manual`)
-              </span>
-            </div>
-            <input
-              type="checkbox"
-              id="isManual"
-              checked={Boolean(isManual)}
-              onChange={(e) => setIsManual(e.target.checked)}
-              className="w-4 h-4 rounded text-black border-gray-300 focus:ring-black cursor-pointer"
-              disabled={loading}
-            />
-          </div>
-        </div>
-
-        {/* Quill Editor */}
+        {/* --- QUILL EDITOR CONTAINER --- */}
         <div className="relative bg-white rounded-xl border border-gray-200 shadow-sm">
+          {/* Action Group Over Toolbar */}
           <div className="absolute right-3 top-2 z-20 flex items-center gap-2 bg-white/90 backdrop-blur-sm px-2 py-1 rounded-lg border border-gray-200 shadow-sm">
             <div className="flex items-center gap-2 text-gray-400 border-r border-gray-200 pr-2">
               <button
@@ -523,14 +498,14 @@ const CreateEmailTemplateView = ({
             <div className="relative">
               <button
                 type="button"
-                onClick={() => setShowPlaceholderMenu((prev) => !prev)}
+                onClick={() => setShowPlaceholderMenu(!showPlaceholderMenu)}
                 className="flex items-center gap-1 text-[11px] text-gray-700 font-semibold uppercase tracking-tight hover:text-black py-0.5 px-1 cursor-pointer"
               >
                 Insert Placeholder <ChevronDown size={14} />
               </button>
 
               {showPlaceholderMenu && (
-                <div className="absolute right-0 mt-2 w-64 bg-white border border-gray-100 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto no-scrollbar py-2 animate-in fade-in zoom-in-95 duration-100">
+                <div className="absolute right-0 mt-2 w-64 bg-white border border-gray-100 rounded-xl shadow-2xl z-50 max-h-64 overflow-y-auto no-scrollbar py-2 animate-in fade-in zoom-in-95 duration-100">
                   <div className="px-3 pb-2 border-b border-gray-50">
                     <div className="flex items-center gap-1.5 bg-gray-50 px-2 py-1 rounded-lg">
                       <Search size={12} className="text-gray-400 shrink-0" />
@@ -539,7 +514,7 @@ const CreateEmailTemplateView = ({
                         placeholder="Search tags..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full bg-transparent text-[11px] outline-none text-gray-700 font-poppins"
+                        className="w-full bg-transparent text-[11px] outline-none text-gray-700"
                         autoFocus
                       />
                     </div>
@@ -574,8 +549,10 @@ const CreateEmailTemplateView = ({
           <ReactQuill
             ref={quillRef}
             theme="snow"
-            value={content}
-            onChange={(val) => setContent(val)}
+            value={formData.body_html}
+            onChange={(val) =>
+              setFormData((prev) => ({ ...prev, body_html: val }))
+            }
             modules={modules}
             formats={formats}
           />
@@ -583,38 +560,24 @@ const CreateEmailTemplateView = ({
       </div>
 
       {/* --- FOOTER --- */}
-      <div className="p-5 bg-white border-t border-gray-100 flex justify-end items-center gap-3">
+      <div className="p-5 bg-white border-t border-gray-100 flex justify-end items-center gap-4">
         {onBack && (
           <button
             type="button"
             onClick={onBack}
-            disabled={loading}
+            disabled={isSubmitting}
             className="px-6 py-2.5 text-[12px] font-semibold text-gray-500 hover:text-gray-800 transition-colors cursor-pointer"
           >
-            Cancel
+            Discard
           </button>
         )}
-        <button
-          type="button"
-          onClick={handleSubmit}
-          disabled={loading}
-          className="flex items-center gap-2 bg-black text-white px-6 py-2.5 rounded-xl text-[12px] hover:bg-gray-800 transition-all shadow-sm cursor-pointer disabled:opacity-50 font-medium"
-        >
-          {loading ? (
-            <>
-              <Loader2 className="animate-spin" size={14} />
-              <span>Creating...</span>
-            </>
-          ) : (
-            <>
-              <Save size={14} />
-              <span>Save Template</span>
-            </>
-          )}
-        </button>
+        <GlowButton onClick={handleSubmit} disabled={isSubmitting}>
+          <div className="flex items-center gap-2">
+            <Save size={16} />
+            {isSubmitting ? "Creating..." : "Create PDF"}
+          </div>
+        </GlowButton>
       </div>
     </div>
   );
-};
-
-export default CreateEmailTemplateView;
+}

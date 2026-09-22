@@ -1,332 +1,469 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { createPortal } from "react-dom";
-import { Plus, Search, Upload, AlertCircle } from "lucide-react";
-import { Toaster, toast } from "react-hot-toast";
-
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import DashboardLayout from "../ui/pagelayout";
 import HeaderGlobal from "../ui/headerglobal";
 import PayrollTable from "../ui/payrolltable";
-import ActionMenu from "../ui/actionmenu";
-import CreateEmailTemplateModal from "../ui/createemailmodal";
-import UploadEmailTemplateModal from "../ui/uploademailmodal";
+import TemplatePreviewView from "../ui/emailandletterpriview";
+import CreateEmailTemplateView from "../ui/createemailmodal";
+import EditEmailTemplateView from "../ui/updateemailmodal";
+import UploadEmailTemplateView from "../ui/uploademailmodal";
+import DeleteConfirmationModal from "../ui/deletemodal";
+import {
+  FiLoader,
+  FiMoreHorizontal,
+  FiMaximize,
+  FiEdit2,
+  FiTrash2,
+  FiCopy,
+  FiPlus,
+  FiUpload,
+  FiSearch,
+} from "react-icons/fi";
 
-import useEmailTemplateStore from "../store/emailtemplateStore";
-import { deleteEmailTemplateService } from "../service/mainServices";
+// Standard Backend Services
+import {
+  fetchEmailTemplates,
+  fetchDefaultEmailTemplates,
+  cloneDefaultEmailTemplate,
+  deleteEmailTemplateService,
+} from "../service/mainServices";
 
-// Configured navigation tabs matching your standard tab layout
-const TABS = [
-  { id: "all", label: "My Templates" },
-  { id: "default", label: "Presets" },
-];
+import toast, { Toaster } from "react-hot-toast";
 
-// Helper to extract detailed backend error messages across all API formats
-const extractErrorMessage = (error, defaultMsg) => {
-  if (typeof error === "string") return error;
-  return (
-    error?.response?.data?.error ||
-    error?.response?.data?.message ||
-    error?.error ||
-    error?.data?.error ||
-    error?.data?.message ||
-    error?.message ||
-    defaultMsg
-  );
-};
+const EmailTemplates = () => {
+  // --- Navigation & View States ---
+  const [subTab, setSubTab] = useState("my-templates"); // 'my-templates' or 'presets'
+  const [viewMode, setViewMode] = useState("table"); // 'table', 'preview', 'edit', 'create', 'upload'
 
-function EmailTemplates() {
-  // Lazy state initialization from localStorage to remember tab choices across refreshes
-  const [activeTab, setActiveTab] = useState(() => {
-    return localStorage.getItem("email_templates_active_tab") || "all";
+  // --- Data States ---
+  const [customTemplates, setCustomTemplates] = useState([]);
+  const [presetTemplates, setPresetTemplates] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  // --- UI Component States ---
+  const [initialData, setInitialData] = useState(null);
+  const [selectedForPreview, setSelectedForPreview] = useState(null);
+  const [openMenuId, setOpenMenuId] = useState(null);
+  const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
+  const [searchQuery, setSearchQuery] = useState("");
+  const [deleteModal, setDeleteModal] = useState({
+    show: false,
+    id: null,
+    name: "",
   });
 
-  const [searchQuery, setSearchQuery] = useState("");
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
-  const [templateToDelete, setTemplateToDelete] = useState(null);
-  const [isDeleting, setIsDeleting] = useState(false);
+  const menuRef = useRef(null);
 
-  const {
-    templates,
-    defaultTemplates,
-    loading,
-    loadTemplates,
-    loadDefaultTemplates,
-  } = useEmailTemplateStore();
-
-  // Synchronize activeTab choices inside localStorage
-  useEffect(() => {
-    localStorage.setItem("email_templates_active_tab", activeTab);
-  }, [activeTab]);
-
-  // Data fetch handler scoped to current active tab with backend error extraction
-  const fetchCurrentTabData = useCallback(async () => {
+  // --- Determine Active Company ID ---
+  const currentCompanyId = useMemo(() => {
     try {
-      if (activeTab === "all") {
-        await loadTemplates();
-      } else {
-        await loadDefaultTemplates();
-      }
-    } catch (err) {
-      toast.error(extractErrorMessage(err, "Failed to load templates"));
+      const user = JSON.parse(localStorage.getItem("user") || "{}");
+      return Number(
+        user?.company_id || localStorage.getItem("company_id") || 0,
+      );
+    } catch {
+      return 0;
     }
-  }, [activeTab, loadTemplates, loadDefaultTemplates]);
+  }, []);
 
-  useEffect(() => {
-    fetchCurrentTabData();
-  }, [fetchCurrentTabData]);
+  const isCompany8 = currentCompanyId === 8;
 
-  // Handle template deletion with backend error handling
-  const handleDeleteConfirm = async () => {
-    if (!templateToDelete) return;
-    const toastId = toast.loading("Deleting template...");
-    setIsDeleting(true);
+  // Helper to extract detailed backend error messages
+  const extractErrorMessage = (error, defaultMsg) => {
+    return (
+      error?.response?.data?.message ||
+      error?.response?.data?.error ||
+      error?.data?.message ||
+      error?.message ||
+      defaultMsg
+    );
+  };
 
+  // --- Data Fetching ---
+  const loadTemplatesData = async () => {
+    setLoading(true);
     try {
-      await deleteEmailTemplateService(templateToDelete.id);
-      toast.success("Template deleted successfully", { id: toastId });
-      await fetchCurrentTabData();
-      setTemplateToDelete(null);
-    } catch (err) {
-      toast.error(extractErrorMessage(err, "Failed to delete template"), {
-        id: toastId,
-      });
+      const [customRes, presetRes] = await Promise.all([
+        fetchEmailTemplates(),
+        fetchDefaultEmailTemplates(),
+      ]);
+
+      const parsedCustom = Array.isArray(customRes)
+        ? customRes
+        : Array.isArray(customRes?.data)
+          ? customRes.data
+          : [];
+
+      const parsedPresets = Array.isArray(presetRes)
+        ? presetRes
+        : Array.isArray(presetRes?.data)
+          ? presetRes.data
+          : [];
+
+      setCustomTemplates(parsedCustom);
+      setPresetTemplates(parsedPresets);
+    } catch (error) {
+      toast.error(extractErrorMessage(error, "Failed to load templates"));
     } finally {
-      setIsDeleting(false);
+      setLoading(false);
     }
   };
 
-  // Table Columns Configuration
-  const columns = useMemo(
-    () => [
-      {
-        key: "name",
-        label: "Template Name",
-        align: "left",
-      },
-      {
-        key: "is_manual",
-        label: "Type",
-        align: "center",
-        render: (v) => (
-          <div className="flex justify-center w-full">
-            <span className="text-gray-600 text-[12px] min-w-[60px] text-center">
-              {v === undefined ? "System" : v ? "Manual" : "Auto"}
-            </span>
-          </div>
-        ),
-      },
-      {
-        key: "created_at",
-        label: "Created on",
-        align: "center",
-        render: (v) => (
-          <div className="flex justify-center w-full text-gray-500 text-[12px]">
-            {v ? new Date(v).toLocaleDateString("en-GB") : "—"}
-          </div>
-        ),
-      },
-      {
-        key: "is_active",
-        label: "Status",
-        align: "center",
-        render: (v) => {
-          const isActive = Boolean(v || activeTab === "default");
-          return (
-            <div className="flex justify-center items-center w-full">
-              <span
-                className={`inline-block w-[75px] py-1 rounded-full border text-[11px] font-medium text-center ${
-                  isActive
-                    ? "bg-green-50 text-green-500 border-green-100"
-                    : "bg-indigo-50 text-indigo-500 border-indigo-100"
-                }`}
-              >
-                {isActive ? "Active" : "Inactive"}
-              </span>
-            </div>
-          );
-        },
-      },
-      {
-        key: "action",
-        label: "Action",
-        align: "center",
-        render: (_, row) => (
-          <div className="flex justify-center items-center w-full">
-            <ActionMenu
-              row={row}
-              isPresetTab={activeTab === "default"}
-              refreshTemplates={fetchCurrentTabData}
-              onDeleteClick={() => setTemplateToDelete(row)}
-            />
-          </div>
-        ),
-      },
-    ],
-    [activeTab, fetchCurrentTabData],
-  );
+  useEffect(() => {
+    loadTemplatesData();
+  }, []);
 
-  // Search filtering logic — excludes letter generation templates
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (menuRef.current && !menuRef.current.contains(event.target)) {
+        setOpenMenuId(null);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleToggleMenu = (e, id) => {
+    if (openMenuId === id) {
+      setOpenMenuId(null);
+    } else {
+      const rect = e.currentTarget.getBoundingClientRect();
+      setMenuPosition({
+        top: rect.bottom + window.scrollY + 5,
+        left: rect.left + window.scrollX - 150,
+      });
+      setOpenMenuId(id);
+    }
+  };
+
+  const handleClonePreset = async (id) => {
+    setOpenMenuId(null);
+    const loadingToast = toast.loading("Cloning preset...");
+    try {
+      await cloneDefaultEmailTemplate(id);
+      toast.success("Cloned to My Templates!", { id: loadingToast });
+      setSubTab("my-templates");
+      await loadTemplatesData();
+      setViewMode("table");
+    } catch (error) {
+      toast.error(extractErrorMessage(error, "Clone failed"), {
+        id: loadingToast,
+      });
+    }
+  };
+
+  const handleDeleteTemplate = async () => {
+    const templateId = deleteModal.id;
+    if (!templateId) return;
+
+    const loadingToast = toast.loading("Deleting template...");
+    try {
+      await deleteEmailTemplateService(templateId);
+
+      setCustomTemplates((prev) =>
+        prev.filter((item) => item.id !== templateId),
+      );
+      setPresetTemplates((prev) =>
+        prev.filter((item) => item.id !== templateId),
+      );
+
+      setDeleteModal({ show: false, id: null, name: "" });
+      toast.success("Deleted successfully!", { id: loadingToast });
+    } catch (error) {
+      toast.error(extractErrorMessage(error, "Failed to delete template"), {
+        id: loadingToast,
+      });
+    }
+  };
+
+  // --- Filtering Logic (Matches Letter.jsx pattern) ---
   const filteredData = useMemo(() => {
-    const dataSource = activeTab === "all" ? templates : defaultTemplates;
+    let sourceData = [];
+
+    if (isCompany8) {
+      // Company 8 sees ALL templates across both System Presets and My Templates
+      const map = new Map();
+      [...presetTemplates, ...customTemplates].forEach((item) => {
+        if (item?.id) map.set(item.id, item);
+      });
+      sourceData = Array.from(map.values());
+    } else {
+      // Other Companies:
+      if (subTab === "presets") {
+        sourceData = presetTemplates;
+      } else {
+        sourceData = customTemplates.filter(
+          (item) => item.is_default === false || item.is_default === undefined,
+        );
+      }
+    }
+
+    // Standard email templates exclude letter generation templates
+    const emailOnly = sourceData.filter((item) => !item.for_letter_generation);
+
     const query = searchQuery.trim().toLowerCase();
+    if (!query) return emailOnly;
 
-    // Filter to only include email templates (for_letter_generation === false)
-    const emailOnlyTemplates = (dataSource || []).filter(
-      (item) => !item.for_letter_generation,
+    return emailOnly.filter(
+      (item) =>
+        item?.name?.toLowerCase().includes(query) ||
+        item?.purpose?.toLowerCase().includes(query),
     );
+  }, [subTab, presetTemplates, customTemplates, isCompany8, searchQuery]);
 
-    if (!query) return emailOnlyTemplates;
+  const columns = [
+    { key: "id", label: "ID", align: "left" },
+    { key: "name", label: "Template Name", align: "left" },
+    { key: "purpose", label: "Purpose", align: "left" },
+    {
+      key: "is_active",
+      label: "Status",
+      render: (val) => (
+        <span
+          className={`px-2 py-1 rounded-full text-[10px] font-normal ${
+            val ? "text-green-600 bg-green-50" : "text-gray-400 bg-gray-50"
+          }`}
+        >
+          {val ? "Active" : "Inactive"}
+        </span>
+      ),
+    },
+    {
+      key: "actions",
+      label: "Actions",
+      align: "center",
+      render: (_, row) => {
+        // Clone is shown ONLY in System Presets for non-Company-8 users
+        const canClone = subTab === "presets" && !isCompany8;
 
-    return emailOnlyTemplates.filter((item) =>
-      item?.name?.toLowerCase().includes(query),
-    );
-  }, [templates, defaultTemplates, searchQuery, activeTab]);
-
-  return (
-    <DashboardLayout userName="Admin" onLogout={() => {}}>
-      <Toaster position="top-right" />
-
-      <div className="w-full space-y-4">
-        {/* Global shared navbar element */}
-        <HeaderGlobal userName="Admin" />
-
-        {/* Navigation Tab Links Header Layout */}
-        <div className="flex justify-between items-center border-b px-4 bg-white pt-2 shadow-sm rounded-t-lg select-none overflow-x-auto gap-4">
-          <div className="flex gap-4 text-[14px]">
-            {TABS.map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setActiveTab(tab.id)}
-                className={`pb-2 px-1 transition-all relative font-medium whitespace-nowrap ${
-                  activeTab === tab.id
-                    ? "text-black font-semibold after:content-[''] after:absolute after:bottom-0 after:left-0 after:w-full after:h-[2px] after:bg-black"
-                    : "text-gray-500 hover:text-black"
-                }`}
+        return (
+          <div className="relative flex justify-center">
+            <button
+              type="button"
+              onClick={(e) => handleToggleMenu(e, row.id)}
+              className="p-1 text-gray-400 hover:text-black transition-colors cursor-pointer"
+            >
+              <FiMoreHorizontal size={18} />
+            </button>
+            {openMenuId === row.id && (
+              <div
+                ref={menuRef}
+                className="fixed w-48 border border-gray-200 rounded-xl shadow-2xl bg-white z-[9999] py-1 animate-in fade-in zoom-in duration-100"
+                style={{ top: menuPosition.top, left: menuPosition.left }}
               >
-                {tab.label}
-              </button>
-            ))}
-          </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedForPreview(row);
+                    setViewMode("preview");
+                    setOpenMenuId(null);
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-[12px] text-black hover:bg-gray-50 font-poppins font-normal cursor-pointer"
+                >
+                  <FiMaximize size={14} className="text-black" /> Preview
+                </button>
 
-          {/* Tab Actions: Search & Quick Buttons */}
-          <div className="flex items-center gap-2 pb-2">
-            <div className="relative">
-              <Search
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
-                size={14}
-              />
-              <input
-                type="text"
-                placeholder="Search templates..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 pr-3 py-1.5 border border-gray-200 bg-[#f9f9f9] rounded-lg text-xs focus:outline-none focus:bg-white focus:ring-1 focus:ring-black w-48 sm:w-64 transition-all"
-              />
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setIsUploadModalOpen(true)}
-              title="Upload Template"
-              className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 active:scale-95 transition-all text-gray-600"
-            >
-              <Upload size={14} />
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setIsCreateModalOpen(true)}
-              className="flex items-center gap-2 bg-black text-white px-3 py-1.5 rounded-lg text-[12px] font-medium active:scale-95 transition-all whitespace-nowrap"
-            >
-              <Plus size={14} /> Create Template
-            </button>
-          </div>
-        </div>
-
-        {/* Tab Content Display Area */}
-        <div className="mt-2 bg-white rounded-b-lg p-2 min-h-[350px]">
-          {loading ? (
-            <div className="flex flex-col items-center justify-center py-24 text-gray-400 text-[12px]">
-              <div className="w-6 h-6 border-2 border-gray-200 border-t-black rounded-full animate-spin mb-2" />
-              <span>Syncing templates...</span>
-            </div>
-          ) : (
-            <PayrollTable
-              key={`template-table-${activeTab}`}
-              columns={columns}
-              data={filteredData}
-              rowsPerPage={8}
-            />
-          )}
-        </div>
-      </div>
-
-      {/* Delete Confirmation Portal Modal */}
-      {templateToDelete &&
-        createPortal(
-          <div className="fixed inset-0 z-[10000] flex items-center justify-center px-4">
-            <div
-              className="fixed inset-0 bg-black/40 backdrop-blur-sm"
-              onClick={() => !isDeleting && setTemplateToDelete(null)}
-            />
-            <div className="relative bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-in zoom-in duration-200 z-10">
-              <div className="flex flex-col items-center text-center">
-                <div className="w-12 h-12 bg-red-50 rounded-full flex items-center justify-center mb-4">
-                  <AlertCircle className="text-red-500" size={24} />
-                </div>
-                <h3 className="text-base font-semibold text-gray-900 mb-1">
-                  Delete Template?
-                </h3>
-                <p className="text-xs text-gray-500 mb-6 leading-relaxed">
-                  Are you sure you want to delete{" "}
-                  <span className="font-semibold text-gray-800">
-                    "{templateToDelete.name}"
-                  </span>
-                  ? This action cannot be undone.
-                </p>
-                <div className="flex gap-3 w-full">
+                {canClone ? (
                   <button
                     type="button"
-                    onClick={() => setTemplateToDelete(null)}
-                    disabled={isDeleting}
-                    className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-xl text-xs font-medium text-gray-700 transition-colors disabled:opacity-50"
+                    onClick={() => handleClonePreset(row.id)}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-[12px] text-black hover:bg-gray-50 border-t border-gray-50 font-poppins font-normal cursor-pointer"
                   >
-                    Cancel
+                    <FiCopy size={14} className="text-black" /> Clone
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setInitialData(row);
+                        setViewMode("edit");
+                        setOpenMenuId(null);
+                      }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-[12px] text-black hover:bg-gray-50 border-t border-gray-50 font-poppins font-normal cursor-pointer"
+                    >
+                      <FiEdit2 size={14} className="text-black" /> Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDeleteModal({
+                          show: true,
+                          id: row.id,
+                          name: row.name || `Template #${row.id}`,
+                        });
+                        setOpenMenuId(null);
+                      }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-[12px] text-red-500 hover:bg-red-50 font-poppins font-normal cursor-pointer"
+                    >
+                      <FiTrash2 size={14} /> Delete
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      },
+    },
+  ];
+
+  return (
+    <DashboardLayout>
+      <Toaster position="top-right" />
+      <div className="w-full space-y-4">
+        <HeaderGlobal userName="Admin" />
+
+        {/* Delete Confirmation Modal */}
+        <DeleteConfirmationModal
+          isOpen={deleteModal.show}
+          onClose={() => setDeleteModal({ show: false, id: null, name: "" })}
+          onConfirm={handleDeleteTemplate}
+          itemName={deleteModal.name}
+        />
+
+        <div className="font-poppins font-normal px-3 text-black">
+          {viewMode === "table" ? (
+            <>
+              {/* Subtab Switcher & Action Buttons (Exact match to Letter.jsx) */}
+              <div className="flex justify-between items-center mb-4 px-2">
+                <div className="flex gap-2 bg-gray-50 p-1 rounded-lg border border-gray-100">
+                  <button
+                    type="button"
+                    onClick={() => setSubTab("my-templates")}
+                    className={`px-4 py-1.5 rounded-md text-[11px] transition-all cursor-pointer ${
+                      subTab === "my-templates"
+                        ? "bg-white shadow-sm text-black font-medium"
+                        : "text-gray-400 hover:text-black"
+                    }`}
+                  >
+                    My Templates
                   </button>
                   <button
                     type="button"
-                    onClick={handleDeleteConfirm}
-                    disabled={isDeleting}
-                    className="flex-1 px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-xl text-xs font-medium shadow-md transition-colors disabled:opacity-50"
+                    onClick={() => setSubTab("presets")}
+                    className={`px-4 py-1.5 rounded-md text-[11px] transition-all cursor-pointer ${
+                      subTab === "presets"
+                        ? "bg-white shadow-sm text-black font-medium"
+                        : "text-gray-400 hover:text-black"
+                    }`}
                   >
-                    {isDeleting ? "Deleting..." : "Delete"}
+                    System Presets
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2.5">
+                  {/* Search Input */}
+                  <div className="relative">
+                    <FiSearch
+                      className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+                      size={13}
+                    />
+                    <input
+                      type="text"
+                      placeholder="Search templates..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="pl-8 pr-3 py-1.5 border border-gray-200 bg-white rounded-lg text-[12px] focus:outline-none focus:ring-1 focus:ring-black w-44 sm:w-56 transition-all"
+                    />
+                  </div>
+
+                  {/* Upload Template Button -> Opens Upload Tab View */}
+                  <button
+                    type="button"
+                    onClick={() => setViewMode("upload")}
+                    title="Upload Template"
+                    className="p-2 border border-gray-200 bg-white rounded-lg hover:bg-gray-50 transition-all text-gray-600 cursor-pointer shadow-2xs"
+                  >
+                    <FiUpload size={14} />
+                  </button>
+
+                  {/* Create Template Button (Letter.jsx exact styling) */}
+                  <button
+                    type="button"
+                    onClick={() => setViewMode("create")}
+                    className="flex items-center gap-1.5 bg-white border border-gray-300 text-gray-800 px-4 py-2 rounded-lg text-[12px] font-medium hover:bg-gray-50 hover:border-gray-400 transition-all shadow-2xs cursor-pointer"
+                  >
+                    <FiPlus size={15} className="text-black" />
+                    <span>Create Template</span>
                   </button>
                 </div>
               </div>
+
+              {/* Table / Loader (Exact match to Letter.jsx card) */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 min-h-[400px] text-[12px]">
+                {loading ? (
+                  <div className="flex flex-col items-center justify-center h-64">
+                    <FiLoader className="animate-spin text-black" size={24} />
+                  </div>
+                ) : (
+                  <PayrollTable
+                    columns={columns}
+                    data={filteredData}
+                    rowsPerPage={8}
+                  />
+                )}
+              </div>
+            </>
+          ) : viewMode === "preview" ? (
+            <TemplatePreviewView
+              data={selectedForPreview}
+              subTab={subTab}
+              onBack={() => setViewMode("table")}
+              onClone={(id) => handleClonePreset(id)}
+            />
+          ) : viewMode === "create" ? (
+            <div className="space-y-4">
+              <CreateEmailTemplateView
+                onBack={() => setViewMode("table")}
+                onSuccess={() => {
+                  setViewMode("table");
+                  loadTemplatesData();
+                }}
+              />
             </div>
-          </div>,
-          document.body,
-        )}
+          ) : viewMode === "upload" ? (
+            <div className="space-y-4">
+              <UploadEmailTemplateView
+                onBack={() => setViewMode("table")}
+                onSuccess={() => {
+                  setViewMode("table");
+                  loadTemplatesData();
+                }}
+              />
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between pb-2 border-b border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setInitialData(null);
+                    setViewMode("table");
+                  }}
+                  className="text-xs text-gray-500 hover:text-black transition-colors cursor-pointer"
+                >
+                  ← Back to templates
+                </button>
+              </div>
 
-      {/* Creation Modals */}
-      <CreateEmailTemplateModal
-        isOpen={isCreateModalOpen}
-        onClose={() => {
-          setIsCreateModalOpen(false);
-          fetchCurrentTabData();
-        }}
-      />
-
-      <UploadEmailTemplateModal
-        isOpen={isUploadModalOpen}
-        onClose={() => {
-          setIsUploadModalOpen(false);
-          fetchCurrentTabData();
-        }}
-      />
+              <EditEmailTemplateView
+                initialData={initialData}
+                onBack={() => {
+                  setInitialData(null);
+                  setViewMode("table");
+                }}
+                onSuccess={() => {
+                  setInitialData(null);
+                  setViewMode("table");
+                  loadTemplatesData();
+                }}
+              />
+            </div>
+          )}
+        </div>
+      </div>
     </DashboardLayout>
   );
-}
+};
 
 export default EmailTemplates;

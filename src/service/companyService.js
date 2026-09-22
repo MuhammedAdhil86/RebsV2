@@ -1,4 +1,4 @@
-import axiosInstance from "../service/axiosinstance";
+import axiosInstance from "./axiosinstance";
 import {
   getBranch,
   getDepartment,
@@ -8,11 +8,13 @@ import {
   getShifts,
   allocateLeavePolicy,
    regularizeAttendanceApproval,
+   postCreateLetterPdfTemplate,
   allocateAllowance,
   allocateCompliance,
   getRoles,
   getwithDivision,
   updateDivision,
+  putUpdateLetterPdfTemplate,
   deleteDivision,
   allocateRoles,
   deleteDesignation,
@@ -714,6 +716,64 @@ export const updateCompanyClaimStatus = async (id, action) => {
     return response.data;
   } catch (error) {
     console.error(`Error updating status for claim ID ${id}:`, error);
+    throw error;
+  }
+};
+
+// export const createLetterPdfTemplate = async (templateData) => {
+//   try {
+//     const response = await axiosInstance.post(
+//       postCreateLetterPdfTemplate,
+//       templateData
+//     );
+//     return response.data;
+//   } catch (error) {
+//     if (error.response?.data) throw error.response.data;
+//     throw error;
+//   }
+// };
+
+export const createLetterPdfTemplate = async (templateData) => {
+  try {
+    const response = await axiosInstance.post(
+      postCreateLetterPdfTemplate,
+      templateData
+    );
+    return response.data;
+  } catch (error) {
+    if (error.response?.data) throw error.response.data;
+    throw error;
+  }
+};
+
+// 🧪 New testing service using the Cloudflare test instance
+export const createLetterPdfTemplateTest = async (templateData) => {
+  try {
+    const response = await testingInstance.post(
+      postCreateLetterPdfTemplate,
+      templateData
+    );
+    return response.data;
+  } catch (error) {
+    if (error.response?.data) throw error.response.data;
+    throw error;
+  }
+};
+
+/**
+ * Updates a letter PDF template using query param id
+ * @param {string|number} id - Template ID
+ * @param {Object} payload - Update payload
+ */
+export const updateLetterPdfTemplateService = async (id, payload) => {
+  try {
+    const response = await axiosInstance.put(
+      `${putUpdateLetterPdfTemplate}?id=${id}`,
+      payload
+    );
+    return response.data;
+  } catch (error) {
+    if (error.response?.data) throw error.response.data;
     throw error;
   }
 };

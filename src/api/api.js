@@ -52,6 +52,7 @@ export const getStaff = "/master/staff"
 //manageEmployee
 export const getEmployeeDetails = "/staff/get"
 export const getEmployeeRole = "/master/role"
+export const getActiveUsersLightUrl = "/staff/get-active-users-light";
 
 // TimeSheet
 export const getEmployeeTimesheets = (params = {}) => {
@@ -344,7 +345,7 @@ export const getEmailPurposes = "admin/available-purposes";
 export const postCreateEmailTemplate = "admin/create/templates";
 export const deleteEmailTemplate = (id) => `admin/templates/${id}`;
 export const getEmailTemplates = "admin/templates";
-
+export const putUpdateLetterPdfTemplate = "/letter/template/update";
 export const updateEmailTemplate = "admin/notification-templates/{purpose}";
 
 export const uploadEmailTemplateFile ="admin/upload/templates";
@@ -356,6 +357,7 @@ export const postAllocatePayarollTemplate = "/api/payroll/template-allocations";
 
 export const postGenerateLetter = "/letter/generate";
 export const postSendLetter = "/letter/send";
+export const postCreateLetterPdfTemplate = "/letter/template/create";
 // FIXED
 export const getUserPayrollTemplateAllocations = (userId) =>
   `/api/payroll/template-allocations/user?user_id=${userId}`;

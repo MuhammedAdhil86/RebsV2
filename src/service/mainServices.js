@@ -1,4 +1,4 @@
-import axiosInstance from "./axiosinstance";
+import axiosInstance, { testingInstance } from "./axiosinstance";
 import {
   getCategory,
   getEmailPurposes,
@@ -63,7 +63,7 @@ export const attachmentUpload = async (employeeUUID, attachmentData) => {
   }
 };
 
-// -------------------- Email API Calls --------------------
+
 export const fetchEmailPurposes = async () => {
   try {
     const response = await axiosInstance.get(getEmailPurposes);
@@ -74,6 +74,9 @@ export const fetchEmailPurposes = async () => {
     return [];
   }
 };
+
+
+
 
 export const fetchEmailPlaceholders = async () => {
   try {
@@ -277,52 +280,114 @@ export const createWeeklyOff = async (payload) => {
   }
 };
 
-export const deleteEmailTemplateService = async (id) => {
-  if (!id) throw new Error("Template ID is required");
 
-  // FIX: Call the function with the id instead of template literals
-  const url = deleteEmailTemplate(id); 
 
-  try {
-    const response = await axiosInstance.delete(url);
-    return response.data; 
-  } catch (error) {
-    const errorMessage =
-      error?.response?.data?.message || 
-      error?.response?.data?.error || 
-      "Failed to delete email template";
-    throw new Error(errorMessage);
-  }
-};
-
-export const generateLetterService = async (userId, category) => {
-  // Ensure the keys match EXACTLY what the backend documentation says
+// ✅ FIXED:
+export const generateLetterService = async (userId, purpose) => {
   const payload = {
     user_id: String(userId),
-    letter_category: String(category),
+    purpose: String(purpose), // ✅ Correct key
   };
 
   try {
     devLog("Generating Letter with Payload:", payload);
-    const response = await axiosInstance.post(postGenerateLetter, payload);
+    const response = await testingInstance.post(postGenerateLetter, payload);
     return response?.data;
   } catch (error) {
-    // This will help you see if it's a 404, 500, or Proxy error
     const serverMessage = error?.response?.data?.message || error?.message;
     console.error("Generate Letter Backend Error:", serverMessage);
     throw new Error(serverMessage);
   }
 };
+
+
+
+
+
+
+
+// export const generateLetterService = async (userId, category) => {
+//   // Ensure the keys match EXACTLY what the backend documentation says
+//   const payload = {
+//     user_id: String(userId),
+//     letter_category: String(category),
+//   };
+
+//   try {
+//     devLog("Generating Letter with Payload:", payload);
+//     const response = await axiosInstance.post(postGenerateLetter, payload);
+//     return response?.data;
+//   } catch (error) {
+//     // This will help you see if it's a 404, 500, or Proxy error
+//     const serverMessage = error?.response?.data?.message || error?.message;
+//     console.error("Generate Letter Backend Error:", serverMessage);
+//     throw new Error(serverMessage);
+//   }
+// };
+
+
+
+
+
+
 /**
  * Send an Email Letter
  */
-export const sendLetterService = async (userId, category, cc = [], bcc = []) => {
+export const sendLetterService = async (userId, purpose, cc = [], bcc = []) => {
+  const isObject = typeof userId === "object" && userId !== null;
+
+  const resolvedUserId = isObject ? userId.user_id || userId.userId : userId;
+  const resolvedPurpose = isObject ? userId.purpose || userId.letter_category : purpose;
+  const resolvedCc = isObject ? userId.cc : cc;
+  const resolvedBcc = isObject ? userId.bcc : bcc;
+
+  // Filter out any empty string "" so gomail doesn't throw "invalid address"
+  const cleanCc = Array.isArray(resolvedCc)
+    ? resolvedCc.map((e) => String(e).trim()).filter((e) => e.length > 0)
+    : [];
+
+  const cleanBcc = Array.isArray(resolvedBcc)
+    ? resolvedBcc.map((e) => String(e).trim()).filter((e) => e.length > 0)
+    : [];
+
   const payload = {
-    user_id: String(userId),
-    letter_category: String(category),
-    cc: cc,
-    bcc: bcc,
+    user_id: String(resolvedUserId || "").trim(),
+    purpose: String(resolvedPurpose || "").trim(),
+    cc: cleanCc,
+    bcc: cleanBcc,
   };
-  const response = await axiosInstance.post(postSendLetter, payload);
-  return response?.data;
+
+  try {
+    const response = await axiosInstance.post(postSendLetter, payload);
+    return response?.data;
+  } catch (error) {
+    console.error("Error sending letter email:", error?.response?.data || error?.message);
+    throw error;
+  }
+};
+/**
+ * Delete Email/Letter Template
+ * DELETE admin/templates/{id}
+ *
+ * @param {string|number} id - Template ID
+ */
+export const deleteEmailTemplateService = async (id) => {
+  if (!id) {
+    throw new Error("Template ID is required to delete template");
+  }
+
+  try {
+    // Directly calls the imported function inline on this line
+    const response = await axiosInstance.delete(deleteEmailTemplate(id));
+    return response?.data;
+  } catch (error) {
+    const errorMessage =
+      error?.response?.data?.message ||
+      error?.response?.data?.error ||
+      error?.message ||
+      "Failed to delete template";
+
+    console.error("deleteEmailTemplateService error:", errorMessage);
+    throw new Error(errorMessage);
+  }
 };

@@ -51,4 +51,44 @@ axiosInstance.interceptors.response.use(
   }
 );
 
+// =============================================================
+// 🧪 Independent Testing Instance (Cloudflare Tunnel via Vite Proxy)
+// =============================================================
+export const testingInstance = axios.create({
+  // Uses /cf_tunnel proxy to prevent browser CORS preflight blocks
+  baseURL: "/cf_tunnel",
+  headers: {
+    "Content-Type": "application/json",
+    "Accept": "application/json",
+    "ngrok-skip-browser-warning": "true",
+    "bypass-tunnel-reminder": "true",
+  },
+  timeout: 15000,
+});
+
+// Attach Bearer token support
+testingInstance.interceptors.request.use(
+  (config) => {
+    const token =
+      localStorage.getItem("authToken") || localStorage.getItem("token");
+    if (token) {
+      config.headers["Authorization"] = `Bearer ${token.trim()}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+// Return response or normalized backend error
+testingInstance.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    console.error(
+      "[Testing Instance Error]:",
+      error?.response?.data || error?.message
+    );
+    return Promise.reject(error?.response?.data || error);
+  }
+);
+
 export default axiosInstance;
