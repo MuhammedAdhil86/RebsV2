@@ -345,6 +345,8 @@ export const getEmailPurposes = "admin/available-purposes";
 export const postCreateEmailTemplate = "admin/create/templates";
 export const deleteEmailTemplate = (id) => `admin/templates/${id}`;
 export const getEmailTemplates = "admin/templates";
+export const getGeneratedLettersUrl = "/letter/generated";
+export const deleteGeneratedLetterUrl = (id) => `/letter/generated/${id}`;
 export const putUpdateLetterPdfTemplate = "/letter/template/update";
 export const updateEmailTemplate = "admin/notification-templates/{purpose}";
 

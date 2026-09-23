@@ -9,6 +9,7 @@ import CreateLetterPdfTemplateForm from "../ui/createletterpdf";
 import CreateLetterEmailTemplateForm from "../ui/createletteremail";
 import LetterActionModal from "../ui/letteractionmodal";
 import DeleteConfirmationModal from "../ui/deletemodal";
+import GeneratedLetterListView from "../ui/generatedletterlistview";
 import {
   FiLoader,
   FiMoreHorizontal,
@@ -19,6 +20,9 @@ import {
   FiSend,
   FiFileText,
   FiPlus,
+  FiList,
+  FiExternalLink,
+  FiSearch,
 } from "react-icons/fi";
 
 // Standard Backend Services
@@ -39,12 +43,16 @@ const Letter = () => {
   // --- Navigation & View States ---
   const [activeTab, setActiveTab] = useState("pdf"); // 'pdf' or 'email'
   const [subTab, setSubTab] = useState("my-templates"); // 'my-templates' or 'presets'
-  const [viewMode, setViewMode] = useState("table"); // 'table', 'preview', 'edit', 'create'
+  const [viewMode, setViewMode] = useState("table"); // 'table', 'preview', 'edit', 'create', 'generated-list'
 
   // --- Data States ---
   const [customTemplates, setCustomTemplates] = useState([]);
   const [presetTemplates, setPresetTemplates] = useState([]);
   const [loading, setLoading] = useState(false);
+
+  // --- Generated Letters State ---
+  const [generatedLetters, setGeneratedLetters] = useState([]);
+  const [generatedSearch, setGeneratedSearch] = useState("");
 
   // --- UI Component States ---
   const [initialData, setInitialData] = useState(null);
@@ -153,8 +161,19 @@ const Letter = () => {
           id: loader,
         });
 
-        if (res?.data?.file_url) {
-          window.open(res.data.file_url, "_blank", "noopener,noreferrer");
+        const fileUrl = res?.data?.file_url;
+        if (fileUrl) {
+          // Track generated letter entry in list
+          const newEntry = {
+            id: Date.now(),
+            user_id: resolvedUserId,
+            purpose: resolvedPurpose,
+            file_url: fileUrl,
+            created_at: new Date().toLocaleString(),
+          };
+          setGeneratedLetters((prev) => [newEntry, ...prev]);
+
+          window.open(fileUrl, "_blank", "noopener,noreferrer");
         }
       } else {
         const res = await sendLetterService(
@@ -212,7 +231,6 @@ const Letter = () => {
     try {
       await deleteEmailTemplateService(templateId);
 
-      // Cleanly remove from both state lists
       setCustomTemplates((prev) =>
         prev.filter((item) => item.id !== templateId),
       );
@@ -234,16 +252,12 @@ const Letter = () => {
     let sourceData = [];
 
     if (isCompany8) {
-      // Company 8 sees ALL templates across both System Presets and My Templates
       const map = new Map();
       [...presetTemplates, ...customTemplates].forEach((item) => {
         if (item?.id) map.set(item.id, item);
       });
       sourceData = Array.from(map.values());
     } else {
-      // Other Companies:
-      // System Presets strictly pulls from presetTemplates
-      // My Templates strictly pulls from customTemplates
       if (subTab === "presets") {
         sourceData = presetTemplates;
       } else {
@@ -254,10 +268,8 @@ const Letter = () => {
     }
 
     return sourceData.filter((item) => {
-      // 1. Strict Letter Generation Module Filter
       if (item.for_letter_generation !== true) return false;
 
-      // 2. Tab Matching (PDF vs Email)
       const purpose = (item.purpose || "").toLowerCase();
       const isPdf = purpose.endsWith("_pdf") || purpose.includes("pdf");
       const isMail =
@@ -270,7 +282,6 @@ const Letter = () => {
   }, [subTab, presetTemplates, customTemplates, activeTab, isCompany8]);
 
   const columns = [
-    { key: "id", label: "ID", align: "left" },
     { key: "name", label: "Template Name", align: "left" },
     { key: "purpose", label: "Purpose", align: "left" },
     {
@@ -291,7 +302,6 @@ const Letter = () => {
       label: "Actions",
       align: "center",
       render: (_, row) => {
-        // Clone is shown ONLY in System Presets for non-Company-8 users
         const canClone = subTab === "presets" && !isCompany8;
 
         return (
@@ -444,6 +454,18 @@ const Letter = () => {
                 </div>
 
                 <div className="flex items-center gap-2.5">
+                  {/* Generated List Button (shown in PDF Letters tab) */}
+                  {activeTab === "pdf" && (
+                    <button
+                      type="button"
+                      onClick={() => setViewMode("generated-list")}
+                      className="flex items-center gap-1.5 bg-white border border-gray-300 text-gray-800 px-3.5 py-2 rounded-lg text-[12px] font-medium hover:bg-gray-50 hover:border-gray-400 transition-all shadow-2xs cursor-pointer"
+                    >
+                      <FiList size={14} className="text-black" />
+                      <span>Generated List</span>
+                    </button>
+                  )}
+
                   <button
                     type="button"
                     onClick={() => setIsActionModalOpen(true)}
@@ -486,6 +508,12 @@ const Letter = () => {
                 )}
               </div>
             </>
+          ) : viewMode === "generated-list" ? (
+            /* Dedicated Generated Letter List View */
+            <GeneratedLetterListView
+              data={generatedLetters}
+              onBack={() => setViewMode("table")}
+            />
           ) : viewMode === "preview" ? (
             <TemplatePreviewView
               data={selectedForPreview}

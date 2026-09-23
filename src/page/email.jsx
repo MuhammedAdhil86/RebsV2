@@ -211,7 +211,6 @@ const EmailTemplates = () => {
   }, [subTab, presetTemplates, customTemplates, isCompany8, searchQuery]);
 
   const columns = [
-    { key: "id", label: "ID", align: "left" },
     { key: "name", label: "Template Name", align: "left" },
     { key: "purpose", label: "Purpose", align: "left" },
     {

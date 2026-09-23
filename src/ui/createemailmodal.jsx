@@ -381,21 +381,89 @@ const CreateEmailTemplateView = ({
                 Template Name <span className="text-red-500">*</span>
               </label>
 
+              {/* Guidelines Tooltip */}
               <div className="relative group flex items-center">
                 <div className="cursor-pointer p-0.5 rounded-full hover:bg-gray-100 transition-colors">
                   <Info size={15} className="text-blue-500" />
                 </div>
-                <div className="absolute right-0 top-full mt-2 w-[340px] max-h-72 overflow-y-auto no-scrollbar hidden group-hover:block bg-white text-black text-[12px] font-normal rounded-xl p-4 shadow-2xl border border-gray-200 z-[100] transition-all normal-case tracking-normal">
-                  <div className="text-[13px] font-semibold mb-1 text-black">
-                    Placeholder Tokens
+                <div className="absolute right-0 top-full mt-2 w-[390px] max-h-80 overflow-y-auto no-scrollbar hidden group-hover:block bg-white text-black text-[12px] font-normal rounded-xl p-5 shadow-2xl border border-gray-200 z-[100] transition-all normal-case tracking-normal">
+                  <div className="text-[14px] font-semibold mb-2 text-black">
+                    Template Placeholder Guidelines
                   </div>
-                  <p className="text-gray-600 mb-2 leading-relaxed">
-                    Insert dynamic variables using the{" "}
-                    <em>Insert Placeholder</em> tool in the toolbar.
+                  <p className="text-gray-700 mb-2 leading-relaxed">
+                    When customizing a template, you can use the available
+                    placeholders shown in the <em>Placeholder</em> dropdown.
                   </p>
-                  <p className="text-gray-500 font-mono text-[11px]">
-                    Format: {"{{.FieldName}}"}
+                  <p className="text-gray-700 mb-2 leading-relaxed">
+                    <strong className="text-black">Important:</strong> The
+                    dropdown contains placeholders from all templates available
+                    in the system. Please use{" "}
+                    <em>
+                      only the placeholders that are applicable to the specific
+                      template you are currently editing
+                    </em>
+                    .
                   </p>
+                  <p className="text-gray-700 mb-3 leading-relaxed">
+                    Each template has its own set of relevant placeholders, and
+                    placeholders are named according to their intended template
+                    purpose to help you identify the correct ones.
+                  </p>
+
+                  <div className="text-[13px] font-semibold mb-1.5 text-black">
+                    How to use placeholders
+                  </div>
+                  <ul className="list-disc pl-4 space-y-1.5 text-gray-700 mb-3 leading-relaxed">
+                    <li>
+                      Select a placeholder from the dropdown and insert it into
+                      the <em>Subject/Function</em> or <em>Body HTML</em> where
+                      required.
+                    </li>
+                    <li>
+                      Use only placeholders relevant to the current template.
+                    </li>
+                    <li>
+                      Do not manually modify the placeholder name or syntax.
+                    </li>
+                    <li>
+                      Placeholders must be used in the format{" "}
+                      <span className="font-mono text-[11px] text-gray-900 bg-gray-100 px-1 py-0.5 rounded">
+                        {"{{.PlaceholderName}}"}
+                      </span>
+                      .
+                    </li>
+                    <li>
+                      Generic placeholders may be available for use across
+                      multiple templates where applicable.
+                    </li>
+                    <li>
+                      Using a placeholder that is not supported by the current
+                      template may result in the value not being populated
+                      correctly when the template is generated or sent.
+                    </li>
+                  </ul>
+
+                  <div className="text-[13px] font-semibold mb-1 text-black">
+                    Example:
+                  </div>
+                  <p className="text-gray-700 mb-1 leading-relaxed">
+                    If you are editing an <em>Employee Leave Approval</em>{" "}
+                    template, use placeholders provided for leave-related
+                    information such as employee name, leave dates, leave type,
+                    etc.
+                  </p>
+                  <p className="text-gray-700 mb-3 leading-relaxed">
+                    Do not use placeholders that belong specifically to
+                    unrelated templates such as payroll, onboarding, attendance,
+                    or other modules.
+                  </p>
+
+                  <div className="p-2.5 bg-gray-50 border-l-2 border-blue-500 rounded text-gray-700 text-[11px] leading-relaxed">
+                    <strong className="text-black">Tip:</strong> Always select
+                    placeholders from the dropdown instead of typing them
+                    manually. The placeholder name and syntax should remain
+                    exactly as provided.
+                  </div>
                 </div>
               </div>
             </div>
@@ -462,7 +530,7 @@ const CreateEmailTemplateView = ({
                   System Preset Default
                 </span>
                 <span className="text-[10px] text-gray-400 block">
-                  Save as system-wide default (`is_default`)
+                  Save as system-wide default
                 </span>
               </div>
               <input
@@ -483,7 +551,7 @@ const CreateEmailTemplateView = ({
                 Manual Dispatch
               </span>
               <span className="text-[10px] text-gray-400 block">
-                Allow manual send triggering (`is_manual`)
+                Allow manual send triggering
               </span>
             </div>
             <input

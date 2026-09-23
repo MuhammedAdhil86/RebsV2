@@ -431,8 +431,7 @@ const EditLetterPdfTemplateView = ({
                   className="w-4 h-4 rounded text-black border-gray-300 focus:ring-black cursor-pointer"
                 />
                 <span className="text-[12px] text-gray-700 font-medium">
-                  Set as Default Template (`is_default:{" "}
-                  {isDefault ? "true" : "false"}`)
+                  Set as Default Template {isDefault ? "true" : "false"}
                 </span>
               </label>
             </div>

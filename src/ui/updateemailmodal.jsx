@@ -468,7 +468,7 @@ const EditEmailTemplateView = ({
                   System Preset Default
                 </span>
                 <span className="text-[10px] text-gray-400 block">
-                  Save as system-wide default (`is_default`)
+                  Save as system-wide default
                 </span>
               </div>
               <input
@@ -489,7 +489,7 @@ const EditEmailTemplateView = ({
                 Manual Dispatch
               </span>
               <span className="text-[10px] text-gray-400 block">
-                Allow manual send triggering (`is_manual`)
+                Allow manual send triggering
               </span>
             </div>
             <input

@@ -11,6 +11,8 @@ import {
   postGenerateLetter,
   getWeeklyOffShifts,
   postCloneEmailTemplate,
+  getGeneratedLettersUrl,
+  deleteGeneratedLetterUrl,
   deleteEmailTemplate,
   postSendLetter,
   postAddWeekOff,
@@ -300,7 +302,44 @@ export const generateLetterService = async (userId, purpose) => {
   }
 };
 
+export const getGeneratedLettersService = async () => {
+  try {
+    const response = await axiosInstance.get(getGeneratedLettersUrl);
+    console.log("Generated letters response:", response);
+    // Accommodates direct array, response.data, or response.data.data
+    return Array.isArray(response?.data)
+      ? response.data
+      : response?.data?.data ?? [];
+  } catch (error) {
+    console.error(
+      "Error fetching generated letters:",
+      error?.response?.data || error?.message
+    );
+    throw error;
+  }
+};
 
+/**
+ * Delete a generated letter by ID
+ * Endpoint: DELETE /letter/generated/{id}
+ */
+export const deleteGeneratedLetterService = async (id) => {
+  if (!id) {
+    throw new Error("Letter ID is required for deletion");
+  }
+
+  try {
+    const response = await axiosInstance.delete(deleteGeneratedLetterUrl(id));
+    console.log(`Deleted letter ${id} response:`, response);
+    return response?.data;
+  } catch (error) {
+    console.error(
+      `Error deleting generated letter ${id}:`,
+      error?.response?.data || error?.message
+    );
+    throw error;
+  }
+};
 
 
 
