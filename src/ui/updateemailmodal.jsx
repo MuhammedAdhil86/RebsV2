@@ -12,8 +12,10 @@ import {
   Info,
   ShieldCheck,
   Save,
+  Image as ImageIcon,
 } from "lucide-react";
 import toast from "react-hot-toast";
+import GlowButton from "../components/helpers/glowbutton";
 import {
   fetchEmailPurposes,
   fetchEmailPlaceholders,
@@ -72,22 +74,34 @@ const EditEmailTemplateView = ({
   const quillRef = useRef(null);
   const { loadTemplates } = useEmailTemplateStore();
 
-  // Detect current company ID
-  const currentCompanyId = useMemo(() => {
-    if (propCompanyId !== undefined && propCompanyId !== null) {
-      return Number(propCompanyId);
+  // Robust detection for Company 8 (System Admin)
+  const isCompany8 = useMemo(() => {
+    if (
+      propCompanyId !== undefined &&
+      propCompanyId !== null &&
+      Number(propCompanyId) > 0
+    ) {
+      return Number(propCompanyId) === 8;
     }
     try {
-      const user = JSON.parse(localStorage.getItem("user") || "{}");
-      return Number(
-        user?.company_id || localStorage.getItem("company_id") || 0,
-      );
+      const userStr = localStorage.getItem("user");
+      const user = userStr ? JSON.parse(userStr) : {};
+
+      const candidateId =
+        user?.company_id ??
+        user?.companyId ??
+        user?.company?.id ??
+        user?.data?.company_id ??
+        localStorage.getItem("company_id") ??
+        localStorage.getItem("companyId") ??
+        sessionStorage.getItem("company_id") ??
+        0;
+
+      return Number(candidateId) === 8;
     } catch {
-      return 0;
+      return false;
     }
   }, [propCompanyId]);
-
-  const isCompany8 = currentCompanyId === 8;
 
   // Form Fields pre-filled from template to edit
   const [templateTitle, setTemplateTitle] = useState(currentData?.name || "");
@@ -96,6 +110,10 @@ const EditEmailTemplateView = ({
   const [content, setContent] = useState(currentData?.body_html || "");
   const [isManual, setIsManual] = useState(Boolean(currentData?.is_manual));
   const [isDefault, setIsDefault] = useState(Boolean(currentData?.is_default));
+
+  // Logo Size Control Tool States
+  const [logoHeight, setLogoHeight] = useState(80);
+  const [showLogoTool, setShowLogoTool] = useState(false);
 
   // Dropdowns & Placeholders
   const [emailPurposes, setEmailPurposes] = useState([]);
@@ -121,6 +139,8 @@ const EditEmailTemplateView = ({
 
   // ---------------- Load Purposes & Placeholders ----------------
   useEffect(() => {
+    let isMounted = true;
+
     const loadData = async () => {
       setPurposesLoading(true);
       setLoadingPlaceholders(true);
@@ -131,44 +151,111 @@ const EditEmailTemplateView = ({
           fetchEmailPlaceholders(),
         ]);
 
-        setEmailPurposes(purposesData || []);
+        if (isMounted) {
+          const rawPurposes = Array.isArray(purposesData)
+            ? purposesData
+            : purposesData?.data || [];
+          setEmailPurposes(rawPurposes);
 
-        const placeholderList = (placeholdersData || []).map(
-          (item) => item.placeholder || item.label || item,
-        );
-        setPlaceholders(placeholderList);
+          const rawPlaceholders = Array.isArray(placeholdersData)
+            ? placeholdersData
+            : placeholdersData?.data || [];
+
+          const placeholderList = rawPlaceholders
+            .map((item) =>
+              typeof item === "string"
+                ? item
+                : item?.placeholder || item?.label || "",
+            )
+            .filter(Boolean);
+
+          setPlaceholders(placeholderList);
+        }
       } catch (error) {
         console.error("Failed to load dependencies:", error);
       } finally {
-        setPurposesLoading(false);
-        setLoadingPlaceholders(false);
+        if (isMounted) {
+          setPurposesLoading(false);
+          setLoadingPlaceholders(false);
+        }
       }
     };
 
     loadData();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   // ---------------- Editor & Placeholder Handlers ----------------
   const handleUndo = () => quillRef.current?.getEditor().history.undo();
   const handleRedo = () => quillRef.current?.getEditor().history.redo();
 
+  // Adjust selected or last inserted image size directly inside Quill
+  const applyLogoHeightChange = (newHeight) => {
+    setLogoHeight(newHeight);
+    const editor = quillRef.current?.getEditor();
+    if (!editor) return;
+
+    // Check if an image is actively selected in editor
+    const range = editor.getSelection();
+    if (range) {
+      const [leaf] = editor.getLeaf(range.index);
+      if (leaf && leaf.domNode && leaf.domNode.tagName === "IMG") {
+        leaf.domNode.style.height = `${newHeight}px`;
+        leaf.domNode.style.maxHeight = `${newHeight}px`;
+        setContent(editor.root.innerHTML);
+        return;
+      }
+    }
+
+    // Otherwise update all logo images matching placeholders in the document
+    const editorElement = editor.root;
+    const images = editorElement.querySelectorAll("img");
+    images.forEach((img) => {
+      if (img.src.includes("Logo") || img.src.includes("URL")) {
+        img.style.height = `${newHeight}px`;
+        img.style.maxHeight = `${newHeight}px`;
+        img.style.width = "auto";
+        img.style.objectFit = "contain";
+      }
+    });
+    setContent(editorElement.innerHTML);
+  };
+
+  // Insert placeholder (handles text vs. logo tag intelligently)
   const insertPlaceholder = (placeholderKey) => {
     const editor = quillRef.current?.getEditor();
     if (!editor) return;
 
     const range = editor.getSelection(true);
-    const token = `{{.${placeholderKey}}}`;
     const insertIndex = range ? range.index : editor.getLength();
 
-    editor.insertText(insertIndex, token, "user");
-    editor.setSelection(insertIndex + token.length);
+    const isLogo =
+      placeholderKey.toLowerCase().includes("logo") ||
+      (placeholderKey.toLowerCase().endsWith("url") &&
+        placeholderKey.toLowerCase().includes("logo"));
+
+    if (isLogo) {
+      // Clean HTML block with customizable height
+      const logoHtml = `<p><img src="{{.${placeholderKey}}}" alt="${placeholderKey}" style="height:${logoHeight}px; max-height:${logoHeight}px; width:auto; object-fit:contain;" /></p>`;
+      editor.clipboard.dangerouslyPasteHTML(insertIndex, logoHtml, "user");
+      editor.setSelection(insertIndex + 1);
+      toast.success(`Inserted ${placeholderKey} (${logoHeight}px)`);
+    } else {
+      const token = `{{.${placeholderKey}}}`;
+      editor.insertText(insertIndex, token, "user");
+      editor.setSelection(insertIndex + token.length);
+      toast.success(`Inserted ${token}`);
+    }
+
     setShowPlaceholderMenu(false);
-    toast.success(`Inserted ${token}`);
   };
 
   // ---------------- Handle Submit ----------------
   const handleSubmit = async (e) => {
-    if (e) e.preventDefault();
+    if (e && e.preventDefault) e.preventDefault();
 
     if (
       !templateTitle.trim() ||
@@ -194,11 +281,9 @@ const EditEmailTemplateView = ({
       purpose: purpose.trim(),
       subject: subject.trim(),
       body_html: finalHtml,
+      template_type: "mail",
       is_manual: Boolean(isManual),
-      // Only Company 8 can specify is_default; other companies keep current state
-      is_default: isCompany8
-        ? Boolean(isDefault)
-        : Boolean(currentData?.is_default),
+      is_default: isCompany8 ? Boolean(isDefault) : false,
     };
 
     try {
@@ -277,7 +362,7 @@ const EditEmailTemplateView = ({
   ];
 
   const filteredPlaceholders = placeholders.filter((p) =>
-    p.toLowerCase().includes(searchTerm.toLowerCase()),
+    String(p).toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
   return (
@@ -294,7 +379,7 @@ const EditEmailTemplateView = ({
               border-bottom: 1px solid #e5e7eb !important;
               padding: 10px 14px !important;
               background-color: #fafbfc;
-              padding-right: 280px !important;
+              padding-right: 360px !important;
               position: relative;
               z-index: 10;
             }
@@ -308,6 +393,12 @@ const EditEmailTemplateView = ({
               min-height: 380px;
               line-height: 1.6;
               padding: 18px;
+            }
+            .ql-editor img {
+              display: inline-block;
+              vertical-align: middle;
+              border-radius: 4px;
+              transition: all 0.2s ease;
             }
             .ql-snow .ql-color, 
             .ql-snow .ql-background {
@@ -368,6 +459,7 @@ const EditEmailTemplateView = ({
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Company 8 Exclusive Admin Badge */}
           {isCompany8 && (
             <div className="flex items-center gap-1.5 px-3 py-1 bg-amber-50 rounded-lg border border-amber-200">
               <ShieldCheck size={13} className="text-amber-600" />
@@ -406,6 +498,13 @@ const EditEmailTemplateView = ({
                   <p className="text-gray-600 mb-2 leading-relaxed">
                     Insert dynamic variables using the{" "}
                     <em>Insert Placeholder</em> tool in the toolbar.
+                  </p>
+                  <p className="text-gray-600 mb-2 leading-relaxed">
+                    Logo placeholders (e.g.{" "}
+                    <span className="font-mono text-[11px] bg-gray-100 px-1 py-0.5 rounded">
+                      SenderLogoURL
+                    </span>
+                    ) are automatically rendered as styled image elements.
                   </p>
                   <p className="text-gray-500 font-mono text-[11px]">
                     Format: {"{{.FieldName}}"}
@@ -462,13 +561,13 @@ const EditEmailTemplateView = ({
         >
           {/* Default Template Flag - ONLY VISIBLE FOR COMPANY 8 */}
           {isCompany8 && (
-            <div className="flex items-center justify-between bg-white border border-amber-100 rounded-xl px-4 py-2.5 shadow-2xs">
+            <div className="flex items-center justify-between bg-white border border-amber-200/80 rounded-xl px-4 py-2.5 shadow-2xs">
               <div>
                 <span className="text-[12px] text-amber-900 font-medium block">
                   System Preset Default
                 </span>
                 <span className="text-[10px] text-gray-400 block">
-                  Save as system-wide default
+                  Save as default template: {isDefault ? "true" : "false"}
                 </span>
               </div>
               <input
@@ -503,10 +602,12 @@ const EditEmailTemplateView = ({
           </div>
         </div>
 
-        {/* --- QUILL EDITOR CONTAINER --- */}
+        {/* --- QUILL EDITOR CONTAINER WITH LOGO CONTROLS --- */}
         <div className="relative bg-white rounded-xl border border-gray-200 shadow-sm">
-          <div className="absolute right-3 top-2 z-20 flex items-center gap-2 bg-white/90 backdrop-blur-sm px-2 py-1 rounded-lg border border-gray-200 shadow-sm">
-            <div className="flex items-center gap-2 text-gray-400 border-r border-gray-200 pr-2">
+          {/* Action Tools Mounted Over Toolbar */}
+          <div className="absolute right-3 top-2 z-20 flex items-center gap-2 bg-white/95 backdrop-blur-sm px-2 py-1 rounded-lg border border-gray-200 shadow-sm">
+            {/* History undo/redo */}
+            <div className="flex items-center gap-1.5 text-gray-400 border-r border-gray-200 pr-2">
               <button
                 type="button"
                 onClick={handleUndo}
@@ -525,18 +626,98 @@ const EditEmailTemplateView = ({
               </button>
             </div>
 
-            {/* Placeholder Menu */}
+            {/* --- LOGO SIZE TOOL CONTROLLER --- */}
+            <div className="relative border-r border-gray-200 pr-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowLogoTool((prev) => !prev);
+                  setShowPlaceholderMenu(false);
+                }}
+                className={`flex items-center gap-1 text-[11px] font-semibold uppercase tracking-tight py-0.5 px-1.5 rounded transition-all cursor-pointer ${
+                  showLogoTool
+                    ? "bg-amber-100 text-amber-900 border border-amber-300"
+                    : "text-gray-700 hover:text-black bg-gray-50 border border-gray-200"
+                }`}
+                title="Configure Logo Display Size"
+              >
+                <ImageIcon size={13} className="text-amber-600" />
+                <span>Logo: {logoHeight}px</span>
+                <ChevronDown size={12} />
+              </button>
+
+              {showLogoTool && (
+                <div className="absolute right-0 mt-2 w-64 bg-white border border-gray-200 rounded-xl shadow-2xl z-50 p-4 animate-in fade-in zoom-in-95 duration-100">
+                  <div className="flex items-center justify-between mb-3 border-b border-gray-100 pb-2">
+                    <span className="text-[12px] font-bold text-gray-800 flex items-center gap-1.5">
+                      <ImageIcon size={14} className="text-amber-600" />
+                      Logo Height Control
+                    </span>
+                    <span className="text-[11px] font-mono font-bold bg-amber-50 text-amber-800 px-2 py-0.5 rounded border border-amber-200">
+                      {logoHeight}px
+                    </span>
+                  </div>
+
+                  {/* Slider Control */}
+                  <div className="flex flex-col gap-2 mb-3">
+                    <div className="flex justify-between text-[10px] text-gray-400 font-medium">
+                      <span>30px</span>
+                      <span>Default: 80px</span>
+                      <span>200px</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="30"
+                      max="200"
+                      step="5"
+                      value={logoHeight}
+                      onChange={(e) =>
+                        applyLogoHeightChange(Number(e.target.value))
+                      }
+                      className="w-full accent-black cursor-pointer"
+                    />
+                  </div>
+
+                  {/* Quick Preset Buttons */}
+                  <div className="flex items-center gap-1.5 justify-between">
+                    {[50, 80, 100, 120].map((preset) => (
+                      <button
+                        key={preset}
+                        type="button"
+                        onClick={() => applyLogoHeightChange(preset)}
+                        className={`flex-1 py-1 text-[11px] rounded border font-mono transition-all cursor-pointer ${
+                          logoHeight === preset
+                            ? "bg-black text-white border-black font-semibold"
+                            : "bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100"
+                        }`}
+                      >
+                        {preset}px
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[10px] text-gray-400 mt-2.5 leading-tight">
+                    Affects new logo placeholders inserted and resizes selected
+                    images in the editor.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* --- PLACEHOLDER MENU --- */}
             <div className="relative">
               <button
                 type="button"
-                onClick={() => setShowPlaceholderMenu((prev) => !prev)}
+                onClick={() => {
+                  setShowPlaceholderMenu((prev) => !prev);
+                  setShowLogoTool(false);
+                }}
                 className="flex items-center gap-1 text-[11px] text-gray-700 font-semibold uppercase tracking-tight hover:text-black py-0.5 px-1 cursor-pointer"
               >
                 Insert Placeholder <ChevronDown size={14} />
               </button>
 
               {showPlaceholderMenu && (
-                <div className="absolute right-0 mt-2 w-64 bg-white border border-gray-100 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto no-scrollbar py-2 animate-in fade-in zoom-in-95 duration-100">
+                <div className="absolute right-0 mt-2 w-72 bg-white border border-gray-100 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto no-scrollbar py-2 animate-in fade-in zoom-in-95 duration-100">
                   <div className="px-3 pb-2 border-b border-gray-50">
                     <div className="flex items-center gap-1.5 bg-gray-50 px-2 py-1 rounded-lg">
                       <Search size={12} className="text-gray-400 shrink-0" />
@@ -554,23 +735,31 @@ const EditEmailTemplateView = ({
                   {loadingPlaceholders ? (
                     <div className="px-4 py-3 text-[11px] text-gray-400 text-center flex items-center justify-center gap-2">
                       <Loader2 size={12} className="animate-spin" />
-                      <span>Loading...</span>
+                      <span>Loading tags...</span>
                     </div>
                   ) : filteredPlaceholders.length === 0 ? (
                     <div className="px-4 py-3 text-[11px] text-gray-400 text-center">
                       No placeholders found
                     </div>
                   ) : (
-                    filteredPlaceholders.map((item) => (
-                      <button
-                        type="button"
-                        key={item}
-                        onClick={() => insertPlaceholder(item)}
-                        className="w-full text-left px-4 py-2 text-[12px] hover:bg-blue-50 hover:text-blue-600 transition-colors border-b border-gray-50 last:border-0 cursor-pointer font-mono"
-                      >
-                        {`{{.${item}}}`}
-                      </button>
-                    ))
+                    filteredPlaceholders.map((keyName) => {
+                      const isLogo = keyName.toLowerCase().includes("logo");
+                      return (
+                        <button
+                          type="button"
+                          key={keyName}
+                          onClick={() => insertPlaceholder(keyName)}
+                          className="w-full flex items-center justify-between px-4 py-2 text-[12px] hover:bg-blue-50 hover:text-blue-600 transition-colors border-b border-gray-50 last:border-0 cursor-pointer font-mono"
+                        >
+                          <span className="truncate">{`{{.${keyName}}}`}</span>
+                          {isLogo && (
+                            <span className="text-[9px] font-sans font-semibold uppercase px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 shrink-0 ml-2 flex items-center gap-1">
+                              <ImageIcon size={10} /> Logo ({logoHeight}px)
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })
                   )}
                 </div>
               )}
@@ -588,8 +777,8 @@ const EditEmailTemplateView = ({
         </div>
       </div>
 
-      {/* --- FOOTER --- */}
-      <div className="p-5 bg-white border-t border-gray-100 flex justify-end items-center gap-3">
+      {/* --- FOOTER WITH GLOWBUTTON --- */}
+      <div className="p-5 bg-white border-t border-gray-100 flex justify-end items-center gap-4">
         {onBack && (
           <button
             type="button"
@@ -600,24 +789,21 @@ const EditEmailTemplateView = ({
             Cancel
           </button>
         )}
-        <button
-          type="button"
-          onClick={handleSubmit}
-          disabled={loading}
-          className="flex items-center gap-2 bg-black text-white px-6 py-2.5 rounded-xl text-[12px] hover:bg-gray-800 transition-all shadow-sm cursor-pointer disabled:opacity-50 font-medium"
-        >
-          {loading ? (
-            <>
-              <Loader2 className="animate-spin" size={14} />
-              <span>Updating...</span>
-            </>
-          ) : (
-            <>
-              <Save size={14} />
-              <span>Update Template</span>
-            </>
-          )}
-        </button>
+        <GlowButton onClick={handleSubmit} disabled={loading}>
+          <div className="flex items-center gap-2">
+            {loading ? (
+              <>
+                <Loader2 className="animate-spin" size={14} />
+                <span>Updating...</span>
+              </>
+            ) : (
+              <>
+                <Save size={14} />
+                <span>Update Template</span>
+              </>
+            )}
+          </div>
+        </GlowButton>
       </div>
     </div>
   );
