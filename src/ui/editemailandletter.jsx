@@ -16,9 +16,11 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import GlowButton from "../components/helpers/glowbutton";
-import { updateEmailTemplateService } from "../service/mainServices";
+import {
+  updateEmailTemplateService,
+  fetchEmailPlaceholders,
+} from "../service/mainServices";
 
-// Quill palette with leading empty string for default color reset
 const COLOR_PALETTE = [
   "",
   "#000000",
@@ -67,7 +69,7 @@ const EditEmailTemplateView = ({
 }) => {
   const quillRef = useRef(null);
 
-  // Check if current user/template belongs to Company 8
+  // Check if current user/template belongs to Company 8 (System Admin)
   const isCompany8 = useMemo(() => {
     if (propCompanyId !== undefined && propCompanyId !== null) {
       return Number(propCompanyId) === 8;
@@ -79,11 +81,14 @@ const EditEmailTemplateView = ({
       return Number(initialData.company_id) === 8;
     }
     try {
-      const user = JSON.parse(localStorage.getItem("user") || "{}");
-      return (
-        Number(user?.company_id || localStorage.getItem("company_id") || 0) ===
-        8
-      );
+      const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
+      const foundId =
+        storedUser?.company_id ||
+        storedUser?.companyId ||
+        storedUser?.data?.company_id ||
+        localStorage.getItem("company_id") ||
+        localStorage.getItem("companyId");
+      return Number(foundId) === 8;
     } catch {
       return false;
     }
@@ -97,8 +102,10 @@ const EditEmailTemplateView = ({
   const [loading, setLoading] = useState(false);
 
   // Dynamic Placeholders
+  const [placeholders, setPlaceholders] = useState([]);
   const [showPlaceholderMenu, setShowPlaceholderMenu] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [loadingPlaceholders, setLoadingPlaceholders] = useState(false);
 
   // Pre-fill fields from initialData
   useEffect(() => {
@@ -110,11 +117,58 @@ const EditEmailTemplateView = ({
     }
   }, [initialData]);
 
-  // History operations
+  // Load placeholders once on mount
+  useEffect(() => {
+    let isMounted = true;
+
+    if (
+      Array.isArray(availablePlaceholders) &&
+      availablePlaceholders.length > 0
+    ) {
+      const parsed = availablePlaceholders
+        .map((item) =>
+          typeof item === "string"
+            ? item
+            : item?.placeholder || item?.label || "",
+        )
+        .filter(Boolean);
+      setPlaceholders(parsed);
+      return;
+    }
+
+    const loadPlaceholders = async () => {
+      setLoadingPlaceholders(true);
+      try {
+        const res = await fetchEmailPlaceholders();
+        if (isMounted) {
+          const rawList = Array.isArray(res) ? res : res?.data || [];
+          const cleanTokens = rawList
+            .map((item) =>
+              typeof item === "string"
+                ? item
+                : item?.placeholder || item?.label || "",
+            )
+            .filter(Boolean);
+
+          setPlaceholders(cleanTokens);
+        }
+      } catch (err) {
+        console.error("Failed to load placeholders:", err);
+      } finally {
+        if (isMounted) setLoadingPlaceholders(false);
+      }
+    };
+
+    loadPlaceholders();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const handleUndo = () => quillRef.current?.getEditor().history.undo();
   const handleRedo = () => quillRef.current?.getEditor().history.redo();
 
-  // Insert placeholder token at current cursor position
   const insertPlaceholder = (placeholderKey) => {
     const editor = quillRef.current?.getEditor();
     if (!editor) return;
@@ -129,20 +183,20 @@ const EditEmailTemplateView = ({
     toast.success(`Inserted ${token}`);
   };
 
-  // Submit Update
   const handleUpdate = async () => {
-    if (!templateTitle.trim() || !subject.trim()) {
-      toast.error("Template name and subject are required");
+    if (!templateTitle.trim()) {
+      toast.error("Template name is required");
       return;
     }
 
-    if (!content.trim()) {
-      toast.error("Template content cannot be empty");
+    const strippedContent = content.replace(/<[^>]*>?/gm, "").trim();
+    if (!strippedContent && !content.includes("<img")) {
+      toast.error("Template body content cannot be empty");
       return;
     }
 
-    if (!initialData?.id) {
-      toast.error("Invalid template ID");
+    if (!initialData?.purpose) {
+      toast.error("Purpose key is missing from template data");
       return;
     }
 
@@ -153,13 +207,14 @@ const EditEmailTemplateView = ({
       ? bodyContent
       : `<html><body>${bodyContent}</body></html>`;
 
+    // Exact payload object accepted by updateEmailTemplateService({ purpose, ... })
     const payload = {
-      id: initialData.id,
-      purpose: initialData?.purpose || "",
+      purpose: initialData.purpose,
       name: templateTitle.trim(),
       subject: subject.trim(),
       body_html: finalHtml,
-      is_default: isCompany8 ? Boolean(isDefault) : false,
+      template_type: "mail",
+      is_default: Boolean(isDefault),
     };
 
     try {
@@ -169,15 +224,14 @@ const EditEmailTemplateView = ({
       );
 
       if (onSuccess) {
-        onSuccess();
+        onSuccess(response);
       } else if (onBack) {
         setTimeout(() => onBack(), 800);
       }
     } catch (err) {
       toast.error(
-        err?.message ||
-          err?.error ||
-          err?.detail ||
+        err?.response?.data?.message ||
+          err?.message ||
           "Failed to update template",
       );
     } finally {
@@ -185,7 +239,6 @@ const EditEmailTemplateView = ({
     }
   };
 
-  // Quill Toolbar Modules
   const modules = useMemo(
     () => ({
       toolbar: [
@@ -238,13 +291,14 @@ const EditEmailTemplateView = ({
     "clean",
   ];
 
-  const filteredPlaceholders = availablePlaceholders.filter((p) =>
-    p.toLowerCase().includes(searchTerm.toLowerCase()),
-  );
+  const filteredPlaceholders = useMemo(() => {
+    return placeholders.filter((p) =>
+      String(p).toLowerCase().includes(searchTerm.toLowerCase()),
+    );
+  }, [placeholders, searchTerm]);
 
   return (
     <div className="w-full bg-white rounded-2xl border border-gray-100 shadow-sm flex flex-col font-poppins animate-in slide-in-from-bottom-2 duration-300">
-      {/* Quill & Color Picker Dropdown Styles */}
       <style
         dangerouslySetInnerHTML={{
           __html: `
@@ -330,6 +384,7 @@ const EditEmailTemplateView = ({
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Company 8 Exclusive Admin Badge */}
           {isCompany8 && (
             <div className="flex items-center gap-1.5 px-3 py-1 bg-amber-50 rounded-lg border border-amber-200">
               <ShieldCheck size={13} className="text-amber-600" />
@@ -349,7 +404,7 @@ const EditEmailTemplateView = ({
 
       {/* --- FORM BODY --- */}
       <div className="p-8 flex flex-col gap-6 max-h-[78vh] overflow-y-auto no-scrollbar bg-[#FAFBFC]">
-        {/* Row 1: Locked Purpose, Name & Company 8 Toggle */}
+        {/* Row 1: Locked Purpose, Name & Company 8 Checkbox */}
         <div
           className={`grid grid-cols-1 ${
             isCompany8 ? "md:grid-cols-3" : "md:grid-cols-2"
@@ -394,7 +449,7 @@ const EditEmailTemplateView = ({
 
             <input
               type="text"
-              placeholder="e.g. Welcome Onboarding Email"
+              placeholder="e.g. Experience Letter"
               className="w-full px-5 py-3 bg-white border border-gray-200 rounded-xl text-[12px] focus:ring-1 focus:ring-black outline-none transition-all"
               value={templateTitle}
               onChange={(e) => setTemplateTitle(e.target.value)}
@@ -402,7 +457,7 @@ const EditEmailTemplateView = ({
             />
           </div>
 
-          {/* UI Flag: Rendered EXCLUSIVELY for Company 8 with matching theme */}
+          {/* Company 8 Exclusive Checkbox */}
           {isCompany8 && (
             <div className="flex flex-col justify-center gap-1.5 bg-white border border-amber-200/80 rounded-xl px-4 py-2.5">
               <label className="text-[11px] font-bold text-amber-800 uppercase tracking-wider">
@@ -427,11 +482,11 @@ const EditEmailTemplateView = ({
         {/* Row 2: Email Subject */}
         <div className="flex flex-col gap-1.5">
           <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider ml-1">
-            Email Subject <span className="text-red-500">*</span>
+            Email Subject
           </label>
           <input
             type="text"
-            placeholder="e.g. Welcome to the Team!"
+            placeholder="e.g. Experience Letter Notification"
             className="w-full px-5 py-3 bg-white border border-gray-200 rounded-xl text-[12px] focus:ring-1 focus:ring-black outline-none transition-all"
             value={subject}
             onChange={(e) => setSubject(e.target.value)}
@@ -441,7 +496,6 @@ const EditEmailTemplateView = ({
 
         {/* --- QUILL EDITOR CONTAINER --- */}
         <div className="relative bg-white rounded-xl border border-gray-200 shadow-sm">
-          {/* Action Group Mounted Over Toolbar Top-Right */}
           <div className="absolute right-3 top-2 z-20 flex items-center gap-2 bg-white/90 backdrop-blur-sm px-2 py-1 rounded-lg border border-gray-200 shadow-sm">
             <div className="flex items-center gap-2 text-gray-400 border-r border-gray-200 pr-2">
               <button
@@ -466,7 +520,7 @@ const EditEmailTemplateView = ({
             <div className="relative">
               <button
                 type="button"
-                onClick={() => setShowPlaceholderMenu(!showPlaceholderMenu)}
+                onClick={() => setShowPlaceholderMenu((prev) => !prev)}
                 className="flex items-center gap-1 text-[11px] text-gray-700 font-semibold uppercase tracking-tight hover:text-black py-0.5 px-1 cursor-pointer"
               >
                 Insert Placeholder <ChevronDown size={14} />
@@ -488,19 +542,24 @@ const EditEmailTemplateView = ({
                     </div>
                   </div>
 
-                  {filteredPlaceholders.length === 0 ? (
+                  {loadingPlaceholders ? (
+                    <div className="px-4 py-3 text-[11px] text-gray-400 text-center flex items-center justify-center gap-2">
+                      <Loader2 size={12} className="animate-spin" />
+                      <span>Loading tags...</span>
+                    </div>
+                  ) : filteredPlaceholders.length === 0 ? (
                     <div className="px-4 py-3 text-[11px] text-gray-400 text-center">
                       No placeholders found
                     </div>
                   ) : (
-                    filteredPlaceholders.map((item) => (
+                    filteredPlaceholders.map((keyName) => (
                       <button
                         type="button"
-                        key={item}
-                        onClick={() => insertPlaceholder(item)}
+                        key={keyName}
+                        onClick={() => insertPlaceholder(keyName)}
                         className="w-full text-left px-4 py-2 text-[12px] hover:bg-blue-50 hover:text-blue-600 transition-colors border-b border-gray-50 last:border-0 cursor-pointer font-mono"
                       >
-                        {`{{.${item}}}`}
+                        {`{{.${keyName}}}`}
                       </button>
                     ))
                   )}

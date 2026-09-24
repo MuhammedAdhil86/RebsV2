@@ -343,6 +343,7 @@ export const getEmailPlaceholders = "/admin/email/placeholders"; // ✅ add this
 
 export const getEmailPurposes = "admin/available-purposes";
 export const postCreateEmailTemplate = "admin/create/templates";
+export const getLetterPurposes = "/letter/list-purposes";
 export const deleteEmailTemplate = (id) => `admin/templates/${id}`;
 export const getEmailTemplates = "admin/templates";
 export const getGeneratedLettersUrl = "/letter/generated";

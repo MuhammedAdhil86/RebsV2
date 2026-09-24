@@ -11,7 +11,10 @@ import {
 } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
 import { getActiveUsersLight } from "../service/employeeService";
-import { fetchEmailPurposes, sendLetterService } from "../service/mainServices";
+import {
+  fetchLetterPurposes,
+  sendLetterService,
+} from "../service/mainServices";
 import { generateLetterService } from "../service/cloudflareLetterServices";
 
 const LetterActionModal = ({
@@ -36,7 +39,7 @@ const LetterActionModal = ({
   const [tempCc, setTempCc] = useState("");
   const [tempBcc, setTempBcc] = useState("");
 
-  // Fetch Staff and Purposes
+  // Fetch Staff and Letter Purposes
   useEffect(() => {
     if (!isOpen) return;
 
@@ -47,7 +50,7 @@ const LetterActionModal = ({
       try {
         const [staffRes, rawPurposesData] = await Promise.all([
           getActiveUsersLight(),
-          fetchEmailPurposes(),
+          fetchLetterPurposes(),
         ]);
 
         // 1. Process Staff List
@@ -56,12 +59,11 @@ const LetterActionModal = ({
           : staffRes?.data?.data || staffRes?.data || [];
         setStaff(staffList);
 
-        // 2. Process Purposes Array: ["aaa_aaa_eewe", "adhil_adhil_pdf", ...]
+        // 2. Process Letter Purposes from /letter/list-purposes
         const parsedPurposes = Array.isArray(rawPurposesData)
           ? rawPurposesData
           : rawPurposesData?.data || [];
 
-        // Ensure every item is a trimmed string
         const cleanPurposes = parsedPurposes
           .map((item) =>
             typeof item === "string"
@@ -71,23 +73,6 @@ const LetterActionModal = ({
           .filter(Boolean);
 
         setPurposes(cleanPurposes);
-
-        // Filter matched purposes for active tab
-        const matched = cleanPurposes.filter((p) => {
-          const key = p.toLowerCase();
-          return activeTab === "pdf"
-            ? key.endsWith("_pdf")
-            : key.endsWith("_mail") ||
-                key.includes("mail") ||
-                key.includes("email");
-        });
-
-        // Set default selection as raw string
-        if (matched.length > 0) {
-          setPurpose(matched[0]);
-        } else {
-          setPurpose("");
-        }
       } catch (err) {
         toast.error("Failed to load details");
       } finally {
@@ -97,26 +82,34 @@ const LetterActionModal = ({
     };
 
     fetchData();
-  }, [isOpen, activeTab]);
+  }, [isOpen]);
 
-  // Filter purposes by tab
+  // Adapt purposes list based on activeTab
   const filteredPurposes = useMemo(() => {
-    return purposes.filter((p) => {
-      const key = String(p).toLowerCase().trim();
-      if (activeTab === "pdf") {
-        return key.endsWith("_pdf");
-      }
-      return (
-        key.endsWith("_mail") || key.includes("mail") || key.includes("email")
+    if (purposes.length === 0) return [];
+
+    if (activeTab === "pdf") {
+      // If endpoint provides explicit _pdf items, prioritize them
+      const explicitPdf = purposes.filter(
+        (p) => p.endsWith("_pdf") || p.includes("pdf"),
       );
-    });
+      if (explicitPdf.length > 0) return explicitPdf;
+
+      // Otherwise dynamically convert _mail suffixes to _pdf
+      return purposes.map((p) => p.replace(/_mail$/, "_pdf"));
+    }
+
+    // Default to mail/email items
+    return purposes.filter(
+      (p) => p.endsWith("_mail") || p.includes("mail") || p.includes("email"),
+    );
   }, [purposes, activeTab]);
 
-  // Keep purpose selection in sync with tab changes
+  // Synchronize default selected purpose on tab or data change
   useEffect(() => {
     if (filteredPurposes.length > 0) {
       if (!purpose || !filteredPurposes.includes(purpose)) {
-        setPurpose(String(filteredPurposes[0]));
+        setPurpose(filteredPurposes[0]);
       }
     } else {
       setPurpose("");
@@ -137,7 +130,7 @@ const LetterActionModal = ({
     });
   }, [staff, searchTerm]);
 
-  // Handle purpose selection change - forces pure string assignment
+  // Handle purpose selection change
   const handlePurposeChange = (e) => {
     const value = String(e.target.value || "").trim();
     setPurpose(value);
@@ -171,13 +164,11 @@ const LetterActionModal = ({
       return toast.error("Please select an employee");
     }
 
-    // Ensure purpose is a non-empty string
     const finalPurpose = String(purpose || filteredPurposes[0] || "").trim();
     if (!finalPurpose) {
       return toast.error("Please select a valid document purpose");
     }
 
-    // Priority: uuid string ("2000" / "100003")
     const empUuid = selectedEmp.uuid || selectedEmp.user_id || selectedEmp.id;
     const userId = String(empUuid).trim();
 
@@ -202,7 +193,7 @@ const LetterActionModal = ({
       } else {
         const emailPayload = {
           user_id: userId,
-          purpose: finalPurpose, // Clean string e.g. "appointment_letter_mail"
+          purpose: finalPurpose,
           cc: cc.length > 0 ? cc : [""],
           bcc: bcc.length > 0 ? bcc : [""],
         };
@@ -395,18 +386,11 @@ const LetterActionModal = ({
                 ) : filteredPurposes.length === 0 ? (
                   <option value="">No templates available</option>
                 ) : (
-                  filteredPurposes.map((p) => {
-                    const stringKey = String(p);
-                    return (
-                      <option
-                        key={stringKey}
-                        value={stringKey}
-                        className="text-black font-mono"
-                      >
-                        {stringKey}
-                      </option>
-                    );
-                  })
+                  filteredPurposes.map((p) => (
+                    <option key={p} value={p} className="text-black font-mono">
+                      {p}
+                    </option>
+                  ))
                 )}
               </select>
             </div>

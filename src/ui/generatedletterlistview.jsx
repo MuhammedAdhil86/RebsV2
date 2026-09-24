@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import PayrollTable from "./payrolltable";
-import DeleteConfirmationModal from "./deletemodal"; // Adjust path as needed
+import DeleteConfirmationModal from "./deletemodal";
 import {
   ArrowLeft,
   Search,
@@ -84,6 +84,17 @@ export default function GeneratedLetterListView({ onBack }) {
 
   const columns = [
     {
+      key: "employee_id",
+      label: "Employee ID",
+      align: "left",
+      width: 130,
+      render: (val) => (
+        <span className="font-mono text-gray-700 bg-gray-100 border border-gray-200 px-2 py-0.5 rounded text-[11px] font-medium">
+          #{val || "N/A"}
+        </span>
+      ),
+    },
+    {
       key: "type",
       label: "Letter Category / Purpose",
       align: "left",
@@ -102,12 +113,10 @@ export default function GeneratedLetterListView({ onBack }) {
       key: "employee_name",
       label: "Employee",
       align: "left",
-      render: (val, row) => (
-        <div className="flex flex-col text-left">
-          <span className="font-medium text-gray-900 text-[12px]">
-            {val || "N/A"}
-          </span>
-        </div>
+      render: (val) => (
+        <span className="font-medium text-gray-900 text-[12px]">
+          {val || "N/A"}
+        </span>
       ),
     },
     {
@@ -179,7 +188,7 @@ export default function GeneratedLetterListView({ onBack }) {
         onConfirm={handleConfirmDelete}
         itemName={
           targetLetter
-            ? `${String(targetLetter.type || "Letter").replace(/_/g, " ")} (${targetLetter.employee_name || targetLetter.id})`
+            ? `${String(targetLetter.type || "Letter").replace(/_/g, " ")} (${targetLetter.employee_name || targetLetter.employee_id})`
             : "this letter"
         }
       />

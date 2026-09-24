@@ -10,6 +10,7 @@ import {
   getDefulatEmailTemplate,
   postGenerateLetter,
   getWeeklyOffShifts,
+  getLetterPurposes,
   postCloneEmailTemplate,
   getGeneratedLettersUrl,
   deleteGeneratedLetterUrl,
@@ -64,7 +65,29 @@ export const attachmentUpload = async (employeeUUID, attachmentData) => {
     throw error;
   }
 };
+/**
+ * Fetch list of letter purposes
+ * @returns {Promise<string[]>} Array of purpose strings
+ */
+export const fetchLetterPurposes = async () => {
+  try {
+    const response = await axiosInstance.get(getLetterPurposes);
 
+    // devLog if you are using it in your codebase:
+    // devLog("Letter Purposes Response:", response);
+
+    // Support both direct array and wrapped response shapes
+    const rawData = response?.data?.data ?? response?.data ?? [];
+
+    return Array.isArray(rawData) ? rawData : [];
+  } catch (error) {
+    console.error(
+      "Error fetching letter purposes:",
+      error?.response?.data || error?.message
+    );
+    return [];
+  }
+};
 
 export const fetchEmailPurposes = async () => {
   try {
@@ -85,12 +108,15 @@ export const fetchEmailPlaceholders = async () => {
     const response = await axiosInstance.get(getEmailPlaceholders);
     devLog("Email Placeholders Response:", response);
 
-    const rawData = response?.data?.data ?? [];
+    // Accommodate both response.data.data and response.data
+    const rawData = Array.isArray(response?.data)
+      ? response.data
+      : response?.data?.data ?? [];
 
-    return rawData.map((item) => ({
-      label: item.placeholder,
-      placeholder: item.placeholder,
-    }));
+    // Extract only the clean placeholder string
+    return rawData
+      .map((item) => (typeof item === "string" ? item : item?.placeholder || item?.label))
+      .filter(Boolean);
   } catch (error) {
     console.error("Error fetching placeholders:", error?.response?.data || error?.message);
     return [];
@@ -104,6 +130,7 @@ export const createEmailTemplate = async ({
   subject,
   body_html,
   is_manual,
+  is_default,
 }) => {
   try {
     const payload = {
@@ -111,6 +138,7 @@ export const createEmailTemplate = async ({
       subject,
       body_html,
       is_manual: Boolean(is_manual),
+      is_default: Boolean(is_default),
     };
 
     if (purpose) {
@@ -129,7 +157,6 @@ export const createEmailTemplate = async ({
     throw error;
   }
 };
-
 // -------------------- FETCH EMAIL TEMPLATES --------------------
 export const fetchEmailTemplates = async () => {
   const url = getEmailTemplates;
@@ -162,6 +189,8 @@ export const updateEmailTemplateService = async ({
   name,
   subject,
   body_html,
+  template_type = "mail",
+  is_default,
 }) => {
   if (!purpose) {
     throw new Error("Purpose is required to update the template");
@@ -172,7 +201,13 @@ export const updateEmailTemplateService = async ({
   try {
     url = updateEmailTemplate.replace("{purpose}", purpose);
 
-    const payload = { name, subject, body_html };
+    const payload = {
+      name,
+      subject,
+      body_html,
+      template_type,
+      is_default: Boolean(is_default),
+    };
 
     const response = await axiosInstance.put(url, payload);
 
@@ -191,7 +226,6 @@ export const updateEmailTemplateService = async ({
     throw new Error(errorMessage);
   }
 };
-
 // -------------------- UPLOAD EMAIL TEMPLATE FILE --------------------
 export const uploadEmailTemplateFileService = async (fileData) => {
   try {
