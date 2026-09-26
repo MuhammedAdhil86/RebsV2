@@ -12,7 +12,6 @@ import {
   Info,
   ShieldCheck,
   Save,
-  Image as ImageIcon,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import GlowButton from "../components/helpers/glowbutton";
@@ -111,10 +110,6 @@ const EditEmailTemplateView = ({
   const [isManual, setIsManual] = useState(Boolean(currentData?.is_manual));
   const [isDefault, setIsDefault] = useState(Boolean(currentData?.is_default));
 
-  // Logo Size Control Tool States
-  const [logoHeight, setLogoHeight] = useState(80);
-  const [showLogoTool, setShowLogoTool] = useState(false);
-
   // Dropdowns & Placeholders
   const [emailPurposes, setEmailPurposes] = useState([]);
   const [purposesLoading, setPurposesLoading] = useState(false);
@@ -192,38 +187,6 @@ const EditEmailTemplateView = ({
   const handleUndo = () => quillRef.current?.getEditor().history.undo();
   const handleRedo = () => quillRef.current?.getEditor().history.redo();
 
-  // Adjust selected or last inserted image size directly inside Quill
-  const applyLogoHeightChange = (newHeight) => {
-    setLogoHeight(newHeight);
-    const editor = quillRef.current?.getEditor();
-    if (!editor) return;
-
-    // Check if an image is actively selected in editor
-    const range = editor.getSelection();
-    if (range) {
-      const [leaf] = editor.getLeaf(range.index);
-      if (leaf && leaf.domNode && leaf.domNode.tagName === "IMG") {
-        leaf.domNode.style.height = `${newHeight}px`;
-        leaf.domNode.style.maxHeight = `${newHeight}px`;
-        setContent(editor.root.innerHTML);
-        return;
-      }
-    }
-
-    // Otherwise update all logo images matching placeholders in the document
-    const editorElement = editor.root;
-    const images = editorElement.querySelectorAll("img");
-    images.forEach((img) => {
-      if (img.src.includes("Logo") || img.src.includes("URL")) {
-        img.style.height = `${newHeight}px`;
-        img.style.maxHeight = `${newHeight}px`;
-        img.style.width = "auto";
-        img.style.objectFit = "contain";
-      }
-    });
-    setContent(editorElement.innerHTML);
-  };
-
   // Insert placeholder (handles text vs. logo tag intelligently)
   const insertPlaceholder = (placeholderKey) => {
     const editor = quillRef.current?.getEditor();
@@ -238,11 +201,10 @@ const EditEmailTemplateView = ({
         placeholderKey.toLowerCase().includes("logo"));
 
     if (isLogo) {
-      // Clean HTML block with customizable height
-      const logoHtml = `<p><img src="{{.${placeholderKey}}}" alt="${placeholderKey}" style="height:${logoHeight}px; max-height:${logoHeight}px; width:auto; object-fit:contain;" /></p>`;
+      const logoHtml = `<p><img src="{{.${placeholderKey}}}" alt="${placeholderKey}" style="height:48px; max-width:160px; width:auto; object-fit:contain;" /></p>`;
       editor.clipboard.dangerouslyPasteHTML(insertIndex, logoHtml, "user");
       editor.setSelection(insertIndex + 1);
-      toast.success(`Inserted ${placeholderKey} (${logoHeight}px)`);
+      toast.success(`Inserted ${placeholderKey}`);
     } else {
       const token = `{{.${placeholderKey}}}`;
       editor.insertText(insertIndex, token, "user");
@@ -379,7 +341,7 @@ const EditEmailTemplateView = ({
               border-bottom: 1px solid #e5e7eb !important;
               padding: 10px 14px !important;
               background-color: #fafbfc;
-              padding-right: 360px !important;
+              padding-right: 250px !important;
               position: relative;
               z-index: 10;
             }
@@ -487,28 +449,107 @@ const EditEmailTemplateView = ({
                 Template Name <span className="text-red-500">*</span>
               </label>
 
+              {/* Informational Guidelines Popover */}
               <div className="relative group flex items-center">
                 <div className="cursor-pointer p-0.5 rounded-full hover:bg-gray-100 transition-colors">
                   <Info size={15} className="text-blue-500" />
                 </div>
-                <div className="absolute right-0 top-full mt-2 w-[340px] max-h-72 overflow-y-auto no-scrollbar hidden group-hover:block bg-white text-black text-[12px] font-normal rounded-xl p-4 shadow-2xl border border-gray-200 z-[100] transition-all normal-case tracking-normal">
-                  <div className="text-[13px] font-semibold mb-1 text-black">
-                    Placeholder Tokens
-                  </div>
-                  <p className="text-gray-600 mb-2 leading-relaxed">
-                    Insert dynamic variables using the{" "}
-                    <em>Insert Placeholder</em> tool in the toolbar.
+                <div className="absolute right-0 top-full mt-2 w-[420px] max-h-[380px] overflow-y-auto no-scrollbar hidden group-hover:block bg-white text-gray-700 text-[12px] font-normal rounded-xl p-5 shadow-2xl border border-gray-200 z-[100] transition-all normal-case tracking-normal">
+                  <h3 className="text-[14px] font-semibold text-gray-900 mb-2">
+                    Template Placeholder Guidelines
+                  </h3>
+                  <p className="mb-2 leading-relaxed text-gray-600">
+                    When customizing a template, you can use the available
+                    placeholders shown in the{" "}
+                    <span className="font-semibold text-gray-800 italic">
+                      Placeholder
+                    </span>{" "}
+                    dropdown.
                   </p>
-                  <p className="text-gray-600 mb-2 leading-relaxed">
-                    Logo placeholders (e.g.{" "}
-                    <span className="font-mono text-[11px] bg-gray-100 px-1 py-0.5 rounded">
-                      SenderLogoURL
+                  <p className="mb-2 leading-relaxed text-amber-800 bg-amber-50 p-2 rounded-lg border border-amber-200">
+                    <strong className="font-semibold">Important:</strong> The
+                    dropdown contains placeholders from all templates available
+                    in the system. Please use{" "}
+                    <span className="italic font-semibold underline">
+                      only the placeholders that are applicable to the specific
+                      template you are currently editing
                     </span>
-                    ) are automatically rendered as styled image elements.
+                    .
                   </p>
-                  <p className="text-gray-500 font-mono text-[11px]">
-                    Format: {"{{.FieldName}}"}
+                  <p className="mb-3 leading-relaxed text-gray-600">
+                    Each template has its own set of relevant placeholders, and
+                    placeholders are named according to their intended template
+                    purpose to help you identify the correct ones.
                   </p>
+
+                  <h4 className="text-[12px] font-bold uppercase tracking-wider text-gray-800 mb-2">
+                    How to use placeholders
+                  </h4>
+                  <ul className="list-disc pl-4 space-y-1 mb-3 text-gray-600">
+                    <li>
+                      Select a placeholder from the dropdown and insert it into
+                      the{" "}
+                      <span className="font-semibold text-gray-800 italic">
+                        Subject
+                      </span>{" "}
+                      or{" "}
+                      <span className="font-semibold text-gray-800 italic">
+                        Body HTML
+                      </span>{" "}
+                      where required.
+                    </li>
+                    <li>
+                      Use only placeholders relevant to the current template.
+                    </li>
+                    <li>
+                      Do not manually modify the placeholder name or syntax.
+                    </li>
+                    <li>
+                      Placeholders must be used in the format{" "}
+                      <code className="bg-gray-100 px-1 py-0.5 rounded font-mono text-[11px] text-gray-800">
+                        {"{{.PlaceholderName}}"}
+                      </code>
+                      .
+                    </li>
+                    <li>
+                      Generic placeholders may be available for use across
+                      multiple templates where applicable.
+                    </li>
+                    <li>
+                      Using a placeholder that is not supported by the current
+                      template may result in the value not being populated
+                      correctly when the template is generated or sent.
+                    </li>
+                  </ul>
+
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-2.5 mb-2.5 text-gray-600">
+                    <p className="font-semibold text-gray-800 mb-1 text-[11px]">
+                      Example:
+                    </p>
+                    <p className="text-[11px] leading-relaxed">
+                      If you are editing an{" "}
+                      <span className="font-medium italic text-gray-700">
+                        Employee Leave Approval
+                      </span>{" "}
+                      template, use placeholders provided for leave-related
+                      information such as employee name, leave dates, leave
+                      type, etc.
+                    </p>
+                    <p className="text-[11px] leading-relaxed mt-1 text-red-600 font-medium">
+                      Do not use placeholders that belong specifically to
+                      unrelated templates such as payroll, onboarding,
+                      attendance, or other modules.
+                    </p>
+                  </div>
+
+                  <div className="border-l-2 border-blue-500 pl-2.5 py-0.5 text-gray-600 italic text-[11px] bg-blue-50/50 rounded-r">
+                    <span className="font-semibold not-italic text-blue-700">
+                      Tip:
+                    </span>{" "}
+                    Always select placeholders from the dropdown instead of
+                    typing them manually. The placeholder name and syntax should
+                    remain exactly as provided.
+                  </div>
                 </div>
               </div>
             </div>
@@ -602,9 +643,9 @@ const EditEmailTemplateView = ({
           </div>
         </div>
 
-        {/* --- QUILL EDITOR CONTAINER WITH LOGO CONTROLS --- */}
+        {/* --- QUILL EDITOR CONTAINER --- */}
         <div className="relative bg-white rounded-xl border border-gray-200 shadow-sm">
-          {/* Action Tools Mounted Over Toolbar */}
+          {/* Action Tools Overlay on Quill Toolbar */}
           <div className="absolute right-3 top-2 z-20 flex items-center gap-2 bg-white/95 backdrop-blur-sm px-2 py-1 rounded-lg border border-gray-200 shadow-sm">
             {/* History undo/redo */}
             <div className="flex items-center gap-1.5 text-gray-400 border-r border-gray-200 pr-2">
@@ -626,98 +667,18 @@ const EditEmailTemplateView = ({
               </button>
             </div>
 
-            {/* --- LOGO SIZE TOOL CONTROLLER --- */}
-            <div className="relative border-r border-gray-200 pr-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowLogoTool((prev) => !prev);
-                  setShowPlaceholderMenu(false);
-                }}
-                className={`flex items-center gap-1 text-[11px] font-semibold uppercase tracking-tight py-0.5 px-1.5 rounded transition-all cursor-pointer ${
-                  showLogoTool
-                    ? "bg-amber-100 text-amber-900 border border-amber-300"
-                    : "text-gray-700 hover:text-black bg-gray-50 border border-gray-200"
-                }`}
-                title="Configure Logo Display Size"
-              >
-                <ImageIcon size={13} className="text-amber-600" />
-                <span>Logo: {logoHeight}px</span>
-                <ChevronDown size={12} />
-              </button>
-
-              {showLogoTool && (
-                <div className="absolute right-0 mt-2 w-64 bg-white border border-gray-200 rounded-xl shadow-2xl z-50 p-4 animate-in fade-in zoom-in-95 duration-100">
-                  <div className="flex items-center justify-between mb-3 border-b border-gray-100 pb-2">
-                    <span className="text-[12px] font-bold text-gray-800 flex items-center gap-1.5">
-                      <ImageIcon size={14} className="text-amber-600" />
-                      Logo Height Control
-                    </span>
-                    <span className="text-[11px] font-mono font-bold bg-amber-50 text-amber-800 px-2 py-0.5 rounded border border-amber-200">
-                      {logoHeight}px
-                    </span>
-                  </div>
-
-                  {/* Slider Control */}
-                  <div className="flex flex-col gap-2 mb-3">
-                    <div className="flex justify-between text-[10px] text-gray-400 font-medium">
-                      <span>30px</span>
-                      <span>Default: 80px</span>
-                      <span>200px</span>
-                    </div>
-                    <input
-                      type="range"
-                      min="30"
-                      max="200"
-                      step="5"
-                      value={logoHeight}
-                      onChange={(e) =>
-                        applyLogoHeightChange(Number(e.target.value))
-                      }
-                      className="w-full accent-black cursor-pointer"
-                    />
-                  </div>
-
-                  {/* Quick Preset Buttons */}
-                  <div className="flex items-center gap-1.5 justify-between">
-                    {[50, 80, 100, 120].map((preset) => (
-                      <button
-                        key={preset}
-                        type="button"
-                        onClick={() => applyLogoHeightChange(preset)}
-                        className={`flex-1 py-1 text-[11px] rounded border font-mono transition-all cursor-pointer ${
-                          logoHeight === preset
-                            ? "bg-black text-white border-black font-semibold"
-                            : "bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100"
-                        }`}
-                      >
-                        {preset}px
-                      </button>
-                    ))}
-                  </div>
-                  <p className="text-[10px] text-gray-400 mt-2.5 leading-tight">
-                    Affects new logo placeholders inserted and resizes selected
-                    images in the editor.
-                  </p>
-                </div>
-              )}
-            </div>
-
             {/* --- PLACEHOLDER MENU --- */}
             <div className="relative">
               <button
                 type="button"
-                onClick={() => {
-                  setShowPlaceholderMenu((prev) => !prev);
-                  setShowLogoTool(false);
-                }}
+                onClick={() => setShowPlaceholderMenu((prev) => !prev)}
                 className="flex items-center gap-1 text-[11px] text-gray-700 font-semibold uppercase tracking-tight hover:text-black py-0.5 px-1 cursor-pointer"
               >
                 Insert Placeholder <ChevronDown size={14} />
               </button>
 
               {showPlaceholderMenu && (
-                <div className="absolute right-0 mt-2 w-72 bg-white border border-gray-100 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto no-scrollbar py-2 animate-in fade-in zoom-in-95 duration-100">
+                <div className="absolute right-0 mt-2 w-72 bg-white border border-gray-100 rounded-xl shadow-2xl z-50 max-h-64 overflow-y-auto no-scrollbar py-2 animate-in fade-in zoom-in-95 duration-100">
                   <div className="px-3 pb-2 border-b border-gray-50">
                     <div className="flex items-center gap-1.5 bg-gray-50 px-2 py-1 rounded-lg">
                       <Search size={12} className="text-gray-400 shrink-0" />
@@ -753,8 +714,8 @@ const EditEmailTemplateView = ({
                         >
                           <span className="truncate">{`{{.${keyName}}}`}</span>
                           {isLogo && (
-                            <span className="text-[9px] font-sans font-semibold uppercase px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 shrink-0 ml-2 flex items-center gap-1">
-                              <ImageIcon size={10} /> Logo ({logoHeight}px)
+                            <span className="text-[9px] font-sans font-semibold uppercase px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 shrink-0 ml-2">
+                              Logo
                             </span>
                           )}
                         </button>

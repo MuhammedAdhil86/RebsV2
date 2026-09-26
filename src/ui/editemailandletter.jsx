@@ -174,13 +174,26 @@ const EditEmailTemplateView = ({
     if (!editor) return;
 
     const range = editor.getSelection(true);
-    const token = `{{.${placeholderKey}}}`;
     const insertIndex = range ? range.index : editor.getLength();
 
-    editor.insertText(insertIndex, token, "user");
-    editor.setSelection(insertIndex + token.length);
+    const isLogo =
+      placeholderKey.toLowerCase().includes("logo") ||
+      (placeholderKey.toLowerCase().endsWith("url") &&
+        placeholderKey.toLowerCase().includes("logo"));
+
+    if (isLogo) {
+      const logoHtml = `<p><img src="{{.${placeholderKey}}}" alt="${placeholderKey}" style="height:48px; max-width:160px; width:auto; object-fit:contain;" /></p>`;
+      editor.clipboard.dangerouslyPasteHTML(insertIndex, logoHtml, "user");
+      editor.setSelection(insertIndex + 1);
+      toast.success(`Inserted ${placeholderKey}`);
+    } else {
+      const token = `{{.${placeholderKey}}}`;
+      editor.insertText(insertIndex, token, "user");
+      editor.setSelection(insertIndex + token.length);
+      toast.success(`Inserted ${token}`);
+    }
+
     setShowPlaceholderMenu(false);
-    toast.success(`Inserted ${token}`);
   };
 
   const handleUpdate = async () => {
@@ -428,21 +441,107 @@ const EditEmailTemplateView = ({
                 Template Name <span className="text-red-500">*</span>
               </label>
 
+              {/* Informational Guidelines Popover */}
               <div className="relative group flex items-center">
                 <div className="cursor-pointer p-0.5 rounded-full hover:bg-gray-100 transition-colors">
-                  <Info size={16} className="text-blue-500" />
+                  <Info size={15} className="text-blue-500" />
                 </div>
-                <div className="absolute right-0 top-full mt-2 w-[380px] max-h-80 overflow-y-auto no-scrollbar hidden group-hover:block bg-white text-black text-[13px] font-normal rounded-xl p-5 shadow-2xl border border-gray-200 z-[100] transition-all normal-case tracking-normal">
-                  <div className="text-[14px] font-semibold mb-2 text-black">
+                <div className="absolute right-0 top-full mt-2 w-[420px] max-h-[380px] overflow-y-auto no-scrollbar hidden group-hover:block bg-white text-gray-700 text-[12px] font-normal rounded-xl p-5 shadow-2xl border border-gray-200 z-[100] transition-all normal-case tracking-normal">
+                  <h3 className="text-[14px] font-semibold text-gray-900 mb-2">
                     Template Placeholder Guidelines
-                  </div>
-                  <p className="text-gray-600 mb-2 leading-relaxed">
-                    Insert dynamic tags using the <em>Insert Placeholder</em>{" "}
+                  </h3>
+                  <p className="mb-2 leading-relaxed text-gray-600">
+                    When customizing a template, you can use the available
+                    placeholders shown in the{" "}
+                    <span className="font-semibold text-gray-800 italic">
+                      Placeholder
+                    </span>{" "}
                     dropdown.
                   </p>
-                  <p className="text-gray-600 leading-relaxed font-mono text-xs">
-                    Format: {"{{.PlaceholderName}}"}
+                  <p className="mb-2 leading-relaxed text-amber-800 bg-amber-50 p-2 rounded-lg border border-amber-200">
+                    <strong className="font-semibold">Important:</strong> The
+                    dropdown contains placeholders from all templates available
+                    in the system. Please use{" "}
+                    <span className="italic font-semibold underline">
+                      only the placeholders that are applicable to the specific
+                      template you are currently editing
+                    </span>
+                    .
                   </p>
+                  <p className="mb-3 leading-relaxed text-gray-600">
+                    Each template has its own set of relevant placeholders, and
+                    placeholders are named according to their intended template
+                    purpose to help you identify the correct ones.
+                  </p>
+
+                  <h4 className="text-[12px] font-bold uppercase tracking-wider text-gray-800 mb-2">
+                    How to use placeholders
+                  </h4>
+                  <ul className="list-disc pl-4 space-y-1 mb-3 text-gray-600">
+                    <li>
+                      Select a placeholder from the dropdown and insert it into
+                      the{" "}
+                      <span className="font-semibold text-gray-800 italic">
+                        Subject
+                      </span>{" "}
+                      or{" "}
+                      <span className="font-semibold text-gray-800 italic">
+                        Body HTML
+                      </span>{" "}
+                      where required.
+                    </li>
+                    <li>
+                      Use only placeholders relevant to the current template.
+                    </li>
+                    <li>
+                      Do not manually modify the placeholder name or syntax.
+                    </li>
+                    <li>
+                      Placeholders must be used in the format{" "}
+                      <code className="bg-gray-100 px-1 py-0.5 rounded font-mono text-[11px] text-gray-800">
+                        {"{{.PlaceholderName}}"}
+                      </code>
+                      .
+                    </li>
+                    <li>
+                      Generic placeholders may be available for use across
+                      multiple templates where applicable.
+                    </li>
+                    <li>
+                      Using a placeholder that is not supported by the current
+                      template may result in the value not being populated
+                      correctly when the template is generated or sent.
+                    </li>
+                  </ul>
+
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-2.5 mb-2.5 text-gray-600">
+                    <p className="font-semibold text-gray-800 mb-1 text-[11px]">
+                      Example:
+                    </p>
+                    <p className="text-[11px] leading-relaxed">
+                      If you are editing an{" "}
+                      <span className="font-medium italic text-gray-700">
+                        Employee Leave Approval
+                      </span>{" "}
+                      template, use placeholders provided for leave-related
+                      information such as employee name, leave dates, leave
+                      type, etc.
+                    </p>
+                    <p className="text-[11px] leading-relaxed mt-1 text-red-600 font-medium">
+                      Do not use placeholders that belong specifically to
+                      unrelated templates such as payroll, onboarding,
+                      attendance, or other modules.
+                    </p>
+                  </div>
+
+                  <div className="border-l-2 border-blue-500 pl-2.5 py-0.5 text-gray-600 italic text-[11px] bg-blue-50/50 rounded-r">
+                    <span className="font-semibold not-italic text-blue-700">
+                      Tip:
+                    </span>{" "}
+                    Always select placeholders from the dropdown instead of
+                    typing them manually. The placeholder name and syntax should
+                    remain exactly as provided.
+                  </div>
                 </div>
               </div>
             </div>
