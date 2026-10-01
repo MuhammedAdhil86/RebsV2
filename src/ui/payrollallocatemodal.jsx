@@ -28,13 +28,14 @@ const AllocatePayrollModal = ({
   setFormData,
   onSubmit,
 }) => {
-  if (!isOpen) return null;
-
+  // Hooks must run on every render, so this stays ABOVE the early return
   const filteredStaff = useMemo(() => {
     return staffList.filter((s) =>
       (s.full_name || "").toLowerCase().includes(searchQuery.toLowerCase()),
     );
   }, [staffList, searchQuery]);
+
+  if (!isOpen) return null;
 
   const isFormValid =
     formData.template_id && formData.from_date && formData.to_date;
@@ -168,46 +169,69 @@ const AllocatePayrollModal = ({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-50">
-                    {filteredStaff.map((staff) => {
-                      const id = staff.uuid || staff.user_id;
-                      const isSelected = selectedStaff.includes(id);
-                      return (
-                        <tr
-                          key={id}
-                          onClick={() =>
-                            setSelectedStaff((prev) =>
-                              isSelected
-                                ? prev.filter((x) => x !== id)
-                                : [...prev, id],
-                            )
-                          }
-                          className={`hover:bg-zinc-50 transition-colors cursor-pointer ${isSelected ? "bg-zinc-100" : ""}`}
+                    {loading ? (
+                      <tr>
+                        <td colSpan={3} className="p-10 text-center">
+                          <Loader2
+                            className="animate-spin text-black inline-block"
+                            size={22}
+                          />
+                        </td>
+                      </tr>
+                    ) : filteredStaff.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan={3}
+                          className="p-10 text-center text-zinc-400"
                         >
-                          <td
-                            className="p-5"
-                            onClick={(e) => e.stopPropagation()}
+                          No employees found
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredStaff.map((staff) => {
+                        const id = staff.uuid || staff.user_id;
+                        const isSelected = selectedStaff.includes(id);
+                        return (
+                          <tr
+                            key={id}
+                            onClick={() =>
+                              setSelectedStaff((prev) =>
+                                isSelected
+                                  ? prev.filter((x) => x !== id)
+                                  : [...prev, id],
+                              )
+                            }
+                            className={`hover:bg-zinc-50 transition-colors cursor-pointer ${isSelected ? "bg-zinc-100" : ""}`}
                           >
-                            <input
-                              type="checkbox"
-                              className="accent-black w-4 h-4 rounded"
-                              checked={isSelected}
-                              readOnly
-                            />
-                          </td>
-                          <td className="p-5">
-                            <div className="text-black text-[13px] font-normal">
-                              {staff.full_name}
-                            </div>
-                            <div className="text-[11px] text-zinc-400 font-normal">
-                              ID: {staff.employee_id || id.slice(0, 8)}
-                            </div>
-                          </td>
-                          <td className="p-5 text-right pr-10 text-zinc-500 font-normal">
-                            {staff.department_name || staff.department || "N/A"}
-                          </td>
-                        </tr>
-                      );
-                    })}
+                            <td
+                              className="p-5"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <input
+                                type="checkbox"
+                                className="accent-black w-4 h-4 rounded"
+                                checked={isSelected}
+                                readOnly
+                              />
+                            </td>
+                            <td className="p-5">
+                              <div className="text-black text-[13px] font-normal">
+                                {staff.full_name}
+                              </div>
+                              <div className="text-[11px] text-zinc-400 font-normal">
+                                ID:{" "}
+                                {staff.employee_id || String(id).slice(0, 8)}
+                              </div>
+                            </td>
+                            <td className="p-5 text-right pr-10 text-zinc-500 font-normal">
+                              {staff.department_name ||
+                                staff.department ||
+                                "N/A"}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -256,6 +280,12 @@ const AllocatePayrollModal = ({
                     </label>
                     <input
                       type="date"
+                      min={new Date(
+                        new Date().getTime() -
+                          new Date().getTimezoneOffset() * 60000,
+                      )
+                        .toISOString()
+                        .slice(0, 10)}
                       className="w-full p-4 bg-zinc-50 border border-zinc-200 rounded-2xl outline-none focus:border-black transition-all font-normal"
                       value={formData.from_date}
                       onChange={(e) =>
@@ -269,6 +299,7 @@ const AllocatePayrollModal = ({
                     </label>
                     <input
                       type="date"
+                      min={formData.from_date || undefined}
                       className="w-full p-4 bg-zinc-50 border border-zinc-200 rounded-2xl outline-none focus:border-black transition-all font-normal"
                       value={formData.to_date}
                       onChange={(e) =>

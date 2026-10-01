@@ -14,6 +14,7 @@ import {
   getDesignationData,
   getAllStaff,
 } from "../../service/staffservice";
+// Global <Toaster /> is mounted once in App.jsx — only import `toast` here
 import toast from "react-hot-toast";
 
 import FinalizePayroll from "./payrollfinalize";
@@ -32,6 +33,33 @@ const monthNames = [
   "November",
   "December",
 ];
+
+// Pull the most useful error message out of an axios/regular error
+const getErrMsg = (err, fallback) =>
+  err?.response?.data?.error ||
+  err?.response?.data?.message ||
+  err?.message ||
+  fallback;
+
+// API always returns HTTP 200; failure is signalled by { ok: false, error }.
+// Throw so the existing catch blocks show the error toast.
+const assertOk = (res) => {
+  const body =
+    res?.data && typeof res.data === "object" && "ok" in res.data
+      ? res.data
+      : res;
+  if (body && body.ok === false) {
+    throw new Error(body.error || body.message || "Request failed");
+  }
+  return res;
+};
+
+// Today as YYYY-MM-DD in local time (for date input min / validation)
+const todayStr = () => {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
 
 export default function PayrollRunning() {
   const now = new Date();
@@ -78,6 +106,7 @@ export default function PayrollRunning() {
         year,
         activeTab,
       );
+      assertOk(res);
       const runs = res?.data?.runs || [];
       const rawEmployees = runs.length > 0 ? runs[0].employees || [] : [];
 
@@ -94,6 +123,7 @@ export default function PayrollRunning() {
       setRecords(processedEmployees);
     } catch (err) {
       setRecords([]);
+      toast.error(getErrMsg(err, "Failed to load payroll data"));
     } finally {
       setLoading(false);
     }
@@ -134,6 +164,8 @@ export default function PayrollRunning() {
           });
           setBulkTemplates(templates || []);
           setBulkStaffList(staff?.data || staff || []);
+        } catch (err) {
+          toast.error(getErrMsg(err, "Failed to load allocation details"));
         } finally {
           setBulkLoading(false);
         }
@@ -160,13 +192,37 @@ export default function PayrollRunning() {
         staffData = res?.data || res || [];
       }
       setBulkStaffList(staffData);
+    } catch (err) {
+      toast.error(getErrMsg(err, "Failed to filter staff"));
     } finally {
       setBulkLoading(false);
     }
   };
 
   const handleBulkSubmit = async () => {
+    // Validation feedback through the global toaster
+    if (selectedStaffUuids.length === 0) {
+      return toast.error("Please select at least one employee");
+    }
+    if (!bulkFormData.template_id) {
+      return toast.error("Please select a salary template");
+    }
+    if (!bulkFormData.from_date) {
+      return toast.error("Please select a start date");
+    }
+    if (bulkFormData.from_date < todayStr()) {
+      return toast.error("Start date cannot be before today");
+    }
+    if (
+      bulkFormData.to_date &&
+      new Date(bulkFormData.to_date) < new Date(bulkFormData.from_date)
+    ) {
+      return toast.error("End date cannot be before start date");
+    }
+
     setBulkLoading(true);
+    const toastId = toast.loading("Allocating payroll...");
+
     const payload = {
       template_id: Number(bulkFormData.template_id),
       user_ids: selectedStaffUuids,
@@ -175,16 +231,19 @@ export default function PayrollRunning() {
         ? `${bulkFormData.to_date}T00:00:00Z`
         : "2099-12-31T00:00:00Z",
     };
+
     try {
-      await payrollService.bulkAllocatePayroll(payload);
-      toast.success("Allocated Successfully!");
+      const res = await payrollService.bulkAllocatePayroll(payload);
+      console.log("Allocate payload:", payload, "response:", res);
+      assertOk(res);
+      toast.success("Allocated Successfully!", { id: toastId });
       setIsAllocateModalOpen(false);
       setBulkStep(1); // RESET STEPS
       setBulkFormData({ template_id: "", from_date: "", to_date: "" });
       setSelectedStaffUuids([]);
       fetchData();
     } catch (err) {
-      toast.error("Allocation failed");
+      toast.error(getErrMsg(err, "Allocation failed"), { id: toastId });
     } finally {
       setBulkLoading(false);
     }
@@ -193,23 +252,28 @@ export default function PayrollRunning() {
   // ================= 4. RUN & FINALIZE LOGIC =================
   const handleRunButton = async () => {
     setLoading(true);
+    const toastId = toast.loading("Calculating payroll...");
     try {
-      await axiosInstance.post(postPayrollAttendance, {
+      const res = await axiosInstance.post(postPayrollAttendance, {
         month: monthNames.indexOf(month) + 1,
         year: Number(year),
       });
-      toast.success("Payroll calculated!");
+      assertOk(res);
+      toast.success("Payroll calculated!", { id: toastId });
       fetchData();
     } catch (err) {
-      toast.error("Failed to run payroll");
+      toast.error(getErrMsg(err, "Failed to run payroll"), { id: toastId });
     } finally {
       setLoading(false);
     }
   };
 
   const handleBulkFinalize = async () => {
-    if (!records.length) return;
+    if (!records.length) {
+      return toast.error("No payroll records to finalize");
+    }
     setLoading(true);
+    const toastId = toast.loading("Finalizing payroll...");
     try {
       const payload = {
         month: monthNames.indexOf(month) + 1,
@@ -230,11 +294,12 @@ export default function PayrollRunning() {
         })),
       };
 
-      await payrollService.updatePayrollAnalyticsRuns(payload);
-      toast.success("Batch Payroll Finalized Successfully!");
+      const res = await payrollService.updatePayrollAnalyticsRuns(payload);
+      assertOk(res);
+      toast.success("Batch Payroll Finalized Successfully!", { id: toastId });
       fetchData();
     } catch (err) {
-      toast.error(err.message || "Finalize failed");
+      toast.error(getErrMsg(err, "Finalize failed"), { id: toastId });
     } finally {
       setLoading(false);
     }

@@ -74,6 +74,7 @@ const LetterActionModal = ({
 
         setPurposes(cleanPurposes);
       } catch (err) {
+        console.error("Failed to load staff/purposes:", err);
         toast.error("Failed to load details");
       } finally {
         setLoading(false);
@@ -136,9 +137,15 @@ const LetterActionModal = ({
     setPurpose(value);
   };
 
+  const isValidEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+
   const handleAddEmail = (type) => {
     const val = type === "cc" ? tempCc.trim() : tempBcc.trim();
-    if (val && !(type === "cc" ? cc : bcc).includes(val)) {
+    if (!val) return;
+    if (!isValidEmail(val)) {
+      return toast.error("Enter a valid email address");
+    }
+    if (!(type === "cc" ? cc : bcc).includes(val)) {
       if (type === "cc") {
         setCc([...cc, val]);
         setTempCc("");
@@ -172,6 +179,31 @@ const LetterActionModal = ({
     const empUuid = selectedEmp.uuid || selectedEmp.user_id || selectedEmp.id;
     const userId = String(empUuid).trim();
 
+    // Include any typed-but-not-added emails so they are not lost
+    const pendingCc = tempCc.trim();
+    const pendingBcc = tempBcc.trim();
+
+    if (pendingCc && !isValidEmail(pendingCc)) {
+      return toast.error("Enter a valid CC email address");
+    }
+    if (pendingBcc && !isValidEmail(pendingBcc)) {
+      return toast.error("Enter a valid BCC email address");
+    }
+
+    const finalCc =
+      pendingCc && !cc.includes(pendingCc) ? [...cc, pendingCc] : cc;
+    const finalBcc =
+      pendingBcc && !bcc.includes(pendingBcc) ? [...bcc, pendingBcc] : bcc;
+
+    // Shared payload (used for email request and onExecute callback)
+    // Body shape: { user_id, purpose, cc: [...emails, ""], bcc: [...emails, ""] }
+    const payload = {
+      user_id: userId,
+      purpose: finalPurpose,
+      cc: [...finalCc, ""],
+      bcc: [...finalBcc, ""],
+    };
+
     setProcessing(true);
     const toastId = toast.loading(
       activeTab === "pdf" ? "Generating PDF..." : "Sending email...",
@@ -179,7 +211,12 @@ const LetterActionModal = ({
 
     try {
       if (activeTab === "pdf") {
+        // PDF service takes (userId, purpose) as separate arguments
+        console.log("PDF payload:", { user_id: userId, purpose: finalPurpose });
+
         const res = await generateLetterService(userId, finalPurpose);
+        console.log("PDF response:", res);
+
         toast.success(res?.message || "Successfully generated letter", {
           id: toastId,
         });
@@ -191,14 +228,11 @@ const LetterActionModal = ({
 
         if (onSuccess) onSuccess(res);
       } else {
-        const emailPayload = {
-          user_id: userId,
-          purpose: finalPurpose,
-          cc: cc.length > 0 ? cc : [""],
-          bcc: bcc.length > 0 ? bcc : [""],
-        };
+        console.log("Email payload:", payload);
 
-        const res = await sendLetterService(emailPayload);
+        const res = await sendLetterService(payload);
+        console.log("Email response:", res);
+
         toast.success(res?.message || "Email letter sent successfully!", {
           id: toastId,
         });
@@ -207,17 +241,14 @@ const LetterActionModal = ({
       }
 
       if (onExecute) {
-        onExecute({
-          user_id: userId,
-          userId,
-          purpose: finalPurpose,
-          cc: cc.length > 0 ? cc : [""],
-          bcc: bcc.length > 0 ? bcc : [""],
-        });
+        console.log("onExecute payload:", { ...payload, userId });
+        onExecute({ ...payload, userId });
       }
 
       handleClose();
     } catch (error) {
+      console.error("Letter request failed:", error?.response?.data || error);
+
       const errMsg =
         error?.response?.data?.message ||
         error?.response?.data?.error ||
