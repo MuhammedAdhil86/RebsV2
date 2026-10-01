@@ -459,9 +459,7 @@ const Payslip = () => {
               <Download size={15} />
               Download PDF
             </button>
-            <div className="w-10 h-10 rounded-full border border-gray-300 flex items-center justify-center">
-              <FiBell className="text-gray-600" />
-            </div>
+
             <button
               onClick={() => setShowNote(!showNote)}
               className={`w-10 h-10 rounded-full border flex items-center justify-center transition-colors cursor-pointer ${
@@ -475,9 +473,7 @@ const Payslip = () => {
                 className={`text-amber-500 ${showNote ? "fill-amber-300" : ""}`}
               />
             </button>
-            <button className="border border-gray-300 px-5 py-2 rounded-full text-sm text-gray-700">
-              Settings
-            </button>
+
             <div className="w-10 h-10 rounded-full overflow-hidden border border-gray-300">
               <img
                 src={avatar}

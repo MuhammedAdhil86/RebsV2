@@ -1,5 +1,8 @@
 import { create } from "zustand";
-import { getStaffDetails } from "../service/employeeService";
+import {
+  getStaffDetails,
+  getActiveUsersLight,
+} from "../service/employeeService";
 import axiosInstance from "../service/axiosinstance";
 import { getEmployeeDetails } from "../api/api"; // your API endpoint
 
@@ -10,6 +13,11 @@ const useEmployeeStore = create((set) => ({
   selectedEmployee: null,
   drawerOpen: false,
   refreshTrigger: 0,
+
+  // Light users state ({ id, name, uuid, image })
+  lightUsers: [],
+  lightLoading: false,
+  lightError: null,
 
   setSelectedDay: (day) => set({ selectedDay: day }),
   setSelectedEmployee: (emp) => set({ selectedEmployee: emp }),
@@ -28,7 +36,19 @@ const useEmployeeStore = create((set) => ({
     }
   },
 
-  // ✅ New: Fetch single employee by ID
+  // Fetch light list of active users
+  fetchLightUsers: async () => {
+    try {
+      set({ lightLoading: true, lightError: null });
+      const data = await getActiveUsersLight();
+      set({ lightUsers: data || [], lightLoading: false });
+    } catch (error) {
+      console.error("Error fetching light users:", error);
+      set({ lightError: error, lightLoading: false });
+    }
+  },
+
+  // Fetch single employee by ID
   fetchEmployeeById: async (id) => {
     try {
       set({ loading: true });

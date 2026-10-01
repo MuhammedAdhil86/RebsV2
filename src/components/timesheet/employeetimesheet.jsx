@@ -6,17 +6,20 @@ import EmployeeTimeSheetFilter from "./employeetimesheetfilter";
 import EmployeeTimeSheetSummary from "./employeetimesheetsummary";
 import EmployeeTimeSheetEntriesList from "./employeetimesheetentries";
 
-export default function EmployeeTimeSheet() {
-  const getTodayFormatted = () => {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, "0");
-    const day = String(today.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
-  };
+// Local-time YYYY-MM-DD (no UTC shift)
+const getTodayFormatted = () => {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, "0");
+  const day = String(today.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
 
-  // Zustand Store Integration
-  const { employees, fetchEmployees } = useEmployeeStore();
+export default function EmployeeTimeSheet() {
+  // Employee dropdown data (GET /staff/get-active-users-light)
+  const lightUsers = useEmployeeStore((s) => s.lightUsers);
+  const lightLoading = useEmployeeStore((s) => s.lightLoading);
+  const fetchLightUsers = useEmployeeStore((s) => s.fetchLightUsers);
 
   // Filter States
   const [viewBy, setViewBy] = useState("Date");
@@ -25,7 +28,7 @@ export default function EmployeeTimeSheet() {
     String(new Date().getMonth() + 1),
   );
   const [selectedWeek, setSelectedWeek] = useState("1");
-  const [selectedEmployee, setSelectedEmployee] = useState("all");
+  const [selectedEmployee, setSelectedEmployee] = useState("all"); // "all" or a user uuid
 
   // API Data States
   const [timesheetData, setTimesheetData] = useState([]);
@@ -41,14 +44,12 @@ export default function EmployeeTimeSheet() {
   // Accordion Expand/Collapse State
   const [openSections, setOpenSections] = useState({});
 
-  // 1. Fetch Employee List from Zustand Store if empty
+  // 1. Fetch the employee list once on mount
   useEffect(() => {
-    if (!employees || employees.length === 0) {
-      fetchEmployees();
-    }
-  }, [employees, fetchEmployees]);
+    fetchLightUsers();
+  }, [fetchLightUsers]);
 
-  // 2. Fetch Timesheet Data with URL query parameters
+  // 2. Fetch timesheet data
   const loadTimesheetData = async (overrideParams = null) => {
     setLoading(true);
     setError(null);
@@ -68,12 +69,16 @@ export default function EmployeeTimeSheet() {
       params.date = overrideParams?.selectedDate || selectedDate;
     }
 
-    if (emp !== "all") {
-      params.employee_id = emp;
+    // Selected employee's uuid from the light users list
+    if (emp && emp !== "all") {
+      params.employee_id = emp; // change the key if your API expects another name
     }
+
+    console.log("📤 Team timesheet params:", params);
 
     try {
       const data = await fetchTeamTimesheets(params);
+      console.log("📥 Team timesheet response:", data);
 
       setSummary({
         fromDate: data.from_date || "—",
@@ -92,6 +97,7 @@ export default function EmployeeTimeSheet() {
       setOpenSections(initialOpenState);
     } catch (err) {
       console.error("Error loading team timesheet data:", err);
+      setTimesheetData([]);
       setError("Failed to fetch employee timesheets. Please try again.");
     } finally {
       setLoading(false);
@@ -100,6 +106,7 @@ export default function EmployeeTimeSheet() {
 
   useEffect(() => {
     loadTimesheetData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleApplyFilters = () => {
@@ -107,13 +114,10 @@ export default function EmployeeTimeSheet() {
   };
 
   const handleResetFilters = () => {
-    const today = getTodayFormatted();
-    const currentMonth = String(new Date().getMonth() + 1);
-
     const defaults = {
       viewBy: "Date",
-      selectedDate: today,
-      selectedMonth: currentMonth,
+      selectedDate: getTodayFormatted(),
+      selectedMonth: String(new Date().getMonth() + 1),
       selectedWeek: "1",
       selectedEmployee: "all",
     };
@@ -150,7 +154,8 @@ export default function EmployeeTimeSheet() {
       <EmployeeTimeSheetFilter
         selectedEmployee={selectedEmployee}
         setSelectedEmployee={setSelectedEmployee}
-        employeeOptions={employees || []}
+        employeeOptions={lightUsers || []}
+        employeesLoading={lightLoading}
         viewBy={viewBy}
         setViewBy={setViewBy}
         selectedDate={selectedDate}
