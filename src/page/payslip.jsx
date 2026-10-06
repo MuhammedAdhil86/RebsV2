@@ -473,14 +473,6 @@ const Payslip = () => {
                 className={`text-amber-500 ${showNote ? "fill-amber-300" : ""}`}
               />
             </button>
-
-            <div className="w-10 h-10 rounded-full overflow-hidden border border-gray-300">
-              <img
-                src={avatar}
-                alt="User"
-                className="w-full h-full object-cover"
-              />
-            </div>
           </div>
         </div>
       </div>

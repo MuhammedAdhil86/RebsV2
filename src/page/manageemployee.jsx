@@ -17,6 +17,7 @@ import useEmployeeStore from "../store/employeeStore";
 import UniversalTable from "../ui/universal_table";
 import toast, { Toaster } from "react-hot-toast";
 import { fetchDeletedUsers } from "../service/employeeService";
+import DeactivateConfirmationModal from "../ui/deactivatemodal";
 
 const API_BASE_URL = "https://rebs-hr-cwhyx.ondigitalocean.app/";
 
@@ -41,6 +42,8 @@ function ManageEmployees() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteReason, setDeleteReason] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeactivateConfirm, setShowDeactivateConfirm] = useState(false);
+  const [isDeactivating, setIsDeactivating] = useState(false);
   const dropdownRef = useRef(null);
   const navigate = useNavigate();
 
@@ -165,7 +168,21 @@ function ManageEmployees() {
   };
 
   const handleActivateUser = () => bulkUpdateStatus(true);
-  const handleDeactivateUser = () => bulkUpdateStatus(false);
+
+  // Deactivate now opens a confirmation modal first
+  const handleDeactivateUser = () => {
+    if (selectedRows.length === 0) return;
+    setIsDropdownOpen(false);
+    setShowDeactivateConfirm(true);
+  };
+
+  const confirmDeactivate = async () => {
+    setIsDeactivating(true);
+    await bulkUpdateStatus(false);
+    setIsDeactivating(false);
+    setShowDeactivateConfirm(false);
+  };
+
   const handleAddPrivilege = () => toast("Add Privilege clicked!");
 
   const handleDelete = () => {
@@ -676,6 +693,14 @@ function ManageEmployees() {
           </div>
         </div>
       )}
+
+      {/* Deactivate Confirmation Modal */}
+      <DeactivateConfirmationModal
+        isOpen={showDeactivateConfirm}
+        onClose={() => setShowDeactivateConfirm(false)}
+        onConfirm={confirmDeactivate}
+        isLoading={isDeactivating}
+      />
     </DashboardLayout>
   );
 }

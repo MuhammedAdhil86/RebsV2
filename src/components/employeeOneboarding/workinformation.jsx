@@ -24,7 +24,7 @@ const WorkInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
     date_of_join: "",
     department: "",
     designation: "",
-    role: "", // Added role name key
+    role: "", // Holds selected role id (UI only)
     total_experience: "",
     source_of_hiring: "",
   });
@@ -82,7 +82,9 @@ const WorkInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
           employeeStatus: extractData(statusRes),
           departments: extractData(deptRes),
           designations: extractData(desigRes),
-          roles: extractData(roleRes),
+          roles: Array.isArray(roleRes.value?.data)
+            ? roleRes.value.data
+            : extractData(roleRes),
         });
 
         if (!companyId) {
@@ -124,7 +126,7 @@ const WorkInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
       employee_type_id: Number(formData.employee_type_id),
       department_id: Number(formData.department),
       designation_id: Number(formData.designation),
-      role: formData.role || "", // Role sent as string/name
+      user_type: formData.role ? String(formData.role) : "", // Role id sent as string, e.g. "2"
     };
 
     // Date formatting to ISO string
@@ -143,6 +145,7 @@ const WorkInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
     delete payload.branch;
     delete payload.department;
     delete payload.designation;
+    delete payload.role;
 
     try {
       setIsSubmitting(true);
@@ -238,14 +241,13 @@ const WorkInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
               options={designations}
             />
 
-            {/* Role Field uses opt.name as the value */}
+            {/* Role Field uses opt.id as the value */}
             <SelectField
               label="Role"
               name="role"
               value={formData.role}
               onChange={handleChange}
               options={roles}
-              valueKey="name"
             />
 
             <InputField
