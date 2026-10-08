@@ -340,7 +340,10 @@ export const getConsolidatedData = "/admin/staff/consolidated";
 export const postShiftcreate = "/shifts/add";
 export const getAttendancepolicy ="attendance-policy/get"
 export const getEmailPlaceholders = "/admin/email/placeholders"; // ✅ add this
-
+export const getManualPurposes = "/admin/manual-purposes";
+export const postSendCustomEmailByPurpose = "/admin/send/custom-email/by-purpose/{purpose}";
+export const getPurposePlaceholders = "admin/purpose/placeholders/{purpose}";
+export const postSendCustomEmail = "/admin/send/custom-email";
 export const getEmailPurposes = "admin/available-purposes";
 export const postCreateEmailTemplate = "admin/create/templates";
 export const getLetterPurposes = "/letter/list-purposes";

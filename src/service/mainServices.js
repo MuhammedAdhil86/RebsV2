@@ -17,6 +17,10 @@ import {
   deleteEmailTemplate,
   postSendLetter,
   postAddWeekOff,
+  getManualPurposes,
+  postSendCustomEmailByPurpose,
+  getPurposePlaceholders,
+  postSendCustomEmail
 } from "../api/api";
 
 /**
@@ -99,9 +103,151 @@ export const fetchEmailPurposes = async () => {
     return [];
   }
 };
+export const fetchManualPurposes = async () => {
+  try {
+    const response = await axiosInstance.get(getManualPurposes);
+    return response.data;
+  } catch (error) {
+    throw error?.response?.data || { message: "Failed to fetch manual mail purposes" };
+  }
+};
+export const fetchPurposePlaceholders = async (purpose) => {
+  if (!purpose) return [];
 
+  try {
+    const url = `/admin/templates/by-purpose/${encodeURIComponent(purpose)}/placeholders`;
+    devLog("Purpose Placeholders URL:", url);
 
+    const response = await axiosInstance.get(url);
+    devLog("Purpose Placeholders Response:", response);
 
+    const raw = response?.data?.placeholders ?? response?.data?.data ?? [];
+
+    return (Array.isArray(raw) ? raw : [])
+      .map((item) => (typeof item === "string" ? item : item?.placeholder || item?.label))
+      .filter(Boolean);
+  } catch (error) {
+    console.error("Error fetching purpose placeholders:", error?.response?.data || error?.message);
+    return [];
+  }
+};/**
+ * Send a custom (composed) email
+ * POST /admin/send/custom-email
+ */
+export const sendCustomEmailService = async ({
+  to = [],
+  cc = [],
+  bcc = [],
+  subject = "",
+  body = "",
+  data = {},
+  attachments = [], // File[]
+  use_manual_templates = false,
+}) => {
+  // Remove empty strings so the backend doesn't reject "invalid address"
+  const clean = (list) =>
+    Array.isArray(list)
+      ? list.map((e) => String(e).trim()).filter((e) => e.length > 0)
+      : [];
+
+  const cleanTo = clean(to);
+  if (cleanTo.length === 0) {
+    throw new Error("At least one recipient is required");
+  }
+  if (!String(subject).trim()) {
+    throw new Error("Subject is required");
+  }
+
+  const formData = new FormData();
+  formData.append("use_manual_templates", String(Boolean(use_manual_templates)));
+  formData.append("to", cleanTo.join(","));
+  formData.append("cc", clean(cc).join(","));
+  formData.append("bcc", clean(bcc).join(","));
+  formData.append("subject", String(subject).trim());
+  formData.append("body", body || "");
+  formData.append("data", JSON.stringify(data || {}));
+  (attachments || []).forEach((file) => formData.append("attachment", file));
+
+  try {
+    devLog("Send Custom Email (compose):", postSendCustomEmail);
+
+    const response = await axiosInstance.post(postSendCustomEmail, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+      timeout: 60000, // mail sending with attachments can be slow
+    });
+
+    devLog("Send Custom Email Response:", response);
+    return response?.data;
+  } catch (error) {
+    const errorMessage =
+      error?.response?.data?.message ||
+      error?.response?.data?.error ||
+      error?.message ||
+      "Failed to send email";
+
+    console.error("sendCustomEmailService error:", { url: postSendCustomEmail, error: errorMessage });
+    throw new Error(errorMessage);
+  }
+};
+/**
+ * Send a custom email by purpose
+ * POST /admin/send/custom-email/by-purpose/{purpose}
+ */
+export const sendCustomEmailByPurposeService = async ({
+  purpose,
+  use_manual_templates = true,
+  to = [],
+  cc = [],
+  bcc = [],
+  data = {},
+  attachment = null,
+}) => {
+  if (!purpose) {
+    throw new Error("Purpose is required to send the email");
+  }
+
+  // Remove empty strings so the backend doesn't reject "invalid address"
+  const clean = (list) =>
+    Array.isArray(list)
+      ? list.map((e) => String(e).trim()).filter((e) => e.length > 0)
+      : [];
+
+  const cleanTo = clean(to);
+  if (cleanTo.length === 0) {
+    throw new Error("At least one recipient is required");
+  }
+
+  const formData = new FormData();
+  formData.append("use_manual_templates", String(Boolean(use_manual_templates)));
+  cleanTo.forEach((email) => formData.append("to", email));
+  clean(cc).forEach((email) => formData.append("cc", email));
+  clean(bcc).forEach((email) => formData.append("bcc", email));
+  formData.append("data", JSON.stringify(data || {}));
+  if (attachment) formData.append("attachment", attachment);
+
+  let url = "";
+
+  try {
+    url = postSendCustomEmailByPurpose.replace("{purpose}", purpose);
+    devLog("Send Custom Email URL:", url);
+
+    const response = await axiosInstance.post(url, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+
+    devLog("Send Custom Email Response:", response);
+    return response?.data;
+  } catch (error) {
+    const errorMessage =
+      error?.response?.data?.message ||
+      error?.response?.data?.detail ||
+      error?.message ||
+      "Failed to send custom email";
+
+    console.error("sendCustomEmailByPurposeService error:", { url, error: errorMessage });
+    throw new Error(errorMessage);
+  }
+};
 
 export const fetchEmailPlaceholders = async () => {
   try {

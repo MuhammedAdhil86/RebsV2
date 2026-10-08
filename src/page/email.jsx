@@ -7,6 +7,7 @@ import CreateEmailTemplateView from "../ui/createemailmodal";
 import EditEmailTemplateView from "../ui/updateemailmodal";
 import UploadEmailTemplateView from "../ui/uploademailmodal";
 import DeleteConfirmationModal from "../ui/deletemodal";
+import SendCustomMailModal from "../ui/SendCustomMailModal";
 import {
   FiLoader,
   FiMoreHorizontal,
@@ -17,6 +18,7 @@ import {
   FiPlus,
   FiUpload,
   FiSearch,
+  FiSend,
 } from "react-icons/fi";
 
 // Standard Backend Services
@@ -25,6 +27,7 @@ import {
   fetchDefaultEmailTemplates,
   cloneDefaultEmailTemplate,
   deleteEmailTemplateService,
+  sendCustomEmailService,
 } from "../service/mainServices";
 
 import toast, { Toaster } from "react-hot-toast";
@@ -51,6 +54,9 @@ const EmailTemplates = () => {
     name: "",
   });
 
+  const [sendMailOpen, setSendMailOpen] = useState(false);
+  const [sendingMail, setSendingMail] = useState(false);
+
   const menuRef = useRef(null);
 
   // --- Determine Active Company ID ---
@@ -66,6 +72,14 @@ const EmailTemplates = () => {
   }, []);
 
   const isCompany8 = currentCompanyId === 8;
+  const isPresetsTab = subTab === "presets";
+
+  // Company 8 (admin company): "Create Template" only on System Presets.
+  // Other companies: "Create Template" stays on My Templates.
+  const showCreateButton = isCompany8 ? isPresetsTab : !isPresetsTab;
+
+  // "Send Custom Mail" only on My Templates
+  const showSendCustomMail = !isPresetsTab;
 
   // Helper to extract detailed backend error messages
   const extractErrorMessage = (error, defaultMsg) => {
@@ -151,6 +165,37 @@ const EmailTemplates = () => {
     }
   };
 
+  // Toggle ON: the modal already called
+  // POST /admin/send/custom-email/by-purpose/{purpose}, so just show the result.
+  const handleMailSent = (res) => {
+    toast.success(res?.message || "Email sent successfully");
+  };
+
+  // Toggle OFF: Gmail-style compose
+  const handleSendCustomMail = async (payload) => {
+    // payload: { continue_with_custom_mail: false, purpose, to, cc, bcc,
+    //            subject, body_html, attachments, scheduled_at }
+    setSendingMail(true);
+    try {
+      // POST /admin/send/custom-email
+      const res = await sendCustomEmailService({
+        to: payload.to,
+        cc: payload.cc,
+        bcc: payload.bcc,
+        subject: payload.subject,
+        body: payload.body_html,
+        attachments: payload.attachments,
+        use_manual_templates: false,
+      });
+      toast.success(res?.message || "Mail sent successfully");
+      setSendMailOpen(false);
+    } catch (error) {
+      toast.error(extractErrorMessage(error, "Failed to send custom mail"));
+    } finally {
+      setSendingMail(false);
+    }
+  };
+
   const handleDeleteTemplate = async () => {
     const templateId = deleteModal.id;
     if (!templateId) return;
@@ -175,26 +220,16 @@ const EmailTemplates = () => {
     }
   };
 
-  // --- Filtering Logic (Matches Letter.jsx pattern) ---
+  // --- Filtering Logic ---
   const filteredData = useMemo(() => {
     let sourceData = [];
 
-    if (isCompany8) {
-      // Company 8 sees ALL templates across both System Presets and My Templates
-      const map = new Map();
-      [...presetTemplates, ...customTemplates].forEach((item) => {
-        if (item?.id) map.set(item.id, item);
-      });
-      sourceData = Array.from(map.values());
+    if (subTab === "presets") {
+      sourceData = presetTemplates;
     } else {
-      // Other Companies:
-      if (subTab === "presets") {
-        sourceData = presetTemplates;
-      } else {
-        sourceData = customTemplates.filter(
-          (item) => item.is_default === false || item.is_default === undefined,
-        );
-      }
+      sourceData = customTemplates.filter(
+        (item) => item.is_default === false || item.is_default === undefined,
+      );
     }
 
     // Standard email templates exclude letter generation templates
@@ -208,7 +243,7 @@ const EmailTemplates = () => {
         item?.name?.toLowerCase().includes(query) ||
         item?.purpose?.toLowerCase().includes(query),
     );
-  }, [subTab, presetTemplates, customTemplates, isCompany8, searchQuery]);
+  }, [subTab, presetTemplates, customTemplates, searchQuery]);
 
   const columns = [
     { key: "name", label: "Template Name", align: "left" },
@@ -320,10 +355,19 @@ const EmailTemplates = () => {
           itemName={deleteModal.name}
         />
 
+        {/* Send Custom Mail Modal */}
+        <SendCustomMailModal
+          isOpen={sendMailOpen}
+          onClose={() => setSendMailOpen(false)}
+          loading={sendingMail}
+          onSubmit={handleSendCustomMail}
+          onSuccess={handleMailSent}
+        />
+
         <div className="font-poppins font-normal px-3 text-black">
           {viewMode === "table" ? (
             <>
-              {/* Subtab Switcher & Action Buttons (Exact match to Letter.jsx) */}
+              {/* Subtab Switcher & Action Buttons */}
               <div className="flex justify-between items-center mb-4 px-2">
                 <div className="flex gap-2 bg-gray-50 p-1 rounded-lg border border-gray-100">
                   <button
@@ -366,7 +410,7 @@ const EmailTemplates = () => {
                     />
                   </div>
 
-                  {/* Upload Template Button -> Opens Upload Tab View */}
+                  {/* Upload Template Button */}
                   <button
                     type="button"
                     onClick={() => setViewMode("upload")}
@@ -376,19 +420,33 @@ const EmailTemplates = () => {
                     <FiUpload size={14} />
                   </button>
 
-                  {/* Create Template Button (Letter.jsx exact styling) */}
-                  <button
-                    type="button"
-                    onClick={() => setViewMode("create")}
-                    className="flex items-center gap-1.5 bg-white border border-gray-300 text-gray-800 px-4 py-2 rounded-lg text-[12px] font-medium hover:bg-gray-50 hover:border-gray-400 transition-all shadow-2xs cursor-pointer"
-                  >
-                    <FiPlus size={15} className="text-black" />
-                    <span>Create Template</span>
-                  </button>
+                  {/* Send Custom Mail: My Templates tab only */}
+                  {showSendCustomMail && (
+                    <button
+                      type="button"
+                      onClick={() => setSendMailOpen(true)}
+                      className="flex items-center gap-1.5 bg-black text-white px-4 py-2 rounded-lg text-[12px] font-medium hover:bg-gray-800 transition-all shadow-2xs cursor-pointer"
+                    >
+                      <FiSend size={14} />
+                      <span>Send Custom Mail</span>
+                    </button>
+                  )}
+
+                  {/* Create Template: Company 8 -> System Presets only */}
+                  {showCreateButton && (
+                    <button
+                      type="button"
+                      onClick={() => setViewMode("create")}
+                      className="flex items-center gap-1.5 bg-white border border-gray-300 text-gray-800 px-4 py-2 rounded-lg text-[12px] font-medium hover:bg-gray-50 hover:border-gray-400 transition-all shadow-2xs cursor-pointer"
+                    >
+                      <FiPlus size={15} className="text-black" />
+                      <span>Create Template</span>
+                    </button>
+                  )}
                 </div>
               </div>
 
-              {/* Table / Loader (Exact match to Letter.jsx card) */}
+              {/* Table / Loader */}
               <div className="bg-white rounded-xl shadow-sm border border-gray-100 min-h-[400px] text-[12px]">
                 {loading ? (
                   <div className="flex flex-col items-center justify-center h-64">
