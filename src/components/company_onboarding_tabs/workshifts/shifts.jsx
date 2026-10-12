@@ -62,6 +62,7 @@ const Shifts = () => {
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [shiftToDelete, setShiftToDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
   const menuRef = useRef(null);
 
   useEffect(() => {
@@ -85,6 +86,7 @@ const Shifts = () => {
 
   const fetchShiftsData = async () => {
     setLoading(true);
+    setError(null);
     try {
       const response = await ShiftDataGet();
       const data = Array.isArray(response) ? response : response?.data || [];
@@ -98,6 +100,7 @@ const Shifts = () => {
         return {
           id: shift.id,
           name: shift.shift_name,
+          isDefault: !!shift.is_default, // <-- default flag from API
           duration: `${policy?.working_hours || 0} Hrs`,
           start: formatTime(policy?.start_time),
           end: formatTime(policy?.end_time),
@@ -113,6 +116,7 @@ const Shifts = () => {
     } catch (err) {
       console.error("Fetch error:", err);
       setError(err.message || "Unknown error");
+      toast.error("Failed to load shifts");
     } finally {
       setLoading(false);
     }
@@ -128,9 +132,10 @@ const Shifts = () => {
       setOpenMenuId(null);
     } else {
       const rect = e.currentTarget.getBoundingClientRect();
+      // Menu is position: fixed, so use viewport coordinates only
       setMenuPosition({
-        top: rect.bottom + window.scrollY + 5,
-        left: rect.left + window.scrollX - 140,
+        top: rect.bottom + 5,
+        left: rect.left - 140,
       });
       setOpenMenuId(rowId);
     }
@@ -144,6 +149,8 @@ const Shifts = () => {
   };
 
   const handleConfirmDelete = async () => {
+    if (deleting) return;
+    setDeleting(true);
     const tid = toast.loading("Deleting shift...");
     try {
       await deleteshift(shiftToDelete.id);
@@ -151,7 +158,14 @@ const Shifts = () => {
       setIsDeleteModalOpen(false);
       fetchShiftsData();
     } catch (err) {
-      toast.error("Failed to delete shift", { id: tid });
+      const msg =
+        err.response?.data?.message ||
+        (typeof err.response?.data?.data === "string" &&
+          err.response.data.data) ||
+        "Failed to delete shift";
+      toast.error(msg, { id: tid });
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -164,7 +178,21 @@ const Shifts = () => {
   };
 
   const columns = [
-    { key: "name", label: "Shift Name", align: "left" },
+    {
+      key: "name",
+      label: "Shift Name",
+      align: "left",
+      render: (_, row) => (
+        <div className="flex items-center gap-2">
+          <span>{row.name}</span>
+          {row.isDefault && (
+            <span className="px-2 py-0.5 rounded-full bg-green-50 text-green-600 border border-green-200 text-[10px] font-medium">
+              Default
+            </span>
+          )}
+        </div>
+      ),
+    },
     { key: "duration", label: "Duration" },
     { key: "start", label: "Start Time" },
     { key: "end", label: "End Time" },
@@ -205,9 +233,7 @@ const Shifts = () => {
   // --- RENDER LOGIC ---
   return (
     <div className="w-full bg-white rounded-xl p-2">
-      {/* CRITICAL: Placing Toaster here ensures it stays mounted 
-          even when viewMode changes to 'create' or 'update' 
-      */}
+      {/* Toaster stays mounted even when viewMode changes to 'create' or 'update' */}
       <Toaster position="top-right" />
 
       <DeleteConfirmationModal
@@ -258,6 +284,10 @@ const Shifts = () => {
               <div className="flex flex-col items-center justify-center py-20 text-gray-400 text-[12px]">
                 <div className="w-6 h-6 border-2 border-gray-200 border-t-black rounded-full animate-spin mb-2" />
                 <span>Loading shifts...</span>
+              </div>
+            ) : error ? (
+              <div className="py-16 text-center text-[12px] text-red-500">
+                {error}
               </div>
             ) : (
               <PayrollTable

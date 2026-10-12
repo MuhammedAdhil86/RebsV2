@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import { createPortal } from "react-dom";
 import toast from "react-hot-toast";
 import { MoreHorizontal, Pencil, Trash2, X, Loader2 } from "lucide-react";
@@ -11,6 +11,31 @@ import {
   editDepartmentData,
   deleteDepartmentData,
 } from "../../../service/companyService";
+
+/* ---------- HELPERS ---------- */
+
+// Collects every descendant id of a department so they can't be chosen as its parent.
+const getDescendantIds = (departments, rootId) => {
+  const descendants = new Set();
+  const queue = [String(rootId)];
+
+  while (queue.length) {
+    const current = queue.shift();
+    departments.forEach((d) => {
+      if (
+        d.parent_id !== null &&
+        d.parent_id !== undefined &&
+        String(d.parent_id) === current &&
+        !descendants.has(String(d.id))
+      ) {
+        descendants.add(String(d.id));
+        queue.push(String(d.id));
+      }
+    });
+  }
+
+  return descendants;
+};
 
 /* ---------- UNIVERSAL MODAL COMPONENT ---------- */
 function UniversalModal({
@@ -41,6 +66,7 @@ function UniversalModal({
           <button
             type="button"
             onClick={onClose}
+            aria-label="Close"
             className="text-gray-400 hover:text-gray-700 transition-colors p-1 cursor-pointer"
           >
             <X size={20} />
@@ -161,16 +187,18 @@ const DepartmentView = () => {
   const [departmentData, setDepartmentData] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // Edit Modal State mapped to update payload
+  // Edit modal state (form values are kept as strings for the inputs)
   const [editModalData, setEditModalData] = useState(null);
   const [isUpdating, setIsUpdating] = useState(false);
 
-  // Delete Modal State
+  // Delete modal state
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   /* ---------- FETCH DATA ---------- */
-  const fetchDepartments = async () => {
-    setLoading(true);
+  // showLoader = false -> refresh the list in the background (no spinner flash)
+  const fetchDepartments = async (showLoader = true) => {
+    if (showLoader) setLoading(true);
     try {
       const data = await getDepartmentData();
       setDepartmentData(Array.isArray(data) ? data : []);
@@ -180,13 +208,28 @@ const DepartmentView = () => {
         error?.message || error?.error || "Failed to load departments",
       );
     } finally {
-      setLoading(false);
+      if (showLoader) setLoading(false);
     }
   };
 
   useEffect(() => {
     fetchDepartments();
+
+    // The create form dispatches this after a successful save:
+    //   window.dispatchEvent(new Event("department:changed"));
+    const handleDepartmentChanged = () => fetchDepartments(false);
+    window.addEventListener("department:changed", handleDepartmentChanged);
+    return () =>
+      window.removeEventListener("department:changed", handleDepartmentChanged);
   }, []);
+
+  /* ---------- PARENT OPTIONS (no self, no descendants) ---------- */
+  const parentOptions = useMemo(() => {
+    if (!editModalData) return [];
+    const blocked = getDescendantIds(departmentData, editModalData.id);
+    blocked.add(String(editModalData.id));
+    return departmentData.filter((d) => !blocked.has(String(d.id)));
+  }, [departmentData, editModalData?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ---------- DELETE HANDLERS ---------- */
   const handleOpenDelete = (department) => {
@@ -194,8 +237,9 @@ const DepartmentView = () => {
   };
 
   const handleConfirmDelete = async () => {
-    if (!deleteTarget?.id) return;
+    if (!deleteTarget?.id || isDeleting) return;
 
+    setIsDeleting(true);
     try {
       const res = await deleteDepartmentData(deleteTarget.id);
       toast.success(res?.message || "Department deleted successfully");
@@ -203,18 +247,27 @@ const DepartmentView = () => {
       setDeleteTarget(null);
     } catch (err) {
       toast.error(err?.message || err?.error || err?.detail || "Delete failed");
+    } finally {
+      setIsDeleting(false);
     }
   };
 
   /* ---------- EDIT MODAL OPEN ---------- */
   const handleOpenEdit = (dept) => {
+    // API uses parent_id "0" (or empty) to mean "no parent"
+    const parentId =
+      dept.parent_id && String(dept.parent_id) !== "0"
+        ? String(dept.parent_id)
+        : "";
+    const hasParent = String(dept.has_parent) === "true" || Boolean(parentId);
+
     setEditModalData({
       id: dept.id,
       name: dept.name || "",
       code: dept.code || "",
       desc: dept.desc || dept.description || "",
-      has_parent: String(dept.has_parent ?? "false"),
-      parent_id: dept.parent_id ? String(dept.parent_id) : "",
+      has_parent: String(hasParent),
+      parent_id: parentId,
       email: dept.email || "",
     });
   };
@@ -222,22 +275,56 @@ const DepartmentView = () => {
   /* ---------- UPDATE HANDLER ---------- */
   const handleUpdateSubmit = async (e) => {
     if (e) e.preventDefault();
+    if (!editModalData || isUpdating) return;
+
+    const { id, has_parent, parent_id, ...rest } = editModalData;
+    const hasParent = has_parent === "true";
+
+    if (hasParent && !parent_id) {
+      toast.error("Please select a parent department");
+      return;
+    }
+
+    // The API returns and stores these as strings ("false", "0"), so send the same shape
+    const payload = {
+      ...rest,
+      has_parent: hasParent ? "true" : "false",
+      parent_id: hasParent ? String(parent_id) : "0",
+    };
+
     setIsUpdating(true);
-
-    const { id, ...payload } = editModalData;
-
     try {
       const res = await editDepartmentData(id, payload);
       toast.success(res?.message || "Department updated successfully");
+
+      // Keep the "Parent Department" column in sync without a refetch
+      const parentName = hasParent
+        ? (departmentData.find((d) => String(d.id) === String(parent_id))
+            ?.name ?? null)
+        : null;
+
       setDepartmentData((prev) =>
-        prev.map((d) => (d.id === id ? { ...d, ...payload } : d)),
+        prev.map((d) =>
+          d.id === id
+            ? { ...d, ...payload, parent: parentName, parent_name: parentName }
+            : d,
+        ),
       );
       setEditModalData(null);
+
+      // Instant UI update above, then re-sync with the server in the background
+      fetchDepartments(false);
     } catch (err) {
       toast.error(err?.message || err?.error || err?.detail || "Update failed");
     } finally {
       setIsUpdating(false);
     }
+  };
+
+  /* ---------- FORM FIELD HELPER ---------- */
+  const updateField = (field) => (e) => {
+    const value = e.target.value;
+    setEditModalData((prev) => ({ ...prev, [field]: value }));
   };
 
   /* ---------- TABLE COLUMNS ---------- */
@@ -307,6 +394,10 @@ const DepartmentView = () => {
     },
   ];
 
+  const inputClass =
+    "w-full border border-gray-200 p-3 rounded-2xl text-xs text-gray-800 focus:outline-none focus:border-gray-400 transition-colors";
+  const labelClass = "text-[11px] font-medium text-gray-600 block mb-1";
+
   return (
     <>
       <div className="flex-1 grid grid-cols-1 gap-4 px-4 pb-4 bg-[#f9fafb] rounded-xl w-full mx-auto mt-5 font-poppins">
@@ -330,7 +421,7 @@ const DepartmentView = () => {
       {/* ---------- EDIT VIA UNIVERSAL MODAL ---------- */}
       <UniversalModal
         isOpen={Boolean(editModalData)}
-        onClose={() => setEditModalData(null)}
+        onClose={() => !isUpdating && setEditModalData(null)}
         title="Edit Department"
         subtitle="Update department details and hierarchy"
         maxWidth="max-w-[500px]"
@@ -340,99 +431,69 @@ const DepartmentView = () => {
             {/* Name & Code */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="text-[11px] font-medium text-gray-600 block mb-1">
-                  Department Name
-                </label>
+                <label className={labelClass}>Department Name</label>
                 <input
                   type="text"
                   required
                   placeholder="e.g. Human Resources"
                   value={editModalData.name}
-                  onChange={(e) =>
-                    setEditModalData((prev) => ({
-                      ...prev,
-                      name: e.target.value,
-                    }))
-                  }
-                  className="w-full border border-gray-200 p-3 rounded-2xl text-xs text-gray-800 focus:outline-none focus:border-gray-400 transition-colors"
+                  onChange={updateField("name")}
+                  className={inputClass}
                 />
               </div>
 
               <div>
-                <label className="text-[11px] font-medium text-gray-600 block mb-1">
-                  Department Code
-                </label>
+                <label className={labelClass}>Department Code</label>
                 <input
                   type="text"
                   required
                   placeholder="e.g. HR"
                   value={editModalData.code}
-                  onChange={(e) =>
-                    setEditModalData((prev) => ({
-                      ...prev,
-                      code: e.target.value,
-                    }))
-                  }
-                  className="w-full border border-gray-200 p-3 rounded-2xl text-xs text-gray-800 focus:outline-none focus:border-gray-400 transition-colors"
+                  onChange={updateField("code")}
+                  className={inputClass}
                 />
               </div>
             </div>
 
             {/* Email */}
             <div>
-              <label className="text-[11px] font-medium text-gray-600 block mb-1">
-                Email
-              </label>
+              <label className={labelClass}>Email</label>
               <input
                 type="email"
                 placeholder="e.g. hr@example.com"
                 value={editModalData.email}
-                onChange={(e) =>
-                  setEditModalData((prev) => ({
-                    ...prev,
-                    email: e.target.value,
-                  }))
-                }
-                className="w-full border border-gray-200 p-3 rounded-2xl text-xs text-gray-800 focus:outline-none focus:border-gray-400 transition-colors"
+                onChange={updateField("email")}
+                className={inputClass}
               />
             </div>
 
             {/* Description */}
             <div>
-              <label className="text-[11px] font-medium text-gray-600 block mb-1">
-                Description
-              </label>
+              <label className={labelClass}>Description</label>
               <textarea
                 rows={2}
                 placeholder="e.g. Human Resources Department"
                 value={editModalData.desc}
-                onChange={(e) =>
-                  setEditModalData((prev) => ({
-                    ...prev,
-                    desc: e.target.value,
-                  }))
-                }
-                className="w-full border border-gray-200 p-3 rounded-2xl text-xs text-gray-800 focus:outline-none focus:border-gray-400 transition-colors resize-none"
+                onChange={updateField("desc")}
+                className={`${inputClass} resize-none`}
               />
             </div>
 
             {/* Parent Department Selection */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="text-[11px] font-medium text-gray-600 block mb-1">
-                  Has Parent?
-                </label>
+                <label className={labelClass}>Has Parent?</label>
                 <select
                   value={editModalData.has_parent}
-                  onChange={(e) =>
+                  onChange={(e) => {
+                    const value = e.target.value;
                     setEditModalData((prev) => ({
                       ...prev,
-                      has_parent: e.target.value,
-                      parent_id:
-                        e.target.value === "false" ? "" : prev.parent_id,
-                    }))
-                  }
-                  className="w-full border border-gray-200 p-3 rounded-2xl text-xs text-gray-800 focus:outline-none focus:border-gray-400 transition-colors"
+                      has_parent: value,
+                      parent_id: value === "false" ? "" : prev.parent_id,
+                    }));
+                  }}
+                  className={inputClass}
                 >
                   <option value="false">No</option>
                   <option value="true">Yes</option>
@@ -441,27 +502,19 @@ const DepartmentView = () => {
 
               {editModalData.has_parent === "true" && (
                 <div>
-                  <label className="text-[11px] font-medium text-gray-600 block mb-1">
-                    Parent Department
-                  </label>
+                  <label className={labelClass}>Parent Department</label>
                   <select
+                    required
                     value={editModalData.parent_id}
-                    onChange={(e) =>
-                      setEditModalData((prev) => ({
-                        ...prev,
-                        parent_id: e.target.value,
-                      }))
-                    }
-                    className="w-full border border-gray-200 p-3 rounded-2xl text-xs text-gray-800 focus:outline-none focus:border-gray-400 transition-colors"
+                    onChange={updateField("parent_id")}
+                    className={inputClass}
                   >
                     <option value="">Select Parent</option>
-                    {departmentData
-                      .filter((d) => d.id !== editModalData.id)
-                      .map((d) => (
-                        <option key={d.id} value={d.id}>
-                          {d.name}
-                        </option>
-                      ))}
+                    {parentOptions.map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.name}
+                      </option>
+                    ))}
                   </select>
                 </div>
               )}
@@ -473,12 +526,14 @@ const DepartmentView = () => {
                 type="button"
                 onClick={() => setEditModalData(null)}
                 disabled={isUpdating}
-                className="px-4 py-2 border border-gray-200 rounded-xl text-gray-500 hover:text-gray-800 hover:bg-gray-50 transition-colors cursor-pointer"
+                className="px-4 py-2 border border-gray-200 rounded-xl text-gray-500 hover:text-gray-800 hover:bg-gray-50 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Cancel
               </button>
 
-              <GlowButton type="submit" onClick={handleUpdateSubmit}>
+              {/* No onClick here: the form's onSubmit handles it, so native
+                  validation (required / type="email") runs first. */}
+              <GlowButton type="submit" disabled={isUpdating}>
                 {isUpdating ? (
                   <Loader2 className="animate-spin w-4 h-4" />
                 ) : (
@@ -493,9 +548,10 @@ const DepartmentView = () => {
       {/* ---------- DELETE CONFIRMATION MODAL ---------- */}
       <DeleteConfirmationModal
         isOpen={Boolean(deleteTarget)}
-        onClose={() => setDeleteTarget(null)}
+        onClose={() => !isDeleting && setDeleteTarget(null)}
         onConfirm={handleConfirmDelete}
         itemName={deleteTarget?.name || "Department"}
+        isLoading={isDeleting}
       />
     </>
   );

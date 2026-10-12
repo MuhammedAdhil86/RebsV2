@@ -8,7 +8,7 @@ const ShiftDonutChart = ({ className }) => {
   const masterSource =
     allShiftsMaster.length > 0 ? allShiftsMaster : shiftDetails;
   const masterStaticTotal =
-    masterSource.reduce((sum, s) => sum + (s.total_people || 0), 0) || 20;
+    masterSource.reduce((sum, s) => sum + (s.total_people || 0), 0) || 0;
 
   // 2. Map fixed visual segments based on permanent shift capacities
   const donutChartData = masterSource.map((masterShift, index) => {

@@ -51,7 +51,7 @@ const ShiftRulesCard = ({ className }) => {
 
         {/* ---------- CONDITIONS ---------- */}
         <div className="space-y-2 pt-1 text-sm font-medium ">
-          {conditions.map((item, index) => (
+          {(conditions ?? []).map((item, index) => (
             <div
               key={index}
               className="grid grid-cols-3 items-center text-[12px]"

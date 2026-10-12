@@ -19,6 +19,7 @@ import {
   editBranch,
   deleteBranch,
 } from "../../../service/companyService";
+import { fetchTimeZone } from "../../../service/eventservice";
 import MapModal from "../../../utils/mapmodel";
 
 /* ---------- UNIVERSAL MODAL COMPONENT ---------- */
@@ -50,6 +51,7 @@ function UniversalModal({
           <button
             type="button"
             onClick={onClose}
+            aria-label="Close"
             className="text-gray-400 hover:text-gray-700 transition-colors p-1 cursor-pointer"
           >
             <X size={20} />
@@ -191,6 +193,9 @@ const BranchView = () => {
   const [loadingLocations, setLoadingLocations] = useState({});
   const [mapModal, setMapModal] = useState(null);
 
+  // Time zones: [{ id, name, country_name, abbreviation, gmt_offset, ... }]
+  const [timeZones, setTimeZones] = useState([]);
+
   // Edit State
   const [editModalData, setEditModalData] = useState(null);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -198,10 +203,12 @@ const BranchView = () => {
 
   // Delete State
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   /* ---------- FETCH BRANCH DATA ---------- */
-  const fetchBranches = async () => {
-    setLoading(true);
+  // showLoader = false -> refresh the list in the background (no spinner flash)
+  const fetchBranches = async (showLoader = true) => {
+    if (showLoader) setLoading(true);
     try {
       const data = await getBranchData();
       setBranchData(data || []);
@@ -209,13 +216,38 @@ const BranchView = () => {
       console.error("Error fetching branch data:", error);
       toast.error(error?.message || error?.error || "Failed to load branches");
     } finally {
-      setLoading(false);
+      if (showLoader) setLoading(false);
     }
+  };
+
+  /* ---------- FETCH TIME ZONES ---------- */
+  const loadTimeZones = async () => {
+    const data = await fetchTimeZone(); // always resolves to an array
+    setTimeZones(data);
   };
 
   useEffect(() => {
     fetchBranches();
+    loadTimeZones();
+
+    // The create form dispatches this after a successful save:
+    //   window.dispatchEvent(new Event("branch:changed"));
+    const handleBranchChanged = () => fetchBranches(false);
+    window.addEventListener("branch:changed", handleBranchChanged);
+    return () =>
+      window.removeEventListener("branch:changed", handleBranchChanged);
   }, []);
+
+  /* ---------- TIME ZONE HELPER ----------
+     The branch may hold either the time zone id ("1") or its name
+     ("Asia/Kolkata"). Always resolve it to the id for the dropdown. */
+  const resolveTimeZoneId = (value) => {
+    if (value === null || value === undefined || value === "") return "";
+    const match = timeZones.find(
+      (tz) => String(tz.id) === String(value) || tz.name === value,
+    );
+    return match ? String(match.id) : "";
+  };
 
   /* ---------- DELETE HANDLERS ---------- */
   const handleOpenDelete = (branch) => {
@@ -223,8 +255,9 @@ const BranchView = () => {
   };
 
   const handleConfirmDelete = async () => {
-    if (!deleteTarget?.id) return;
+    if (!deleteTarget?.id || isDeleting) return;
 
+    setIsDeleting(true);
     try {
       const res = await deleteBranch(deleteTarget.id);
       toast.success(res?.message || "Branch deleted successfully");
@@ -232,6 +265,8 @@ const BranchView = () => {
       setDeleteTarget(null);
     } catch (err) {
       toast.error(err?.message || err?.error || err?.detail || "Delete failed");
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -242,7 +277,8 @@ const BranchView = () => {
       name: branch.name || "",
       code: branch.code || "",
       description: branch.description || "",
-      time_zone: branch.time_zone || "Asia/Kolkata",
+      // stored as the time zone ID (what the dropdown value / backend uses)
+      time_zone: resolveTimeZoneId(branch.time_zone || "Asia/Kolkata"),
       longitude: String(branch.longitude || ""),
       latitude: String(branch.latitude || ""),
       address: branch.address || "",
@@ -283,10 +319,22 @@ const BranchView = () => {
   /* ---------- UPDATE HANDLER ---------- */
   const handleUpdateSubmit = async (e) => {
     if (e) e.preventDefault();
+    if (!editModalData || isUpdating) return;
+
+    const { id, time_zone, ...rest } = editModalData;
+
+    if (!time_zone) {
+      toast.error("Please select a time zone");
+      return;
+    }
+
+    // time_zone is the ID of the selected time zone (e.g. "2"), not its name
+    const payload = {
+      ...rest,
+      time_zone: String(time_zone),
+    };
+
     setIsUpdating(true);
-
-    const { id, ...payload } = editModalData;
-
     try {
       const res = await editBranch(id, payload);
       toast.success(res?.message || "Branch updated successfully");
@@ -294,6 +342,10 @@ const BranchView = () => {
         prev.map((b) => (b.id === id ? { ...b, ...payload } : b)),
       );
       setEditModalData(null);
+
+      // Instant UI update above, then re-sync with the server in the background
+      // so every field (e.g. server-computed ones) is accurate.
+      fetchBranches(false);
     } catch (err) {
       toast.error(err?.message || err?.error || err?.detail || "Update failed");
     } finally {
@@ -459,7 +511,7 @@ const BranchView = () => {
       {/* ---------- EDIT VIA UNIVERSAL MODAL ---------- */}
       <UniversalModal
         isOpen={Boolean(editModalData)}
-        onClose={() => setEditModalData(null)}
+        onClose={() => !isUpdating && setEditModalData(null)}
         title="Edit Branch"
         subtitle="Update branch details and location coordinates"
         maxWidth="max-w-[540px]"
@@ -531,9 +583,9 @@ const BranchView = () => {
                 <label className="text-[11px] font-medium text-gray-600 block mb-1">
                   Time Zone
                 </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Asia/Kolkata"
+                {/* Shows the time zone name, but the value (and payload) is its id */}
+                <select
+                  required
                   value={editModalData.time_zone}
                   onChange={(e) =>
                     setEditModalData((prev) => ({
@@ -542,7 +594,18 @@ const BranchView = () => {
                     }))
                   }
                   className="w-full border border-gray-200 p-3 rounded-2xl text-xs text-gray-800 focus:outline-none focus:border-gray-400 transition-colors"
-                />
+                >
+                  <option value="">
+                    {timeZones.length === 0
+                      ? "No time zones available"
+                      : "Select Time Zone"}
+                  </option>
+                  {timeZones.map((tz) => (
+                    <option key={tz.id} value={String(tz.id)}>
+                      {tz.name}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
 
@@ -652,12 +715,13 @@ const BranchView = () => {
                 type="button"
                 onClick={() => setEditModalData(null)}
                 disabled={isUpdating}
-                className="px-4 py-2 border border-gray-200 rounded-xl text-gray-500 hover:text-gray-800 hover:bg-gray-50 transition-colors cursor-pointer"
+                className="px-4 py-2 border border-gray-200 rounded-xl text-gray-500 hover:text-gray-800 hover:bg-gray-50 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Cancel
               </button>
 
-              <GlowButton type="submit" onClick={handleUpdateSubmit}>
+              {/* No onClick: the form's onSubmit handles it so native validation runs */}
+              <GlowButton type="submit" disabled={isUpdating}>
                 {isUpdating ? (
                   <Loader2 className="animate-spin w-4 h-4" />
                 ) : (
@@ -672,9 +736,10 @@ const BranchView = () => {
       {/* ---------- DELETE CONFIRMATION MODAL ---------- */}
       <DeleteConfirmationModal
         isOpen={Boolean(deleteTarget)}
-        onClose={() => setDeleteTarget(null)}
+        onClose={() => !isDeleting && setDeleteTarget(null)}
         onConfirm={handleConfirmDelete}
         itemName={deleteTarget?.name || "Branch"}
+        isLoading={isDeleting}
       />
 
       {/* ---------- MAP MODAL ---------- */}

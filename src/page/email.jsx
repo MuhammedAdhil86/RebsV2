@@ -63,9 +63,13 @@ const EmailTemplates = () => {
   const currentCompanyId = useMemo(() => {
     try {
       const user = JSON.parse(localStorage.getItem("user") || "{}");
-      return Number(
-        user?.company_id || localStorage.getItem("company_id") || 0,
-      );
+      const id =
+        user?.company_id ??
+        user?.companyId ??
+        user?.company?.id ??
+        localStorage.getItem("company_id") ??
+        0;
+      return Number(id) || 0;
     } catch {
       return 0;
     }
@@ -75,7 +79,7 @@ const EmailTemplates = () => {
   const isPresetsTab = subTab === "presets";
 
   // Company 8 (admin company): "Create Template" only on System Presets.
-  // Other companies: "Create Template" stays on My Templates.
+  // Other companies: "Create Template" only on My Templates.
   const showCreateButton = isCompany8 ? isPresetsTab : !isPresetsTab;
 
   // "Send Custom Mail" only on My Templates
@@ -227,8 +231,11 @@ const EmailTemplates = () => {
     if (subTab === "presets") {
       sourceData = presetTemplates;
     } else {
+      // My Templates must never contain presets (matters for company 8,
+      // whose own templates endpoint may also return the default ones).
+      const presetIds = new Set(presetTemplates.map((p) => p.id));
       sourceData = customTemplates.filter(
-        (item) => item.is_default === false || item.is_default === undefined,
+        (item) => !item.is_default && !presetIds.has(item.id),
       );
     }
 
@@ -432,7 +439,8 @@ const EmailTemplates = () => {
                     </button>
                   )}
 
-                  {/* Create Template: Company 8 -> System Presets only */}
+                  {/* Create Template: Company 8 -> System Presets only,
+                      other companies -> My Templates only */}
                   {showCreateButton && (
                     <button
                       type="button"

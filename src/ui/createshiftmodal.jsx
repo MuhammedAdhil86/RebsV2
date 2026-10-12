@@ -11,6 +11,7 @@ const CreateShiftModal = ({ onClose, refreshData }) => {
   const [shiftCode, setShiftCode] = useState("");
   const [shiftColour, setShiftColour] = useState("");
   const [isCrossShift, setIsCrossShift] = useState(false);
+  const [isDefault, setIsDefault] = useState(false);
   const [policies, setPolicies] = useState([]);
   const [allPolicies, setAllPolicies] = useState([]);
   const [remarks, setRemarks] = useState("");
@@ -52,9 +53,11 @@ const CreateShiftModal = ({ onClose, refreshData }) => {
     );
   };
 
-  // --- SUBMIT LOGIC (HANDLES 500 ERRORS FOR HOT TOAST) ---
+  // --- SUBMIT LOGIC ---
   const handleSubmit = async () => {
-    // Basic Front-end Validation
+    if (loading) return; // guard against double submit
+
+    // Basic front-end validation
     if (!shiftName.trim()) return toast.error("Shift Name is required");
     if (policies.length === 0)
       return toast.error("Please select at least one Policy");
@@ -62,45 +65,39 @@ const CreateShiftModal = ({ onClose, refreshData }) => {
     if (!shiftColour) return toast.error("Please select a Color");
 
     const payload = {
-      shift_name: shiftName,
-      shift_code: shiftCode,
+      shift_name: shiftName.trim(),
+      shift_code: shiftCode.trim(),
       shift_colour: shiftColour,
       is_cross_shift: isCrossShift,
-      is_default: false,
+      is_default: isDefault,
       policies,
       remarks,
     };
 
-    // Start loading toast
+    setLoading(true);
     const tid = toast.loading("Creating shift...");
 
     try {
-      setLoading(true);
-
       const response = await createShift(payload);
 
-      // Success logic
       toast.success(response?.message || "Shift created successfully!", {
         id: tid,
       });
       if (refreshData) refreshData();
       onClose();
     } catch (err) {
-      // --- CAPTURING THE ERROR FOR THE CLIENT ---
-      // This extracts the "weekly off policies cannot be combined..." string
+      // Show the specific backend error (e.g. "weekly off policies cannot be combined...")
       const serverResponse = err.response?.data;
       const clientErrorMessage =
-        serverResponse?.data ||
+        (typeof serverResponse?.data === "string" && serverResponse.data) ||
         serverResponse?.message ||
         "An internal server error occurred.";
 
-      // Show the specific backend error in the hot-toast
       toast.error(clientErrorMessage, {
         id: tid,
-        duration: 6000, // Keeping it visible longer so user can read instructions
+        duration: 6000,
       });
 
-      // Console log for developer reference
       console.error("Shift Creation Failed:", clientErrorMessage);
     } finally {
       setLoading(false);
@@ -113,7 +110,7 @@ const CreateShiftModal = ({ onClose, refreshData }) => {
   const labelStyle = "text-[12px] font-[Poppins] text-black mb-1 block";
 
   return (
-    <div className="w-full min-h-screen bg-white p-4 font-[Poppins]">
+    <div className="w-full bg-white p-4 font-[Poppins]">
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
         <button onClick={onClose} className="text-gray-500 hover:text-black">
@@ -214,8 +211,27 @@ const CreateShiftModal = ({ onClose, refreshData }) => {
           <div className="relative">
             <select
               className={`${inputStyle} appearance-none pr-10 cursor-pointer`}
-              value={isCrossShift}
+              value={String(isCrossShift)}
               onChange={(e) => setIsCrossShift(e.target.value === "true")}
+            >
+              <option value="false">No</option>
+              <option value="true">Yes</option>
+            </select>
+            <ChevronDown
+              size={16}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none"
+            />
+          </div>
+        </div>
+
+        {/* Default Shift Select */}
+        <div>
+          <label className={labelStyle}>Set as Default Shift?</label>
+          <div className="relative">
+            <select
+              className={`${inputStyle} appearance-none pr-10 cursor-pointer`}
+              value={String(isDefault)}
+              onChange={(e) => setIsDefault(e.target.value === "true")}
             >
               <option value="false">No</option>
               <option value="true">Yes</option>

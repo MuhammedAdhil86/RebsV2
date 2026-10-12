@@ -66,15 +66,15 @@ const ChevronDownIcon = () => (
 );
 
 const CustomToolbar = (props) => (
-  <div className="flex justify-between items-center mb-6 p-2 font-poppins text-[12px]">
-    <div className="flex items-center space-x-3">
+  <div className="flex justify-center sm:justify-between items-center mb-4 sm:mb-6 p-2 font-poppins text-[12px]">
+    <div className="flex items-center flex-wrap justify-center gap-2 sm:gap-3">
       <button
         onClick={() => props.onNavigate("PREV")}
         className="p-2 hover:bg-gray-100 rounded-full transition-colors"
       >
         <FiChevronLeft className="w-4 h-4 text-gray-600" />
       </button>
-      <span className="min-w-[150px] text-center uppercase tracking-widest text-gray-800 font-normal">
+      <span className="min-w-[120px] sm:min-w-[150px] text-center uppercase tracking-widest text-gray-800 font-normal">
         {moment(props.date).format("MMMM YYYY")}
       </span>
       <button
@@ -85,7 +85,7 @@ const CustomToolbar = (props) => (
       </button>
       <button
         onClick={() => props.onNavigate("TODAY")}
-        className="ml-4 px-4 py-1 border border-gray-200 rounded-lg hover:bg-gray-50 transition-all uppercase tracking-widest font-normal"
+        className="sm:ml-4 px-4 py-1 border border-gray-200 rounded-lg hover:bg-gray-50 transition-all uppercase tracking-widest font-normal"
       >
         Today
       </button>
@@ -262,12 +262,12 @@ export default function Events({ userId, userName }) {
             </p>
           </div>
 
-          <div className="flex items-center gap-4 flex-wrap w-full sm:w-auto justify-end">
-            <div className="relative">
+          <div className="flex items-center gap-3 sm:gap-4 flex-wrap w-full sm:w-auto justify-between sm:justify-end">
+            <div className="relative flex-1 sm:flex-none">
               <select
                 value={selectedBranch}
                 onChange={(e) => setSelectedBranch(e.target.value)}
-                className="appearance-none bg-transparent text-gray-600 tracking-widest uppercase outline-none cursor-pointer border border-gray-200 rounded-lg px-3 py-1.5 pr-8 focus:ring-0 font-normal"
+                className="appearance-none bg-transparent text-gray-600 tracking-widest uppercase outline-none cursor-pointer border border-gray-200 rounded-lg px-3 py-1.5 pr-8 focus:ring-0 font-normal w-full sm:w-auto"
               >
                 <option value="all">All Branches</option>
                 {branches.map((b) => (
@@ -291,51 +291,56 @@ export default function Events({ userId, userName }) {
         </div>
 
         {/* Calendar Core Workspace Area Layout */}
-        <div className="flex flex-col lg:flex-row gap-6 h-[calc(100vh-220px)] font-poppins text-[12px]">
-          <div className="flex-1 bg-white rounded-[32px] shadow-sm border border-gray-100 p-6 overflow-hidden flex flex-col">
-            <Calendar
-              localizer={localizer}
-              events={calendarEvents}
-              date={calendarDate}
-              onNavigate={handleNavigate}
-              onSelectSlot={(slot) => setSelectedDate(slot.start)}
-              onSelectEvent={(e) => openDrawer("detail", e)}
-              selectable
-              popup
-              components={{ toolbar: CustomToolbar }}
-              eventPropGetter={(event) => ({
-                style: {
-                  backgroundColor: event.isHoliday
-                    ? eventColors.holiday
-                    : event.isWeeklyOff
-                      ? eventColors.weeklyOff
-                      : event.isLeave
-                        ? eventColors.leave
-                        : eventColors.meeting,
-                  borderRadius: "6px",
-                  border: "none",
-                  color: "white",
-                  padding: "4px 8px",
-                  fontSize: "10px",
-                  fontFamily: "Poppins",
-                  fontWeight: "400",
-                },
-              })}
-              dayPropGetter={(date) =>
-                moment(date).isSame(moment(), "day")
-                  ? {
-                      style: {
-                        backgroundColor: "#f8fbff",
-                        borderTop: "2px solid #000",
-                      },
-                    }
-                  : {}
-              }
-              style={{ flex: 1 }}
-            />
+        <div className="flex flex-col lg:flex-row gap-6 h-auto lg:h-[calc(100vh-220px)] font-poppins text-[12px]">
+          <div className="flex-1 min-h-[560px] lg:min-h-0 bg-white rounded-[24px] sm:rounded-[32px] shadow-sm border border-gray-100 p-3 sm:p-6 overflow-hidden flex flex-col">
+            {/* Horizontal scroll safety for very small phones */}
+            <div className="flex-1 flex flex-col overflow-x-auto">
+              <div className="flex-1 flex flex-col min-w-[420px] sm:min-w-0">
+                <Calendar
+                  localizer={localizer}
+                  events={calendarEvents}
+                  date={calendarDate}
+                  onNavigate={handleNavigate}
+                  onSelectSlot={(slot) => setSelectedDate(slot.start)}
+                  onSelectEvent={(e) => openDrawer("detail", e)}
+                  selectable
+                  popup
+                  components={{ toolbar: CustomToolbar }}
+                  eventPropGetter={(event) => ({
+                    style: {
+                      backgroundColor: event.isHoliday
+                        ? eventColors.holiday
+                        : event.isWeeklyOff
+                          ? eventColors.weeklyOff
+                          : event.isLeave
+                            ? eventColors.leave
+                            : eventColors.meeting,
+                      borderRadius: "6px",
+                      border: "none",
+                      color: "white",
+                      padding: "4px 8px",
+                      fontSize: "10px",
+                      fontFamily: "Poppins",
+                      fontWeight: "400",
+                    },
+                  })}
+                  dayPropGetter={(date) =>
+                    moment(date).isSame(moment(), "day")
+                      ? {
+                          style: {
+                            backgroundColor: "#f8fbff",
+                            borderTop: "2px solid #000",
+                          },
+                        }
+                      : {}
+                  }
+                  style={{ flex: 1 }}
+                />
+              </div>
+            </div>
           </div>
 
-          <div className="w-full lg:w-[380px] space-y-6 overflow-y-auto pr-2 custom-scrollbar">
+          <div className="w-full lg:w-[380px] space-y-6 lg:overflow-y-auto lg:pr-2 custom-scrollbar">
             {/* Holidays */}
             <div className="bg-white p-6 rounded-[24px] border border-gray-100 shadow-sm">
               <h3 className="tracking-widest uppercase text-gray-400 mb-5 flex items-center gap-2 font-normal">
@@ -504,10 +509,10 @@ export default function Events({ userId, userName }) {
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         PaperProps={{
-          className: "w-[549px] shadow-2xl border-none",
+          className: "w-full sm:w-[549px] max-w-full shadow-2xl border-none",
         }}
       >
-        <div className="p-6 h-full flex flex-col font-poppins text-[12px]">
+        <div className="p-4 sm:p-6 h-full flex flex-col font-poppins text-[12px]">
           {drawerContent === "create" && (
             <EventCreate
               onClose={() => setDrawerOpen(false)}

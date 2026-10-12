@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Icon } from "@iconify/react";
 import useEmployeeStore from "../../store/employeeStore";
 import axiosInstance from "../../service/axiosinstance";
-import toast, { Toaster } from "react-hot-toast";
+import toast from "react-hot-toast"; // uses the global <Toaster /> from App.jsx
 
 export default function BasicInfoSection() {
   const { selectedEmployee, setSelectedEmployee } = useEmployeeStore();
@@ -61,11 +61,12 @@ export default function BasicInfoSection() {
   if (!formData) return <p>Loading...</p>;
 
   return (
-<div className="bg-white p-4 rounded-xl shadow-sm border w-full">
-
+    <div className="bg-white p-4 rounded-xl shadow-sm border w-full">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
-        <h3 className="font-medium text-gray-800 text-[14px]">Basic Information</h3>
+        <h3 className="font-medium text-gray-800 text-[14px]">
+          Basic Information
+        </h3>
         <div className="flex items-center gap-2">
           {isEditing && (
             <button
@@ -107,8 +108,6 @@ export default function BasicInfoSection() {
           </div>
         ))}
       </div>
-
-      <Toaster />
     </div>
   );
 }

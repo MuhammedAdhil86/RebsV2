@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { Icon } from "@iconify/react";
+import toast from "react-hot-toast";
 import useEmployeeStore from "../../store/employeeStore";
 import axiosInstance from "../../service/axiosinstance";
 import {
@@ -14,6 +15,12 @@ import {
 } from "../../service/employeeService";
 
 export default function WorkInfoSection({ onSuccess, onError }) {
+  // Use the parent's handlers (same global Toaster as the other sections);
+  // fall back to react-hot-toast if they are not passed.
+  const notifySuccess = (msg) =>
+    onSuccess ? onSuccess(msg) : toast.success(msg);
+  const notifyError = (msg) => (onError ? onError(msg) : toast.error(msg));
+
   const { selectedEmployee, setSelectedEmployee } = useEmployeeStore();
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -34,6 +41,7 @@ export default function WorkInfoSection({ onSuccess, onError }) {
     departmentName: "",
     designationId: "",
     designationName: "",
+    roleId: "",
     role: "",
     sourceOfHiring: "",
     employmentStatusId: "",
@@ -45,6 +53,7 @@ export default function WorkInfoSection({ onSuccess, onError }) {
     location: "Panampilly Nagar",
   });
 
+  // Load dropdown master data
   useEffect(() => {
     const fetchDropdowns = async () => {
       try {
@@ -56,7 +65,7 @@ export default function WorkInfoSection({ onSuccess, onError }) {
         const t = await fetchEmployeeType();
 
         const normalize = (res) =>
-          res?.data?.data || (Array.isArray(res) ? res : []);
+          res?.data?.data || res?.data || (Array.isArray(res) ? res : []);
 
         setBranches(normalize(b));
         setDepartments(normalize(d));
@@ -66,12 +75,13 @@ export default function WorkInfoSection({ onSuccess, onError }) {
         setEmploymentTypeList(normalize(t));
       } catch (err) {
         console.error("Failed to fetch dropdowns:", err);
-        if (onError) onError("Failed to load dropdowns");
+        notifyError("Failed to load dropdowns");
       }
     };
     fetchDropdowns();
-  }, [onError]);
+  }, []);
 
+  // Fill form from selected employee
   useEffect(() => {
     if (!selectedEmployee) return;
     setLocalEdits({
@@ -83,7 +93,15 @@ export default function WorkInfoSection({ onSuccess, onError }) {
       departmentName: selectedEmployee.department || "",
       designationId: selectedEmployee.designation_id || "",
       designationName: selectedEmployee.designation || "",
-      role: selectedEmployee.role || "",
+      // user_type may come back as an id ("3") or a name ("Employee")
+      roleId: /^\d+$/.test(String(selectedEmployee.user_type ?? ""))
+        ? String(selectedEmployee.user_type)
+        : "",
+      role:
+        selectedEmployee.role ||
+        (/^\d+$/.test(String(selectedEmployee.user_type ?? ""))
+          ? ""
+          : String(selectedEmployee.user_type || "")),
       sourceOfHiring: selectedEmployee.source_of_hiring || "",
       employmentStatusId: selectedEmployee.employment_status_id || "",
       employmentStatus: selectedEmployee.employment_status || "",
@@ -97,10 +115,23 @@ export default function WorkInfoSection({ onSuccess, onError }) {
     });
   }, [selectedEmployee]);
 
+  // If the API only gives the role name, resolve the id once roles are loaded
+  useEffect(() => {
+    if (!roles.length) return;
+    setLocalEdits((prev) => {
+      if (prev.roleId || !prev.role) return prev;
+      const match = roles.find(
+        (r) => String(r.name).toLowerCase() === String(prev.role).toLowerCase(),
+      );
+      return match ? { ...prev, roleId: String(match.id) } : prev;
+    });
+  }, [roles, selectedEmployee]);
+
   const setField = useCallback((field, value) => {
     setLocalEdits((prev) => ({ ...prev, [field]: value }));
   }, []);
 
+  // Sets the id and the display name together
   const handleSelectChange = useCallback((fieldId, fieldName, list, value) => {
     const selected = list.find((item) => String(item.id) === String(value));
     setLocalEdits((prev) => ({
@@ -116,7 +147,22 @@ export default function WorkInfoSection({ onSuccess, onError }) {
   const handleSave = async () => {
     const staffId = getStaffId();
     if (!staffId) {
-      if (onError) onError("No valid staff ID found.");
+      notifyError("No valid staff ID found.");
+      return;
+    }
+
+    // Always send a numeric role id, never the role name
+    let roleId = String(localEdits.roleId || "");
+    if (!/^\d+$/.test(roleId)) {
+      const match = roles.find(
+        (r) =>
+          String(r.name).toLowerCase() ===
+          String(localEdits.role).toLowerCase(),
+      );
+      roleId = match ? String(match.id) : "";
+    }
+    if (!roleId) {
+      notifyError("Please select a valid role.");
       return;
     }
 
@@ -125,7 +171,7 @@ export default function WorkInfoSection({ onSuccess, onError }) {
       branch_id: localEdits.branchId || null,
       department_id: localEdits.departmentId || null,
       location: localEdits.location || "Panampilly Nagar",
-      role: localEdits.role || "",
+      user_type: roleId, // numeric role id from master roles API
       employee_type_id: localEdits.employeeTypeId || null,
       designation_id: localEdits.designationId || null,
       source_of_hiring: localEdits.sourceOfHiring || "",
@@ -157,7 +203,9 @@ export default function WorkInfoSection({ onSuccess, onError }) {
           designations.find(
             (d) => String(d.id) === String(payload.designation_id),
           )?.name || "",
-        role: payload.role,
+        role:
+          roles.find((r) => String(r.id) === String(payload.user_type))?.name ||
+          "",
         employment_status:
           employmentStatusList.find(
             (s) => String(s.id) === String(payload.employment_status_id),
@@ -178,6 +226,9 @@ export default function WorkInfoSection({ onSuccess, onError }) {
         departmentName: updatedEmployee.department,
         designationId: updatedEmployee.designation_id,
         designationName: updatedEmployee.designation,
+        roleId: updatedEmployee.user_type
+          ? String(updatedEmployee.user_type)
+          : "",
         role: updatedEmployee.role,
         sourceOfHiring: updatedEmployee.source_of_hiring,
         employmentStatusId: updatedEmployee.employment_status_id,
@@ -191,17 +242,13 @@ export default function WorkInfoSection({ onSuccess, onError }) {
         location: updatedEmployee.location || "Panampilly Nagar",
       });
 
-      if (onSuccess) {
-        onSuccess("Work information updated successfully!");
-      }
+      notifySuccess("Work information updated successfully!");
       setIsEditing(false);
     } catch (err) {
       console.error("Update failed:", err);
       const msg =
         err?.response?.data?.message || "Failed to update work information.";
-      if (onError) {
-        onError(msg);
-      }
+      notifyError(msg);
     } finally {
       setLoading(false);
     }
@@ -242,9 +289,10 @@ export default function WorkInfoSection({ onSuccess, onError }) {
     },
     {
       label: "Role",
-      key: "role",
-      type: "select-value",
+      key: "roleId",
+      type: "select",
       list: roles,
+      nameField: "role",
     },
     { label: "Location", key: "location", type: "text" },
     { label: "Source of Hiring", key: "sourceOfHiring", type: "text" },
@@ -329,19 +377,6 @@ export default function WorkInfoSection({ onSuccess, onError }) {
                         ]
                     ).map((item) => (
                       <option key={item.id} value={item.id}>
-                        {item.name}
-                      </option>
-                    ))}
-                  </select>
-                ) : field.type === "select-value" ? (
-                  <select
-                    value={localEdits[field.key] || ""}
-                    onChange={(e) => setField(field.key, e.target.value)}
-                    className="border border-gray-300 rounded px-2 py-1 text-gray-800 w-full max-w-[160px]"
-                  >
-                    <option value="">Select {field.label}</option>
-                    {field.list.map((item) => (
-                      <option key={item.id} value={item.name}>
                         {item.name}
                       </option>
                     ))}

@@ -1,47 +1,189 @@
-import React, { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Calendar, Clock, ChevronDown } from "lucide-react";
 import attendancePolicyService from "../service/attendancepolicyService";
 import ColorPicker from "./colorpicker";
-import toast from "react-hot-toast";
+import toast, { Toaster } from "react-hot-toast";
 
-const CreateAttendancePolicyTab = ({ onClose }) => {
-  const [formData, setFormData] = useState({
-    policy_name: "",
-    policy_code: "",
-    policy_colour: "#4CAF50",
-    start_time: "",
-    end_time: "",
-    working_hours: "",
-    delay: "",
-    delay_unpaid_count: "",
-    delay_cut: "",
-    late: "",
-    late_unpaid_count: "",
-    late_cut: "",
-    delay_action_type: "",
-    delay_fine_amount: "",
-    delay_fine_source: "",
-    late_action_type: "",
-    late_fine_amount: "",
-    late_fine_source: "",
-    half_day: "",
-    break_time_from: "",
-    break_time_to: "",
-    lunch_break_from: "",
-    lunch_break_to: "",
-    work_from_home: false,
-    over_time_benefit: false,
-    over_time_pay: "",
-    regularisation_limit: "",
-    regularisation_type: "Monthly",
-    start_date: "",
-    end_date: "",
-    overtime_cap_limit: "",
-    overtime_cap_period: "Monthly",
-    consider_as_halfday: false,
-    policy_halfday_type: "",
-    for_weekly_off: false,
+// Every field that is sent to the backend as a time value.
+const TIME_FIELDS = [
+  "start_time",
+  "end_time",
+  "delay",
+  "late",
+  "half_day",
+  "break_time_from",
+  "break_time_to",
+  "lunch_break_from",
+  "lunch_break_to",
+  "overtime_cap_limit",
+];
+
+// Always returns strict 24-hour "HH:mm:ss", or null if the value is invalid.
+// Accepts: "HH:mm", "HH:mm:ss", "h:mm AM/PM", "h:mm:ss AM/PM",
+// and ISO strings like "0000-01-01T09:30:00Z".
+// Empty value -> "00:00:00" (same behaviour as before).
+const to24Hour = (input) => {
+  if (!input) return "00:00:00";
+
+  let str = String(input).trim();
+
+  // ISO datetime -> take the time part
+  if (str.includes("T")) str = str.split("T")[1];
+  str = str.replace(/Z$|[+-]\d{2}:?\d{2}$/, "").trim();
+
+  const match = str.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?$/i);
+  if (!match) return null;
+
+  let hour = parseInt(match[1], 10);
+  const minute = parseInt(match[2], 10);
+  const second = parseInt(match[3] || "0", 10);
+  const meridiem = match[4]?.toUpperCase();
+
+  if (meridiem) {
+    if (hour < 1 || hour > 12) return null;
+    if (meridiem === "PM" && hour !== 12) hour += 12;
+    if (meridiem === "AM" && hour === 12) hour = 0;
+  }
+
+  if (hour > 23 || minute > 59 || second > 59) return null;
+
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${pad(hour)}:${pad(minute)}:${pad(second)}`;
+};
+
+// Builds the exact error text from the API response: "message: data"
+const getApiErrorText = (error) => {
+  const res = error?.response?.data;
+  if (!res) return error?.message || "Update Failed";
+  const detail =
+    typeof res.data === "string"
+      ? res.data
+      : res.data
+        ? JSON.stringify(res.data)
+        : "";
+  const msg = res.message || res.error || "";
+  return [msg, detail].filter(Boolean).join(": ") || "Update Failed";
+};
+
+const INITIAL_FORM = {
+  policy_name: "",
+  policy_code: "",
+  policy_colour: "#4CAF50",
+  start_time: "",
+  end_time: "",
+  working_hours: "",
+  delay: "",
+  delay_unpaid_count: "",
+  delay_cut: "",
+  late: "",
+  late_unpaid_count: "",
+  late_cut: "",
+  delay_action_type: "",
+  delay_fine_amount: "",
+  delay_fine_source: "",
+  late_action_type: "",
+  late_fine_amount: "",
+  late_fine_source: "",
+  half_day: "",
+  break_time_from: "",
+  break_time_to: "",
+  lunch_break_from: "",
+  lunch_break_to: "",
+  work_from_home: false,
+  over_time_benefit: false,
+  over_time_pay: "",
+  regularisation_limit: "",
+  regularisation_type: "Monthly",
+  start_date: "",
+  end_date: "",
+  overtime_cap_limit: "",
+  overtime_cap_period: "Monthly",
+  consider_as_halfday: false,
+  policy_halfday_type: "",
+  for_weekly_off: false,
+};
+
+// Form values built from the policy loaded from the server (24h times, plain dates)
+// Backend may return the cut as a number (0.5 / 1); the form uses Half/Full Day
+const CUT_LABELS = { "0.5": "Half Day", "1": "Full Day" };
+const toCutLabel = (v) =>
+  v === null || v === undefined || v === ""
+    ? ""
+    : (CUT_LABELS[String(v)] ?? String(v));
+
+const buildFormFromInitial = (data) => {
+  const form = {};
+  Object.keys(INITIAL_FORM).forEach((key) => {
+    form[key] = data[key] ?? INITIAL_FORM[key];
   });
+  TIME_FIELDS.forEach((f) => {
+    form[f] = data[f] ? (to24Hour(data[f]) ?? "") : "";
+  });
+  form.delay_cut = toCutLabel(data.delay_cut);
+  form.late_cut = toCutLabel(data.late_cut);
+  // Keep these body fields when the backend sends them (same body as create)
+  if (data.is_flexible !== undefined) form.is_flexible = data.is_flexible;
+  if (data.weekly_expected_hours !== undefined)
+    form.weekly_expected_hours = data.weekly_expected_hours;
+  form.start_date = data.start_date ? String(data.start_date).split("T")[0] : "";
+  form.end_date = data.end_date ? String(data.end_date).split("T")[0] : "";
+  form.working_hours = data.working_hours ?? "";
+  return form;
+};
+
+const FlexibleUpdateAttendancePolicyTab = ({ initialData, onClose }) => {
+  const [formData, setFormData] = useState(INITIAL_FORM);
+  const [apiError, setApiError] = useState("");
+  const [hydrated, setHydrated] = useState(false);
+
+  // One draft per policy, so editing different policies never mixes data
+  const policyId = initialData?.id || initialData?._id;
+  const storageKey = `attendance_policy_update_draft_${policyId}`;
+
+  // Load: saved draft first, otherwise the data from the server
+  useEffect(() => {
+    if (!initialData) return;
+    const base = buildFormFromInitial(initialData);
+    let next = base;
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (saved) next = { ...base, ...JSON.parse(saved) };
+    } catch (e) {
+      /* corrupted or blocked - use server data */
+    }
+    setFormData(next);
+    setHydrated(true);
+  }, [initialData, storageKey]);
+
+  // Auto-save draft on every change so a refresh never loses data
+  useEffect(() => {
+    if (!hydrated || !initialData) return;
+    try {
+      const current = JSON.stringify(formData);
+      if (current === JSON.stringify(buildFormFromInitial(initialData))) {
+        localStorage.removeItem(storageKey); // unchanged -> keep storage empty
+      } else {
+        localStorage.setItem(storageKey, current);
+      }
+    } catch (e) {
+      /* storage full or blocked - ignore */
+    }
+  }, [formData, hydrated, initialData, storageKey]);
+
+  const clearDraft = () => {
+    try {
+      localStorage.removeItem(storageKey);
+    } catch (e) {
+      /* ignore */
+    }
+  };
+
+  const handleClear = () => {
+    clearDraft();
+    if (initialData) setFormData(buildFormFromInitial(initialData));
+    setApiError("");
+    toast.success("Form cleared");
+  };
 
   useEffect(() => {
     if (formData.start_time && formData.end_time) {
@@ -71,18 +213,22 @@ const CreateAttendancePolicyTab = ({ onClose }) => {
     });
   };
 
-  const formatTimeToHMS = (timeStr) => {
-    if (!timeStr) return "00:00:00";
-    const parts = timeStr.split(":");
-    if (parts.length === 2) return `${timeStr}:00`;
-    if (parts.length === 1) return `${timeStr}:00:00`;
-    return timeStr;
-  };
-
   const handleSubmit = async () => {
+    setApiError("");
     if (formData.consider_as_halfday && !formData.policy_halfday_type) {
       toast.error("Please select a Policy Half Day Type");
       return;
+    }
+
+    // Normalise + validate every time field to strict 24h HH:mm:ss
+    const times = {};
+    for (const field of TIME_FIELDS) {
+      const normalized = to24Hour(formData[field]);
+      if (normalized === null) {
+        toast.error(`Invalid time format for ${field.replace(/_/g, " ")}`);
+        return;
+      }
+      times[field] = normalized;
     }
 
     const getSafeSource = (type, source) => {
@@ -91,18 +237,19 @@ const CreateAttendancePolicyTab = ({ onClose }) => {
       return s === "payroll" || s === "hand" ? s : "payroll";
     };
 
+    const {
+      id,
+      _id,
+      created_at,
+      updated_at,
+      company,
+      is_active,
+      ...changeableData
+    } = formData;
+
     const payload = {
-      ...formData,
-      start_time: formatTimeToHMS(formData.start_time),
-      end_time: formatTimeToHMS(formData.end_time),
-      delay: formatTimeToHMS(formData.delay),
-      late: formatTimeToHMS(formData.late),
-      half_day: formatTimeToHMS(formData.half_day),
-      break_time_from: formatTimeToHMS(formData.break_time_from),
-      break_time_to: formatTimeToHMS(formData.break_time_to),
-      lunch_break_from: formatTimeToHMS(formData.lunch_break_from),
-      lunch_break_to: formatTimeToHMS(formData.lunch_break_to),
-      overtime_cap_limit: formatTimeToHMS(formData.overtime_cap_limit),
+      ...changeableData,
+      ...times, // all time fields, strict 24h HH:mm:ss
       working_hours: Number(formData.working_hours) || 0,
       delay_unpaid_count: Number(formData.delay_unpaid_count) || 0,
       late_unpaid_count: Number(formData.late_unpaid_count) || 0,
@@ -126,16 +273,29 @@ const CreateAttendancePolicyTab = ({ onClose }) => {
       ),
     };
 
+    // Same rule as the create form: backend rejects policy_halfday_type
+    // when consider_as_halfday is false
+    if (!formData.consider_as_halfday) {
+      delete payload.policy_halfday_type;
+    }
+
     console.log("Payload sent to backend:", payload);
 
     try {
-      const response = await attendancePolicyService.createPolicy(payload);
+      // NOTE: change `updatePolicy` if your service uses a different name
+      const response = await attendancePolicyService.updatePolicy(
+        policyId,
+        payload,
+      );
       if (response.status === 200 || response.status === 201) {
-        toast.success("Policy Created Successfully!");
+        toast.success("Policy Updated Successfully!");
+        clearDraft();
         onClose();
       }
     } catch (error) {
-      toast.error(error.response?.data?.message || "Internal Server Error");
+      const errorText = getApiErrorText(error);
+      setApiError(errorText);
+      toast.error(errorText, { duration: 6000 });
     }
   };
 
@@ -224,14 +384,36 @@ const CreateAttendancePolicyTab = ({ onClose }) => {
         }
       `}</style>
 
+      <Toaster position="top-right" />
+
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Calendar size={20} className="text-gray-900" />
           <h2 className="text-[16px] text-gray-900 font-semibold">
-            Create Attendance Policy
+            Update Attendance Policy
           </h2>
         </div>
+        <button
+          type="button"
+          onClick={handleClear}
+          className="px-3 py-1 border border-gray-300 rounded-lg text-[11px] font-medium text-gray-600 hover:bg-gray-50 hover:text-black transition-colors"
+        >
+          Clear
+        </button>
       </div>
+
+      {apiError && (
+        <div className="flex items-start justify-between gap-3 bg-red-50 border border-red-200 text-red-600 rounded-xl px-4 py-3 text-[12px] font-medium">
+          <span>{apiError}</span>
+          <button
+            type="button"
+            onClick={() => setApiError("")}
+            className="text-red-400 hover:text-red-700 text-[14px] leading-none"
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       <div className="flex gap-6">
         <div className="w-[32%] space-y-4">
@@ -594,11 +776,11 @@ const CreateAttendancePolicyTab = ({ onClose }) => {
           onClick={handleSubmit}
           className="px-10 py-2.5 bg-black text-white rounded-xl text-[13px] font-medium hover:bg-zinc-800 transition-all shadow-lg"
         >
-          Create
+          Update
         </button>
       </div>
     </div>
   );
 };
 
-export default CreateAttendancePolicyTab;
+export default FlexibleUpdateAttendancePolicyTab;
