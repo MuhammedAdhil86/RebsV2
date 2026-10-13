@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Icon } from "@iconify/react";
 import CommonUploadActions from "../../ui/commonupload";
 import { addBasicInformation } from "../../service/employeeService";
-import toast, { Toaster } from "react-hot-toast";
+import toast from "react-hot-toast";
 
 const BasicInformation = ({ goNextStep, onStepComplete }) => {
   // 🧠 Local form state
@@ -33,8 +33,13 @@ const BasicInformation = ({ goNextStep, onStepComplete }) => {
   }, []);
 
   // 💾 Auto-save form data to localStorage
+  // (a File object can't be serialized, so the image is left out of the draft)
   useEffect(() => {
-    localStorage.setItem("basicInfoForm", JSON.stringify(formData));
+    const { image, ...draft } = formData; // eslint-disable-line no-unused-vars
+    localStorage.setItem(
+      "basicInfoForm",
+      JSON.stringify({ ...draft, image: null }),
+    );
   }, [formData]);
 
   // 🧩 Handle input changes
@@ -57,6 +62,8 @@ const BasicInformation = ({ goNextStep, onStepComplete }) => {
 
   // ✅ Submit form and trigger parent progress
   const handleSubmit = async () => {
+    if (isSubmitting) return;
+
     // Validation
     if (!formData.first_name || !formData.last_name || !formData.email) {
       toast.error("Please fill out all required fields.");
@@ -80,7 +87,7 @@ const BasicInformation = ({ goNextStep, onStepComplete }) => {
         localStorage.setItem("employeeId", employeeId);
       }
 
-      // ✅ Show success toast
+      // ✅ Show success toast (rendered by the global <Toaster /> in App.jsx)
       toast.success("Employee created successfully!");
 
       // 🧹 Remove saved form data
@@ -89,14 +96,7 @@ const BasicInformation = ({ goNextStep, onStepComplete }) => {
       // 🧠 Save progress in localStorage
       localStorage.setItem("basicInfoCompleted", "true");
 
-      // ✅ Notify parent (progress to next step)
-      if (onStepComplete) {
-        onStepComplete();
-      } else if (goNextStep) {
-        goNextStep();
-      }
-
-      // Reset local form (optional)
+      // Reset local form
       setFormData({
         first_name: "",
         last_name: "",
@@ -107,9 +107,21 @@ const BasicInformation = ({ goNextStep, onStepComplete }) => {
         image: null,
       });
       setImagePreview(null);
+
+      // ✅ Notify parent (progress to next step)
+      if (onStepComplete) {
+        onStepComplete();
+      } else if (goNextStep) {
+        goNextStep();
+      }
     } catch (error) {
       console.error("Error creating employee:", error);
-      toast.error("Failed to create employee. Please try again.");
+      toast.error(
+        error?.message ||
+          error?.error ||
+          error?.detail ||
+          "Failed to create employee. Please try again.",
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -254,6 +266,7 @@ const BasicInformation = ({ goNextStep, onStepComplete }) => {
       {/* ✅ Save Button */}
       <div className="flex justify-end mt-6">
         <button
+          type="button"
           onClick={handleSubmit}
           disabled={isSubmitting}
           className="bg-[#111827] hover:bg-black text-white text-sm px-5 py-2 rounded-md shadow disabled:opacity-60"
@@ -262,7 +275,7 @@ const BasicInformation = ({ goNextStep, onStepComplete }) => {
         </button>
       </div>
 
-      <Toaster />
+      {/* No <Toaster /> here: the single global one lives in App.jsx */}
     </div>
   );
 };

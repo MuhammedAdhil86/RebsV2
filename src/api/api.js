@@ -21,6 +21,8 @@ export const getMypersonalProfile = "/staff/getmypersonalprofile"
 export const updateMypersonalProfile = "staff/updatemypersonalprofile";
 export const getTotalEmployee = "/admin/staffstatus/list"
 export const putStatusUpdate = "/admin/attendance/status/update"
+export const getEmployeeByIdApi = (employeeId) => `/staff/get/${employeeId}`;
+
 
 export const postEmployeeListbyMonth ="/admin/attendance/listbymonth"
 
@@ -226,12 +228,14 @@ export const updatePersonalInfo = "/staff/updatepersonalinfo"
 export const updateIDInfo = "/staff/updateidinfo"
 export const updateContactInfo = "/staff/updatecontactinfo"
 export const updateWorkExperience = "/staff/addworkexperience"
-export const updateEducationalDetails = "/staff/addeducation"
+
 export const updateDependantDetails = "/staff/updatedependantinfo"
 export const updateAdditionalInformation = "/staff/addadditionalinfo"
 export const getAllDetailsStaff = "/staff/get"
 export const putUserActivation = "/staff/toggle-activate"
 export const getWeekOff = "/admin/weekly-off/get/:year"
+export const updateEducationalDetails = "/staff/addeducation"
+export const editEducationalDetails = "/staff/updateeducation/:educationId"
 
 export const getWeeklyOffBranch = "/admin/weekly-off/getbybranch/:year/:branchId";
 

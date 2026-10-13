@@ -18,77 +18,90 @@ import AdditionalInformation from "../components/employeeOneboarding/additionali
 const PROGRESS_KEY = "employeeOnboardingProgress";
 const CURRENT_STEP_KEY = "employeeCurrentStep";
 
+const steps = [
+  {
+    title: "Basic Information",
+    desc: "This step serves as the foundation for building a user profile",
+    component: BasicInformation,
+  },
+  {
+    title: "Bank Information",
+    desc: "Details about user’s financials for building user profile",
+    component: BankInformation,
+  },
+  {
+    title: "Work Information",
+    desc: "Useful for professional & HR purposes.",
+    component: WorkInformation,
+  },
+  {
+    title: "Hierarchy Information",
+    desc: "Helps in structuring workflows and reporting mechanisms.",
+    component: HierarchyInformation,
+  },
+  {
+    title: "Personal Information",
+    desc: "Captures personal details and expertise for onboarding.",
+    component: PersonalInformation,
+  },
+  {
+    title: "ID Information",
+    desc: "Collect official identification details for verification.",
+    component: IDInformation,
+  },
+  {
+    title: "Contact Information",
+    desc: "Collect contact details and addresses.",
+    component: ContactInformation,
+  },
+  {
+    title: "Work Experience",
+    desc: "Add professional experience details.",
+    component: WorkExperience,
+  },
+  {
+    title: "Educational Details",
+    desc: "Add educational qualifications and certifications.",
+    component: EducationalDetails,
+  },
+  {
+    title: "Department Details",
+    desc: "Add department-specific and dependent details.",
+    component: DepartmentDetails,
+  },
+  {
+    title: "Additional Information",
+    desc: "Add blood group and emergency contact details.",
+    component: AdditionalInformation,
+  },
+];
+
+const LAST_STEP = steps.length - 1;
+
+/* ---------- SAFE STORAGE HELPERS ---------- */
+// Reads a number from localStorage and clamps it into [min, max] so a bad or
+// stale saved value can never make `steps[currentStep]` undefined (blank page).
+const readSavedNumber = (key, min, max) => {
+  try {
+    const value = Number(JSON.parse(localStorage.getItem(key) || "0"));
+    if (!Number.isFinite(value)) return min;
+    return Math.min(Math.max(Math.trunc(value), min), max);
+  } catch {
+    return min;
+  }
+};
+
 const EmployeeOnboarding = () => {
-  const steps = [
-    {
-      title: "Basic Information",
-      desc: "This step serves as the foundation for building a user profile",
-      component: BasicInformation,
-    },
-    {
-      title: "Bank Information",
-      desc: "Details about user’s financials for building user profile",
-      component: BankInformation,
-    },
-    {
-      title: "Work Information",
-      desc: "Useful for professional & HR purposes.",
-      component: WorkInformation,
-    },
-    {
-      title: "Hierarchy Information",
-      desc: "Helps in structuring workflows and reporting mechanisms.",
-      component: HierarchyInformation,
-    },
-    {
-      title: "Personal Information",
-      desc: "Captures personal details and expertise for onboarding.",
-      component: PersonalInformation,
-    },
-    {
-      title: "ID Information",
-      desc: "Collect official identification details for verification.",
-      component: IDInformation,
-    },
-    {
-      title: "Contact Information",
-      desc: "Collect contact details and addresses.",
-      component: ContactInformation,
-    },
-    {
-      title: "Work Experience",
-      desc: "Add professional experience details.",
-      component: WorkExperience,
-    },
-    {
-      title: "Educational Details",
-      desc: "Add educational qualifications and certifications.",
-      component: EducationalDetails,
-    },
-    {
-      title: "Department Details",
-      desc: "Add department-specific and dependent details.",
-      component: DepartmentDetails,
-    },
-    {
-      title: "Additional Information",
-      desc: "Add blood group and emergency contact details.",
-      component: AdditionalInformation,
-    },
-  ];
-
   // ✅ Initialize directly from localStorage (prevents flash reset)
-  const [completedSteps, setCompletedSteps] = useState(() => {
-    const saved = localStorage.getItem(PROGRESS_KEY);
-    return saved ? JSON.parse(saved) : 0;
-  });
+  const [completedSteps, setCompletedSteps] = useState(() =>
+    readSavedNumber(PROGRESS_KEY, 0, steps.length),
+  );
 
-  const [currentStep, setCurrentStep] = useState(() => {
-    const saved = localStorage.getItem(CURRENT_STEP_KEY);
-    return saved ? JSON.parse(saved) : 0;
-  });
+  const [currentStep, setCurrentStep] = useState(() =>
+    readSavedNumber(CURRENT_STEP_KEY, 0, LAST_STEP),
+  );
 
-  // ✅ Always persist when changed
+  // ✅ Always persist when changed (single place; no side effects inside setters)
   useEffect(() => {
     localStorage.setItem(PROGRESS_KEY, JSON.stringify(completedSteps));
     localStorage.setItem(CURRENT_STEP_KEY, JSON.stringify(currentStep));
@@ -97,49 +110,40 @@ const EmployeeOnboarding = () => {
   // ✅ Listen for updates from other tabs (optional)
   useEffect(() => {
     const syncProgress = () => {
-      const savedProgress = JSON.parse(
-        localStorage.getItem(PROGRESS_KEY) || "0",
-      );
-      const savedStep = JSON.parse(
-        localStorage.getItem(CURRENT_STEP_KEY) || "0",
-      );
-      setCompletedSteps(savedProgress);
-      setCurrentStep(savedStep);
+      setCompletedSteps(readSavedNumber(PROGRESS_KEY, 0, steps.length));
+      setCurrentStep(readSavedNumber(CURRENT_STEP_KEY, 0, LAST_STEP));
     };
     window.addEventListener("storage", syncProgress);
     return () => window.removeEventListener("storage", syncProgress);
   }, []);
 
   // ✅ Step complete logic
+  // Idempotent: calling it twice for the same step (e.g. a step that saves
+  // several entries, or calls onStepComplete AND goNextStep) can no longer skip
+  // ahead or inflate the progress. Progress = "this step is done", not "+1".
   const handleStepComplete = () => {
-    setCompletedSteps((prev) => {
-      const updated = Math.min(prev + 1, steps.length);
-      localStorage.setItem(PROGRESS_KEY, JSON.stringify(updated));
-      return updated;
-    });
-
-    setCurrentStep((prev) => {
-      const updated = Math.min(prev + 1, steps.length - 1);
-      localStorage.setItem(CURRENT_STEP_KEY, JSON.stringify(updated));
-      return updated;
-    });
+    const next = Math.min(currentStep + 1, LAST_STEP);
+    setCompletedSteps((prev) =>
+      Math.min(Math.max(prev, currentStep + 1), steps.length),
+    );
+    setCurrentStep(next);
   };
 
-  // ✅ Manual navigation
+  // ✅ Manual navigation (uses the rendered step, so duplicate calls land on the
+  // same step instead of jumping two)
   const goNextStep = () => {
-    setCurrentStep((prev) => {
-      const updated = Math.min(prev + 1, steps.length - 1);
-      localStorage.setItem(CURRENT_STEP_KEY, JSON.stringify(updated));
-      return updated;
-    });
+    setCurrentStep(Math.min(currentStep + 1, LAST_STEP));
   };
 
   const goPrevStep = () => {
-    setCurrentStep((prev) => {
-      const updated = Math.max(prev - 1, 0);
-      localStorage.setItem(CURRENT_STEP_KEY, JSON.stringify(updated));
-      return updated;
-    });
+    setCurrentStep(Math.max(currentStep - 1, 0));
+  };
+
+  const handleReset = () => {
+    localStorage.removeItem(PROGRESS_KEY);
+    localStorage.removeItem(CURRENT_STEP_KEY);
+    setCompletedSteps(0);
+    setCurrentStep(0);
   };
 
   const StepComponent = steps[currentStep].component;
@@ -170,12 +174,7 @@ const EmployeeOnboarding = () => {
               </div>
               <button
                 type="button"
-                onClick={() => {
-                  localStorage.removeItem(PROGRESS_KEY);
-                  localStorage.removeItem(CURRENT_STEP_KEY);
-                  setCompletedSteps(0);
-                  setCurrentStep(0);
-                }}
+                onClick={handleReset}
                 className="text-xs border-b-2 border-black"
               >
                 Reset
@@ -191,7 +190,7 @@ const EmployeeOnboarding = () => {
               <div
                 className="absolute left-2.5 top-2.5 w-[2px] bg-green-500 transition-all duration-500"
                 style={{
-                  height: `${Math.min((completedSteps / (steps.length - 1)) * 100, 100)}%`,
+                  height: `${Math.min((completedSteps / LAST_STEP) * 100, 100)}%`,
                   maxHeight: "calc(100% - 24px)",
                 }}
               ></div>
@@ -260,7 +259,9 @@ const EmployeeOnboarding = () => {
 
           {/* Step Content */}
           <div className="flex-1 bg-white rounded-lg border border-gray-100 p-4 shadow-sm">
+            {/* key forces a clean remount per step so no state leaks between steps */}
             <StepComponent
+              key={currentStep}
               goNextStep={goNextStep}
               goPrevStep={goPrevStep}
               onStepComplete={handleStepComplete}

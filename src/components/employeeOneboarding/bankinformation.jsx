@@ -1,16 +1,18 @@
 import React, { useState, useEffect } from "react";
 import CommonUploadActions from "../../ui/commonupload";
-import toast, { Toaster } from "react-hot-toast";
+import toast from "react-hot-toast";
 import { updateBankInformation } from "../../service/employeeService"; // ✅ Make sure this path matches your structure
 
+const INITIAL_FORM = {
+  account_holder_name: "",
+  bank_name: "",
+  account_number: "",
+  ifsc: "",
+  bank_branch: "",
+};
+
 const BankInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
-  const [formData, setFormData] = useState({
-    account_holder_name: "",
-    bank_name: "",
-    account_number: "",
-    ifsc: "",
-    bank_branch: "",
-  });
+  const [formData, setFormData] = useState(INITIAL_FORM);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -19,7 +21,7 @@ const BankInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
     const saved = localStorage.getItem("bankInfoForm");
     if (saved) {
       try {
-        setFormData(JSON.parse(saved));
+        setFormData({ ...INITIAL_FORM, ...JSON.parse(saved) });
       } catch {
         console.error("Failed to parse saved bank info form data");
       }
@@ -39,6 +41,8 @@ const BankInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
 
   // ✅ Handle form submission
   const handleSubmit = async () => {
+    if (isSubmitting) return;
+
     // 🧾 Validation
     if (
       !formData.account_holder_name ||
@@ -55,9 +59,12 @@ const BankInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
 
       // 🧠 Send to backend
       const response = await updateBankInformation(formData);
+      console.log("Bank info response:", response);
 
-      // ✅ Success feedback
-      toast.success("Bank information updated successfully!");
+      // ✅ Success feedback (rendered by the global <Toaster /> in App.jsx)
+      toast.success(
+        response?.message || "Bank information updated successfully!",
+      );
 
       // 🧹 Clear saved form
       localStorage.removeItem("bankInfoForm");
@@ -65,17 +72,23 @@ const BankInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
       // 🧠 Save step completed
       localStorage.setItem("bankInfoCompleted", "true");
 
+      // Reset local form
+      setFormData(INITIAL_FORM);
+
       // ✅ Update progress through parent
       if (onStepComplete) {
         onStepComplete();
       } else if (goNextStep) {
         goNextStep();
       }
-
-      console.log("Bank info response:", response);
     } catch (error) {
       console.error("Error updating bank information:", error);
-      toast.error("Failed to update bank information. Please try again.");
+      toast.error(
+        error?.message ||
+          error?.error ||
+          error?.detail ||
+          "Failed to update bank information. Please try again.",
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -86,7 +99,9 @@ const BankInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
       {/* Header */}
       <div className="flex justify-between items-center mb-1">
         <div className="flex items-center gap-2">
-          <h2 className="text-base font-medium text-gray-900">Bank Information</h2>
+          <h2 className="text-base font-medium text-gray-900">
+            Bank Information
+          </h2>
           <span className="text-sm text-gray-500">Step 02</span>
         </div>
         <CommonUploadActions />
@@ -111,7 +126,9 @@ const BankInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700">Bank</label>
+            <label className="block text-sm font-medium text-gray-700">
+              Bank
+            </label>
             <input
               type="text"
               name="bank_name"
@@ -137,7 +154,9 @@ const BankInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
           </div>
 
           <div className="mt-5">
-            <label className="block text-sm font-medium text-gray-700">IFSC Code</label>
+            <label className="block text-sm font-medium text-gray-700">
+              IFSC Code
+            </label>
             <input
               type="text"
               name="ifsc"
@@ -149,7 +168,9 @@ const BankInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
           </div>
 
           <div className="mt-5">
-            <label className="block text-sm font-medium text-gray-700">Branch Name</label>
+            <label className="block text-sm font-medium text-gray-700">
+              Branch Name
+            </label>
             <input
               type="text"
               name="bank_branch"
@@ -165,12 +186,15 @@ const BankInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
       {/* Footer Buttons */}
       <div className="flex justify-end gap-3 mt-6">
         <button
+          type="button"
           onClick={goPrevStep}
-          className="border border-gray-300 text-gray-700 text-sm px-5 py-2 rounded-md hover:bg-gray-100"
+          disabled={isSubmitting}
+          className="border border-gray-300 text-gray-700 text-sm px-5 py-2 rounded-md hover:bg-gray-100 disabled:opacity-60"
         >
           Previous
         </button>
         <button
+          type="button"
           onClick={handleSubmit}
           disabled={isSubmitting}
           className="bg-[#111827] hover:bg-black text-white text-sm px-5 py-2 rounded-md shadow disabled:opacity-60"
@@ -179,7 +203,7 @@ const BankInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
         </button>
       </div>
 
-      <Toaster />
+      {/* No <Toaster /> here: the single global one lives in App.jsx */}
     </div>
   );
 };

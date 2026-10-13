@@ -1,20 +1,65 @@
 import React, { useState, useEffect } from "react";
 import CommonUploadActions from "../../ui/commonupload";
 import { addContactInfo } from "../../service/employeeService";
-import toast, { Toaster } from "react-hot-toast";
+import toast from "react-hot-toast"; // uses the global <Toaster /> from App.jsx
+
+// Change this to the real step number in your onboarding flow
+const STEP_NUMBER = "10";
+
+const emptyForm = {
+  work_phone: "",
+  personal_email: "",
+  personal_phone: "",
+  seating_location: "",
+  additional_phone: "",
+  tags: "",
+  present_address: "",
+  permanent_address: "",
+};
+
+const inputFields = [
+  { name: "work_phone", label: "Work Phone", placeholder: "Enter work phone" },
+  {
+    name: "personal_email",
+    label: "Personal Email",
+    placeholder: "Enter personal email",
+  },
+  {
+    name: "personal_phone",
+    label: "Personal Phone",
+    placeholder: "Enter personal phone",
+  },
+  {
+    name: "seating_location",
+    label: "Seating Location",
+    placeholder: "Enter seating location",
+  },
+  {
+    name: "additional_phone",
+    label: "Additional Phone",
+    placeholder: "Enter additional phone",
+  },
+  { name: "tags", label: "Tags", placeholder: "Enter tags" },
+];
+
+const addressFields = [
+  {
+    name: "present_address",
+    label: "Present Address",
+    placeholder: "Enter present address",
+  },
+  {
+    name: "permanent_address",
+    label: "Permanent Address",
+    placeholder: "Enter permanent address",
+  },
+];
+
+const inputClass =
+  "block w-full rounded-md border border-gray-300 bg-gray-50 p-2 text-gray-700 text-sm";
 
 const ContactInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
-  const [formData, setFormData] = useState({
-    work_phone: "",
-    personal_email: "",
-    personal_phone: "",
-    seating_location: "",
-    additional_phone: "",
-    tags: "",
-    present_address: "",
-    permanent_address: "",
-  });
-
+  const [formData, setFormData] = useState(emptyForm);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -44,20 +89,13 @@ const ContactInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
       toast.success("Contact information saved successfully!");
       if (onStepComplete) onStepComplete();
       else if (goNextStep) goNextStep();
-      setFormData({
-        work_phone: "",
-        personal_email: "",
-        personal_phone: "",
-        seating_location: "",
-        additional_phone: "",
-        tags: "",
-        present_address: "",
-        permanent_address: "",
-      });
+      setFormData(emptyForm);
       localStorage.removeItem("contactForm");
     } catch (error) {
       console.error(error);
-      toast.error("Failed to save contact information.");
+      toast.error(
+        error?.response?.data?.message || "Failed to save contact information.",
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -68,69 +106,71 @@ const ContactInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
   };
 
   return (
-    <div className="bg-white p-4 rounded-xl shadow-sm border w-full">
+    <div className="flex-1 p-3 bg-[#f9fafb]">
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="font-medium text-gray-800 text-[14px]">Contact Information</h3>
+      <div className="flex justify-between items-center mb-4">
+        <div className="flex items-center gap-2">
+          <h2 className="text-base font-medium text-gray-900">
+            Contact Information
+          </h2>
+          <span className="text-sm text-gray-500">Step {STEP_NUMBER}</span>
+        </div>
         <CommonUploadActions />
       </div>
 
-      {/* Form Fields */}
-      <div className="text-sm space-y-3">
-        {[
-          { name: "work_phone", label: "Work Phone" },
-          { name: "personal_email", label: "Personal Email" },
-          { name: "personal_phone", label: "Personal Phone" },
-          { name: "seating_location", label: "Seating Location" },
-          { name: "additional_phone", label: "Additional Phone" },
-          { name: "tags", label: "Tags" },
-        ].map((field) => (
-          <div key={field.name} className="flex justify-between items-center border-b border-gray-100 py-2">
-            <span className="text-gray-500 text-[12px]">{field.label}</span>
-            <input
-              name={field.name}
-              value={formData[field.name]}
-              onChange={handleChange}
-              className="border border-gray-300 rounded px-2 py-1 text-gray-800 w-full max-w-[160px]"
-            />
-          </div>
-        ))}
+      {/* Form Card */}
+      <div className="bg-white rounded-lg shadow-sm px-6 py-8 mt-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-6 max-w-3xl">
+          {inputFields.map((field) => (
+            <div key={field.name}>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                {field.label}
+              </label>
+              <input
+                type="text"
+                name={field.name}
+                value={formData[field.name]}
+                onChange={handleChange}
+                placeholder={field.placeholder}
+                className={inputClass}
+              />
+            </div>
+          ))}
 
-        {/* Addresses */}
-        {["present_address", "permanent_address"].map((field) => (
-          <div key={field} className="flex justify-between items-start border-b border-gray-100 py-2">
-            <span className="text-gray-500 text-[12px]">
-              {field === "present_address" ? "Present Address" : "Permanent Address"}
-            </span>
-            <textarea
-              name={field}
-              value={formData[field]}
-              onChange={handleChange}
-              className="border border-gray-300 rounded px-2 py-1 text-gray-800 w-full max-w-[160px]"
-              rows={2}
-            />
-          </div>
-        ))}
+          {addressFields.map((field) => (
+            <div key={field.name}>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                {field.label}
+              </label>
+              <textarea
+                name={field.name}
+                value={formData[field.name]}
+                onChange={handleChange}
+                placeholder={field.placeholder}
+                rows={3}
+                className={inputClass}
+              />
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Navigation Buttons */}
-      <div className="flex justify-end gap-3 mt-4">
+      <div className="flex justify-end mt-8 gap-3">
         <button
           onClick={handlePrev}
-          className="px-4 py-2 border rounded-md text-sm hover:bg-gray-50"
+          className="border border-gray-300 text-gray-700 text-sm px-5 py-2 rounded-md hover:bg-gray-100"
         >
           Previous
         </button>
         <button
           onClick={handleSubmit}
           disabled={isSubmitting}
-          className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700 disabled:opacity-50"
+          className="bg-[#111827] hover:bg-black text-white text-sm px-5 py-2 rounded-md shadow disabled:opacity-60"
         >
-          {isSubmitting ? "Saving..." : "Save"}
+          {isSubmitting ? "Saving..." : "Save & Complete"}
         </button>
       </div>
-
-      <Toaster />
     </div>
   );
 };
