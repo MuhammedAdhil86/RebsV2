@@ -1,9 +1,47 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import CommonUploadActions from "../../ui/commonupload";
 import { X } from "lucide-react";
 import { Icon } from "@iconify/react";
 import toast from "react-hot-toast";
 import { addWorkExperience } from "../../service/employeeService";
+
+// 🔹 Date input with a single custom icon that opens the native calendar
+const DateField = ({ name, value, onChange }) => {
+  const inputRef = useRef(null);
+
+  const openCalendar = () => {
+    const el = inputRef.current;
+    if (!el) return;
+    if (typeof el.showPicker === "function") {
+      el.showPicker(); // modern browsers
+    } else {
+      el.focus(); // fallback
+      el.click();
+    }
+  };
+
+  return (
+    <div className="relative">
+      <input
+        ref={inputRef}
+        type="date"
+        name={name}
+        value={value}
+        onChange={onChange}
+        className="block w-full rounded-md border border-gray-300 bg-gray-50 p-2 pr-10 text-gray-700 text-sm
+                   [&::-webkit-calendar-picker-indicator]:hidden"
+      />
+      <button
+        type="button"
+        onClick={openCalendar}
+        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-700 hover:text-black"
+        aria-label="Open calendar"
+      >
+        <Icon icon="solar:calendar-outline" className="w-4 h-4" />
+      </button>
+    </div>
+  );
+};
 
 const WorkExperience = ({ goNextStep, goPrevStep, onStepComplete }) => {
   const [workExperiences, setWorkExperiences] = useState([]);
@@ -134,19 +172,11 @@ const WorkExperience = ({ goNextStep, goPrevStep, onStepComplete }) => {
             <label className="block text-sm font-medium text-gray-700 mb-1">
               From Date
             </label>
-            <div className="relative">
-              <input
-                type="date"
-                name="fromDate"
-                value={newExperience.fromDate}
-                onChange={handleChange}
-                className="block w-full rounded-md border border-gray-300 bg-gray-50 p-2 text-gray-700 text-sm pr-10"
-              />
-              <Icon
-                icon="solar:calendar-outline"
-                className="absolute right-3 top-3 w-4 h-4 text-gray-400"
-              />
-            </div>
+            <DateField
+              name="fromDate"
+              value={newExperience.fromDate}
+              onChange={handleChange}
+            />
           </div>
 
           {/* To Date */}
@@ -154,19 +184,11 @@ const WorkExperience = ({ goNextStep, goPrevStep, onStepComplete }) => {
             <label className="block text-sm font-medium text-gray-700 mb-1">
               To Date
             </label>
-            <div className="relative">
-              <input
-                type="date"
-                name="toDate"
-                value={newExperience.toDate}
-                onChange={handleChange}
-                className="block w-full rounded-md border border-gray-300 bg-gray-50 p-2 text-gray-700 text-sm pr-10"
-              />
-              <Icon
-                icon="solar:calendar-outline"
-                className="absolute right-3 top-3 w-4 h-4 text-gray-400"
-              />
-            </div>
+            <DateField
+              name="toDate"
+              value={newExperience.toDate}
+              onChange={handleChange}
+            />
           </div>
 
           {/* Job Description + Add */}

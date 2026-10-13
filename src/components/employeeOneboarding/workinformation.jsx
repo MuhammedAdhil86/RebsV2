@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import toast from "react-hot-toast";
+import { Icon } from "@iconify/react";
 import CommonUploadActions from "../../ui/commonupload";
 import {
   fetchEmployeeStatus,
@@ -291,7 +292,10 @@ const WorkInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
   );
 };
 
-/** 🔹 Atomic Input Component */
+/** 🔹 Atomic Input Component
+ *  For type="date": hides the browser's default icon and shows a single
+ *  Solar calendar icon that opens the native date picker on click.
+ */
 const InputField = ({
   label,
   name,
@@ -299,19 +303,50 @@ const InputField = ({
   value,
   onChange,
   placeholder,
-}) => (
-  <div className="flex flex-col">
-    <label className="text-sm font-medium text-gray-700 mb-1">{label}</label>
-    <input
-      type={type}
-      name={name}
-      value={value || ""}
-      onChange={onChange}
-      placeholder={placeholder}
-      className="w-full rounded-md border border-gray-300 bg-white p-2 text-sm text-gray-700 focus:ring-1 focus:ring-gray-900 focus:border-gray-900 focus:outline-none transition-all"
-    />
-  </div>
-);
+}) => {
+  const inputRef = useRef(null);
+  const isDate = type === "date";
+
+  const openCalendar = () => {
+    const el = inputRef.current;
+    if (!el) return;
+    if (typeof el.showPicker === "function") {
+      el.showPicker(); // modern browsers
+    } else {
+      el.focus(); // fallback
+      el.click();
+    }
+  };
+
+  return (
+    <div className="flex flex-col">
+      <label className="text-sm font-medium text-gray-700 mb-1">{label}</label>
+      <div className="relative">
+        <input
+          ref={inputRef}
+          type={type}
+          name={name}
+          value={value || ""}
+          onChange={onChange}
+          placeholder={placeholder}
+          className={`w-full rounded-md border border-gray-300 bg-white p-2 text-sm text-gray-700 focus:ring-1 focus:ring-gray-900 focus:border-gray-900 focus:outline-none transition-all ${
+            isDate ? "pr-10 [&::-webkit-calendar-picker-indicator]:hidden" : ""
+          }`}
+        />
+        {isDate && (
+          <button
+            type="button"
+            onClick={openCalendar}
+            aria-label="Open calendar"
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-700 hover:text-black"
+          >
+            <Icon icon="solar:calendar-outline" className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
 
 /** 🔹 Atomic Select Component */
 const SelectField = ({

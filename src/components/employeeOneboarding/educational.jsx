@@ -1,6 +1,7 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { Plus, Trash2 } from "lucide-react";
+import { Icon } from "@iconify/react";
 import CommonUploadActions from "../../ui/commonupload";
 import { addEducationDetails } from "../../service/educationService";
 
@@ -220,7 +221,10 @@ const EducationalDetails = ({ goNextStep, goPrevStep, onStepComplete }) => {
   );
 };
 
-/** 🔹 Atomic Input Component */
+/** 🔹 Atomic Input Component
+ *  For type="date": hides the browser's default icon and shows a single
+ *  Solar calendar icon that opens the native date picker on click.
+ */
 const InputField = ({
   label,
   name,
@@ -229,19 +233,51 @@ const InputField = ({
   onChange,
   placeholder,
   disabled = false,
-}) => (
-  <div className="flex flex-col">
-    <label className="text-sm font-medium text-gray-700 mb-1">{label}</label>
-    <input
-      type={type}
-      name={name}
-      value={value || ""}
-      onChange={onChange}
-      placeholder={placeholder}
-      disabled={disabled}
-      className="w-full rounded-md border border-gray-300 bg-white p-2 text-sm text-gray-700 focus:ring-1 focus:ring-gray-900 focus:border-gray-900 focus:outline-none transition-all disabled:bg-gray-50 disabled:text-gray-500"
-    />
-  </div>
-);
+}) => {
+  const inputRef = useRef(null);
+  const isDate = type === "date";
+
+  const openCalendar = () => {
+    const el = inputRef.current;
+    if (!el || disabled) return;
+    if (typeof el.showPicker === "function") {
+      el.showPicker(); // modern browsers
+    } else {
+      el.focus(); // fallback
+      el.click();
+    }
+  };
+
+  return (
+    <div className="flex flex-col">
+      <label className="text-sm font-medium text-gray-700 mb-1">{label}</label>
+      <div className="relative">
+        <input
+          ref={inputRef}
+          type={type}
+          name={name}
+          value={value || ""}
+          onChange={onChange}
+          placeholder={placeholder}
+          disabled={disabled}
+          className={`w-full rounded-md border border-gray-300 bg-white p-2 text-sm text-gray-700 focus:ring-1 focus:ring-gray-900 focus:border-gray-900 focus:outline-none transition-all disabled:bg-gray-50 disabled:text-gray-500 ${
+            isDate ? "pr-10 [&::-webkit-calendar-picker-indicator]:hidden" : ""
+          }`}
+        />
+        {isDate && (
+          <button
+            type="button"
+            onClick={openCalendar}
+            disabled={disabled}
+            aria-label="Open calendar"
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-700 hover:text-black disabled:text-gray-400 disabled:cursor-not-allowed"
+          >
+            <Icon icon="solar:calendar-outline" className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
 
 export default EducationalDetails;

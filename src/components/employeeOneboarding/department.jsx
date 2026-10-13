@@ -1,8 +1,47 @@
-import React, { useState } from "react";
-import { Calendar } from "lucide-react";
+import React, { useRef, useState } from "react";
+import { Icon } from "@iconify/react";
 import toast, { Toaster } from "react-hot-toast";
 import CommonUploadActions from "../../ui/commonupload";
 import { addDependantDetails } from "../../service/employeeService";
+
+// 🔹 Date input with a single custom icon that opens the native calendar
+const DateField = ({ name, value, onChange, required = false }) => {
+  const inputRef = useRef(null);
+
+  const openCalendar = () => {
+    const el = inputRef.current;
+    if (!el) return;
+    if (typeof el.showPicker === "function") {
+      el.showPicker(); // modern browsers
+    } else {
+      el.focus(); // fallback
+      el.click();
+    }
+  };
+
+  return (
+    <div className="relative">
+      <input
+        ref={inputRef}
+        type="date"
+        name={name}
+        value={value}
+        onChange={onChange}
+        required={required}
+        className="block w-full rounded-md border border-gray-300 bg-gray-50 p-2 pr-10 text-gray-700 text-sm
+                   [&::-webkit-calendar-picker-indicator]:hidden"
+      />
+      <button
+        type="button"
+        onClick={openCalendar}
+        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-700 hover:text-black"
+        aria-label="Open calendar"
+      >
+        <Icon icon="solar:calendar-outline" className="w-4 h-4" />
+      </button>
+    </div>
+  );
+};
 
 const DependantDetails = ({ goNextStep, goPrevStep, onStepComplete }) => {
   const [dependantData, setDependantData] = useState({
@@ -43,7 +82,8 @@ const DependantDetails = ({ goNextStep, goPrevStep, onStepComplete }) => {
       await addDependantDetails(dependantPayload);
 
       // ✅ Update progress in localStorage (consistent with PersonalInformation)
-      const progress = JSON.parse(localStorage.getItem("employeeProgress")) || {};
+      const progress =
+        JSON.parse(localStorage.getItem("employeeProgress")) || {};
       const completed = new Set(progress.completedSteps || []);
       completed.add("dependantDetails");
 
@@ -71,7 +111,9 @@ const DependantDetails = ({ goNextStep, goPrevStep, onStepComplete }) => {
       if (error.response?.status === 400) {
         toast.error("Invalid data sent to server. Please check your fields.");
       } else if (error.response?.status === 404) {
-        toast.error("Employee ID not found. Please complete Personal Info first.");
+        toast.error(
+          "Employee ID not found. Please complete Personal Info first.",
+        );
       } else {
         toast.error("Failed to save dependant details. Please try again.");
       }
@@ -133,17 +175,12 @@ const DependantDetails = ({ goNextStep, goPrevStep, onStepComplete }) => {
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Date of Birth
             </label>
-            <div className="relative">
-              <input
-                type="date"
-                name="dateOfBirth"
-                value={dependantData.dateOfBirth}
-                onChange={handleChange}
-                className="block w-full rounded-md border border-gray-300 bg-gray-50 p-2 text-gray-700 text-sm pr-10"
-                required
-              />
-              <Calendar className="absolute right-3 top-3 w-4 h-4 text-gray-400" />
-            </div>
+            <DateField
+              name="dateOfBirth"
+              value={dependantData.dateOfBirth}
+              onChange={handleChange}
+              required
+            />
           </div>
         </div>
       </div>

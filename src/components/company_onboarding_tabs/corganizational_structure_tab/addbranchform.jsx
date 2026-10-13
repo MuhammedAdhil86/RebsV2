@@ -7,6 +7,63 @@ import GlowButton from "../../helpers/glowbutton";
 import CancelButton from "../../helpers/cancelbutton";
 import { getGeolocation } from "../../../utils/geolocation";
 
+/* ---------------- Validation (returns first error message, or "" if valid) ---------------- */
+const validateBranchForm = (data) => {
+  const name = data.branchName.trim();
+  const code = data.branchCode.trim();
+  const location = data.location.trim();
+  const description = data.description.trim();
+  const address = data.address.trim();
+  const lat = data.latitude.toString().trim();
+  const lng = data.longitude.toString().trim();
+
+  // Branch Name
+  if (!name) return "Branch name is required.";
+  if (name.length < 2) return "Branch name must be at least 2 characters.";
+  if (name.length > 100) return "Branch name must be 100 characters or less.";
+
+  // Branch Code
+  if (!code) return "Branch code is required.";
+  if (!/^[A-Za-z0-9_-]{2,20}$/.test(code))
+    return "Branch code must be 2-20 characters (letters, numbers, - or _ only).";
+
+  // Location
+  if (!location) return "Location is required.";
+  if (location.length < 2) return "Location must be at least 2 characters.";
+  if (location.length > 255) return "Location must be 255 characters or less.";
+
+  // Description
+  if (!description) return "Description is required.";
+  if (description.length < 5)
+    return "Description must be at least 5 characters.";
+  if (description.length > 500)
+    return "Description must be 500 characters or less.";
+
+  // Branch Address
+  if (!address) return "Branch address is required.";
+  if (address.length < 5)
+    return "Branch address must be at least 5 characters.";
+  if (address.length > 255)
+    return "Branch address must be 255 characters or less.";
+
+  // Time Zone
+  if (!data.timeZone) return "Please select a time zone.";
+
+  // Latitude
+  if (!lat) return "Latitude is required.";
+  if (isNaN(Number(lat))) return "Latitude must be a valid number.";
+  if (Number(lat) < -90 || Number(lat) > 90)
+    return "Latitude must be between -90 and 90.";
+
+  // Longitude
+  if (!lng) return "Longitude is required.";
+  if (isNaN(Number(lng))) return "Longitude must be a valid number.";
+  if (Number(lng) < -180 || Number(lng) > 180)
+    return "Longitude must be between -180 and 180.";
+
+  return "";
+};
+
 const AddBranchForm = () => {
   const [formData, setFormData] = useState({
     branchName: "",
@@ -86,6 +143,14 @@ const AddBranchForm = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // Validate all fields before calling the API
+    const validationError = validateBranchForm(formData);
+    if (validationError) {
+      toast.error(validationError, { id: "branch-validation" });
+      return;
+    }
+
     try {
       const payload = {
         name: formData.branchName,

@@ -67,24 +67,83 @@ const AddDivisionForm = () => {
   const validateForm = () => {
     const newErrors = {};
 
-    if (!formData.divisionName.trim()) {
+    const name = formData.divisionName.trim();
+    const code = formData.divisionCode.trim();
+    const location = formData.location.trim();
+    const description = formData.description.trim();
+    const address = formData.address.trim();
+    const lat = formData.latitude.toString().trim();
+    const lng = formData.longitude.toString().trim();
+
+    // Division Name
+    if (!name) {
       newErrors.divisionName = "Division name is required";
+    } else if (name.length < 2) {
+      newErrors.divisionName = "Division name must be at least 2 characters";
+    } else if (name.length > 100) {
+      newErrors.divisionName = "Division name must be 100 characters or less";
     }
 
-    if (!formData.description.trim()) {
+    // Division Code
+    if (!code) {
+      newErrors.divisionCode = "Division code is required";
+    } else if (!/^[A-Za-z0-9_-]{2,20}$/.test(code)) {
+      newErrors.divisionCode = "2-20 characters: letters, numbers, - or _ only";
+    }
+
+    // Location
+    if (!location) {
+      newErrors.location = "Location is required";
+    } else if (location.length < 2) {
+      newErrors.location = "Location must be at least 2 characters";
+    } else if (location.length > 255) {
+      newErrors.location = "Location must be 255 characters or less";
+    }
+
+    // Description
+    if (!description) {
       newErrors.description = "Description is required";
+    } else if (description.length < 5) {
+      newErrors.description = "Description must be at least 5 characters";
+    } else if (description.length > 500) {
+      newErrors.description = "Description must be 500 characters or less";
     }
 
+    // Address
+    if (!address) {
+      newErrors.address = "Address is required";
+    } else if (address.length < 5) {
+      newErrors.address = "Address must be at least 5 characters";
+    } else if (address.length > 255) {
+      newErrors.address = "Address must be 255 characters or less";
+    }
+
+    // Time Zone
     if (!formData.timeZone) {
       newErrors.timeZone = "Time zone is required";
     }
 
-    if (!formData.address.trim()) {
-      newErrors.address = "Address is required";
+    // Parent Branch
+    if (!formData.parentBranch) {
+      newErrors.parentBranch = "Parent branch is required";
     }
 
-    if (!formData.latitude || !formData.longitude) {
-      newErrors.location = "Latitude & Longitude required";
+    // Latitude
+    if (!lat) {
+      newErrors.latitude = "Latitude is required";
+    } else if (isNaN(Number(lat))) {
+      newErrors.latitude = "Latitude must be a number";
+    } else if (Number(lat) < -90 || Number(lat) > 90) {
+      newErrors.latitude = "Latitude must be between -90 and 90";
+    }
+
+    // Longitude
+    if (!lng) {
+      newErrors.longitude = "Longitude is required";
+    } else if (isNaN(Number(lng))) {
+      newErrors.longitude = "Longitude must be a number";
+    } else if (Number(lng) < -180 || Number(lng) > 180) {
+      newErrors.longitude = "Longitude must be between -180 and 180";
     }
 
     setErrors(newErrors);
@@ -113,6 +172,14 @@ const AddDivisionForm = () => {
             latitude: lat,
             longitude: lng,
             location: formattedLocation || "",
+          }));
+
+          // Clear errors for the fields that were just filled
+          setErrors((prev) => ({
+            ...prev,
+            latitude: "",
+            longitude: "",
+            location: "",
           }));
 
           toast.success("Location fetched");
@@ -207,6 +274,9 @@ const AddDivisionForm = () => {
               onChange={handleChange}
               className="w-full border border-gray-300 bg-gray-50 rounded-md px-3 py-2 text-sm"
             />
+            {errors.divisionCode && (
+              <p className="text-red-500 text-xs mt-1">{errors.divisionCode}</p>
+            )}
           </div>
 
           <div>
@@ -218,6 +288,9 @@ const AddDivisionForm = () => {
               onChange={handleChange}
               className="w-full border border-gray-300 bg-gray-50 rounded-md px-3 py-2 text-sm"
             />
+            {errors.location && (
+              <p className="text-red-500 text-xs mt-1">{errors.location}</p>
+            )}
           </div>
         </div>
 
@@ -285,33 +358,40 @@ const AddDivisionForm = () => {
           </div>
 
           <div className="flex flex-col justify-between">
-            <div className="flex items-end gap-3">
-              <div
-                onClick={handleFetchLocation}
-                className="flex items-center justify-center w-10 h-10 border bg-gray-50 rounded-md cursor-pointer"
-              >
-                <Icon icon="mdi:location" />
-              </div>
+            <div>
+              <div className="flex items-end gap-3">
+                <div
+                  onClick={handleFetchLocation}
+                  className="flex items-center justify-center w-10 h-10 border bg-gray-50 rounded-md cursor-pointer"
+                >
+                  <Icon icon="mdi:location" />
+                </div>
 
-              <div className="flex-1">
-                <label className="block text-sm">Latitude</label>
-                <input
-                  name="latitude"
-                  value={formData.latitude}
-                  onChange={handleChange}
-                  className="w-full border bg-gray-50 rounded-md px-3 py-2 text-sm"
-                />
-              </div>
+                <div className="flex-1">
+                  <label className="block text-sm">Latitude</label>
+                  <input
+                    name="latitude"
+                    value={formData.latitude}
+                    onChange={handleChange}
+                    className="w-full border bg-gray-50 rounded-md px-3 py-2 text-sm"
+                  />
+                </div>
 
-              <div className="flex-1">
-                <label className="block text-sm">Longitude</label>
-                <input
-                  name="longitude"
-                  value={formData.longitude}
-                  onChange={handleChange}
-                  className="w-full border bg-gray-50 rounded-md px-3 py-2 text-sm"
-                />
+                <div className="flex-1">
+                  <label className="block text-sm">Longitude</label>
+                  <input
+                    name="longitude"
+                    value={formData.longitude}
+                    onChange={handleChange}
+                    className="w-full border bg-gray-50 rounded-md px-3 py-2 text-sm"
+                  />
+                </div>
               </div>
+              {(errors.latitude || errors.longitude) && (
+                <p className="text-red-500 text-xs mt-1">
+                  {errors.latitude || errors.longitude}
+                </p>
+              )}
             </div>
 
             <div className="pt-4">
@@ -331,6 +411,11 @@ const AddDivisionForm = () => {
                   </option>
                 ))}
               </select>
+              {errors.parentBranch && (
+                <p className="text-red-500 text-xs mt-1">
+                  {errors.parentBranch}
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -338,7 +423,7 @@ const AddDivisionForm = () => {
         {/* Footer Buttons */}
         <div className="flex justify-end gap-4 pt-6">
           <CancelButton
-            onClick={() =>
+            onClick={() => {
               setFormData({
                 divisionName: "",
                 divisionCode: "",
@@ -349,8 +434,9 @@ const AddDivisionForm = () => {
                 longitude: "",
                 timeZone: "",
                 parentBranch: "",
-              })
-            }
+              });
+              setErrors({});
+            }}
           >
             Cancel
           </CancelButton>

@@ -4,17 +4,72 @@ import CommonUploadActions from "../../ui/commonupload";
 import { addBasicInformation } from "../../service/employeeService";
 import toast from "react-hot-toast";
 
+const initialFormData = {
+  first_name: "",
+  last_name: "",
+  email: "",
+  ph_no: "",
+  basic_salary: "",
+  image: null,
+};
+
+/**
+ * Pull the backend's { message, data } out of whatever the service threw.
+ * Handles: axios errors (error.response.data), XHR-style errors
+ * (error.responseText / error.response as a JSON string), or a plain object.
+ */
+const parseBackendError = (error) => {
+  const candidates = [
+    error?.response?.data,
+    error?.responseText,
+    error?.response,
+    error,
+  ];
+
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+
+    let body = candidate;
+    if (typeof candidate === "string") {
+      try {
+        body = JSON.parse(candidate);
+      } catch {
+        continue;
+      }
+    }
+
+    if (body && typeof body === "object" && (body.message || body.data)) {
+      return {
+        message: typeof body.message === "string" ? body.message : "",
+        detail: typeof body.data === "string" ? body.data : "",
+      };
+    }
+  }
+
+  return {
+    message:
+      error?.message ||
+      error?.error ||
+      error?.detail ||
+      "Failed to create employee. Please try again.",
+    detail: "",
+  };
+};
+
+const showBackendError = (error) => {
+  const { message, detail } = parseBackendError(error);
+
+  toast.error(
+    <div>
+      <p className="font-medium">{message}</p>
+      {detail && <p className="text-sm">{detail}</p>}
+    </div>,
+  );
+};
+
 const BasicInformation = ({ goNextStep, onStepComplete }) => {
   // 🧠 Local form state
-  const [formData, setFormData] = useState({
-    first_name: "",
-    last_name: "",
-    nick_name: "",
-    email: "",
-    ph_no: "",
-    basic_salary: "",
-    image: null,
-  });
+  const [formData, setFormData] = useState(initialFormData);
 
   const [imagePreview, setImagePreview] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -24,8 +79,9 @@ const BasicInformation = ({ goNextStep, onStepComplete }) => {
     const saved = localStorage.getItem("basicInfoForm");
     if (saved) {
       try {
-        const parsed = JSON.parse(saved);
-        setFormData(parsed);
+        // Drop nick_name from any old saved draft so it is never restored or sent
+        const { nick_name, ...parsed } = JSON.parse(saved); // eslint-disable-line no-unused-vars
+        setFormData((prev) => ({ ...prev, ...parsed }));
       } catch {
         console.error("Failed to parse saved form data");
       }
@@ -97,15 +153,7 @@ const BasicInformation = ({ goNextStep, onStepComplete }) => {
       localStorage.setItem("basicInfoCompleted", "true");
 
       // Reset local form
-      setFormData({
-        first_name: "",
-        last_name: "",
-        nick_name: "",
-        email: "",
-        ph_no: "",
-        basic_salary: "",
-        image: null,
-      });
+      setFormData(initialFormData);
       setImagePreview(null);
 
       // ✅ Notify parent (progress to next step)
@@ -116,12 +164,7 @@ const BasicInformation = ({ goNextStep, onStepComplete }) => {
       }
     } catch (error) {
       console.error("Error creating employee:", error);
-      toast.error(
-        error?.message ||
-          error?.error ||
-          error?.detail ||
-          "Failed to create employee. Please try again.",
-      );
+      showBackendError(error);
     } finally {
       setIsSubmitting(false);
     }
@@ -242,21 +285,6 @@ const BasicInformation = ({ goNextStep, onStepComplete }) => {
               value={formData.ph_no}
               onChange={handleInputChange}
               placeholder="Enter phone number"
-              className="mt-1 block w-full rounded-md border border-gray-300 bg-white p-2 text-gray-700 text-sm"
-            />
-          </div>
-
-          {/* Nickname */}
-          <div className="mt-5">
-            <label className="block text-sm font-medium text-gray-700">
-              Nick Name
-            </label>
-            <input
-              type="text"
-              name="nick_name"
-              value={formData.nick_name}
-              onChange={handleInputChange}
-              placeholder="Enter nickname"
               className="mt-1 block w-full rounded-md border border-gray-300 bg-white p-2 text-gray-700 text-sm"
             />
           </div>

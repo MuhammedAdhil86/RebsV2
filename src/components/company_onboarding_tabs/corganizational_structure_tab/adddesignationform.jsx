@@ -33,12 +33,33 @@ const AddDesignationForm = () => {
   const validateForm = () => {
     const newErrors = {};
 
-    if (!formData.name.trim()) {
+    const name = formData.name.trim();
+    const code = formData.code.trim();
+    const email = formData.email.trim();
+
+    // Designation Name
+    if (!name) {
       newErrors.name = "Designation name is required";
+    } else if (name.length < 2) {
+      newErrors.name = "Designation name must be at least 2 characters";
+    } else if (name.length > 100) {
+      newErrors.name = "Designation name must be 100 characters or less";
     }
 
-    if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      newErrors.email = "Invalid email format";
+    // Designation Code
+    if (!code) {
+      newErrors.code = "Designation code is required";
+    } else if (!/^[A-Za-z0-9_-]{2,20}$/.test(code)) {
+      newErrors.code = "2-20 characters: letters, numbers, - or _ only";
+    }
+
+    // Designation Email (optional, but must be valid if entered)
+    if (email) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        newErrors.email = "Invalid email format";
+      } else if (email.length > 254) {
+        newErrors.email = "Email must be 254 characters or less";
+      }
     }
 
     setErrors(newErrors);
@@ -112,7 +133,7 @@ const AddDesignationForm = () => {
           {/* Designation Code */}
           <div className="flex flex-col">
             <label className="text-sm text-gray-600 mb-1">
-              Designation Code
+              Designation Code <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
@@ -120,8 +141,15 @@ const AddDesignationForm = () => {
               value={formData.code}
               onChange={handleChange}
               placeholder="Enter code"
-              className="border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-200"
+              className={`border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 ${
+                errors.code
+                  ? "border-red-500 focus:ring-red-200"
+                  : "border-gray-200 focus:ring-gray-200"
+              }`}
             />
+            {errors.code && (
+              <p className="text-red-500 text-xs mt-1">{errors.code}</p>
+            )}
           </div>
 
           {/* Designation Email */}
@@ -150,13 +178,14 @@ const AddDesignationForm = () => {
         {/* Buttons */}
         <div className="flex justify-end gap-2 pt-4">
           <CancelButton
-            onClick={() =>
+            onClick={() => {
               setFormData({
                 name: "",
                 code: "",
                 email: "",
-              })
-            }
+              });
+              setErrors({});
+            }}
           >
             Cancel
           </CancelButton>
