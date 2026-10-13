@@ -1,357 +1,247 @@
 import React, { useState } from "react";
-import { Icon } from "@iconify/react";
-import { Loader2, Plus } from "lucide-react";
-
-import {
-  addEducationDetails,
-  updateMultipleEducationDetails,
-} from "../../service/educationService";
-import useEmployeeStore from "../../store/employeeStore";
+import toast from "react-hot-toast";
+import { Plus, Trash2 } from "lucide-react";
+import CommonUploadActions from "../../ui/commonupload";
+import { addEducationDetails } from "../../service/educationService";
 
 /* ---------- HELPERS ---------- */
 
-const EMPTY_ENTRY = {
+const EMPTY_FIELDS = {
   institution_name: "",
   degree: "",
   specialisation: "",
   date_of_completion: "",
 };
 
-// Extract just the date (YYYY-MM-DD). Splitting by 'T' prevents timezone shifts.
-// The API uses 0001-01-01 for "no date", so treat that as empty.
-const formatDate = (dateString) => {
-  if (!dateString) return "";
-  const date = String(dateString).split("T")[0];
-  return date.startsWith("0001-01-01") ? "" : date;
-};
+// Each entry gets a local uid so rows stay stable while adding/removing.
+// `saved` marks entries already posted, so a retry never creates duplicates.
+const createEntry = () => ({
+  uid: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+  saved: false,
+  ...EMPTY_FIELDS,
+});
+
+const isEntryEmpty = (entry) =>
+  !entry.institution_name.trim() &&
+  !entry.degree.trim() &&
+  !entry.specialisation.trim() &&
+  !entry.date_of_completion;
 
 // The service throws the backend's response body, so read it directly.
 const getErrorMessage = (err, fallback) =>
   err?.message || err?.error || err?.detail || fallback;
 
-// Stable key for an education record (falls back to index if there is no id)
-const entryKey = (edu, index) => String(edu?.id ?? `idx-${index}`);
+const EducationalDetails = ({ goNextStep, goPrevStep, onStepComplete }) => {
+  const [entries, setEntries] = useState([createEntry()]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-const inputClass =
-  "border border-gray-300 rounded px-2 py-1 text-gray-800 text-[13px] w-full max-w-[160px] focus:outline-none focus:border-gray-500";
-
-/* ---------- ROW COMPONENTS ----------
-   Defined at module level (not inside the section) so React doesn't remount
-   them on every keystroke, which would make inputs lose focus. */
-const ViewRow = ({ label, value, last }) => (
-  <div
-    className={`flex justify-between items-center py-2 ${
-      last ? "" : "border-b border-gray-100"
-    }`}
-  >
-    <span className="text-gray-500 text-[12px]">{label}</span>
-    <span className="text-gray-800 text-[13px] flex-1 min-w-0 text-right">
-      {value || "-"}
-    </span>
-  </div>
-);
-
-const EditRow = ({ label, last, children }) => (
-  <div
-    className={`flex justify-between items-center py-2 ${
-      last ? "" : "border-b border-gray-100"
-    }`}
-  >
-    <span className="text-gray-500 text-[12px]">{label}</span>
-    {children}
-  </div>
-);
-
-// The four editable fields, shared by the "add" form and the "edit" form
-const EducationFields = ({ draft, onChange }) => (
-  <>
-    <EditRow label="Institution">
-      <input
-        type="text"
-        value={draft.institution_name ?? ""}
-        onChange={(e) => onChange("institution_name", e.target.value)}
-        placeholder="e.g. University of Calicut"
-        className={inputClass}
-      />
-    </EditRow>
-
-    <EditRow label="Degree/Diploma">
-      <input
-        type="text"
-        value={draft.degree ?? ""}
-        onChange={(e) => onChange("degree", e.target.value)}
-        placeholder="e.g. Bachelor of Technology"
-        className={inputClass}
-      />
-    </EditRow>
-
-    <EditRow label="Specialization">
-      <input
-        type="text"
-        value={draft.specialisation ?? ""}
-        onChange={(e) => onChange("specialisation", e.target.value)}
-        placeholder="e.g. Computer Science"
-        className={inputClass}
-      />
-    </EditRow>
-
-    <EditRow label="Date of Completion" last>
-      <input
-        type="date"
-        value={draft.date_of_completion ?? ""}
-        onChange={(e) => onChange("date_of_completion", e.target.value)}
-        className={inputClass}
-      />
-    </EditRow>
-  </>
-);
-
-/* ---------- MAIN COMPONENT ---------- */
-const EducationalDetailsSection = ({ employee, onSuccess, onError }) => {
-  const educationData = employee?.education_details || [];
-  const isEmpty = educationData.length === 0;
-
-  const { fetchEmployeeById } = useEmployeeStore();
-
-  // mode: null (view) | "add" (no data yet) | "edit" (data exists)
-  const [mode, setMode] = useState(null);
-  const [isSaving, setIsSaving] = useState(false);
-
-  // edit mode: { [entryKey]: { institution_name, degree, specialisation, date_of_completion } }
-  const [drafts, setDrafts] = useState({});
-  // add mode: a single new record
-  const [newEntry, setNewEntry] = useState(EMPTY_ENTRY);
-
-  /* ---------- OPEN / CLOSE ---------- */
-  const startAdding = () => {
-    setNewEntry(EMPTY_ENTRY);
-    setMode("add");
-  };
-
-  const startEditing = () => {
-    const initial = {};
-    educationData.forEach((edu, index) => {
-      initial[entryKey(edu, index)] = {
-        institution_name: edu.institution_name || "",
-        degree: edu.degree || "",
-        specialisation: edu.specialisation || "",
-        date_of_completion: formatDate(edu.date_of_completion),
-      };
-    });
-    setDrafts(initial);
-    setMode("edit");
-  };
-
-  const closeForm = () => {
-    if (isSaving) return;
-    setMode(null);
-    setDrafts({});
-    setNewEntry(EMPTY_ENTRY);
-  };
-
-  const handleDraftChange = (key, field, value) => {
-    setDrafts((prev) => ({
-      ...prev,
-      [key]: { ...prev[key], [field]: value },
-    }));
-  };
-
-  const handleNewEntryChange = (field, value) => {
-    setNewEntry((prev) => ({ ...prev, [field]: value }));
-  };
-
-  /* ---------- SAVE: ADD ---------- */
-  const saveNew = async () => {
-    if (!employee?.id) {
-      onError?.("Cannot add: employee id is missing");
-      return false;
-    }
-    if (!newEntry.institution_name.trim() || !newEntry.degree.trim()) {
-      onError?.("Institution and Degree are required");
-      return false;
-    }
-
-    await addEducationDetails(employee.id, newEntry);
-    onSuccess?.("Education detail added successfully");
-    return true;
-  };
-
-  /* ---------- SAVE: UPDATE ---------- */
-  const saveUpdates = async () => {
-    // Validate every entry before sending anything
-    for (let i = 0; i < educationData.length; i++) {
-      const edu = educationData[i];
-      const draft = drafts[entryKey(edu, i)];
-
-      if (edu.id === undefined || edu.id === null || edu.id === "") {
-        onError?.("Cannot update: education record has no id");
-        return false;
-      }
-      if (!draft?.institution_name?.trim() || !draft?.degree?.trim()) {
-        onError?.("Institution and Degree are required");
-        return false;
-      }
-    }
-
-    // PUT /staff/updateeducation/{educationId} for each entry
-    await updateMultipleEducationDetails(
-      educationData.map((edu, index) => ({
-        id: edu.id,
-        ...drafts[entryKey(edu, index)],
-      })),
+  /** ✅ Handle input changes for one entry */
+  const handleChange = (uid, e) => {
+    const { name, value } = e.target;
+    setEntries((prev) =>
+      prev.map((entry) =>
+        entry.uid === uid ? { ...entry, [name]: value } : entry,
+      ),
     );
-    onSuccess?.("Educational details updated successfully");
-    return true;
   };
 
-  /* ---------- SAVE HANDLER ---------- */
-  const handleSave = async () => {
-    if (isSaving) return;
+  /** ✅ Add / remove entries */
+  const addEntry = () => setEntries((prev) => [...prev, createEntry()]);
 
-    setIsSaving(true);
+  const removeEntry = (uid) =>
+    setEntries((prev) =>
+      prev.length > 1 ? prev.filter((entry) => entry.uid !== uid) : prev,
+    );
+
+  /** ✅ Handle form submission */
+  const handleSubmit = async () => {
+    const employeeId = localStorage.getItem("employeeId");
+
+    if (!employeeId) {
+      toast.error("Employee ID missing. Please restart onboarding.");
+      return;
+    }
+
+    const alreadySaved = entries.filter((entry) => entry.saved);
+    const pending = entries.filter(
+      (entry) => !entry.saved && !isEntryEmpty(entry),
+    );
+
+    // Validate everything before sending anything
+    if (pending.length === 0 && alreadySaved.length === 0) {
+      toast.error("Please add at least one educational detail.");
+      return;
+    }
+
+    for (const entry of pending) {
+      if (!entry.institution_name.trim() || !entry.degree.trim()) {
+        toast.error("Institution and Degree are required.");
+        return;
+      }
+    }
+
     try {
-      const ok = mode === "add" ? await saveNew() : await saveUpdates();
-      if (!ok) return;
+      setIsSubmitting(true);
 
-      // Re-fetch so the profile (GET /staff/get/{id}) shows the saved values
-      if (employee?.id) await fetchEmployeeById(employee.id);
+      // Save one by one; mark each as saved so a retry skips it
+      for (const entry of pending) {
+        const { uid, saved, ...data } = entry;
+        await addEducationDetails(Number(employeeId), data);
+        setEntries((prev) =>
+          prev.map((item) =>
+            item.uid === uid ? { ...item, saved: true } : item,
+          ),
+        );
+      }
 
-      setMode(null);
-      setDrafts({});
-      setNewEntry(EMPTY_ENTRY);
-    } catch (err) {
-      console.error("Error saving education:", err);
-      onError?.(
-        getErrorMessage(
-          err,
-          mode === "add"
-            ? "Failed to add educational details"
-            : "Failed to update educational details",
-        ),
-      );
+      toast.success("Educational details saved successfully!");
+      localStorage.setItem("educationInfoCompleted", "true");
+
+      if (onStepComplete) onStepComplete();
+      else if (goNextStep) goNextStep();
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Error saving educational details."));
     } finally {
-      setIsSaving(false);
+      setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="bg-white p-4 rounded-xl shadow-sm border w-full">
+    <div className="flex-1 p-4 bg-gray-50">
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="font-medium text-gray-800 text-[14px]">
-          Educational Details
-        </h3>
-
-        {/* No data -> "+" to add. Data available -> pencil to update. */}
-        {!mode &&
-          (isEmpty ? (
-            <button
-              type="button"
-              onClick={startAdding}
-              aria-label="Add educational details"
-              title="Add educational details"
-              className="cursor-pointer"
-            >
-              <Plus className="w-5 h-5 text-gray-400 hover:text-gray-700 transition-colors" />
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={startEditing}
-              aria-label="Edit educational details"
-              title="Edit educational details"
-              className="cursor-pointer"
-            >
-              <Icon
-                icon="basil:edit-outline"
-                className="w-5 h-5 text-gray-400 hover:text-gray-700 transition-colors"
-              />
-            </button>
-          ))}
+      <div className="flex justify-between items-center mb-4">
+        <div>
+          <h2 className="text-base font-medium text-gray-900">
+            Educational Details
+          </h2>
+          <p className="text-sm text-gray-500">Step 09</p>
+        </div>
+        <CommonUploadActions />
       </div>
 
-      {/* Body */}
+      {/* Main Form Section */}
       <div className="space-y-4">
-        {mode === "add" ? (
-          /* ---------- ADD FORM (no existing data) ---------- */
-          <div className="bg-white">
-            <EducationFields draft={newEntry} onChange={handleNewEntryChange} />
-          </div>
-        ) : isEmpty ? (
-          <div className="text-gray-500 text-[13px]">
-            No educational details available
-          </div>
-        ) : (
-          /* ---------- VIEW / EDIT EXISTING RECORDS ---------- */
-          educationData.map((edu, index) => {
-            const key = entryKey(edu, index);
-
-            return (
-              <div key={key} className="bg-white">
-                {/* Education Header if multiple entries */}
-                {educationData.length > 1 && (
-                  <div className="text-[14px] font-medium text-gray-800 mb-2 border-b border-gray-200 pb-1">
-                    Education {index + 1}
-                  </div>
-                )}
-
-                {mode === "edit" ? (
-                  <EducationFields
-                    draft={drafts[key] || EMPTY_ENTRY}
-                    onChange={(field, value) =>
-                      handleDraftChange(key, field, value)
-                    }
-                  />
-                ) : (
-                  <>
-                    <ViewRow label="Institution" value={edu.institution_name} />
-                    <ViewRow label="Degree/Diploma" value={edu.degree} />
-                    <ViewRow
-                      label="Specialization"
-                      value={edu.specialisation}
-                    />
-                    <ViewRow
-                      label="Date of Completion"
-                      value={formatDate(edu.date_of_completion)}
-                      last
-                    />
-                  </>
+        {entries.map((entry, index) => (
+          <div key={entry.uid} className="bg-white rounded-xl shadow-sm p-6">
+            {/* Entry header (only when there is more than one) */}
+            {entries.length > 1 && (
+              <div className="flex items-center justify-between mb-4 border-b border-gray-200 pb-2">
+                <span className="text-sm font-medium text-gray-800">
+                  Education {index + 1}
+                  {entry.saved && (
+                    <span className="ml-2 text-xs text-green-600">Saved</span>
+                  )}
+                </span>
+                {!entry.saved && (
+                  <button
+                    type="button"
+                    onClick={() => removeEntry(entry.uid)}
+                    aria-label={`Remove education ${index + 1}`}
+                    title="Remove"
+                    className="text-gray-400 hover:text-red-500 transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 )}
               </div>
-            );
-          })
-        )}
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              <InputField
+                label="Institution"
+                name="institution_name"
+                value={entry.institution_name}
+                onChange={(e) => handleChange(entry.uid, e)}
+                placeholder="e.g. University of Calicut"
+                disabled={entry.saved}
+              />
+
+              <InputField
+                label="Degree/Diploma"
+                name="degree"
+                value={entry.degree}
+                onChange={(e) => handleChange(entry.uid, e)}
+                placeholder="e.g. Bachelor of Technology"
+                disabled={entry.saved}
+              />
+
+              <InputField
+                label="Specialization"
+                name="specialisation"
+                value={entry.specialisation}
+                onChange={(e) => handleChange(entry.uid, e)}
+                placeholder="e.g. Computer Science"
+                disabled={entry.saved}
+              />
+
+              <InputField
+                label="Date of Completion"
+                type="date"
+                name="date_of_completion"
+                value={entry.date_of_completion}
+                onChange={(e) => handleChange(entry.uid, e)}
+                disabled={entry.saved}
+              />
+            </div>
+          </div>
+        ))}
+
+        {/* Add another education */}
+        <button
+          type="button"
+          onClick={addEntry}
+          disabled={isSubmitting}
+          className="flex items-center gap-1 text-sm text-gray-700 hover:text-black border border-dashed border-gray-300 rounded-lg px-4 py-2 hover:bg-gray-100 disabled:opacity-50 transition-all"
+        >
+          <Plus className="w-4 h-4" />
+          Add Another Education
+        </button>
       </div>
 
-      {/* Form Actions */}
-      {mode && (
-        <div className="flex justify-end items-center gap-3 mt-4">
-          <button
-            type="button"
-            onClick={closeForm}
-            disabled={isSaving}
-            className="px-4 py-2 border border-gray-200 rounded-md text-xs text-gray-500 hover:text-gray-800 hover:bg-gray-50 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={isSaving}
-            className="px-4 py-2 bg-[#111827] hover:bg-black text-white text-xs rounded-md shadow cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center min-w-[96px]"
-          >
-            {isSaving ? (
-              <Loader2 className="animate-spin w-4 h-4" />
-            ) : mode === "add" ? (
-              "Add"
-            ) : (
-              "Save Changes"
-            )}
-          </button>
-        </div>
-      )}
+      {/* Footer Actions */}
+      <div className="flex justify-end gap-3 mt-6">
+        <button
+          onClick={goPrevStep}
+          type="button"
+          className="border border-gray-300 text-gray-700 text-sm px-6 py-2 rounded-lg hover:bg-gray-100 transition-all"
+        >
+          Previous
+        </button>
+        <button
+          onClick={handleSubmit}
+          disabled={isSubmitting}
+          type="button"
+          className="bg-gray-900 hover:bg-black text-white text-sm px-6 py-2 rounded-lg shadow disabled:opacity-50 transition-all"
+        >
+          {isSubmitting ? "Saving..." : "Save & Complete"}
+        </button>
+      </div>
     </div>
   );
 };
 
-export default EducationalDetailsSection;
+/** 🔹 Atomic Input Component */
+const InputField = ({
+  label,
+  name,
+  type = "text",
+  value,
+  onChange,
+  placeholder,
+  disabled = false,
+}) => (
+  <div className="flex flex-col">
+    <label className="text-sm font-medium text-gray-700 mb-1">{label}</label>
+    <input
+      type={type}
+      name={name}
+      value={value || ""}
+      onChange={onChange}
+      placeholder={placeholder}
+      disabled={disabled}
+      className="w-full rounded-md border border-gray-300 bg-white p-2 text-sm text-gray-700 focus:ring-1 focus:ring-gray-900 focus:border-gray-900 focus:outline-none transition-all disabled:bg-gray-50 disabled:text-gray-500"
+    />
+  </div>
+);
+
+export default EducationalDetails;
