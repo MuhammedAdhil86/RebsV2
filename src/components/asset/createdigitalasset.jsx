@@ -31,8 +31,19 @@ const CreateDigitalAssetDrawer = ({ open, onClose, onAssetCreated }) => {
     appearance-none 
     bg-no-repeat 
     bg-[length:16px] 
-    bg-[right_10px_center] 
-    w-full bg-white border border-gray-300 rounded-2xl px-5 py-4 outline-none focus:ring-1 focus:ring-black text-gray-700
+    bg-[right_14px_center] 
+    w-full bg-white border border-gray-200 rounded-xl pl-4 pr-10 py-3.5 text-[13px]
+    outline-none transition-all duration-300 hover:border-gray-300
+    focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100
+    text-gray-700 font-['Poppins',sans-serif] font-normal
+  `;
+
+  // Shared look for every plain text input in this form
+  const inputStyle = `
+    w-full bg-white border border-gray-200 rounded-xl px-4 py-3.5 text-[13px]
+    outline-none transition-all duration-300 hover:border-gray-300
+    focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100
+    placeholder:text-gray-300 text-gray-700 font-normal
   `;
 
   const arrowIcon = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%239ca3af' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7' /%3E%3C/svg%3E")`;
@@ -169,21 +180,21 @@ const CreateDigitalAssetDrawer = ({ open, onClose, onAssetCreated }) => {
       onClose={handleClose}
       PaperProps={{ className: "w-full max-w-[500px] border-none shadow-2xl" }}
     >
-      <div className="h-full flex flex-col bg-white font-poppins text-[12px]">
+      <div className="h-full flex flex-col bg-white font-['Poppins',sans-serif] font-normal text-[12px]">
         {/* Header */}
-        <div className="px-8 py-6 flex items-center justify-between border-b border-gray-100 bg-white">
+        <div className="px-8 py-6 flex items-center justify-between border-b border-gray-100 bg-gradient-to-b from-indigo-50/60 to-white">
           <div>
-            <h2 className="text-gray-900 text-[16px] font-medium tracking-tight uppercase">
+            <h2 className="text-gray-900 text-[17px] font-normal tracking-wide">
               New Digital Entry
             </h2>
-            <p className="text-gray-400 text-[10px] tracking-wider mt-1 font-bold uppercase">
+            <p className="text-gray-400 text-[12px] tracking-wide mt-1 font-normal">
               Provide account access details
             </p>
           </div>
           <button
             type="button"
             onClick={handleClose}
-            className="p-2 hover:bg-gray-100 rounded-full text-gray-400"
+            className="p-2 rounded-full text-gray-400 transition-all duration-300 hover:bg-white hover:text-gray-700 hover:shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
           >
             <FiX size={20} />
           </button>
@@ -194,7 +205,7 @@ const CreateDigitalAssetDrawer = ({ open, onClose, onAssetCreated }) => {
           className="flex-1 overflow-y-auto p-8 space-y-6 custom-scrollbar"
         >
           {/* Image Upload Area */}
-          <div className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-gray-300 rounded-[2rem] bg-gray-50 hover:bg-gray-100 transition-all group relative overflow-hidden h-44">
+          <div className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-indigo-200 rounded-3xl bg-indigo-50/30 hover:bg-indigo-50/70 hover:border-indigo-300 transition-all duration-300 group relative overflow-hidden h-44">
             {imagePreview ? (
               <img
                 src={imagePreview}
@@ -204,10 +215,10 @@ const CreateDigitalAssetDrawer = ({ open, onClose, onAssetCreated }) => {
             ) : (
               <div className="text-center">
                 <FiCamera
-                  className="mx-auto text-gray-300 group-hover:text-black transition-colors mb-2"
+                  className="mx-auto text-indigo-300 group-hover:text-indigo-600 transition-colors duration-300 mb-2"
                   size={30}
                 />
-                <p className="text-gray-400 text-[10px] uppercase font-bold tracking-widest">
+                <p className="text-gray-400 text-[12px] font-normal tracking-wide">
                   Icon / Proof
                 </p>
               </div>
@@ -222,7 +233,7 @@ const CreateDigitalAssetDrawer = ({ open, onClose, onAssetCreated }) => {
             <button
               type="button"
               onClick={() => fileInputRef.current.click()}
-              className="absolute inset-0 w-full h-full bg-black/0 group-hover:bg-black/20 transition-all flex items-center justify-center text-transparent group-hover:text-white font-bold"
+              className="absolute inset-0 w-full h-full bg-black/0 group-hover:bg-black/30 transition-all duration-300 flex items-center justify-center text-transparent group-hover:text-white font-normal text-[13px] tracking-wide"
             >
               Change Image
             </button>
@@ -230,7 +241,7 @@ const CreateDigitalAssetDrawer = ({ open, onClose, onAssetCreated }) => {
 
           {/* Account Name */}
           <div className="space-y-2">
-            <label className="text-gray-400 text-[10px] tracking-widest uppercase font-bold ml-1">
+            <label className="block text-gray-500 text-[12px] tracking-wide font-normal ml-1">
               Account Name
             </label>
             <input
@@ -239,14 +250,14 @@ const CreateDigitalAssetDrawer = ({ open, onClose, onAssetCreated }) => {
               value={formData.account_name}
               onChange={handleChange}
               placeholder="e.g. AWS Root Account"
-              className="w-full bg-white border border-gray-300 rounded-2xl px-5 py-4 outline-none focus:ring-1 focus:ring-black text-gray-700 font-medium"
+              className={inputStyle}
             />
           </div>
 
           {/* Dynamic Dropdowns */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="text-gray-400 text-[10px] tracking-widest uppercase font-bold ml-1">
+              <label className="block text-gray-500 text-[12px] tracking-wide font-normal ml-1">
                 Account Type
               </label>
               <select
@@ -266,7 +277,7 @@ const CreateDigitalAssetDrawer = ({ open, onClose, onAssetCreated }) => {
               </select>
             </div>
             <div className="space-y-2">
-              <label className="text-gray-400 text-[10px] tracking-widest uppercase font-bold ml-1">
+              <label className="block text-gray-500 text-[12px] tracking-wide font-normal ml-1">
                 Auth Mode
               </label>
               <select
@@ -289,7 +300,7 @@ const CreateDigitalAssetDrawer = ({ open, onClose, onAssetCreated }) => {
 
           {/* Account Status */}
           <div className="space-y-2">
-            <label className="text-gray-400 text-[10px] tracking-widest uppercase font-bold ml-1">
+            <label className="block text-gray-500 text-[12px] tracking-wide font-normal ml-1">
               Account Status
             </label>
             <select
@@ -306,16 +317,16 @@ const CreateDigitalAssetDrawer = ({ open, onClose, onAssetCreated }) => {
 
           {/* URL */}
           <div className="space-y-2">
-            <label className="text-gray-400 text-[10px] tracking-widest uppercase font-bold ml-1">
+            <label className="block text-gray-500 text-[12px] tracking-wide font-normal ml-1">
               Account URL
             </label>
-            <div className="relative">
-              <FiLink className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+            <div className="relative group">
+              <FiLink className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 transition-colors duration-300 group-focus-within:text-indigo-500" />
               <input
                 name="account_url"
                 value={formData.account_url}
                 onChange={handleChange}
-                className="w-full bg-white border border-gray-300 rounded-2xl pl-12 pr-5 py-4 outline-none focus:ring-1 focus:ring-black text-gray-700"
+                className="w-full bg-white border border-gray-200 rounded-xl pl-11 pr-4 py-3.5 text-[13px] outline-none transition-all duration-300 hover:border-gray-300 focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100 placeholder:text-gray-300 text-gray-700 font-normal"
                 placeholder="https://..."
               />
             </div>
@@ -324,31 +335,31 @@ const CreateDigitalAssetDrawer = ({ open, onClose, onAssetCreated }) => {
           {/* Credentials */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="text-gray-400 text-[10px] tracking-widest uppercase font-bold ml-1">
+              <label className="block text-gray-500 text-[12px] tracking-wide font-normal ml-1">
                 Username
               </label>
               <input
                 name="username"
                 value={formData.username}
                 onChange={handleChange}
-                className="w-full bg-white border border-gray-300 rounded-2xl px-5 py-4 outline-none focus:ring-1 focus:ring-black text-gray-700"
+                className={inputStyle}
               />
             </div>
             <div className="space-y-2">
-              <label className="text-gray-400 text-[10px] tracking-widest uppercase font-bold ml-1">
+              <label className="block text-gray-500 text-[12px] tracking-wide font-normal ml-1">
                 Passkey
               </label>
               <input
                 name="passkey"
                 value={formData.passkey}
                 onChange={handleChange}
-                className="w-full bg-white border border-gray-300 rounded-2xl px-5 py-4 outline-none focus:ring-1 focus:ring-black text-gray-700"
+                className={inputStyle}
               />
             </div>
           </div>
 
           <div className="space-y-2">
-            <label className="text-gray-400 text-[10px] tracking-widest uppercase font-bold ml-1">
+            <label className="block text-gray-500 text-[12px] tracking-wide font-normal ml-1">
               Password
             </label>
             <input
@@ -356,24 +367,24 @@ const CreateDigitalAssetDrawer = ({ open, onClose, onAssetCreated }) => {
               name="password"
               value={formData.password}
               onChange={handleChange}
-              className="w-full bg-white border border-gray-300 rounded-2xl px-5 py-4 outline-none focus:ring-1 focus:ring-black text-gray-700"
+              className={inputStyle}
             />
           </div>
         </form>
 
         {/* Footer Actions */}
-        <div className="p-8 border-t border-gray-100 flex items-center justify-between bg-white sticky bottom-0">
+        <div className="px-8 py-6 border-t border-gray-100 flex items-center justify-between bg-white sticky bottom-0">
           <button
             type="button"
             onClick={handleClose}
-            className="px-10 py-4 bg-white border border-black rounded-2xl text-black hover:bg-gray-50 transition-all font-bold uppercase tracking-widest"
+            className="px-8 py-3.5 bg-white border border-gray-200 rounded-xl text-gray-600 text-[13px] tracking-wide hover:bg-gray-50 hover:text-gray-900 hover:border-gray-300 transition-all duration-300 font-normal focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
           >
             Cancel
           </button>
           <button
             onClick={handleSubmit}
             disabled={isSubmitting}
-            className="flex items-center gap-3 bg-black text-white px-10 py-4 rounded-2xl font-bold uppercase tracking-widest hover:bg-gray-800 transition-all shadow-lg active:scale-95 disabled:opacity-50"
+            className="flex items-center gap-2.5 bg-black text-white px-8 py-3.5 rounded-xl text-[13px] font-normal tracking-wide hover:bg-gray-800 transition-all duration-300 shadow-md shadow-gray-300 active:scale-95 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400"
           >
             {isSubmitting ? "Adding..." : "Add Asset"} <FiPlus />
           </button>

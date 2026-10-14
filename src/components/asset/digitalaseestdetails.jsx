@@ -139,27 +139,27 @@ const DigitalAssetDetailDrawer = ({ asset, onRefresh, onClose }) => {
       onClose={onClose}
       PaperProps={{ className: "w-full max-w-[500px] border-none shadow-2xl" }}
     >
-      <div className="h-full flex flex-col bg-white font-poppins text-[12px] font-normal">
+      <div className="h-full flex flex-col bg-white font-['Poppins',sans-serif] text-[12px] font-normal">
         {/* Header Section */}
-        <div className="p-6 border-b flex justify-between items-start sticky top-0 bg-white z-20">
+        <div className="px-8 py-6 border-b border-gray-100 flex justify-between items-start sticky top-0 bg-gradient-to-b from-indigo-50/60 to-white z-20">
           <div>
-            <h2 className="text-[16px] text-gray-900 leading-tight uppercase tracking-tight font-normal">
+            <h2 className="text-[18px] text-gray-900 leading-tight tracking-wide font-normal">
               {asset.account_name}
             </h2>
-            <p className="text-[10px] text-gray-400 mt-1 uppercase tracking-widest font-normal">
+            <p className="text-[12px] text-gray-400 mt-1 tracking-wide font-normal">
               {asset.account_type} Account • ID: #{asset.id}
             </p>
           </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-full text-gray-400 transition-colors"
+            className="p-2 rounded-full text-gray-400 transition-all duration-300 hover:bg-white hover:text-gray-700 hover:shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
           >
             <FiX size={20} />
           </button>
         </div>
 
         {/* Navigation Tabs */}
-        <div className="flex px-6 gap-8 border-b bg-gray-50/50">
+        <div className="flex px-8 pt-3 gap-2 border-b border-gray-100">
           {[
             { id: "details", label: "Account Info", icon: <FiLock /> },
             { id: "history", label: "Access Log", icon: <FiClock /> },
@@ -167,10 +167,10 @@ const DigitalAssetDetailDrawer = ({ asset, onRefresh, onClose }) => {
             <button
               key={tab.id}
               onClick={() => setActiveSubTab(tab.id)}
-              className={`py-4 text-[12px] uppercase tracking-wider flex items-center gap-2 transition-all relative font-normal ${
+              className={`relative px-4 pt-2 pb-3 rounded-t-lg text-[13px] tracking-wide flex items-center gap-2 transition-all duration-300 ease-in-out font-normal focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200 ${
                 activeSubTab === tab.id
-                  ? "text-black after:absolute after:bottom-0 after:left-0 after:w-full after:h-[2px] after:bg-black"
-                  : "text-gray-400 hover:text-gray-600"
+                  ? "text-indigo-600 bg-indigo-50/70 after:content-[''] after:absolute after:bottom-0 after:left-0 after:w-full after:h-[2px] after:rounded-full after:bg-indigo-600"
+                  : "text-gray-500 hover:text-gray-800 hover:bg-gray-50"
               }`}
             >
               {tab.icon} {tab.label}
@@ -179,11 +179,11 @@ const DigitalAssetDetailDrawer = ({ asset, onRefresh, onClose }) => {
         </div>
 
         {/* Content Area */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
           {activeSubTab === "details" ? (
             <div className="space-y-6 animate-in fade-in duration-300">
               {/* Asset Main Image */}
-              <div className="rounded-2xl border border-gray-100 overflow-hidden aspect-video bg-gray-50 flex items-center justify-center relative">
+              <div className="rounded-3xl border-2 border-dashed border-indigo-200 overflow-hidden aspect-video bg-indigo-50/30 flex items-center justify-center relative">
                 <img
                   src={asset.image || getPlaceholderImage(asset.account_name)}
                   className="w-full h-full object-cover"
@@ -201,7 +201,7 @@ const DigitalAssetDetailDrawer = ({ asset, onRefresh, onClose }) => {
                     }
                     target="_blank"
                     rel="noreferrer"
-                    className="absolute bottom-4 right-4 p-2.5 bg-white/90 backdrop-blur rounded-xl shadow-sm hover:bg-black hover:text-white transition-all"
+                    className="absolute bottom-4 right-4 p-2.5 bg-white/90 backdrop-blur rounded-xl shadow-sm hover:bg-black hover:text-white transition-all duration-300"
                   >
                     <FiExternalLink size={14} />
                   </a>
@@ -274,17 +274,17 @@ const DigitalAssetDetailDrawer = ({ asset, onRefresh, onClose }) => {
                 ].map((item, i) => (
                   <div
                     key={i}
-                    className="flex items-center justify-between p-4 rounded-xl border border-gray-100 bg-white hover:border-gray-300 transition-all group"
+                    className="flex items-center justify-between px-4 py-3.5 rounded-xl border border-gray-100 bg-white hover:border-gray-300 hover:shadow-sm transition-all duration-300 group"
                   >
                     <div className="flex items-center gap-4 overflow-hidden">
-                      <div className="text-gray-300 group-hover:text-black transition-colors shrink-0">
+                      <div className="text-gray-400 group-hover:text-black transition-colors duration-300 shrink-0">
                         {item.icon}
                       </div>
                       <div className="overflow-hidden">
-                        <label className="text-[10px] uppercase text-gray-400 tracking-tighter block font-normal">
+                        <label className="text-[12px] text-gray-500 tracking-wide block font-normal">
                           {item.label}
                         </label>
-                        <p className="text-[12px] text-gray-800 truncate font-normal">
+                        <p className="text-[13px] text-gray-800 truncate font-normal">
                           {item.val || "—"}
                         </p>
                       </div>
@@ -292,7 +292,7 @@ const DigitalAssetDetailDrawer = ({ asset, onRefresh, onClose }) => {
                     {item.copy && item.val && (
                       <button
                         onClick={() => copyToClipboard(item.val, item.label)}
-                        className="p-2 text-gray-300 hover:text-black hover:bg-gray-100 rounded-lg transition-all"
+                        className="p-2 text-gray-400 hover:text-black hover:bg-gray-100 rounded-lg transition-all duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
                       >
                         <FiCopy size={14} />
                       </button>
@@ -305,7 +305,7 @@ const DigitalAssetDetailDrawer = ({ asset, onRefresh, onClose }) => {
             /* Timeline/History Log */
             <div className="animate-in slide-in-from-right duration-300">
               {isLoading ? (
-                <div className="py-20 text-center text-gray-400 italic font-normal">
+                <div className="py-20 text-center text-gray-400 text-[13px] tracking-wide font-normal">
                   Fetching access records...
                 </div>
               ) : history.length > 0 ? (
@@ -329,13 +329,13 @@ const DigitalAssetDetailDrawer = ({ asset, onRefresh, onClose }) => {
                         )}
                       </TimelineSeparator>
                       <TimelineContent sx={{ pb: 4, pt: 0 }}>
-                        <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 font-normal">
+                        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm transition-all duration-300 hover:shadow-md hover:border-gray-200 font-normal">
                           <div className="flex justify-between items-center mb-1">
-                            <span className="text-gray-900">
+                            <span className="text-gray-900 text-[13px]">
                               {item.staff_name || "System Record"}
                             </span>
                             <span
-                              className={`text-[10px] px-2 py-0.5 rounded-full border uppercase tracking-tighter ${
+                              className={`text-[11px] px-2.5 py-0.5 rounded-full border tracking-wide ${
                                 item.status === "Allocated"
                                   ? "bg-blue-50 text-blue-600 border-blue-100"
                                   : "bg-emerald-50 text-emerald-600 border-emerald-100"
@@ -344,8 +344,8 @@ const DigitalAssetDetailDrawer = ({ asset, onRefresh, onClose }) => {
                               {item.status}
                             </span>
                           </div>
-                          <div className="flex items-center gap-1 text-gray-400 text-[10px]">
-                            <FiCalendar size={10} />
+                          <div className="flex items-center gap-1.5 text-gray-400 text-[12px] mt-2">
+                            <FiCalendar size={12} />
                             {new Date(item.date).toLocaleString("en-GB", {
                               day: "2-digit",
                               month: "short",
@@ -360,7 +360,7 @@ const DigitalAssetDetailDrawer = ({ asset, onRefresh, onClose }) => {
                   ))}
                 </Timeline>
               ) : (
-                <div className="py-20 text-center text-gray-300 italic font-normal">
+                <div className="py-20 text-center text-gray-400 text-[13px] tracking-wide font-normal">
                   No history records available.
                 </div>
               )}
@@ -369,11 +369,11 @@ const DigitalAssetDetailDrawer = ({ asset, onRefresh, onClose }) => {
         </div>
 
         {/* Footer Actions Area */}
-        <div className="p-6 border-t bg-white">
+        <div className="px-8 py-6 border-t border-gray-100 bg-white">
           {currentStatus === "Allocated" ? (
             <button
               onClick={() => handleAction("return")}
-              className="w-full bg-white border border-black py-3.5 rounded-xl text-[12px] uppercase tracking-widest hover:bg-black hover:text-white transition-all font-normal"
+              className="w-full bg-black text-white py-3.5 rounded-xl text-[13px] tracking-wide shadow-md shadow-gray-300 hover:bg-gray-800 transition-all duration-300 active:scale-95 font-normal focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400"
             >
               Revoke Account Access
             </button>
@@ -381,7 +381,7 @@ const DigitalAssetDetailDrawer = ({ asset, onRefresh, onClose }) => {
             <div className="flex gap-4">
               <button
                 onClick={() => setIsEmployeeDrawerOpen(true)}
-                className="flex-[1.5] bg-gray-50 border border-gray-200 py-3.5 rounded-xl text-[12px] flex items-center justify-center gap-2 hover:border-black transition-all font-normal"
+                className="flex-[1.5] bg-white border border-gray-200 text-gray-600 py-3.5 rounded-xl text-[13px] tracking-wide flex items-center justify-center gap-2.5 hover:bg-gray-50 hover:text-gray-900 hover:border-gray-300 transition-all duration-300 font-normal focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
               >
                 <FiUser />{" "}
                 {selectedEmployee ? selectedEmployee.name : "Select Employee"}
@@ -389,7 +389,7 @@ const DigitalAssetDetailDrawer = ({ asset, onRefresh, onClose }) => {
               <button
                 disabled={!selectedEmployee}
                 onClick={() => handleAction("allocate")}
-                className="flex-1 bg-black text-white py-3.5 rounded-xl text-[12px] uppercase tracking-widest disabled:opacity-20 transition-all font-normal"
+                className="flex-1 bg-black text-white py-3.5 rounded-xl text-[13px] tracking-wide shadow-md shadow-gray-300 hover:bg-gray-800 active:scale-95 disabled:opacity-30 transition-all duration-300 font-normal focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400"
               >
                 Grant Access
               </button>

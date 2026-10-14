@@ -37,6 +37,36 @@ const UpdateDigitalAssetDrawer = ({ open, onClose, asset, onAssetUpdated }) => {
     image: null,
   });
 
+  // Same dropdown look as the other drawers
+  const selectStyle = `
+    appearance-none 
+    bg-no-repeat 
+    bg-[length:16px] 
+    bg-[right_14px_center] 
+    w-full bg-white border border-gray-200 rounded-xl pl-4 pr-10 py-3.5 text-[13px]
+    outline-none transition-all duration-300 hover:border-gray-300
+    focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100
+    text-gray-700 font-['Poppins',sans-serif] font-normal
+  `;
+
+  // Plain input look (no left icon)
+  const inputStyle = `
+    w-full bg-white border border-gray-200 rounded-xl px-4 py-3.5 text-[13px]
+    outline-none transition-all duration-300 hover:border-gray-300
+    focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100
+    placeholder:text-gray-300 text-gray-700 font-normal
+  `;
+
+  // Input look when a left icon is present
+  const inputIconStyle = `
+    w-full bg-white border border-gray-200 rounded-xl pl-11 pr-4 py-3.5 text-[13px]
+    outline-none transition-all duration-300 hover:border-gray-300
+    focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100
+    placeholder:text-gray-300 text-gray-700 font-normal
+  `;
+
+  const arrowIcon = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%239ca3af' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7' /%3E%3C/svg%3E")`;
+
   const capitalize = (str) => {
     if (!str) return "Available";
     return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
@@ -154,20 +184,20 @@ const UpdateDigitalAssetDrawer = ({ open, onClose, asset, onAssetUpdated }) => {
       onClose={onClose}
       PaperProps={{ className: "w-full max-w-[500px] border-none shadow-2xl" }}
     >
-      <div className="h-full flex flex-col bg-white font-poppins text-[12px]">
+      <div className="h-full flex flex-col bg-white font-['Poppins',sans-serif] font-normal text-[12px]">
         {/* Header */}
-        <div className="px-8 py-6 flex items-center justify-between border-b border-gray-100">
+        <div className="px-8 py-6 flex items-center justify-between border-b border-gray-100 bg-gradient-to-b from-indigo-50/60 to-white">
           <div>
-            <h2 className="text-gray-900 text-[16px] font-medium tracking-tight uppercase">
+            <h2 className="text-gray-900 text-[17px] font-normal tracking-wide">
               Update Digital Asset
             </h2>
-            <p className="text-gray-400 text-[10px] tracking-wider mt-1 font-bold uppercase">
-              Modify Security & Access
+            <p className="text-gray-400 text-[12px] tracking-wide mt-1 font-normal">
+              Modify security & access
             </p>
           </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-full text-gray-400"
+            className="p-2 rounded-full text-gray-400 transition-all duration-300 hover:bg-white hover:text-gray-700 hover:shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
           >
             <FiX size={20} />
           </button>
@@ -178,7 +208,7 @@ const UpdateDigitalAssetDrawer = ({ open, onClose, asset, onAssetUpdated }) => {
           className="flex-1 overflow-y-auto p-8 space-y-6 custom-scrollbar"
         >
           {/* Professional Image Area */}
-          <div className="relative group h-44 w-full border-2 border-dashed border-gray-300 rounded-[2rem] bg-gray-50 overflow-hidden flex items-center justify-center transition-all duration-300 hover:border-black/20 hover:bg-gray-100">
+          <div className="relative group h-44 w-full border-2 border-dashed border-indigo-200 rounded-3xl bg-indigo-50/30 overflow-hidden flex items-center justify-center transition-all duration-300 hover:border-indigo-300 hover:bg-indigo-50/70">
             {imagePreview ? (
               <>
                 <img
@@ -188,11 +218,11 @@ const UpdateDigitalAssetDrawer = ({ open, onClose, asset, onAssetUpdated }) => {
                 />
                 <div
                   onClick={() => fileInputRef.current.click()}
-                  className="absolute inset-0 bg-black/20 backdrop-blur-[2px] opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center cursor-pointer"
+                  className="absolute inset-0 bg-black/30 backdrop-blur-[2px] opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center cursor-pointer"
                 >
                   <div className="flex items-center gap-2 bg-white/90 backdrop-blur-md px-5 py-2.5 rounded-full shadow-xl border border-white/20 transform translate-y-4 group-hover:translate-y-0 transition-all duration-300">
-                    <FiEdit2 size={14} className="text-black" />
-                    <span className="text-black font-bold uppercase tracking-[0.1em] text-[10px]">
+                    <FiEdit2 size={14} className="text-indigo-600" />
+                    <span className="text-gray-800 font-normal tracking-wide text-[12px]">
                       Edit Photo
                     </span>
                   </div>
@@ -203,8 +233,11 @@ const UpdateDigitalAssetDrawer = ({ open, onClose, asset, onAssetUpdated }) => {
                 onClick={() => fileInputRef.current.click()}
                 className="text-center cursor-pointer flex flex-col items-center"
               >
-                <FiCamera size={24} className="text-gray-400 mb-2" />
-                <p className="text-gray-400 text-[10px] uppercase font-bold tracking-[0.15em]">
+                <FiCamera
+                  size={24}
+                  className="text-indigo-300 group-hover:text-indigo-600 transition-colors duration-300 mb-2"
+                />
+                <p className="text-gray-400 text-[12px] font-normal tracking-wide">
                   Upload Account Icon
                 </p>
               </div>
@@ -220,7 +253,7 @@ const UpdateDigitalAssetDrawer = ({ open, onClose, asset, onAssetUpdated }) => {
 
           {/* Account Name */}
           <div className="space-y-2">
-            <label className="text-gray-400 text-[10px] tracking-widest uppercase font-bold ml-1">
+            <label className="block text-gray-500 text-[12px] tracking-wide font-normal ml-1">
               Account Name
             </label>
             <input
@@ -228,14 +261,14 @@ const UpdateDigitalAssetDrawer = ({ open, onClose, asset, onAssetUpdated }) => {
               name="account_name"
               value={formData.account_name}
               onChange={handleChange}
-              className={`w-full bg-white border ${errors.account_name ? "border-red-500" : "border-gray-300"} rounded-2xl px-5 py-4 outline-none focus:ring-1 focus:ring-black text-gray-700 font-medium`}
+              className={`w-full bg-white border ${errors.account_name ? "border-red-400 focus:border-red-400 focus:ring-red-100" : "border-gray-200 focus:border-indigo-300 focus:ring-indigo-100"} rounded-xl px-4 py-3.5 text-[13px] outline-none transition-all duration-300 hover:border-gray-300 focus:ring-2 placeholder:text-gray-300 text-gray-700 font-normal`}
             />
           </div>
 
           {/* Dynamic Dropdowns - Crucial for ID mapping */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="text-gray-400 text-[10px] tracking-widest uppercase font-bold ml-1">
+              <label className="block text-gray-500 text-[12px] tracking-wide font-normal ml-1">
                 Account Type
               </label>
               <select
@@ -243,7 +276,8 @@ const UpdateDigitalAssetDrawer = ({ open, onClose, asset, onAssetUpdated }) => {
                 name="account_type"
                 value={formData.account_type}
                 onChange={handleChange}
-                className="w-full bg-white border border-gray-300 rounded-2xl px-5 py-4 outline-none focus:ring-1 focus:ring-black text-gray-700"
+                style={{ backgroundImage: arrowIcon }}
+                className={selectStyle}
               >
                 <option value="">Select Type</option>
                 {accountTypes.map((t) => (
@@ -254,7 +288,7 @@ const UpdateDigitalAssetDrawer = ({ open, onClose, asset, onAssetUpdated }) => {
               </select>
             </div>
             <div className="space-y-2">
-              <label className="text-gray-400 text-[10px] tracking-widest uppercase font-bold ml-1">
+              <label className="block text-gray-500 text-[12px] tracking-wide font-normal ml-1">
                 Auth Mode
               </label>
               <select
@@ -262,7 +296,8 @@ const UpdateDigitalAssetDrawer = ({ open, onClose, asset, onAssetUpdated }) => {
                 name="authentication_mode"
                 value={formData.authentication_mode}
                 onChange={handleChange}
-                className="w-full bg-white border border-gray-300 rounded-2xl px-5 py-4 outline-none focus:ring-1 focus:ring-black text-gray-700"
+                style={{ backgroundImage: arrowIcon }}
+                className={selectStyle}
               >
                 <option value="">Select Mode</option>
                 {authenticators.map((a) => (
@@ -275,77 +310,78 @@ const UpdateDigitalAssetDrawer = ({ open, onClose, asset, onAssetUpdated }) => {
           </div>
 
           <div className="space-y-2">
-            <label className="text-gray-400 text-[10px] tracking-widest uppercase font-bold ml-1">
+            <label className="block text-gray-500 text-[12px] tracking-wide font-normal ml-1">
               URL
             </label>
-            <div className="relative">
-              <FiGlobe className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+            <div className="relative group">
+              <FiGlobe className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 transition-colors duration-300 group-focus-within:text-indigo-500" />
               <input
                 name="account_url"
                 value={formData.account_url}
                 onChange={handleChange}
                 placeholder="https://..."
-                className="w-full bg-white border border-gray-300 rounded-2xl pl-12 pr-5 py-4 outline-none focus:ring-1 focus:ring-black text-gray-700"
+                className={inputIconStyle}
               />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="text-gray-400 text-[10px] tracking-widest uppercase font-bold ml-1">
+              <label className="block text-gray-500 text-[12px] tracking-wide font-normal ml-1">
                 Username
               </label>
-              <div className="relative">
-                <FiUser className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+              <div className="relative group">
+                <FiUser className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 transition-colors duration-300 group-focus-within:text-indigo-500" />
                 <input
                   name="username"
                   value={formData.username}
                   onChange={handleChange}
-                  className="w-full bg-white border border-gray-300 rounded-2xl pl-12 pr-5 py-4 outline-none focus:ring-1 focus:ring-black text-gray-700"
+                  className={inputIconStyle}
                 />
               </div>
             </div>
             <div className="space-y-2">
-              <label className="text-gray-400 text-[10px] tracking-widest uppercase font-bold ml-1">
+              <label className="block text-gray-500 text-[12px] tracking-wide font-normal ml-1">
                 Passkey
               </label>
-              <div className="relative">
-                <FiShield className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+              <div className="relative group">
+                <FiShield className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 transition-colors duration-300 group-focus-within:text-indigo-500" />
                 <input
                   name="passkey"
                   value={formData.passkey}
                   onChange={handleChange}
-                  className="w-full bg-white border border-gray-300 rounded-2xl pl-12 pr-5 py-4 outline-none focus:ring-1 focus:ring-black text-gray-700"
+                  className={inputIconStyle}
                 />
               </div>
             </div>
           </div>
 
           <div className="space-y-2">
-            <label className="text-gray-400 text-[10px] tracking-widest uppercase font-bold ml-1">
+            <label className="block text-gray-500 text-[12px] tracking-wide font-normal ml-1">
               Password
             </label>
-            <div className="relative">
-              <FiLock className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+            <div className="relative group">
+              <FiLock className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 transition-colors duration-300 group-focus-within:text-indigo-500" />
               <input
                 type="password"
                 name="password"
                 value={formData.password}
                 onChange={handleChange}
-                className="w-full bg-white border border-gray-300 rounded-2xl pl-12 pr-5 py-4 outline-none focus:ring-1 focus:ring-black text-gray-700"
+                className={inputIconStyle}
               />
             </div>
           </div>
 
           <div className="space-y-2">
-            <label className="text-gray-400 text-[10px] tracking-widest uppercase font-bold ml-1">
+            <label className="block text-gray-500 text-[12px] tracking-wide font-normal ml-1">
               Status
             </label>
             <select
               name="account_status"
               value={formData.account_status}
               onChange={handleChange}
-              className="w-full bg-white border border-gray-300 rounded-2xl px-5 py-4 outline-none focus:ring-1 focus:ring-black text-gray-700"
+              style={{ backgroundImage: arrowIcon }}
+              className={selectStyle}
             >
               <option value="Available">Available</option>
               <option value="Allocated">Allocated</option>
@@ -353,18 +389,18 @@ const UpdateDigitalAssetDrawer = ({ open, onClose, asset, onAssetUpdated }) => {
           </div>
         </form>
 
-        <div className="p-8 border-t border-gray-100 flex items-center justify-between bg-white sticky bottom-0">
+        <div className="px-8 py-6 border-t border-gray-100 flex items-center justify-between bg-white sticky bottom-0">
           <button
             type="button"
             onClick={onClose}
-            className="px-10 py-4 bg-white border border-black rounded-2xl text-black font-bold uppercase tracking-widest"
+            className="px-8 py-3.5 bg-white border border-gray-200 rounded-xl text-gray-600 text-[13px] tracking-wide hover:bg-gray-50 hover:text-gray-900 hover:border-gray-300 transition-all duration-300 font-normal focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
           >
             Cancel
           </button>
           <button
             onClick={handleSubmit}
             disabled={isSubmitting}
-            className="flex items-center gap-3 bg-black text-white px-10 py-4 rounded-2xl font-bold uppercase tracking-widest hover:bg-gray-800 disabled:opacity-50 transition-all shadow-lg active:scale-95"
+            className="flex items-center gap-2.5 bg-black text-white px-8 py-3.5 rounded-xl text-[13px] font-normal tracking-wide hover:bg-gray-800 disabled:opacity-50 transition-all duration-300 shadow-md shadow-gray-300 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400"
           >
             {isSubmitting ? "Updating..." : "Save Changes"} <FiCheck />
           </button>
