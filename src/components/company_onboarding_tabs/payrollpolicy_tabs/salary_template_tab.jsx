@@ -41,9 +41,6 @@ export default function SalaryTemplate() {
     { id: "salary-template", label: "Salary Template" },
     { id: "salary-components", label: "Salary Components" },
     { id: "statutory-components", label: "Statutory Components" },
-    { id: "payment-schedules", label: "Payment Schedules" },
-    { id: "tax", label: "Tax" },
-    { id: "approvals", label: "Approvals" },
   ];
 
   // ---------------- FETCH DATA ----------------

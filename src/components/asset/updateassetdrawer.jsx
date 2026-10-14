@@ -1,13 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Drawer } from "@mui/material";
-import {
-  FiX,
-  FiCamera,
-  FiCheck,
-  FiCalendar,
-  FiTool,
-  FiEdit2,
-} from "react-icons/fi";
+import { FiX, FiCamera, FiCheck, FiTool, FiEdit2 } from "react-icons/fi";
+import { Icon } from "@iconify/react";
 import toast from "react-hot-toast";
 import { updateAsset, assetType } from "../../service/assetservice";
 
@@ -33,8 +27,22 @@ const UpdateAssetDrawer = ({ open, onClose, asset, onAssetUpdated }) => {
     appearance-none 
     bg-no-repeat 
     bg-[length:16px] 
-    bg-[right_1.25rem_center] 
-    w-full bg-white border border-gray-300 rounded-2xl px-5 py-4 outline-none focus:ring-1 focus:ring-black text-gray-700 font-normal
+    bg-[right_14px_center] 
+    w-full bg-white border border-gray-200 rounded-xl pl-4 pr-10 py-3.5 text-[13px]
+    outline-none transition-all duration-300 hover:border-gray-300
+    focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100
+    text-gray-700 font-['Poppins',sans-serif] font-normal
+  `;
+
+  // Hides the browser's own calendar icon and stretches its click area over
+  // the whole field, so our Iconify icon is the only visible picker icon.
+  const datePickerReset = `
+    [&::-webkit-calendar-picker-indicator]:absolute
+    [&::-webkit-calendar-picker-indicator]:inset-0
+    [&::-webkit-calendar-picker-indicator]:w-full
+    [&::-webkit-calendar-picker-indicator]:h-full
+    [&::-webkit-calendar-picker-indicator]:opacity-0
+    [&::-webkit-calendar-picker-indicator]:cursor-pointer
   `;
 
   // SVG for the down arrow
@@ -145,20 +153,20 @@ const UpdateAssetDrawer = ({ open, onClose, asset, onAssetUpdated }) => {
       onClose={onClose}
       PaperProps={{ className: "w-full max-w-[500px] border-none shadow-2xl" }}
     >
-      <div className="h-full flex flex-col bg-white font-poppins text-[12px] font-normal">
+      <div className="h-full flex flex-col bg-white font-['Poppins',sans-serif] text-[12px] font-normal">
         {/* Header */}
-        <div className="px-8 py-6 flex items-center justify-between border-b border-gray-100">
+        <div className="px-8 py-6 flex items-center justify-between border-b border-gray-100 bg-gradient-to-b from-indigo-50/60 to-white">
           <div>
-            <h2 className="text-gray-900 text-[16px] font-normal tracking-tight uppercase">
+            <h2 className="text-gray-900 text-[17px] font-normal tracking-wide">
               Update Physical Asset
             </h2>
-            <p className="text-gray-400 text-[10px] tracking-wider mt-1 font-normal uppercase">
+            <p className="text-gray-400 text-[12px] tracking-wide mt-1 font-normal">
               ID: #{asset?.id || "N/A"} • Modify details
             </p>
           </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-full text-gray-400 transition-colors"
+            className="p-2 rounded-full text-gray-400 transition-all duration-300 hover:bg-white hover:text-gray-700 hover:shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
           >
             <FiX size={20} />
           </button>
@@ -169,7 +177,7 @@ const UpdateAssetDrawer = ({ open, onClose, asset, onAssetUpdated }) => {
           className="flex-1 overflow-y-auto p-8 space-y-6 custom-scrollbar"
         >
           {/* Image Area */}
-          <div className="relative group h-44 w-full border-2 border-dashed border-gray-300 rounded-[2rem] bg-gray-50 overflow-hidden flex items-center justify-center transition-all duration-300">
+          <div className="relative group h-44 w-full border-2 border-dashed border-indigo-200 rounded-3xl bg-indigo-50/30 hover:bg-indigo-50/70 hover:border-indigo-300 overflow-hidden flex items-center justify-center transition-all duration-300">
             {imagePreview ? (
               <>
                 <img
@@ -179,11 +187,11 @@ const UpdateAssetDrawer = ({ open, onClose, asset, onAssetUpdated }) => {
                 />
                 <div
                   onClick={() => fileInputRef.current.click()}
-                  className="absolute inset-0 bg-black/20 backdrop-blur-[2px] opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center cursor-pointer"
+                  className="absolute inset-0 bg-black/30 backdrop-blur-[2px] opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center cursor-pointer"
                 >
                   <div className="flex items-center gap-2 bg-white/90 backdrop-blur-md px-5 py-2.5 rounded-full shadow-xl border border-white/20 transform translate-y-4 group-hover:translate-y-0 transition-all duration-300">
-                    <FiEdit2 size={14} className="text-black" />
-                    <span className="text-black font-normal uppercase tracking-[0.1em] text-[10px]">
+                    <FiEdit2 size={14} className="text-indigo-600" />
+                    <span className="text-gray-800 font-normal tracking-wide text-[12px]">
                       Edit Photo
                     </span>
                   </div>
@@ -195,9 +203,12 @@ const UpdateAssetDrawer = ({ open, onClose, asset, onAssetUpdated }) => {
                 className="text-center cursor-pointer flex flex-col items-center"
               >
                 <div className="p-4 rounded-full bg-white mb-3 shadow-sm">
-                  <FiCamera size={24} className="text-gray-400" />
+                  <FiCamera
+                    size={24}
+                    className="text-indigo-300 group-hover:text-indigo-600 transition-colors duration-300"
+                  />
                 </div>
-                <p className="text-gray-400 text-[10px] uppercase font-normal tracking-[0.15em]">
+                <p className="text-gray-400 text-[12px] font-normal tracking-wide">
                   Upload Asset Image
                 </p>
               </div>
@@ -213,7 +224,7 @@ const UpdateAssetDrawer = ({ open, onClose, asset, onAssetUpdated }) => {
 
           {/* Asset Name */}
           <div className="space-y-2">
-            <label className="text-gray-400 text-[10px] tracking-widest uppercase font-normal ml-1">
+            <label className="block text-gray-500 text-[12px] tracking-wide font-normal ml-1">
               Asset Name
             </label>
             <input
@@ -222,14 +233,14 @@ const UpdateAssetDrawer = ({ open, onClose, asset, onAssetUpdated }) => {
               value={formData.asset_name}
               onChange={handleChange}
               placeholder="e.g. Dell UltraSharp 27"
-              className={`w-full bg-white border ${errors.asset_name ? "border-red-500" : "border-gray-300"} rounded-2xl px-5 py-4 outline-none focus:ring-1 focus:ring-black text-gray-700 font-normal transition-all`}
+              className={`w-full bg-white border ${errors.asset_name ? "border-red-400 focus:border-red-400 focus:ring-red-100" : "border-gray-200 focus:border-indigo-300 focus:ring-indigo-100"} rounded-xl px-4 py-3.5 text-[13px] outline-none transition-all duration-300 hover:border-gray-300 focus:ring-2 placeholder:text-gray-300 text-gray-700 font-normal`}
             />
           </div>
 
           {/* Type and Condition Row */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="text-gray-400 text-[10px] tracking-widest uppercase font-normal ml-1">
+              <label className="block text-gray-500 text-[12px] tracking-wide font-normal ml-1">
                 Asset Type
               </label>
               <select
@@ -249,7 +260,7 @@ const UpdateAssetDrawer = ({ open, onClose, asset, onAssetUpdated }) => {
               </select>
             </div>
             <div className="space-y-2">
-              <label className="text-gray-400 text-[10px] tracking-widest uppercase font-normal ml-1">
+              <label className="block text-gray-500 text-[12px] tracking-wide font-normal ml-1">
                 Condition
               </label>
               <select
@@ -270,32 +281,39 @@ const UpdateAssetDrawer = ({ open, onClose, asset, onAssetUpdated }) => {
           {/* Dates Section */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="text-gray-400 text-[10px] tracking-widest uppercase font-normal ml-1">
+              <label className="block text-gray-500 text-[12px] tracking-wide font-normal ml-1">
                 Purchase Date
               </label>
-              <div className="relative">
-                <FiCalendar className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+              <div className="relative group">
                 <input
                   type="date"
                   name="purchase_date"
                   value={formData.purchase_date}
                   onChange={handleChange}
-                  className="w-full bg-white border border-gray-300 rounded-2xl pl-12 pr-5 py-4 outline-none focus:ring-1 focus:ring-black text-gray-700 font-normal"
+                  className={`${datePickerReset} w-full bg-white border border-gray-200 rounded-xl pl-4 pr-11 py-3.5 text-[13px] outline-none transition-all duration-300 hover:border-gray-300 focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100 text-gray-700 font-normal`}
+                />
+                <Icon
+                  icon="solar:calendar-outline"
+                  className="w-4 h-4 absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-800 transition-colors duration-300 group-hover:text-black group-focus-within:text-black"
                 />
               </div>
             </div>
             <div className="space-y-2">
-              <label className="text-gray-400 text-[10px] tracking-widest uppercase font-normal ml-1">
+              <label className="block text-gray-500 text-[12px] tracking-wide font-normal ml-1">
                 Maintenance
               </label>
-              <div className="relative">
-                <FiTool className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+              <div className="relative group">
+                <FiTool className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 transition-colors duration-300 group-focus-within:text-indigo-500" />
                 <input
                   type="date"
                   name="last_maintenance"
                   value={formData.last_maintenance}
                   onChange={handleChange}
-                  className="w-full bg-white border border-gray-300 rounded-2xl pl-12 pr-5 py-4 outline-none focus:ring-1 focus:ring-black text-gray-700 font-normal"
+                  className={`${datePickerReset} w-full bg-white border border-gray-200 rounded-xl pl-11 pr-11 py-3.5 text-[13px] outline-none transition-all duration-300 hover:border-gray-300 focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100 text-gray-700 font-normal`}
+                />
+                <Icon
+                  icon="solar:calendar-outline"
+                  className="w-4 h-4 absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-800 transition-colors duration-300 group-hover:text-black group-focus-within:text-black"
                 />
               </div>
             </div>
@@ -303,7 +321,7 @@ const UpdateAssetDrawer = ({ open, onClose, asset, onAssetUpdated }) => {
 
           {/* Status Field */}
           <div className="space-y-2">
-            <label className="text-gray-400 text-[10px] tracking-widest uppercase font-normal ml-1">
+            <label className="block text-gray-500 text-[12px] tracking-wide font-normal ml-1">
               Current Status
             </label>
             <select
@@ -322,18 +340,18 @@ const UpdateAssetDrawer = ({ open, onClose, asset, onAssetUpdated }) => {
         </form>
 
         {/* Footer Actions */}
-        <div className="p-8 border-t border-gray-100 flex items-center justify-between bg-white sticky bottom-0">
+        <div className="px-8 py-6 border-t border-gray-100 flex items-center justify-between bg-white sticky bottom-0">
           <button
             type="button"
             onClick={onClose}
-            className="px-10 py-4 bg-white border border-black rounded-2xl text-black hover:bg-gray-50 transition-all font-normal uppercase tracking-widest"
+            className="px-8 py-3.5 bg-white border border-gray-200 rounded-xl text-gray-600 text-[13px] tracking-wide hover:bg-gray-50 hover:text-gray-900 hover:border-gray-300 transition-all duration-300 font-normal focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
           >
             Cancel
           </button>
           <button
             onClick={handleSubmit}
             disabled={isSubmitting}
-            className="flex items-center gap-3 bg-black text-white px-10 py-4 rounded-2xl font-normal uppercase tracking-widest hover:bg-gray-800 transition-all shadow-lg active:scale-95 disabled:opacity-50"
+            className="flex items-center gap-2.5 bg-black text-white px-8 py-3.5 rounded-xl text-[13px] font-normal tracking-wide hover:bg-gray-800 transition-all duration-300 shadow-md shadow-gray-300 active:scale-95 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400"
           >
             {isSubmitting ? "Updating..." : "Save Changes"} <FiCheck />
           </button>

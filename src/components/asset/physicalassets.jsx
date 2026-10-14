@@ -6,6 +6,7 @@ import {
   removeAsset,
 } from "../../service/assetservice";
 import toast from "react-hot-toast";
+import { Icon } from "@iconify/react";
 
 import AssetTable from "./assettable";
 import AssetDetailDrawer from "./assetdeatailsdrawer";
@@ -29,9 +30,10 @@ function GlowButton({ children = "Edit in Chat", onClick }) {
           padding: 10px 20px;
           border: none;
           border-radius: 8px;
-          font-weight: 100;
+          font-weight: 400;
           font-family: "Poppins", sans-serif;
           font-size: 12px;
+          letter-spacing: 0.02em;
           background: linear-gradient(180deg, #14161c, #0d0f14);
           color: white;
           overflow: visible;
@@ -165,7 +167,18 @@ function PhysicalAssetTab() {
         align: "center",
         sortable: true,
         onSort: () => handleRequestSort("purchase_date"),
-        render: (val) => (val ? new Date(val).toLocaleDateString() : "—"),
+        render: (val) =>
+          val ? (
+            <span className="inline-flex items-center gap-1.5 text-gray-600 font-normal">
+              <Icon
+                icon="solar:calendar-outline"
+                className="w-4 h-4 text-gray-400"
+              />
+              {new Date(val).toLocaleDateString()}
+            </span>
+          ) : (
+            "—"
+          ),
       },
       {
         key: "staff_name",
@@ -182,12 +195,17 @@ function PhysicalAssetTab() {
           const isAllocated = val?.toLowerCase() === "allocated";
           return (
             <span
-              className={`px-3 py-1 rounded-full text-[12px] border ${
+              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[12px] font-normal border ${
                 isAllocated
                   ? "bg-emerald-50 text-emerald-700 border-emerald-100"
                   : "bg-sky-50 text-sky-700 border-sky-100"
               }`}
             >
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${
+                  isAllocated ? "bg-emerald-500" : "bg-sky-500"
+                }`}
+              />
               {isAllocated ? "Allocated" : "Unallocated"}
             </span>
           );
@@ -257,7 +275,7 @@ function PhysicalAssetTab() {
   }, [assets, activeStatus, searchQuery, sortConfig]);
 
   return (
-    <>
+    <div className="font-['Poppins',sans-serif] font-normal">
       <DeleteConfirmationModal
         isOpen={deleteModal.isOpen}
         onClose={() => setDeleteModal({ isOpen: false, data: null })}
@@ -265,8 +283,9 @@ function PhysicalAssetTab() {
         itemName={deleteModal.data?.asset_name || "this asset"}
       />
 
-      <div className="bg-white flex justify-between items-center p-4 mb-4 shadow-sm rounded-lg">
-        <h1 className="text-lg text-gray-800 font-medium">
+      {/* Page title bar */}
+      <div className="bg-white flex justify-between items-center px-5 py-4 mb-4 shadow-sm rounded-xl border border-gray-100">
+        <h1 className="text-[17px] text-gray-800 font-normal tracking-wide">
           Physical Asset Inventory
         </h1>
         <div className="flex items-center gap-3">
@@ -276,52 +295,72 @@ function PhysicalAssetTab() {
         </div>
       </div>
 
+      {/* Stat cards */}
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
         {[
           {
             label: "Total",
             value: dashboardData?.total_assets,
             color: "text-blue-600",
+            bar: "bg-blue-500",
+            tint: "bg-blue-50/60",
           },
           {
             label: "Allocated",
             value: dashboardData?.allocated_assets,
             color: "text-emerald-600",
+            bar: "bg-emerald-500",
+            tint: "bg-emerald-50/60",
           },
           {
             label: "Available",
             value: dashboardData?.unallocated_assets,
             color: "text-sky-600",
+            bar: "bg-sky-500",
+            tint: "bg-sky-50/60",
           },
           {
             label: "Maintenance",
             value: dashboardData?.assets_under_maintanance,
             color: "text-red-600",
+            bar: "bg-red-500",
+            tint: "bg-red-50/60",
           },
         ].map((stat, i) => (
           <div
             key={i}
-            className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm"
+            className="relative overflow-hidden bg-white px-5 py-4 rounded-2xl border border-gray-100 shadow-sm transition-all duration-300 hover:shadow-md hover:-translate-y-0.5"
           >
-            <p className="text-sm text-gray-400 mb-1">{stat.label}</p>
-            <p className={`text-2xl font-black ${stat.color}`}>
+            <span
+              className={`absolute left-0 top-0 h-full w-[3px] ${stat.bar}`}
+            />
+            <div
+              className={`absolute -right-6 -top-6 w-20 h-20 rounded-full ${stat.tint}`}
+            />
+            <p className="relative text-[13px] text-gray-400 mb-1 font-normal tracking-wide">
+              {stat.label}
+            </p>
+            <p
+              className={`relative text-[28px] leading-tight font-normal ${stat.color}`}
+            >
               {isLoading ? "..." : stat.value || 0}
             </p>
           </div>
         ))}
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-visible">
-        <div className="p-4 border-b flex justify-between items-center bg-white">
-          <div className="flex gap-6 text-sm">
+      {/* Table card */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-visible">
+        <div className="px-5 pt-4 pb-3 border-b border-gray-100 flex justify-between items-center bg-white rounded-t-2xl">
+          <div className="flex gap-2 text-[13px]">
             {["all", "Allocated", "available"].map((status) => (
               <button
                 key={status}
                 onClick={() => setActiveStatus(status)}
-                className={`pb-2 capitalize transition-all relative ${
+                className={`relative px-4 py-2 capitalize font-normal tracking-wide rounded-lg transition-all duration-300 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200 ${
                   activeStatus === status
-                    ? "text-black font-medium after:content-[''] after:absolute after:bottom-0 after:left-0 after:w-full after:h-[2px] after:bg-black "
-                    : "text-gray-400 hover:text-gray-600"
+                    ? "text-indigo-600 bg-indigo-50/70 after:content-[''] after:absolute after:bottom-0 after:left-3 after:right-3 after:h-[2px] after:rounded-full after:bg-indigo-600"
+                    : "text-gray-500 hover:text-gray-800 hover:bg-gray-50"
                 }`}
               >
                 {status === "available" ? "Unallocated" : status}
@@ -330,12 +369,12 @@ function PhysicalAssetTab() {
           </div>
 
           <div className="relative group">
-            <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <FiSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 transition-colors duration-300 group-focus-within:text-indigo-500" />
             <input
               type="text"
               placeholder="Search assets..."
               value={searchQuery}
-              className="pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:ring-1 focus:ring-black w-64"
+              className="pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-[13px] font-normal outline-none transition-all duration-300 placeholder:text-gray-400 hover:border-gray-300 focus:bg-white focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100 w-64"
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
@@ -368,7 +407,7 @@ function PhysicalAssetTab() {
         onClose={() => setSelectedAsset(null)}
         onRefresh={loadData}
       />
-    </>
+    </div>
   );
 }
 

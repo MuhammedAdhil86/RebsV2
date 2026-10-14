@@ -224,18 +224,22 @@ const EmailTemplates = () => {
     }
   };
 
-  // --- Filtering Logic ---
+  // --- Filtering Logic (same data arrangement as the Letter module) ---
   const filteredData = useMemo(() => {
     let sourceData = [];
 
-    if (subTab === "presets") {
+    if (isCompany8) {
+      // Company 8: presets + custom merged into one deduped list
+      const map = new Map();
+      [...presetTemplates, ...customTemplates].forEach((item) => {
+        if (item?.id) map.set(item.id, item);
+      });
+      sourceData = Array.from(map.values());
+    } else if (subTab === "presets") {
       sourceData = presetTemplates;
     } else {
-      // My Templates must never contain presets (matters for company 8,
-      // whose own templates endpoint may also return the default ones).
-      const presetIds = new Set(presetTemplates.map((p) => p.id));
       sourceData = customTemplates.filter(
-        (item) => !item.is_default && !presetIds.has(item.id),
+        (item) => item.is_default === false || item.is_default === undefined,
       );
     }
 
@@ -250,7 +254,7 @@ const EmailTemplates = () => {
         item?.name?.toLowerCase().includes(query) ||
         item?.purpose?.toLowerCase().includes(query),
     );
-  }, [subTab, presetTemplates, customTemplates, searchQuery]);
+  }, [subTab, presetTemplates, customTemplates, searchQuery, isCompany8]);
 
   const columns = [
     { key: "name", label: "Template Name", align: "left" },

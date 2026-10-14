@@ -17,19 +17,19 @@ function AssetManager() {
 
   return (
     <DashboardLayout>
-      <div className="w-full space-y-4">
+      <div className="w-full space-y-4 font-['Poppins',sans-serif] font-normal">
         {/* Global Navbar Header */}
         <HeaderGlobal userName="Admin" />
 
         {/* Shared Tab Navigation */}
-        <div className="flex gap-4 border-b px-4 text-[14px] bg-white pt-2 shadow-sm rounded-t-lg select-none">
+        <div className="flex gap-2 border-b border-gray-100 px-4 pt-2 text-[14px] bg-white shadow-sm rounded-t-xl select-none font-['Poppins',sans-serif] font-normal">
           <button
             type="button"
             onClick={() => setActiveTab("physical")}
-            className={`pb-2 px-2 transition-all relative font-medium ${
+            className={`relative px-4 pt-2 pb-3 rounded-t-lg font-['Poppins',sans-serif] font-normal tracking-wide transition-all duration-300 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200 ${
               activeTab === "physical"
-                ? "text-black after:content-[''] after:absolute after:bottom-0 after:left-0 after:w-full after:h-[2px] after:bg-black font-semibold"
-                : "text-gray-400 hover:text-gray-600"
+                ? "text-indigo-600 bg-indigo-50/70 after:content-[''] after:absolute after:bottom-0 after:left-0 after:w-full after:h-[2px] after:rounded-full after:bg-indigo-600"
+                : "text-gray-500 hover:text-gray-800 hover:bg-gray-50"
             }`}
           >
             Asset Manager
@@ -37,10 +37,10 @@ function AssetManager() {
           <button
             type="button"
             onClick={() => setActiveTab("digital")}
-            className={`pb-2 px-2 transition-all relative font-medium ${
+            className={`relative px-4 pt-2 pb-3 rounded-t-lg font-['Poppins',sans-serif] font-normal tracking-wide transition-all duration-300 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200 ${
               activeTab === "digital"
-                ? "text-black after:content-[''] after:absolute after:bottom-0 after:left-0 after:w-full after:h-[2px] after:bg-black font-semibold"
-                : "text-gray-400 hover:text-gray-600"
+                ? "text-indigo-600 bg-indigo-50/70 after:content-[''] after:absolute after:bottom-0 after:left-0 after:w-full after:h-[2px] after:rounded-full after:bg-indigo-600"
+                : "text-gray-500 hover:text-gray-800 hover:bg-gray-50"
             }`}
           >
             Digital Assets

@@ -126,35 +126,35 @@ const AssetDetailDrawer = ({ asset, onRefresh, onClose }) => {
       onClose={onClose}
       PaperProps={{ className: "w-full max-w-[500px] shadow-2xl border-none" }}
     >
-      <div className="h-full flex flex-col bg-white font-poppins">
+      <div className="h-full flex flex-col bg-white font-['Poppins',sans-serif] font-normal">
         {/* HEADER */}
-        <div className="p-8 border-b border-gray-100 flex justify-between items-center bg-white">
+        <div className="px-8 py-6 border-b border-gray-100 flex justify-between items-center bg-gradient-to-b from-indigo-50/60 to-white">
           <div>
-            <h2 className="text-gray-900 text-[18px] uppercase tracking-tight">
+            <h2 className="text-gray-900 text-[18px] font-normal tracking-wide">
               {asset.asset_name}
             </h2>
-            <p className="text-gray-400 text-[10px]  uppercase tracking-widest mt-1">
+            <p className="text-gray-400 text-[12px] font-normal tracking-wide mt-1">
               {asset.asset_type}
             </p>
           </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-full text-gray-400 transition-colors"
+            className="p-2 rounded-full text-gray-400 transition-all duration-300 hover:bg-white hover:text-gray-700 hover:shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
           >
             <FiX size={20} />
           </button>
         </div>
 
         {/* TABS */}
-        <div className="flex px-8 pt-2 gap-8 border-b border-gray-100">
+        <div className="flex px-8 pt-3 gap-2 border-b border-gray-100">
           {["details", "history"].map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveSubTab(tab)}
-              className={`pb-4 text-[11px] uppercase tracking-widest  flex items-center gap-2 transition-all ${
+              className={`relative px-4 pt-2 pb-3 rounded-t-lg text-[13px] font-normal capitalize tracking-wide flex items-center gap-2 transition-all duration-300 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200 ${
                 activeSubTab === tab
-                  ? "border-b-2 border-black text-black"
-                  : "text-gray-400"
+                  ? "text-indigo-600 bg-indigo-50/70 after:content-[''] after:absolute after:bottom-0 after:left-0 after:w-full after:h-[2px] after:rounded-full after:bg-indigo-600"
+                  : "text-gray-500 hover:text-gray-800 hover:bg-gray-50"
               }`}
             >
               {tab === "details" ? <FiInfo /> : <FiClock />} {tab}
@@ -166,7 +166,7 @@ const AssetDetailDrawer = ({ asset, onRefresh, onClose }) => {
         <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
           {activeSubTab === "details" ? (
             <div className="space-y-8">
-              <div className="rounded-[2rem] border-2 border-dashed border-gray-200 overflow-hidden aspect-video bg-gray-50 relative group">
+              <div className="rounded-3xl border-2 border-dashed border-indigo-200 overflow-hidden aspect-video bg-indigo-50/30 relative group">
                 <img
                   src={asset.image || getPlaceholderImage(asset.asset_name)}
                   className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
@@ -174,7 +174,7 @@ const AssetDetailDrawer = ({ asset, onRefresh, onClose }) => {
                 />
                 <div className="absolute top-4 right-4">
                   <span
-                    className={`px-4 py-1.5 rounded-full text-[9px] uppercase tracking-widest shadow-sm ${
+                    className={`px-4 py-1.5 rounded-full text-[12px] font-normal tracking-wide shadow-sm capitalize ${
                       isCurrentlyAllocated
                         ? "bg-orange-100 text-orange-600"
                         : "bg-green-100 text-green-600"
@@ -185,7 +185,7 @@ const AssetDetailDrawer = ({ asset, onRefresh, onClose }) => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-8">
+              <div className="grid grid-cols-2 gap-6">
                 {[
                   { label: "Condition", value: asset.condition },
                   { label: "Status", value: currentStatus },
@@ -194,11 +194,11 @@ const AssetDetailDrawer = ({ asset, onRefresh, onClose }) => {
                     value: asset.staff_name || "Unassigned",
                   },
                 ].map((item, i) => (
-                  <div key={i} className="space-y-1">
-                    <label className="text-[10px] uppercase text-gray-400 tracking-widest ml-1">
+                  <div key={i} className="space-y-2">
+                    <label className="block text-[12px] text-gray-500 font-normal tracking-wide ml-1">
                       {item.label}
                     </label>
-                    <p className="text-sm font-medium text-gray-800 bg-gray-50 px-4 py-3 rounded-2xl border border-gray-100">
+                    <p className="text-[13px] font-normal text-gray-800 bg-gray-50 px-4 py-3 rounded-xl border border-gray-100 transition-all duration-300 hover:border-gray-200">
                       {item.value}
                     </p>
                   </div>
@@ -209,9 +209,9 @@ const AssetDetailDrawer = ({ asset, onRefresh, onClose }) => {
             <div className="py-4">
               {isLoading ? (
                 <div className="flex flex-col items-center justify-center py-20 gap-3">
-                  <div className="w-6 h-6 border-2 border-black border-t-transparent rounded-full animate-spin" />
-                  <p className="text-[10px] uppercase  text-gray-400 tracking-widest">
-                    Fetching History
+                  <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+                  <p className="text-[12px] font-normal text-gray-400 tracking-wide">
+                    Fetching history
                   </p>
                 </div>
               ) : allocations.length > 0 ? (
@@ -230,13 +230,13 @@ const AssetDetailDrawer = ({ asset, onRefresh, onClose }) => {
                         )}
                       </TimelineSeparator>
                       <TimelineContent sx={{ py: "12px", px: 2 }}>
-                        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+                        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm transition-all duration-300 hover:shadow-md hover:border-gray-200">
                           <div className="flex justify-between items-start">
-                            <p className=" text-gray-900 text-sm">
+                            <p className="text-gray-900 text-[13px] font-normal">
                               {item.staff_name}
                             </p>
                             <span
-                              className={`text-[9px] uppercase tracking-tighter px-2 py-0.5 rounded ${
+                              className={`text-[11px] font-normal tracking-wide px-2.5 py-0.5 rounded-full capitalize ${
                                 item.status.toLowerCase() === "allocated"
                                   ? "text-blue-600 bg-blue-50"
                                   : "text-gray-500 bg-gray-100"
@@ -247,7 +247,7 @@ const AssetDetailDrawer = ({ asset, onRefresh, onClose }) => {
                           </div>
                           <div className="flex items-center gap-2 mt-3 text-gray-400">
                             <FiClock size={12} />
-                            <p className="text-[10px] font-medium italic">
+                            <p className="text-[12px] font-normal">
                               {new Date(item.date).toLocaleDateString(
                                 undefined,
                                 { dateStyle: "long" },
@@ -261,8 +261,8 @@ const AssetDetailDrawer = ({ asset, onRefresh, onClose }) => {
                 </Timeline>
               ) : (
                 <div className="text-center py-20">
-                  <p className="text-gray-400 text-[10px] uppercase tracking-widest">
-                    No Allocation History Found
+                  <p className="text-gray-400 text-[13px] font-normal tracking-wide">
+                    No allocation history found
                   </p>
                 </div>
               )}
@@ -271,12 +271,12 @@ const AssetDetailDrawer = ({ asset, onRefresh, onClose }) => {
         </div>
 
         {/* FOOTER ACTIONS */}
-        <div className="p-8 border-t border-gray-100 bg-white sticky bottom-0">
+        <div className="px-8 py-6 border-t border-gray-100 bg-white sticky bottom-0">
           {isCurrentlyAllocated ? (
             <button
               onClick={handleReturn}
               disabled={isActionLoading}
-              className="w-full flex items-center justify-center gap-3 bg-white border-2 border-black text-black py-4 rounded-2xl uppercase tracking-widest hover:bg-gray-50 transition-all active:scale-95 disabled:opacity-50"
+              className="w-full flex items-center justify-center gap-2.5 bg-black text-white py-3.5 rounded-xl text-[13px] font-normal tracking-wide shadow-md shadow-gray-300 hover:bg-gray-800 transition-all duration-300 active:scale-95 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400"
             >
               {isActionLoading ? (
                 "Processing..."
@@ -290,7 +290,7 @@ const AssetDetailDrawer = ({ asset, onRefresh, onClose }) => {
             <div className="flex gap-4">
               <button
                 onClick={() => setIsEmployeeDrawerOpen(true)}
-                className="flex-[1.5] bg-gray-50 border border-gray-200 text-gray-700 py-4 rounded-2xl flex items-center justify-center gap-3 uppercase tracking-widest text-[11px] hover:bg-gray-100 transition-all"
+                className="flex-[1.5] bg-white border border-gray-200 text-gray-600 py-3.5 rounded-xl flex items-center justify-center gap-2.5 text-[13px] font-normal tracking-wide hover:bg-gray-50 hover:text-gray-900 hover:border-gray-300 transition-all duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
               >
                 <FiUser size={16} />
                 <span className="truncate">
@@ -301,7 +301,7 @@ const AssetDetailDrawer = ({ asset, onRefresh, onClose }) => {
               <button
                 disabled={!selectedEmployee || isActionLoading}
                 onClick={handleAllocate}
-                className="flex-1 bg-black text-white py-4 rounded-2xl uppercase tracking-widest text-[11px] shadow-lg hover:bg-gray-800 transition-all active:scale-95 disabled:opacity-30"
+                className="flex-1 bg-black text-white py-3.5 rounded-xl text-[13px] font-normal tracking-wide shadow-md shadow-gray-300 hover:bg-gray-800 transition-all duration-300 active:scale-95 disabled:opacity-30 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400"
               >
                 {isActionLoading ? "..." : "Allocate"}
               </button>
