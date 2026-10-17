@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
+import { X, Search, Loader2 } from "lucide-react";
 import { Icon } from "@iconify/react";
 import { getAllStaff } from "../service/staffservice";
 import useLeaveStore from "../store/useleaveStore";
@@ -16,6 +17,9 @@ const AdminLeaveModal = ({ isOpen, onClose }) => {
   const [staffList, setStaffList] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [fetchingPolicies, setFetchingPolicies] = useState(false);
+
+  // Refs to each date input so the calendar icon can open its picker
+  const dateInputRefs = useRef([]);
 
   const [formData, setFormData] = useState({
     employeeUuid: "",
@@ -76,6 +80,33 @@ const AdminLeaveModal = ({ isOpen, onClose }) => {
     }));
   };
 
+  // Remove a date row (always keep at least one row)
+  const removeDateRow = (index) => {
+    setFormData((prev) => {
+      if (prev.leave_date.length <= 1) return prev;
+      return {
+        ...prev,
+        leave_date: prev.leave_date.filter((_, i) => i !== index),
+      };
+    });
+  };
+
+  // Open the native date picker for a given row
+  const openDatePicker = (index) => {
+    const input = dateInputRefs.current[index];
+    if (!input) return;
+    if (typeof input.showPicker === "function") {
+      try {
+        input.showPicker();
+        return;
+      } catch {
+        // fall through to focus/click
+      }
+    }
+    input.focus();
+    input.click();
+  };
+
   const filteredStaff = useMemo(() => {
     return staffList.filter((s) => {
       const fullName = (s.full_name || s.name || "").toLowerCase();
@@ -133,37 +164,33 @@ const AdminLeaveModal = ({ isOpen, onClose }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm font-poppins">
-      <div className="bg-white w-[55%] rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-in fade-in zoom-in duration-200 border border-white/20">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm font-poppins text-[12px]">
+      <div className="bg-white w-[95%] max-w-[500px] rounded-[2rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] border border-white/20">
         {/* Header */}
-        <div className="px-8 py-6 border-b border-gray-50 flex justify-between items-center">
+        <div className="px-8 py-5 flex items-center justify-between border-b border-gray-50 bg-white">
           <div>
-            <h2 className="text-[16px] font-medium uppercase tracking-tight">
+            <h2 className="text-gray-900 text-[16px] font-medium uppercase">
               Apply Admin Leave
             </h2>
-            <p className="text-[10px] text-gray-400">
+            <p className="text-gray-400 text-[10px]">
               Record staff absence manually
             </p>
           </div>
-          <button
-            onClick={handleClose}
-            className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-400"
-          >
-            <Icon icon="heroicons:x-mark-20-solid" className="w-5 h-5" />
+          <button onClick={handleClose}>
+            <X size={20} />
           </button>
         </div>
 
-        {/* Body */}
-        <div className="p-8 space-y-6 overflow-y-auto custom-scrollbar">
+        <form onSubmit={handleSubmit} className="p-8 space-y-5 overflow-y-auto">
           {/* Employee Selection */}
           <div>
-            <label className="block text-[10px] text-gray-400 tracking-widest uppercase mb-2 ml-1">
+            <label className="block mb-1 font-medium text-gray-700">
               Employee
             </label>
             <select
               value={formData.employeeUuid}
               onChange={(e) => handleEmployeeChange(e.target.value)}
-              className="w-full bg-white border border-gray-300 rounded-2xl px-5 py-4 outline-none focus:ring-2 focus:ring-black transition-all text-[12px] appearance-none"
+              className="w-full border p-3 rounded-2xl"
             >
               <option value="">Select Staff Member</option>
               {staffList.map((s) => (
@@ -176,7 +203,7 @@ const AdminLeaveModal = ({ isOpen, onClose }) => {
 
           {/* Leave Policy Selection */}
           <div>
-            <label className="block text-[10px] text-gray-400 tracking-widest uppercase mb-2 ml-1">
+            <label className="block mb-1 font-medium text-gray-700">
               Leave Policy / Type
             </label>
             <select
@@ -188,7 +215,7 @@ const AdminLeaveModal = ({ isOpen, onClose }) => {
                   leave_policy: Number(e.target.value),
                 })
               }
-              className="w-full bg-white border border-gray-300 rounded-2xl px-5 py-4 outline-none focus:ring-2 focus:ring-black transition-all text-[12px] appearance-none disabled:bg-gray-50 disabled:text-gray-400"
+              className="w-full border p-3 rounded-2xl disabled:bg-gray-50 disabled:text-gray-400"
             >
               <option value="">
                 {fetchingPolicies
@@ -211,105 +238,136 @@ const AdminLeaveModal = ({ isOpen, onClose }) => {
 
           {/* Dates Section */}
           <div>
-            <label className="block text-[10px] text-gray-400 tracking-widest uppercase mb-2 ml-1">
+            <label className="block mb-1 font-medium text-gray-700">
               Leave Dates
             </label>
-            <div className="space-y-3">
+            <div className="space-y-2">
               {formData.leave_date.map((row, index) => (
                 <div
                   key={index}
-                  className="flex items-center justify-between p-4 bg-white border border-gray-300 rounded-2xl"
+                  className="flex items-center justify-between gap-3 border p-3 rounded-2xl"
                 >
-                  <input
-                    type="date"
-                    value={row.date}
-                    onChange={(e) => {
-                      const newDates = [...formData.leave_date];
-                      newDates[index].date = e.target.value;
-                      setFormData({ ...formData, leave_date: newDates });
-                    }}
-                    className="bg-transparent text-[12px] outline-none font-medium"
-                  />
-                  <label className="flex items-center gap-2 text-[11px] text-gray-500 cursor-pointer">
+                  <div className="relative flex items-center gap-2">
+                    {/* Calendar icon opens the date picker */}
+                    <button
+                      type="button"
+                      onClick={() => openDatePicker(index)}
+                      aria-label="Open date picker"
+                      className="p-0.5 rounded hover:bg-gray-100 transition-colors"
+                    >
+                      <Icon
+                        icon="solar:calendar-outline"
+                        className="w-4 h-4 text-black"
+                      />
+                    </button>
                     <input
-                      type="checkbox"
-                      className="accent-black w-4 h-4 rounded"
-                      checked={row.half_day}
+                      ref={(el) => (dateInputRefs.current[index] = el)}
+                      type="date"
+                      value={row.date}
+                      onClick={(e) => e.target.showPicker?.()}
                       onChange={(e) => {
                         const newDates = [...formData.leave_date];
-                        newDates[index].half_day = e.target.checked;
-                        newDates[index].half_day_type = e.target.checked
-                          ? 1
-                          : 0;
+                        newDates[index].date = e.target.value;
                         setFormData({ ...formData, leave_date: newDates });
                       }}
+                      className="bg-transparent outline-none font-medium cursor-pointer [&::-webkit-calendar-picker-indicator]:hidden"
                     />
-                    Half Day
-                  </label>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <label className="flex items-center gap-2 text-gray-600 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="accent-black w-4 h-4 rounded"
+                        checked={row.half_day}
+                        onChange={(e) => {
+                          const newDates = [...formData.leave_date];
+                          newDates[index].half_day = e.target.checked;
+                          newDates[index].half_day_type = e.target.checked
+                            ? 1
+                            : 0;
+                          setFormData({ ...formData, leave_date: newDates });
+                        }}
+                      />
+                      Half Day
+                    </label>
+
+                    {/* Delete row (hidden when only one row is left) */}
+                    {formData.leave_date.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeDateRow(index)}
+                        aria-label="Delete date row"
+                        title="Delete"
+                        className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                      >
+                        <Icon
+                          icon="solar:trash-bin-trash-outline"
+                          className="w-4 h-4"
+                        />
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
             <button
               type="button"
               onClick={addDateRow}
-              className="mt-3 text-[11px] text-white bg-black px-4 py-2 rounded-xl hover:bg-gray-800 transition-all"
+              className="mt-2 w-full flex items-center justify-center gap-2 border border-dashed border-gray-300 p-3 rounded-2xl text-gray-600 hover:bg-gray-50"
             >
               + Add Row
             </button>
           </div>
 
           {/* CC Notification Search */}
-          <div>
-            <label className="block text-[10px] text-gray-400 tracking-widest uppercase mb-2 ml-1">
+          <div className="space-y-2">
+            <label className="block mb-1 font-medium text-gray-700">
               CC (Notify Staff)
             </label>
-            <input
-              type="text"
-              placeholder="Search staff..."
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full bg-white border border-gray-300 rounded-2xl px-5 py-3 text-[11px] outline-none mb-3 focus:ring-2 focus:ring-black transition-all"
-            />
-            <div className="bg-white rounded-2xl max-h-[150px] overflow-y-auto p-2 border border-gray-300">
-              {filteredStaff.map((s) => {
-                const isSelected = formData.cc.includes(s.uuid);
-                return (
-                  <div
+            <div className="relative">
+              <Search
+                className="absolute left-3 top-3 text-gray-400"
+                size={16}
+              />
+              <input
+                type="text"
+                placeholder="Search staff..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-9 border p-2.5 rounded-2xl"
+              />
+            </div>
+
+            <div className="max-h-[180px] overflow-y-auto border rounded-2xl p-2 space-y-1">
+              {filteredStaff.length === 0 ? (
+                <div className="p-3 text-center text-gray-400">
+                  No staff found
+                </div>
+              ) : (
+                filteredStaff.map((s) => (
+                  <label
                     key={s.uuid}
-                    onClick={() => toggleCcEmployee(s.uuid)}
-                    className={`flex items-center justify-between p-3 hover:bg-gray-50 rounded-xl cursor-pointer transition-colors ${
-                      isSelected ? "bg-gray-50" : ""
-                    }`}
+                    className="flex justify-between items-center p-2 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors"
                   >
-                    <span
-                      className={`text-[12px] ${
-                        isSelected ? "font-bold text-black" : "text-gray-600"
-                      }`}
-                    >
+                    <span className="font-medium text-gray-800">
                       {s.full_name || s.name}
                     </span>
-                    <div
-                      className={`w-5 h-5 rounded-md border flex items-center justify-center transition-colors ${
-                        isSelected
-                          ? "bg-black border-black text-white"
-                          : "bg-white border-gray-300"
-                      }`}
-                    >
-                      {isSelected && (
-                        <Icon
-                          icon="heroicons:check-16-solid"
-                          className="w-3.5 h-3.5"
-                        />
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+                    <input
+                      type="checkbox"
+                      checked={formData.cc.includes(s.uuid)}
+                      onChange={() => toggleCcEmployee(s.uuid)}
+                      className="rounded border-gray-300"
+                    />
+                  </label>
+                ))
+              )}
             </div>
           </div>
 
           {/* Reason Section */}
           <div>
-            <label className="block text-[10px] text-gray-400 tracking-widest uppercase mb-2 ml-1">
+            <label className="block mb-1 font-medium text-gray-700">
               Reason
             </label>
             <textarea
@@ -319,28 +377,32 @@ const AdminLeaveModal = ({ isOpen, onClose }) => {
                 setFormData({ ...formData, reason: e.target.value })
               }
               placeholder="Personal work..."
-              className="w-full bg-white border border-gray-300 rounded-2xl px-5 py-4 outline-none focus:ring-2 focus:ring-black transition-all text-[12px] resize-none"
+              className="w-full border p-3 rounded-2xl"
             />
           </div>
 
-          {/* Footer Actions */}
-          <div className="pt-6 border-t border-gray-100 flex justify-between items-center sticky bottom-0 bg-white">
+          {/* Footer */}
+          <div className="flex justify-end gap-3 pt-2">
             <button
+              type="button"
               onClick={handleClose}
-              className="text-white bg-black text-[12px] px-6 py-3 rounded-xl hover:bg-gray-800 transition-all font-medium"
+              className="px-4 py-2 text-gray-600 hover:text-gray-800"
             >
               Cancel
             </button>
+
             <GlowButton
               onClick={handleSubmit}
               disabled={loading || fetchingPolicies}
             >
-              <span className="text-white">
-                {loading ? "Processing..." : "Confirm Leave"}
-              </span>
+              {loading ? (
+                <Loader2 className="animate-spin" size={16} />
+              ) : (
+                "Confirm Leave"
+              )}
             </GlowButton>
           </div>
-        </div>
+        </form>
       </div>
     </div>
   );

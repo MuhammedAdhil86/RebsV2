@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
-import { Calendar, Clock, ChevronDown } from "lucide-react";
+import { Clock, ChevronDown } from "lucide-react";
+import { Icon } from "@iconify/react";
 import attendancePolicyService from "../service/attendancepolicyService";
 import ColorPicker from "./colorpicker";
 import toast, { Toaster } from "react-hot-toast";
@@ -19,15 +20,12 @@ const TIME_FIELDS = [
 ];
 
 // Always returns strict 24-hour "HH:mm:ss", or null if the value is invalid.
-// Accepts: "HH:mm", "HH:mm:ss", "h:mm AM/PM", "h:mm:ss AM/PM",
-// and ISO strings like "0000-01-01T09:30:00Z".
-// Empty value -> "00:00:00" (same behaviour as before).
+// Empty value -> "00:00:00".
 const to24Hour = (input) => {
   if (!input) return "00:00:00";
 
   let str = String(input).trim();
 
-  // ISO datetime -> take the time part
   if (str.includes("T")) str = str.split("T")[1];
   str = str.replace(/Z$|[+-]\d{2}:?\d{2}$/, "").trim();
 
@@ -51,10 +49,18 @@ const to24Hour = (input) => {
   return `${pad(hour)}:${pad(minute)}:${pad(second)}`;
 };
 
+// Today's date as "YYYY-MM-DD" in the user's LOCAL timezone (not UTC),
+// used as the minimum selectable date so past dates can never be chosen.
+const getToday = () => {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+
 // Builds the exact error text from the API response: "message: data"
 const getApiErrorText = (error) => {
   const res = error?.response?.data;
-  if (!res) return error?.message || "Update Failed";
+  if (!res) return error?.message || "Create Failed";
   const detail =
     typeof res.data === "string"
       ? res.data
@@ -62,7 +68,7 @@ const getApiErrorText = (error) => {
         ? JSON.stringify(res.data)
         : "";
   const msg = res.message || res.error || "";
-  return [msg, detail].filter(Boolean).join(": ") || "Update Failed";
+  return [msg, detail].filter(Boolean).join(": ") || "Create Failed";
 };
 
 const INITIAL_FORM = {
@@ -96,6 +102,7 @@ const INITIAL_FORM = {
   regularisation_type: "Monthly",
   start_date: "",
   end_date: "",
+  weekly_expected_hours: "",
   overtime_cap_limit: "",
   overtime_cap_period: "Monthly",
   consider_as_halfday: false,
@@ -103,76 +110,50 @@ const INITIAL_FORM = {
   for_weekly_off: false,
 };
 
-// Form values built from the policy loaded from the server (24h times, plain dates)
-// Backend may return the cut as a number (0.5 / 1); the form uses Half/Full Day
-const CUT_LABELS = { "0.5": "Half Day", "1": "Full Day" };
-const toCutLabel = (v) =>
-  v === null || v === undefined || v === ""
-    ? ""
-    : (CUT_LABELS[String(v)] ?? String(v));
+// One draft for the create form
+const STORAGE_KEY = "attendance_policy_create_draft";
 
-const buildFormFromInitial = (data) => {
-  const form = {};
-  Object.keys(INITIAL_FORM).forEach((key) => {
-    form[key] = data[key] ?? INITIAL_FORM[key];
-  });
-  TIME_FIELDS.forEach((f) => {
-    form[f] = data[f] ? (to24Hour(data[f]) ?? "") : "";
-  });
-  form.delay_cut = toCutLabel(data.delay_cut);
-  form.late_cut = toCutLabel(data.late_cut);
-  // Keep these body fields when the backend sends them (same body as create)
-  if (data.is_flexible !== undefined) form.is_flexible = data.is_flexible;
-  if (data.weekly_expected_hours !== undefined)
-    form.weekly_expected_hours = data.weekly_expected_hours;
-  form.start_date = data.start_date ? String(data.start_date).split("T")[0] : "";
-  form.end_date = data.end_date ? String(data.end_date).split("T")[0] : "";
-  form.working_hours = data.working_hours ?? "";
-  return form;
-};
-
-const FlexibleUpdateAttendancePolicyTab = ({ initialData, onClose }) => {
+const CreateAttendancePolicyTab = ({ onClose, onCreated }) => {
   const [formData, setFormData] = useState(INITIAL_FORM);
   const [apiError, setApiError] = useState("");
   const [hydrated, setHydrated] = useState(false);
 
-  // One draft per policy, so editing different policies never mixes data
-  const policyId = initialData?.id || initialData?._id;
-  const storageKey = `attendance_policy_update_draft_${policyId}`;
-
-  // Load: saved draft first, otherwise the data from the server
+  // Load saved draft on mount
   useEffect(() => {
-    if (!initialData) return;
-    const base = buildFormFromInitial(initialData);
-    let next = base;
     try {
-      const saved = localStorage.getItem(storageKey);
-      if (saved) next = { ...base, ...JSON.parse(saved) };
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const draft = { ...INITIAL_FORM, ...JSON.parse(saved) };
+        // A draft saved on an earlier day may hold dates that are now in the past
+        const today = getToday();
+        if (draft.start_date && draft.start_date < today) draft.start_date = "";
+        if (draft.end_date && draft.end_date < today) draft.end_date = "";
+        setFormData(draft);
+      }
     } catch (e) {
-      /* corrupted or blocked - use server data */
+      /* corrupted or blocked - start empty */
     }
-    setFormData(next);
     setHydrated(true);
-  }, [initialData, storageKey]);
+  }, []);
 
   // Auto-save draft on every change so a refresh never loses data
   useEffect(() => {
-    if (!hydrated || !initialData) return;
+    if (!hydrated) return;
     try {
       const current = JSON.stringify(formData);
-      if (current === JSON.stringify(buildFormFromInitial(initialData))) {
-        localStorage.removeItem(storageKey); // unchanged -> keep storage empty
+      if (current === JSON.stringify(INITIAL_FORM)) {
+        localStorage.removeItem(STORAGE_KEY);
       } else {
-        localStorage.setItem(storageKey, current);
+        localStorage.setItem(STORAGE_KEY, current);
       }
     } catch (e) {
       /* storage full or blocked - ignore */
     }
-  }, [formData, hydrated, initialData, storageKey]);
+  }, [formData, hydrated]);
 
   const clearDraft = () => {
     try {
-      localStorage.removeItem(storageKey);
+      localStorage.removeItem(STORAGE_KEY);
     } catch (e) {
       /* ignore */
     }
@@ -180,11 +161,12 @@ const FlexibleUpdateAttendancePolicyTab = ({ initialData, onClose }) => {
 
   const handleClear = () => {
     clearDraft();
-    if (initialData) setFormData(buildFormFromInitial(initialData));
+    setFormData(INITIAL_FORM);
     setApiError("");
     toast.success("Form cleared");
   };
 
+  // Auto-calculate working hours from check in / check out
   useEffect(() => {
     if (formData.start_time && formData.end_time) {
       const [sH, sM] = formData.start_time.split(":").map(Number);
@@ -200,12 +182,33 @@ const FlexibleUpdateAttendancePolicyTab = ({ initialData, onClose }) => {
 
   const handleInputChange = (field, value) => {
     if (
-      ["delay_fine_amount", "late_fine_amount", "over_time_pay"].includes(field)
+      [
+        "delay_fine_amount",
+        "late_fine_amount",
+        "over_time_pay",
+        "weekly_expected_hours",
+      ].includes(field)
     ) {
       if (value !== "" && parseFloat(value) < 0) return;
     }
+    // Never allow past dates (covers typing a date by hand)
+    if (["start_date", "end_date"].includes(field)) {
+      if (value && value < getToday()) {
+        toast.error("Past dates are not allowed");
+        return;
+      }
+    }
     setFormData((prev) => {
       const updated = { ...prev, [field]: value };
+      // End date can never be before the start date
+      if (
+        field === "start_date" &&
+        value &&
+        prev.end_date &&
+        prev.end_date < value
+      ) {
+        updated.end_date = "";
+      }
       if (field === "consider_as_halfday" && value === false) {
         updated.policy_halfday_type = "";
       }
@@ -215,8 +218,31 @@ const FlexibleUpdateAttendancePolicyTab = ({ initialData, onClose }) => {
 
   const handleSubmit = async () => {
     setApiError("");
+
+    if (!formData.policy_name.trim()) {
+      toast.error("Please enter a Policy Name");
+      return;
+    }
+    if (!formData.policy_code.trim()) {
+      toast.error("Please enter a Policy Code");
+      return;
+    }
     if (formData.consider_as_halfday && !formData.policy_halfday_type) {
       toast.error("Please select a Policy Half Day Type");
+      return;
+    }
+
+    const today = getToday();
+    if (!formData.start_date || !formData.end_date) {
+      toast.error("Please select Effective From and Effective To dates");
+      return;
+    }
+    if (formData.start_date < today || formData.end_date < today) {
+      toast.error("Past dates are not allowed");
+      return;
+    }
+    if (formData.end_date < formData.start_date) {
+      toast.error("Effective To cannot be before Effective From");
       return;
     }
 
@@ -237,20 +263,11 @@ const FlexibleUpdateAttendancePolicyTab = ({ initialData, onClose }) => {
       return s === "payroll" || s === "hand" ? s : "payroll";
     };
 
-    const {
-      id,
-      _id,
-      created_at,
-      updated_at,
-      company,
-      is_active,
-      ...changeableData
-    } = formData;
-
     const payload = {
-      ...changeableData,
+      ...formData,
       ...times, // all time fields, strict 24h HH:mm:ss
       working_hours: Number(formData.working_hours) || 0,
+      weekly_expected_hours: Number(formData.weekly_expected_hours) || 0,
       delay_unpaid_count: Number(formData.delay_unpaid_count) || 0,
       late_unpaid_count: Number(formData.late_unpaid_count) || 0,
       over_time_pay: parseFloat(formData.over_time_pay) || 0.0,
@@ -273,8 +290,7 @@ const FlexibleUpdateAttendancePolicyTab = ({ initialData, onClose }) => {
       ),
     };
 
-    // Same rule as the create form: backend rejects policy_halfday_type
-    // when consider_as_halfday is false
+    // Backend rejects policy_halfday_type when consider_as_halfday is false
     if (!formData.consider_as_halfday) {
       delete payload.policy_halfday_type;
     }
@@ -282,15 +298,14 @@ const FlexibleUpdateAttendancePolicyTab = ({ initialData, onClose }) => {
     console.log("Payload sent to backend:", payload);
 
     try {
-      // NOTE: change `updatePolicy` if your service uses a different name
-      const response = await attendancePolicyService.updatePolicy(
-        policyId,
-        payload,
-      );
+      // NOTE: change `createPolicy` if your service uses a different name
+      const response = await attendancePolicyService.createPolicy(payload);
       if (response.status === 200 || response.status === 201) {
-        toast.success("Policy Updated Successfully!");
+        toast.success("Policy Created Successfully!");
         clearDraft();
-        onClose();
+        setFormData(INITIAL_FORM);
+        onCreated?.(response.data);
+        onClose?.();
       }
     } catch (error) {
       const errorText = getApiErrorText(error);
@@ -306,6 +321,8 @@ const FlexibleUpdateAttendancePolicyTab = ({ initialData, onClose }) => {
     "text-[12px] font-medium text-gray-700 mb-1.5 block font-['Poppins']";
   const iconWrapper =
     "absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 cursor-pointer hover:text-black transition-colors";
+  const calendarIconClass =
+    "absolute right-4 top-1/2 -translate-y-1/2 cursor-pointer text-gray-800 hover:text-black transition-colors";
 
   const ToggleButton = ({ label, value, field }) => (
     <div className="flex flex-col gap-1.5">
@@ -337,7 +354,6 @@ const FlexibleUpdateAttendancePolicyTab = ({ initialData, onClose }) => {
             className={`${inputClass} pr-10`}
             onChange={(e) => handleInputChange(field, e.target.value)}
           />
-          {/* Clicking ONLY this div triggers the picker */}
           <div
             className={iconWrapper}
             onClick={() => inputRef.current?.showPicker()}
@@ -349,7 +365,7 @@ const FlexibleUpdateAttendancePolicyTab = ({ initialData, onClose }) => {
     );
   };
 
-  const DateInput = ({ label, field }) => {
+  const DateInput = ({ label, field, min }) => {
     const inputRef = useRef(null);
     return (
       <div>
@@ -358,21 +374,27 @@ const FlexibleUpdateAttendancePolicyTab = ({ initialData, onClose }) => {
           <input
             ref={inputRef}
             type="date"
+            min={min || getToday()}
             value={formData[field]}
             className={`${inputClass} pr-10`}
             onChange={(e) => handleInputChange(field, e.target.value)}
           />
-          {/* Clicking ONLY this div triggers the picker */}
           <div
-            className={iconWrapper}
+            className={calendarIconClass}
             onClick={() => inputRef.current?.showPicker()}
           >
-            <Calendar size={14} />
+            <Icon icon="solar:calendar-outline" className="w-4 h-4" />
           </div>
         </div>
       </div>
     );
   };
+
+  const SelectArrow = () => (
+    <div className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
+      <ChevronDown size={14} />
+    </div>
+  );
 
   return (
     <div className="bg-white rounded-xl shadow-xl border border-gray-200 p-6 space-y-6 overflow-y-auto font-['Poppins']">
@@ -388,9 +410,12 @@ const FlexibleUpdateAttendancePolicyTab = ({ initialData, onClose }) => {
 
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Calendar size={20} className="text-gray-900" />
+          <Icon
+            icon="solar:calendar-outline"
+            className="w-4 h-4 text-gray-800 hover:text-black"
+          />
           <h2 className="text-[16px] text-gray-900 font-semibold">
-            Update Attendance Policy
+            Create Attendance Policy
           </h2>
         </div>
         <button
@@ -433,7 +458,7 @@ const FlexibleUpdateAttendancePolicyTab = ({ initialData, onClose }) => {
               <label className={labelClass}>Policy Code</label>
               <input
                 type="text"
-                placeholder="RP"
+                placeholder="GEN001"
                 className={inputClass}
                 value={formData.policy_code}
                 onChange={(e) =>
@@ -462,6 +487,21 @@ const FlexibleUpdateAttendancePolicyTab = ({ initialData, onClose }) => {
               field="over_time_benefit"
             />
           </div>
+
+          {formData.over_time_benefit && (
+            <div>
+              <label className={labelClass}>Over Time Pay</label>
+              <input
+                type="number"
+                placeholder="Amount"
+                className={inputClass}
+                value={formData.over_time_pay}
+                onChange={(e) =>
+                  handleInputChange("over_time_pay", e.target.value)
+                }
+              />
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-4">
             <ToggleButton
@@ -493,9 +533,7 @@ const FlexibleUpdateAttendancePolicyTab = ({ initialData, onClose }) => {
                   <option value="First Half">First Half</option>
                   <option value="Second Half">Second Half</option>
                 </select>
-                <div className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
-                  <ChevronDown size={14} />
-                </div>
+                <SelectArrow />
               </div>
             </div>
           )}
@@ -526,9 +564,7 @@ const FlexibleUpdateAttendancePolicyTab = ({ initialData, onClose }) => {
                   <option value="Monthly">Monthly</option>
                   <option value="Weekly">Weekly</option>
                 </select>
-                <div className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
-                  <ChevronDown size={14} />
-                </div>
+                <SelectArrow />
               </div>
             </div>
           </div>
@@ -548,16 +584,31 @@ const FlexibleUpdateAttendancePolicyTab = ({ initialData, onClose }) => {
                   <option value="Monthly">Monthly</option>
                   <option value="Weekly">Weekly</option>
                 </select>
-                <div className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
-                  <ChevronDown size={14} />
-                </div>
+                <SelectArrow />
               </div>
             </div>
           </div>
 
+          <div>
+            <label className={labelClass}>Weekly Expected Hours</label>
+            <input
+              type="number"
+              placeholder="48"
+              className={inputClass}
+              value={formData.weekly_expected_hours}
+              onChange={(e) =>
+                handleInputChange("weekly_expected_hours", e.target.value)
+              }
+            />
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <DateInput label="Effective From" field="start_date" />
-            <DateInput label="Effective To" field="end_date" />
+            <DateInput
+              label="Effective To"
+              field="end_date"
+              min={formData.start_date || getToday()}
+            />
           </div>
         </div>
 
@@ -566,12 +617,12 @@ const FlexibleUpdateAttendancePolicyTab = ({ initialData, onClose }) => {
             <TimeInput
               label="Check in Time"
               field="start_time"
-              placeholder="09:30:00"
+              placeholder="09:00:00"
             />
             <TimeInput
               label="Check out Time"
               field="end_time"
-              placeholder="18:30:00"
+              placeholder="18:00:00"
             />
             <TimeInput label="Lunch Break From" field="lunch_break_from" />
             <TimeInput label="Lunch Break To" field="lunch_break_to" />
@@ -623,9 +674,7 @@ const FlexibleUpdateAttendancePolicyTab = ({ initialData, onClose }) => {
                     <option value="fine">Fine</option>
                     <option value="email">Email</option>
                   </select>
-                  <div className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
-                    <ChevronDown size={14} />
-                  </div>
+                  <SelectArrow />
                 </div>
               </div>
               {formData.delay_action_type === "day" && (
@@ -641,9 +690,7 @@ const FlexibleUpdateAttendancePolicyTab = ({ initialData, onClose }) => {
                     <option value="Half Day">Half Day</option>
                     <option value="Full Day">Full Day</option>
                   </select>
-                  <div className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
-                    <ChevronDown size={14} />
-                  </div>
+                  <SelectArrow />
                 </div>
               )}
               {formData.delay_action_type === "fine" && (
@@ -669,9 +716,7 @@ const FlexibleUpdateAttendancePolicyTab = ({ initialData, onClose }) => {
                       <option value="payroll">Payroll</option>
                       <option value="hand">Hand</option>
                     </select>
-                    <div className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
-                      <ChevronDown size={14} />
-                    </div>
+                    <SelectArrow />
                   </div>
                 </div>
               )}
@@ -708,9 +753,7 @@ const FlexibleUpdateAttendancePolicyTab = ({ initialData, onClose }) => {
                     <option value="fine">Fine</option>
                     <option value="email">Email</option>
                   </select>
-                  <div className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
-                    <ChevronDown size={14} />
-                  </div>
+                  <SelectArrow />
                 </div>
               </div>
               {formData.late_action_type === "day" && (
@@ -726,9 +769,7 @@ const FlexibleUpdateAttendancePolicyTab = ({ initialData, onClose }) => {
                     <option value="Half Day">Half Day</option>
                     <option value="Full Day">Full Day</option>
                   </select>
-                  <div className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
-                    <ChevronDown size={14} />
-                  </div>
+                  <SelectArrow />
                 </div>
               )}
               {formData.late_action_type === "fine" && (
@@ -754,9 +795,7 @@ const FlexibleUpdateAttendancePolicyTab = ({ initialData, onClose }) => {
                       <option value="payroll">Payroll</option>
                       <option value="hand">Hand</option>
                     </select>
-                    <div className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
-                      <ChevronDown size={14} />
-                    </div>
+                    <SelectArrow />
                   </div>
                 </div>
               )}
@@ -767,20 +806,22 @@ const FlexibleUpdateAttendancePolicyTab = ({ initialData, onClose }) => {
 
       <div className="flex justify-end gap-3 mt-6">
         <button
+          type="button"
           onClick={onClose}
           className="px-10 py-2.5 border border-gray-300 rounded-xl text-[13px] font-medium text-gray-700 hover:bg-gray-50 transition-colors"
         >
           Cancel
         </button>
         <button
+          type="button"
           onClick={handleSubmit}
           className="px-10 py-2.5 bg-black text-white rounded-xl text-[13px] font-medium hover:bg-zinc-800 transition-all shadow-lg"
         >
-          Update
+          Create
         </button>
       </div>
     </div>
   );
 };
 
-export default FlexibleUpdateAttendancePolicyTab;
+export default CreateAttendancePolicyTab;

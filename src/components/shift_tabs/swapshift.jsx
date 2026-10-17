@@ -1,23 +1,42 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
+import { Icon } from "@iconify/react";
 import {
-  fetchShiftAllocationsforSwap,
+  getEffectiveAllocations,
   executeShiftSwap,
 } from "../../service/policiesService";
+import { getDepartmentData } from "../../service/staffservice";
 
 export default function SwapShift() {
-  const [currentMonth] = useState(new Date("2026-06-01"));
-  const [apiShiftData, setApiShiftData] = useState([]);
+  const [currentMonth] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
+  // "YYYY-MM" as expected by ?month=
+  const monthParam = `${currentMonth.getFullYear()}-${String(
+    currentMonth.getMonth() + 1,
+  ).padStart(2, "0")}`;
 
-  // Master list of employees to keep dropdowns functional at all times
-  const [allEmployees, setAllEmployees] = useState([]);
+  // All allocation rows (every employee of the effective department, every date)
+  const [allRows, setAllRows] = useState([]);
+
+  const [departments, setDepartments] = useState([]);
+  // "" = logged-in user's own department (backend default)
+  const [selectedDepartment, setSelectedDepartment] = useState("");
 
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  // Simplified unified notification state string to eliminate object parsing friction
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [notification, setNotification] = useState({ type: "", message: "" });
   const [submitting, setSubmitting] = useState(false);
   const [calendarEmployeeFilter, setCalendarEmployeeFilter] = useState("");
+
+  const dateInputRef = useRef(null);
+
+  const openDatePicker = () => {
+    const el = dateInputRef.current;
+    if (!el) return;
+    if (typeof el.showPicker === "function") el.showPicker();
+    else el.focus();
+  };
 
   const [formData, setFormData] = useState({
     fromEmployee: "",
@@ -42,6 +61,36 @@ export default function SwapShift() {
     </div>
   );
 
+  // Employee dropdown options, derived from the loaded rows
+  const allEmployees = useMemo(
+    () =>
+      Array.from(new Map(allRows.map((r) => [r.user_id, r])).values()).map(
+        (emp) => ({
+          id: emp.user_id,
+          name: emp.employee_name?.trim() || "Unknown Staff",
+        }),
+      ),
+    [allRows],
+  );
+
+  // Shift of an employee on a specific date
+  const getShiftForDate = (empId, isoDate) => {
+    if (!empId) return "";
+    if (!isoDate) return "Select a date first";
+    const day = isoDate.split("T")[0];
+    const row = allRows.find(
+      (r) => r.user_id === empId && r.date?.split("T")[0] === day,
+    );
+    return row?.shift_name ? row.shift_name.trim() : "Unassigned / Off Day";
+  };
+
+  // Single place that builds the request: ?month=YYYY-MM[&department=ID]
+  const loadAllocations = () =>
+    getEffectiveAllocations({
+      month: monthParam,
+      departmentId: selectedDepartment || undefined,
+    });
+
   // Automatically clear notifications after 6 seconds
   useEffect(() => {
     if (notification.message) {
@@ -52,60 +101,81 @@ export default function SwapShift() {
     }
   }, [notification]);
 
-  // 1. Initial Load: Fetch full company payload to establish stable dropdown options
+  // 1. Load departments once
   useEffect(() => {
-    const initializeStaffList = async () => {
+    let ignore = false;
+    (async () => {
       try {
-        const resData = await fetchShiftAllocationsforSwap(null);
+        const list = await getDepartmentData();
+        if (!ignore) setDepartments(Array.isArray(list) ? list : []);
+      } catch (err) {
+        console.error("Department load error:", err);
+      }
+    })();
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
+  // 2. Load allocations for the month + department (race-condition safe)
+  useEffect(() => {
+    let ignore = false;
+    (async () => {
+      setLoading(true);
+      try {
+        const resData = await loadAllocations();
+        if (ignore) return;
         if (
           resData &&
           resData.status_code === 200 &&
           Array.isArray(resData.data)
         ) {
-          // Extract unique employees and map their structures
-          const uniqueMap = Array.from(
-            new Map(resData.data.map((item) => [item.user_id, item])).values(),
-          ).map((emp) => ({
-            id: emp.user_id,
-            name: emp.employee_name || "Unknown Staff",
-            currentShift: emp.shift_name
-              ? emp.shift_name.trim()
-              : "Unassigned / Off Day",
-          }));
-          setAllEmployees(uniqueMap);
-        }
-      } catch (err) {
-        console.error("Initialization error:", err);
-      }
-    };
-    initializeStaffList();
-  }, []);
-
-  // 2. Calendar Logic Sync: Runs on every component filter adjustment safely
-  useEffect(() => {
-    const getEffectiveShifts = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const targetUuid =
-          calendarEmployeeFilter || formData.fromEmployee || null;
-        const resData = await fetchShiftAllocationsforSwap(targetUuid);
-
-        if (resData && resData.status_code === 200) {
-          setApiShiftData(resData.data || []);
+          setAllRows(resData.data);
         } else {
-          setError("Failed to fetch effective shifts parameters.");
+          setAllRows([]);
+          setNotification({
+            type: "error",
+            message:
+              resData?.message ||
+              "Failed to fetch effective shifts parameters.",
+          });
         }
       } catch (err) {
+        if (ignore) return;
         console.error("API error fetching allocations:", err);
-        setError(err.message || "Something went wrong while loading shifts.");
+        setAllRows([]);
+        setNotification({
+          type: "error",
+          message: err.message || "Something went wrong while loading shifts.",
+        });
       } finally {
-        setLoading(false);
+        if (!ignore) {
+          setLoading(false);
+          setHasLoadedOnce(true);
+        }
       }
+    })();
+    return () => {
+      ignore = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [monthParam, selectedDepartment]);
 
-    getEffectiveShifts();
-  }, [formData.fromEmployee, calendarEmployeeFilter]);
+  // 3. Keep "Assigned Shift" / "Target Shift" in sync with employee + selected date
+  useEffect(() => {
+    setFormData((prev) => {
+      const fromShift = getShiftForDate(prev.fromEmployee, prev.selectedDate);
+      const toShift = getShiftForDate(prev.toEmployee, prev.selectedDate);
+      if (fromShift === prev.fromShift && toShift === prev.toShift) return prev;
+      return { ...prev, fromShift, toShift };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    formData.fromEmployee,
+    formData.toEmployee,
+    formData.selectedDate,
+    allRows,
+  ]);
 
   const daysInMonth = new Date(
     currentMonth.getFullYear(),
@@ -122,19 +192,29 @@ export default function SwapShift() {
     ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
   ];
 
+  // Which employee's shifts the calendar displays
+  const calendarEmployeeId =
+    calendarEmployeeFilter ||
+    formData.fromEmployee ||
+    allEmployees[0]?.id ||
+    "";
+
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prev) => {
-      const updated = { ...prev, [name]: value };
-      if (name === "fromEmployee") {
-        const emp = allEmployees.find((e) => e.id === value);
-        updated.fromShift = emp ? emp.currentShift : "";
-      }
-      if (name === "toEmployee") {
-        const emp = allEmployees.find((e) => e.id === value);
-        updated.toShift = emp ? emp.currentShift : "";
-      }
-      return updated;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleDepartmentChange = (e) => {
+    setSelectedDepartment(e.target.value);
+    setAllRows([]); // drop previous department's staff right away
+    // employees belong to the old department, so reset everything tied to them
+    setCalendarEmployeeFilter("");
+    setFormData({
+      fromEmployee: "",
+      fromShift: "",
+      toEmployee: "",
+      toShift: "",
+      selectedDate: "",
     });
   };
 
@@ -170,6 +250,16 @@ export default function SwapShift() {
       return;
     }
 
+    // Swapping identical shifts does nothing (remove this block if not wanted)
+    if (formData.fromShift === formData.toShift) {
+      setNotification({
+        type: "error",
+        message:
+          "Validation Error: Both employees already have the same shift on this date.",
+      });
+      return;
+    }
+
     setSubmitting(true);
     setNotification({ type: "", message: "" });
 
@@ -188,11 +278,9 @@ export default function SwapShift() {
           message: result.message || "Shift swapped successfully!",
         });
 
-        const freshData = await fetchShiftAllocationsforSwap(
-          calendarEmployeeFilter || formData.fromEmployee || null,
-        );
-        if (freshData?.status_code === 200)
-          setApiShiftData(freshData.data || []);
+        const freshData = await loadAllocations();
+        if (freshData?.status_code === 200 && Array.isArray(freshData.data))
+          setAllRows(freshData.data);
       } else {
         const combinedErr = result?.data
           ? `${result.message}: ${result.data}`
@@ -203,14 +291,12 @@ export default function SwapShift() {
         });
       }
     } catch (err) {
-      // 1. Gather all potential text locations from your Axios Error Stack log
       let rawString =
         err.response?.data ||
         err.request?.responseText ||
         err.responseText ||
         "";
 
-      // If it's inside an object layout due to interceptors
       if (rawString && typeof rawString === "object") {
         rawString = JSON.stringify(rawString);
       }
@@ -219,15 +305,13 @@ export default function SwapShift() {
 
       if (typeof rawString === "string" && rawString.includes("message")) {
         try {
-          // Try standard JSON recovery mapping
           const parsed = JSON.parse(rawString.trim());
           if (parsed?.message && parsed?.data) {
             finalErrorMessage = `${parsed.message}: ${parsed.data}`;
           } else if (parsed?.message) {
             finalErrorMessage = parsed.message;
           }
-        } catch (e) {
-          // Regex extraction safety fallback directly out of the Postman string format block if parsing hiccups
+        } catch (parseErr) {
           const messageMatch = rawString.match(/"message"\s*:\s*"([^"]+)"/);
           const dataMatch = rawString.match(/"data"\s*:\s*"([^"]+)"/);
 
@@ -239,7 +323,6 @@ export default function SwapShift() {
         }
       }
 
-      // Final display assignment fallback guard
       if (!finalErrorMessage) {
         finalErrorMessage =
           err.message ||
@@ -255,7 +338,7 @@ export default function SwapShift() {
     }
   };
 
-  if (loading && apiShiftData.length === 0) {
+  if (loading && !hasLoadedOnce) {
     return (
       <div className="flex justify-center items-center p-20 bg-white rounded-b-lg text-sm text-gray-500 font-normal">
         Loading active business allocations dashboard array payload...
@@ -406,16 +489,27 @@ export default function SwapShift() {
               <label className="block text-[10px] uppercase font-normal text-gray-500 mb-1">
                 Target Swap Date
               </label>
-              <input
-                type="date"
-                value={
-                  formData.selectedDate
-                    ? formData.selectedDate.split("T")[0]
-                    : ""
-                }
-                onChange={handleDateChange}
-                className="w-full text-xs border border-gray-300 rounded-md p-2 bg-white text-gray-700 font-normal outline-none focus:ring-1 focus:ring-black cursor-pointer"
-              />
+              <div className="relative">
+                <input
+                  ref={dateInputRef}
+                  type="date"
+                  value={
+                    formData.selectedDate
+                      ? formData.selectedDate.split("T")[0]
+                      : ""
+                  }
+                  onChange={handleDateChange}
+                  className="w-full text-xs border border-gray-300 rounded-md p-2 pr-8 bg-white text-gray-700 font-normal outline-none focus:ring-1 focus:ring-black cursor-pointer [&::-webkit-calendar-picker-indicator]:hidden"
+                />
+                <button
+                  type="button"
+                  onClick={openDatePicker}
+                  aria-label="Open date picker"
+                  className="absolute inset-y-0 right-0 flex items-center pr-2.5 text-gray-800 hover:text-black"
+                >
+                  <Icon icon="solar:calendar-outline" className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
             <button
@@ -439,14 +533,35 @@ export default function SwapShift() {
             </span>
 
             {/* Right Side Employee Dropdown Filter */}
-            <div className="flex items-center gap-2 max-w-xs w-full justify-end">
+            <div className="flex items-center gap-2 max-w-md w-full justify-end">
+              {/* Department Dropdown */}
+              <div className="relative max-w-[200px] w-full">
+                <select
+                  value={selectedDepartment}
+                  onChange={handleDepartmentChange}
+                  className="text-xs border border-gray-300 rounded-md p-1.5 pr-8 bg-white focus:outline-none focus:ring-1 focus:ring-black font-normal w-full appearance-none cursor-pointer"
+                >
+                  <option value="">-- My Department --</option>
+                  {departments.map((dept) => (
+                    <option key={dept.id} value={dept.id}>
+                      {dept.name}
+                    </option>
+                  ))}
+                </select>
+                <DropdownArrow />
+              </div>
+
               <div className="relative max-w-[200px] w-full">
                 <select
                   value={calendarEmployeeFilter}
                   onChange={(e) => setCalendarEmployeeFilter(e.target.value)}
                   className="text-xs border border-gray-300 rounded-md p-1.5 pr-8 bg-white focus:outline-none focus:ring-1 focus:ring-black font-normal w-full appearance-none cursor-pointer"
                 >
-                  <option value="">-- Filter Calendar By Staff --</option>
+                  <option value="">
+                    {loading
+                      ? "Loading staff..."
+                      : "-- Filter Calendar By Staff --"}
+                  </option>
                   {allEmployees.map((emp) => (
                     <option key={emp.id} value={emp.id}>
                       {emp.name}
@@ -477,9 +592,12 @@ export default function SwapShift() {
 
                 if (day) {
                   targetDateStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-                  shiftDetails = apiShiftData.find(
+                  shiftDetails = allRows.find(
                     (item) =>
-                      item.date && item.date.split("T")[0] === targetDateStr,
+                      item.date &&
+                      item.date.split("T")[0] === targetDateStr &&
+                      (!calendarEmployeeId ||
+                        item.user_id === calendarEmployeeId),
                   );
                 }
 

@@ -1,7 +1,12 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import { Icon } from "@iconify/react";
 import EventEmployee from "./eventemployee";
 import GlowButton from "../helpers/glowbutton";
-import { createEvent, fetchTimeZone } from "../../service/eventservices";
+import {
+  createEvent,
+  updateEventApi,
+  fetchTimeZone,
+} from "../../service/eventservices";
 import toast, { Toaster } from "react-hot-toast";
 
 const ChevronDownIcon = () => (
@@ -18,26 +23,87 @@ const ChevronDownIcon = () => (
   </svg>
 );
 
-export default function EventCreate({ onClose, onCreateSuccess }) {
+const EMPTY_FORM = {
+  title: "",
+  description: "",
+  start_date: "",
+  start_time: "",
+  end_date: "",
+  end_time: "",
+  event_type: "",
+  participation: [],
+  place: "",
+  link: "",
+  when_to_notify: "",
+  timezone: "",
+};
+
+// "2026-10-20T10:00:00Z" -> { date: "2026-10-20", time: "10:00" } (same Z-stripping as the calendar)
+const splitDateTime = (value) => {
+  if (!value) return { date: "", time: "" };
+  const clean = value.includes("Z") ? value.split("Z")[0] : value;
+  const [date, time = ""] = clean.split("T");
+  return { date, time: time.slice(0, 5) };
+};
+
+// "00:15:00" or "15" -> "15"
+const reminderToMinutes = (value) => {
+  if (value === undefined || value === null || value === "") return "";
+  const str = String(value);
+  if (str.includes(":")) {
+    const [h = 0, m = 0] = str.split(":").map(Number);
+    return String(h * 60 + m);
+  }
+  return str;
+};
+
+// Maps an existing event (from the API) to the form state
+const eventToForm = (event) => {
+  const start = splitDateTime(event.start_date);
+  const end = splitDateTime(event.end_date);
+  return {
+    title: event.title || "",
+    description: event.description || "",
+    start_date: start.date,
+    start_time: start.time,
+    end_date: end.date,
+    end_time: end.time,
+    event_type: event.event_type || "",
+    participation: (event.participation || [])
+      .map((p) => (typeof p === "string" ? p : p.uuid || p.user_id || p.id))
+      .filter(Boolean),
+    place: event.event_type === "offline" ? event.place || "" : "",
+    link: event.meeting_url || "",
+    when_to_notify: reminderToMinutes(event.reminder_before),
+    timezone: event.time_zone || "",
+  };
+};
+
+export default function EventCreate({
+  event = null,
+  onClose,
+  onCreateSuccess,
+}) {
+  const isEdit = Boolean(event?.id);
   const [timeZone, setTimeZone] = useState([]);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const [formData, setFormData] = useState({
-    title: "",
-    description: "",
-    start_date: "",
-    start_time: "",
-    end_date: "",
-    end_time: "",
-    event_type: "",
-    participation: [],
-    place: "",
-    link: "",
-    when_to_notify: "",
-    timezone: "",
-  });
+  const startDateRef = useRef(null);
+  const endDateRef = useRef(null);
+
+  // Opens the native date picker when the calendar icon is clicked
+  const openDatePicker = (ref) => {
+    const el = ref.current;
+    if (!el) return;
+    if (typeof el.showPicker === "function") el.showPicker();
+    else el.focus();
+  };
+
+  const [formData, setFormData] = useState(() =>
+    event ? eventToForm(event) : EMPTY_FORM,
+  );
 
   useEffect(() => {
     let isMounted = true;
@@ -55,13 +121,21 @@ export default function EventCreate({ onClose, onCreateSuccess }) {
     };
   }, []);
 
-  const formatTime = (minutes) => {
-    if (!minutes) return "00:00:00";
-    const hrs = String(Math.floor(minutes / 60)).padStart(2, "0");
-    const mins = String(minutes % 60).padStart(2, "0");
-    return `${hrs}:${mins}:00`;
-  };
+  // Edit mode: match the event's time_zone to an option in the dropdown
+  useEffect(() => {
+    if (!isEdit || !timeZone.length || !formData.timezone) return;
+    const match = timeZone.find(
+      (tz) =>
+        String(tz.id) === String(formData.timezone) ||
+        tz.name === formData.timezone,
+    );
+    if (match && String(match.id) !== String(formData.timezone)) {
+      setFormData((prev) => ({ ...prev, timezone: match.id }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timeZone, isEdit]);
 
+  // "2026-10-20" + "10:00" -> "2026-10-20T10:00:00"
   const formatDateTimeWithZone = (dateStr, timeStr) => {
     if (!dateStr || !timeStr) return "";
     const standardTime = timeStr.length === 5 ? `${timeStr}:00` : timeStr;
@@ -111,6 +185,9 @@ export default function EventCreate({ onClose, onCreateSuccess }) {
 
     const participationArray = formData.participation.map((uuid) => ({ uuid }));
 
+    // Matches the API body:
+    // { title, description, start_date, end_date, event_type, participation,
+    //   place, meeting_url, reminder_before, time_zone }
     const eventPayload = {
       title: formData.title,
       description: formData.description,
@@ -118,40 +195,36 @@ export default function EventCreate({ onClose, onCreateSuccess }) {
       end_date: endDateTime,
       event_type: formData.event_type,
       participation: participationArray,
-      place: formData.event_type === "offline" ? formData.place : "Online",
+      place: formData.event_type === "offline" ? formData.place : "",
       meeting_url: formData.event_type === "online" ? formData.link : "",
-      reminder_before: formatTime(parseInt(formData.when_to_notify, 10)),
-      time_zone: formData.timezone,
+      reminder_before: String(formData.when_to_notify), // e.g. "15"
+      time_zone: formData.timezone, // e.g. "Asia/Kolkata"
     };
 
     try {
-      await createEvent(eventPayload);
-      toast.success("Event created successfully");
+      if (isEdit) {
+        await updateEventApi(event.id, eventPayload);
+        toast.success("Event updated successfully");
+      } else {
+        await createEvent(eventPayload);
+        toast.success("Event created successfully");
+      }
 
       if (typeof onCreateSuccess === "function") {
         await onCreateSuccess();
       }
 
-      setFormData({
-        title: "",
-        description: "",
-        start_date: "",
-        start_time: "",
-        end_date: "",
-        end_time: "",
-        event_type: "",
-        participation: [],
-        place: "",
-        link: "",
-        when_to_notify: "",
-        timezone: "",
-      });
+      setFormData(EMPTY_FORM);
 
       if (typeof onClose === "function") {
         onClose();
       }
     } catch {
-      toast.error("Error creating event. Please Try Again");
+      toast.error(
+        isEdit
+          ? "Error updating event. Please Try Again"
+          : "Error creating event. Please Try Again",
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -206,7 +279,7 @@ export default function EventCreate({ onClose, onCreateSuccess }) {
 
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-xl text-black font-normal uppercase tracking-wider">
-          Create Event
+          {isEdit ? "Edit Event" : "Create Event"}
         </h1>
         {onClose && (
           <button
@@ -264,13 +337,24 @@ export default function EventCreate({ onClose, onCreateSuccess }) {
             <label className="block text-[11px] font-normal uppercase tracking-wider text-gray-500 mb-1.5">
               Start Date
             </label>
-            <input
-              type="date"
-              className="w-full bg-transparent text-gray-800 outline-none border border-gray-200 rounded-lg px-3 py-2 text-xs focus:border-gray-400 transition-all font-normal uppercase"
-              name="start_date"
-              value={formData.start_date}
-              onChange={handleChange}
-            />
+            <div className="relative">
+              <input
+                ref={startDateRef}
+                type="date"
+                className="w-full bg-transparent text-gray-800 outline-none border border-gray-200 rounded-lg px-3 py-2 pr-8 text-xs focus:border-gray-400 transition-all font-normal uppercase [&::-webkit-calendar-picker-indicator]:hidden"
+                name="start_date"
+                value={formData.start_date}
+                onChange={handleChange}
+              />
+              <button
+                type="button"
+                onClick={() => openDatePicker(startDateRef)}
+                aria-label="Open start date picker"
+                className="absolute inset-y-0 right-0 flex items-center pr-2.5 text-gray-800 hover:text-black cursor-pointer"
+              >
+                <Icon icon="solar:calendar-outline" className="w-4 h-4" />
+              </button>
+            </div>
             {errors.start_date && (
               <p className="text-red-500 text-[10px] mt-1 tracking-wide">
                 {errors.start_date}
@@ -303,13 +387,24 @@ export default function EventCreate({ onClose, onCreateSuccess }) {
             <label className="block text-[11px] font-normal uppercase tracking-wider text-gray-500 mb-1.5">
               End Date
             </label>
-            <input
-              type="date"
-              className="w-full bg-transparent text-gray-800 outline-none border border-gray-200 rounded-lg px-3 py-2 text-xs focus:border-gray-400 transition-all font-normal uppercase"
-              name="end_date"
-              value={formData.end_date}
-              onChange={handleChange}
-            />
+            <div className="relative">
+              <input
+                ref={endDateRef}
+                type="date"
+                className="w-full bg-transparent text-gray-800 outline-none border border-gray-200 rounded-lg px-3 py-2 pr-8 text-xs focus:border-gray-400 transition-all font-normal uppercase [&::-webkit-calendar-picker-indicator]:hidden"
+                name="end_date"
+                value={formData.end_date}
+                onChange={handleChange}
+              />
+              <button
+                type="button"
+                onClick={() => openDatePicker(endDateRef)}
+                aria-label="Open end date picker"
+                className="absolute inset-y-0 right-0 flex items-center pr-2.5 text-gray-800 hover:text-black cursor-pointer"
+              >
+                <Icon icon="solar:calendar-outline" className="w-4 h-4" />
+              </button>
+            </div>
             {errors.end_date && (
               <p className="text-red-500 text-[10px] mt-1 tracking-wide">
                 {errors.end_date}
@@ -551,7 +646,13 @@ export default function EventCreate({ onClose, onCreateSuccess }) {
         {/* Submit Button */}
         <div className="pt-2">
           <GlowButton type="submit" disabled={isSubmitting}>
-            {isSubmitting ? "Creating..." : "Create Event"}
+            {isSubmitting
+              ? isEdit
+                ? "Updating..."
+                : "Creating..."
+              : isEdit
+                ? "Update Event"
+                : "Create Event"}
           </GlowButton>
         </div>
       </form>

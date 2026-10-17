@@ -9,7 +9,8 @@ import {
   getHoliday,
   getWeekOff,
   getEventbyDate,
-  getLeavebyDate
+  getLeavebyDate,
+  updateEvent
 } from "../api/api";
 
 /**
@@ -145,5 +146,16 @@ export const cancelEventapi = async (eventId) => {
   } catch (error) {
     console.error("Error cancelling event:", error);
     throw error;
+  }
+};
+
+export const updateEventApi = async (id, eventData) => {
+  try {
+    const url = updateEvent.replace(":id", id);
+    const response = await axiosInstance.put(url, eventData);
+    return response.data?.data || response.data;
+  } catch (error) {
+    console.error("Error updating event:", error);
+    throw error; // Throw so component toast can handle it
   }
 };

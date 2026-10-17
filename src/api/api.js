@@ -112,6 +112,7 @@ export const postEvents = "/admin/event/add"
 export const getTimezone = "/master/timezone"
 export const deleteEvent = "/admin/event/delete/:id"
 export const cancelEvent = "/admin/event/cancel/:id"
+export const updateEvent = "/admin/event/update/:id";
 
 
 

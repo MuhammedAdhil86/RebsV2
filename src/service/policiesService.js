@@ -170,3 +170,14 @@ export const executeShiftSwap = async (payload) => {
     };
   }
 };
+export const getEffectiveAllocations = async ({
+  month,
+  departmentId,
+  userId,
+} = {}) => {
+  const params = { month };
+  if (departmentId) params.department = departmentId;
+  if (userId) params.user_id = userId;
+  const res = await axiosInstance.get(fetchEffectiveAllocations, { params });
+  return res.data;
+};
