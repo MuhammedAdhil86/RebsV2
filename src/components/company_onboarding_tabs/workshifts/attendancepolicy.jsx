@@ -8,14 +8,16 @@ import {
 } from "../../../service/companyService";
 
 import CreateAttendancePolicyTab from "../../../ui/createattendancepolicy";
-import FlexibleUpdateAttendancePolicyTab from "../../../ui/flexibleattendancepolicy";
+// Update form for the "All Policies" tab (adjust the path/file name if yours differs)
+import UpdateAttendancePolicyTab from "../../../ui/updateattendancepolicy";
 import PresetFlexibleUpdateTab from "../../../ui/PresetFlexibleUpdateTab";
 import EditAttendancePreset from "./editattendanceprset";
 
 import DefaultAttendanceTemplates from "./defaultattendacepolicy";
 import DeleteConfirmationModal from "../../../ui/deletemodal";
 
-import toast, { Toaster } from "react-hot-toast";
+// Global <Toaster /> lives in App.jsx, so only `toast` is needed here
+import toast from "react-hot-toast";
 
 const AttendancePolicy = () => {
   const [activeTab, setActiveTab] = useState("all_policies");
@@ -67,8 +69,8 @@ const AttendancePolicy = () => {
   const handleCloseTabs = () => {
     setViewMode("list");
     setEditData(null);
-    // Refresh the list whenever a child component (like EditAttendancePreset)
-    // signals it is done, so the UI reflects the changes.
+    // Refresh the list whenever a child component signals it is done,
+    // so the UI reflects the changes.
     loadAllData();
   };
 
@@ -197,7 +199,7 @@ const AttendancePolicy = () => {
     );
   if (viewMode === "update")
     return (
-      <FlexibleUpdateAttendancePolicyTab
+      <UpdateAttendancePolicyTab
         initialData={editData}
         onClose={handleCloseTabs}
       />
@@ -216,7 +218,6 @@ const AttendancePolicy = () => {
 
   return (
     <div className="w-full bg-white rounded-xl">
-      <Toaster position="top-right" />
       <DeleteConfirmationModal
         isOpen={isDeleteModalOpen}
         onClose={() => setIsDeleteModalOpen(false)}

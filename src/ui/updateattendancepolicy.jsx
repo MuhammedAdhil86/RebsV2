@@ -4,6 +4,64 @@ import attendancePolicyService from "../service/attendancepolicyService";
 import ColorPicker from "./colorpicker";
 import toast from "react-hot-toast";
 
+// ---------- TIME HELPERS ----------
+const toMinutes = (t) => {
+  if (!t) return null;
+  const [h, m] = t.split(":").map(Number);
+  if (isNaN(h)) return null;
+  return h * 60 + (m || 0);
+};
+
+const minutesToTime = (mins) => {
+  const total = ((Math.round(mins) % 1440) + 1440) % 1440; // wrap past midnight
+  const h = String(Math.floor(total / 60)).padStart(2, "0");
+  const m = String(total % 60).padStart(2, "0");
+  return `${h}:${m}:00`;
+};
+
+const calcWorkingHours = (start, end) => {
+  const s = toMinutes(start);
+  const e = toMinutes(end);
+  if (s === null || e === null) return "";
+  let diff = e - s;
+  if (diff < 0) diff += 1440; // overnight shift
+  return (diff / 60).toFixed(2);
+};
+
+// ---------- NUMBER HELPERS (backend expects real numbers, not strings) ----------
+const toInt = (v) => {
+  const n = parseInt(v, 10);
+  return isNaN(n) ? 0 : n;
+};
+
+const toFloat = (v) => {
+  const n = parseFloat(v);
+  return isNaN(n) ? 0 : n;
+};
+
+// ---------- TOAST HELPER (message + reason on hover) ----------
+const showApiToast = (type, message, detail) => {
+  const detailText =
+    detail === null || detail === undefined || detail === ""
+      ? ""
+      : typeof detail === "object"
+        ? JSON.stringify(detail)
+        : String(detail);
+
+  const content = (
+    <div>
+      <div className="font-semibold">{message}</div>
+      {detailText && (
+        <div className="mt-1 text-[12px] font-normal text-gray-600">
+          {detailText}
+        </div>
+      )}
+    </div>
+  );
+
+  toast[type](content, { id: "policy-update" });
+};
+
 const UpdateAttendancePolicyTab = ({ initialData, onClose }) => {
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -75,34 +133,41 @@ const UpdateAttendancePolicyTab = ({ initialData, onClose }) => {
     }
   }, [initialData]);
 
-  // LOGIC: Auto-calculate working hours
-  useEffect(() => {
-    if (formData.start_time && formData.end_time) {
-      const [sH, sM] = formData.start_time.split(":").map(Number);
-      const [eH, eM] = formData.end_time.split(":").map(Number);
-      const start = new Date(0, 0, 0, sH, sM || 0);
-      const end = new Date(0, 0, 0, eH, eM || 0);
-      let diff = end.getTime() - start.getTime();
-      if (diff < 0) diff += 24 * 60 * 60 * 1000;
-      const hours = (diff / (1000 * 60 * 60)).toFixed(2);
-      setFormData((prev) => ({ ...prev, working_hours: hours }));
-    }
-  }, [formData.start_time, formData.end_time]);
-
+  // LOGIC: Central change handler (includes two-way working hours sync)
   const handleInputChange = (field, value) => {
     if (
       ["delay_fine_amount", "late_fine_amount", "over_time_pay"].includes(field)
     ) {
       if (value !== "" && parseFloat(value) < 0) return;
     }
+
     setFormData((prev) => {
       const updated = { ...prev, [field]: value };
+
       if (field === "consider_as_halfday" && value === false) {
         updated.policy_halfday_type = "";
       }
       if (field === "over_time_benefit" && value === false) {
         updated.over_time_pay = "";
       }
+
+      // Check-in / Check-out changed -> recalculate working hours
+      if (field === "start_time" || field === "end_time") {
+        updated.working_hours = calcWorkingHours(
+          updated.start_time,
+          updated.end_time,
+        );
+      }
+
+      // Working hours edited -> adjust check-out from check-in
+      if (field === "working_hours") {
+        const s = toMinutes(updated.start_time);
+        const hrs = parseFloat(value);
+        if (s !== null && !isNaN(hrs) && hrs > 0 && hrs <= 24) {
+          updated.end_time = minutesToTime(s + hrs * 60);
+        }
+      }
+
       return updated;
     });
   };
@@ -128,21 +193,47 @@ const UpdateAttendancePolicyTab = ({ initialData, onClose }) => {
       end_time: formatTimeToHMS(formData.end_time),
       delay: formatTimeToHMS(formData.delay),
       late: formatTimeToHMS(formData.late),
-      working_hours: Number(formData.working_hours) || 0,
-      over_time_pay: parseFloat(formData.over_time_pay) || 0,
+
+      // numeric fields must be numbers, not strings
+      working_hours: toFloat(formData.working_hours),
+      over_time_pay: toFloat(formData.over_time_pay),
+      delay_unpaid_count: toInt(formData.delay_unpaid_count),
+      late_unpaid_count: toInt(formData.late_unpaid_count),
+      regularisation_limit: toInt(formData.regularisation_limit),
+      delay_fine_amount: toFloat(formData.delay_fine_amount),
+      late_fine_amount: toFloat(formData.late_fine_amount),
     };
 
     try {
-      const response = await attendancePolicyService.updatePolicy(
-        policyId,
-        payload,
-      );
-      if (response.status === 200 || response.status === 201) {
-        toast.success("Policy Updated Successfully!");
+      const res = await attendancePolicyService.updatePolicy(policyId, payload);
+
+      console.log("updatePolicy raw response:", res);
+
+      // Handles: axios response, body only, or body nested in data
+      const body =
+        res?.data?.status_code !== undefined || res?.data?.message
+          ? res.data
+          : res?.status_code !== undefined || res?.message
+            ? res
+            : (res?.data ?? res);
+
+      const code = Number(body?.status_code ?? res?.status);
+      const message = body?.message;
+
+      if (code >= 200 && code < 300) {
+        showApiToast("success", message || "Policy Updated Successfully!");
         onClose();
+      } else {
+        showApiToast("error", message || "Something went wrong", body?.data);
       }
     } catch (error) {
-      toast.error(error.response?.data?.message || "Internal Server Error");
+      // axios throws on 4xx/5xx, so the backend body is in error.response.data
+      const errBody = error.response?.data;
+      showApiToast(
+        "error",
+        errBody?.message || error.message || "Internal Server Error",
+        errBody?.data,
+      );
     } finally {
       setLoading(false);
     }
@@ -281,7 +372,7 @@ const UpdateAttendancePolicyTab = ({ initialData, onClose }) => {
             />
           </div>
 
-          {/* EXACT CLONE: Conditional OverTime Pay Input */}
+          {/* Conditional OverTime Pay Input */}
           {formData.over_time_benefit && (
             <div className="animate-in fade-in slide-in-from-top-1">
               <label className={`${labelClass} text-orange-600`}>
@@ -413,12 +504,17 @@ const UpdateAttendancePolicyTab = ({ initialData, onClose }) => {
             <TimeInput label="Short Break To" field="break_time_to" />
             <TimeInput label="Half Day Start Time" field="half_day" />
             <div>
-              <label className={labelClass}>Total Working Hours (Auto)</label>
+              <label className={labelClass}>Total Working Hours</label>
               <input
-                type="text"
+                type="number"
+                step="0.25"
+                min="0"
+                max="24"
                 value={formData.working_hours}
                 className={`${inputClass} bg-blue-50/50 border-blue-100 font-bold text-blue-700`}
-                readOnly
+                onChange={(e) =>
+                  handleInputChange("working_hours", e.target.value)
+                }
               />
             </div>
             <TimeInput label="Late Limit (Time)" field="late" />
