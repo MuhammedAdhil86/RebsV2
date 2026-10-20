@@ -1,5 +1,6 @@
-import React, { useEffect, useRef, useState, useMemo } from "react";
-import { X, Calendar, Clock, MailPlus, Plus, Trash2 } from "lucide-react";
+import React, { useEffect, useState, useMemo } from "react";
+import { X, MailPlus, Plus } from "lucide-react";
+import { Icon } from "@iconify/react";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { format, isValid } from "date-fns";
@@ -8,10 +9,9 @@ import toast from "react-hot-toast";
 import axiosInstance from "../service/axiosinstance";
 import { getStaffDetails } from "../service/employeeService";
 import { getShiftPolicyById } from "../service/companyService";
+import GlowButton from "../components/helpers/glowbutton";
 
 function AddRegularizeModal({ open, data, onClose, onSuccess }) {
-  if (!open) return null;
-
   const [loading, setLoading] = useState(false);
   const [staffList, setStaffList] = useState([]);
   const [shiftName, setShiftName] = useState("Not Allocated");
@@ -26,11 +26,12 @@ function AddRegularizeModal({ open, data, onClose, onSuccess }) {
     remarks: "",
   });
 
-  // Dynamic array state starting with exactly one single discrete column box
   const [ccList, setCcList] = useState([""]);
 
   /* ================= FETCH STAFF ================= */
   useEffect(() => {
+    if (!open) return;
+
     const fetchStaff = async () => {
       try {
         const staff = await getStaffDetails();
@@ -39,12 +40,26 @@ function AddRegularizeModal({ open, data, onClose, onSuccess }) {
         console.error("Failed to fetch staff", err);
       }
     };
+
     fetchStaff();
-  }, []);
+  }, [open]);
 
   /* ================= PREFILL DATA ================= */
   useEffect(() => {
-    if (!data) return;
+    if (!open) return;
+
+    if (!data) {
+      setForm({
+        staffId: "",
+        date: null,
+        checkIn: "",
+        checkOut: "",
+        remarks: "",
+      });
+      setCcList([""]);
+      setShowCcBox(false);
+      return;
+    }
 
     setForm({
       staffId: data.userId || "",
@@ -63,12 +78,13 @@ function AddRegularizeModal({ open, data, onClose, onSuccess }) {
       setShowCcBox(true);
     } else {
       setCcList([""]);
+      setShowCcBox(false);
     }
-  }, [data]);
+  }, [data, open]);
 
   /* ================= FETCH SHIFT ================= */
   useEffect(() => {
-    if (!form.staffId) {
+    if (!open || !form.staffId) {
       setShiftName("Not Allocated");
       return;
     }
@@ -84,42 +100,45 @@ function AddRegularizeModal({ open, data, onClose, onSuccess }) {
     };
 
     loadShift();
-  }, [form.staffId]);
+  }, [form.staffId, open]);
+
+  if (!open) return null;
 
   /* ================= HELPERS ================= */
   const handleChange = (e) => {
-    setForm((p) => ({ ...p, [e.target.name]: e.target.value }));
+    setForm((prev) => ({
+      ...prev,
+      [e.target.name]: e.target.value,
+    }));
   };
 
-  // Formats to exact local text layout string: "YYYY-MM-DD HH:mm:ss"
   const buildDateTimeISO = (date, time) => {
     if (!date || !time) return null;
+
     const dateString = format(date, "yyyy-MM-dd");
     return `${dateString} ${time}:00`;
   };
 
   /* ================= DYNAMIC CC ACTIONS ================= */
   const handleCcChange = (index, value) => {
-    const updatedCc = [...ccList];
-    updatedCc[index] = value;
-    setCcList(updatedCc);
+    setCcList((prev) => prev.map((email, i) => (i === index ? value : email)));
   };
 
   const addCcField = () => {
-    setCcList([...ccList, ""]);
+    setCcList((prev) => [...prev, ""]);
   };
 
   const removeCcField = (index) => {
-    if (ccList.length === 1) {
-      setCcList([""]);
-    } else {
-      setCcList(ccList.filter((_, i) => i !== index));
-    }
+    setCcList((prev) =>
+      prev.length === 1 ? [""] : prev.filter((_, i) => i !== index),
+    );
   };
 
   /* ================= WORK HOURS CALCULATION ================= */
   const workHours = useMemo(() => {
-    if (!form.date || !form.checkIn || !form.checkOut) return "--";
+    if (!form.date || !form.checkIn || !form.checkOut) {
+      return "--";
+    }
 
     const [inH, inM] = form.checkIn.split(":").map(Number);
     const [outH, outM] = form.checkOut.split(":").map(Number);
@@ -136,7 +155,10 @@ function AddRegularizeModal({ open, data, onClose, onSuccess }) {
     const hrs = Math.floor(diffMs / 3600000);
     const mins = Math.floor((diffMs % 3600000) / 60000);
 
-    return `${String(hrs).padStart(2, "0")}:${String(mins).padStart(2, "0")}:00`;
+    return `${String(hrs).padStart(2, "0")}:${String(mins).padStart(
+      2,
+      "0",
+    )}:00`;
   }, [form.date, form.checkIn, form.checkOut]);
 
   /* ================= SUBMIT LOGIC ================= */
@@ -151,7 +173,6 @@ function AddRegularizeModal({ open, data, onClose, onSuccess }) {
       return;
     }
 
-    // Clean structural array mapping
     const processedCcArray = ccList
       .map((email) => email.trim())
       .filter(Boolean);
@@ -172,13 +193,16 @@ function AddRegularizeModal({ open, data, onClose, onSuccess }) {
 
     try {
       setLoading(true);
+
       await axiosInstance.post("/admin/attendance/regularize/request", payload);
+
       toast.success("Attendance regularized successfully!");
       onSuccess?.();
       onClose(true);
     } catch (err) {
       const errorMsg =
         err.response?.data?.message || "Failed to submit regularization";
+
       toast.error(errorMsg);
     } finally {
       setLoading(false);
@@ -186,19 +210,31 @@ function AddRegularizeModal({ open, data, onClose, onSuccess }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm font-poppins text-[12px]">
+      <div className="bg-white w-[95%] max-w-[500px] rounded-[2rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] border border-white/20">
         {/* Header */}
-        <div className="flex justify-between items-center px-6 py-4 border-b shrink-0">
+        <div className="px-8 py-5 flex items-center justify-between border-b border-gray-50 bg-white shrink-0">
           <div className="flex items-center gap-3">
-            <h3 className="font-semibold text-sm text-gray-800">
-              Attendance Regularization
-            </h3>
+            <Icon
+              icon="solar:calendar-outline"
+              className="w-5 h-5 text-black"
+            />
 
+            <div>
+              <h2 className="text-gray-900 text-[16px] font-medium uppercase">
+                Attendance Regularization
+              </h2>
+              <p className="text-gray-400 text-[10px]">
+                Record missed check-in or check-out
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={() => setShowCcBox(!showCcBox)}
-              className={`p-1.5 rounded-md border transition-colors flex items-center gap-1.5 text-xs font-medium ${
+              onClick={() => setShowCcBox((prev) => !prev)}
+              className={`px-2.5 py-1.5 rounded-xl border transition-colors flex items-center gap-1.5 font-medium ${
                 showCcBox
                   ? "bg-black text-white border-black"
                   : "bg-white text-gray-600 hover:bg-gray-50 border-gray-200"
@@ -207,55 +243,74 @@ function AddRegularizeModal({ open, data, onClose, onSuccess }) {
               <MailPlus size={14} />
               <span>{showCcBox ? "Remove CC" : "Add CC"}</span>
             </button>
+
+            <button
+              type="button"
+              onClick={() => onClose(false)}
+              aria-label="Close modal"
+            >
+              <X size={20} />
+            </button>
           </div>
-          <button
-            onClick={() => onClose(false)}
-            className="text-gray-400 hover:text-gray-600"
-          >
-            <X size={18} />
-          </button>
         </div>
 
         {/* Scrollable Form Body */}
-        <div className="p-6 grid grid-cols-2 gap-6 text-sm overflow-y-auto grow">
+        <div className="p-8 grid grid-cols-2 gap-x-4 gap-y-5 overflow-y-auto grow">
           {/* Staff Select */}
           <div>
-            <label className="text-gray-500 text-xs font-medium">Staff</label>
-            <select
-              name="staffId"
-              value={form.staffId}
-              onChange={handleChange}
-              className="w-full mt-1 px-4 py-2 border rounded-lg bg-gray-50"
-            >
-              <option value="">Select Staff</option>
-              {staffList.map((s) => (
-                <option key={s.uuid} value={s.uuid}>
-                  {`${s.first_name || ""} ${s.last_name || ""}`.trim()}
-                </option>
-              ))}
-            </select>
+            <label className="block mb-1 font-medium text-gray-700">
+              Staff
+            </label>
+
+            <div className="relative">
+              <select
+                name="staffId"
+                value={form.staffId}
+                onChange={handleChange}
+                className="w-full appearance-none border border-gray-200 bg-white p-3 pr-10 rounded-2xl outline-none focus:border-gray-400 cursor-pointer"
+              >
+                <option value="">Select Staff</option>
+
+                {staffList.map((s) => (
+                  <option key={s.uuid} value={s.uuid}>
+                    {`${s.first_name || ""} ${s.last_name || ""}`.trim()}
+                  </option>
+                ))}
+              </select>
+
+              {/* Standard centered dropdown arrow */}
+              <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-gray-500">
+                <Icon icon="lucide:chevron-down" className="w-4 h-4" />
+              </span>
+            </div>
           </div>
 
           {/* Date Picker */}
           <div className="relative">
-            <label className="text-gray-500 text-xs font-medium">Date</label>
+            <label className="block mb-1 font-medium text-gray-700">Date</label>
+
             <div
-              onClick={() => setShowDatePicker(!showDatePicker)}
-              className="w-full mt-1 px-4 py-2 border rounded-lg bg-gray-50 cursor-pointer flex justify-between items-center"
+              onClick={() => setShowDatePicker((prev) => !prev)}
+              className="w-full border border-gray-200 p-3 rounded-2xl cursor-pointer flex justify-between items-center"
             >
               <span>
                 {form.date && isValid(form.date)
                   ? format(form.date, "dd/MM/yyyy")
                   : "Select Date"}
               </span>
-              <Calendar size={14} className="text-gray-400" />
+
+              <Icon
+                icon="solar:calendar-outline"
+                className="w-4 h-4 text-black"
+              />
             </div>
+
             {showDatePicker && (
               <div className="absolute z-50 top-full mt-1">
                 <DatePicker
                   selected={form.date}
                   onChange={(date) => {
-                    setForm((p) => ({ ...p, date }));
+                    setForm((prev) => ({ ...prev, date }));
                     setShowDatePicker(false);
                   }}
                   inline
@@ -266,60 +321,72 @@ function AddRegularizeModal({ open, data, onClose, onSuccess }) {
 
           {/* Check In */}
           <div>
-            <label className="text-gray-500 text-xs font-medium">
+            <label className="block mb-1 font-medium text-gray-700">
               Check In
             </label>
+
             <input
               type="time"
               value={form.checkIn}
               onChange={(e) =>
-                setForm((p) => ({ ...p, checkIn: e.target.value }))
+                setForm((prev) => ({
+                  ...prev,
+                  checkIn: e.target.value,
+                }))
               }
-              className="w-full mt-1 px-4 py-2 border rounded-lg bg-gray-50"
+              className="w-full border border-gray-200 p-3 rounded-2xl outline-none focus:border-gray-400"
             />
           </div>
 
           {/* Check Out */}
           <div>
-            <label className="text-gray-500 text-xs font-medium">
+            <label className="block mb-1 font-medium text-gray-700">
               Check Out
             </label>
+
             <input
               type="time"
               value={form.checkOut}
               onChange={(e) =>
-                setForm((p) => ({ ...p, checkOut: e.target.value }))
+                setForm((prev) => ({
+                  ...prev,
+                  checkOut: e.target.value,
+                }))
               }
-              className="w-full mt-1 px-4 py-2 border rounded-lg bg-gray-50"
+              className="w-full border border-gray-200 p-3 rounded-2xl outline-none focus:border-gray-400"
             />
           </div>
 
-          {/* Shift (Read Only) */}
+          {/* Shift Read Only */}
           <div>
-            <label className="text-gray-500 text-xs font-medium">Shift</label>
+            <label className="block mb-1 font-medium text-gray-700">
+              Shift
+            </label>
+
             <input
               readOnly
               value={shiftName}
-              className="w-full mt-1 px-4 py-2 border rounded-lg bg-gray-100 text-gray-600"
+              className="w-full border border-gray-200 p-3 rounded-2xl bg-gray-50 text-gray-600 outline-none"
             />
           </div>
 
-          {/* Work Hours (Read Only) */}
+          {/* Work Hours Read Only */}
           <div>
-            <label className="text-gray-500 text-xs font-medium">
+            <label className="block mb-1 font-medium text-gray-700">
               Work Hours
             </label>
+
             <input
               readOnly
               value={workHours}
-              className="w-full mt-1 px-4 py-2 border rounded-lg bg-gray-100 font-bold text-gray-700"
+              className="w-full border border-gray-200 p-3 rounded-2xl bg-gray-50 text-gray-600 font-medium outline-none"
             />
           </div>
 
-          {/* Dynamic CC Field Segment */}
+          {/* Dynamic CC Fields */}
           {showCcBox && (
             <div className="col-span-2 space-y-2">
-              <label className="text-gray-500 text-xs font-medium block">
+              <label className="block mb-1 font-medium text-gray-700">
                 CC Recipients
               </label>
 
@@ -330,16 +397,16 @@ function AddRegularizeModal({ open, data, onClose, onSuccess }) {
                     value={emailValue}
                     onChange={(e) => handleCcChange(index, e.target.value)}
                     placeholder="recipient@company.com"
-                    className="flex-1 px-4 py-2 border rounded-lg bg-gray-50"
+                    className="flex-1 min-w-0 border border-gray-200 p-3 rounded-2xl outline-none focus:border-gray-400"
                   />
 
-                  {/* Dynamic Action Button Group */}
-                  <div className="flex gap-1">
+                  <div className="flex items-center gap-1 shrink-0">
                     <button
                       type="button"
                       onClick={addCcField}
-                      className="p-2.5 bg-gray-100 text-gray-700 hover:bg-black hover:text-white rounded-lg transition-colors border"
+                      className="p-2.5 text-gray-700 hover:bg-gray-50 rounded-xl transition-colors border border-gray-200"
                       title="Add recipient box"
+                      aria-label="Add recipient"
                     >
                       <Plus size={16} />
                     </button>
@@ -348,10 +415,14 @@ function AddRegularizeModal({ open, data, onClose, onSuccess }) {
                       <button
                         type="button"
                         onClick={() => removeCcField(index)}
-                        className="p-2.5 bg-red-50 text-red-600 hover:bg-red-600 hover:text-white rounded-lg transition-colors border border-red-100"
-                        title="Delete box"
+                        aria-label="Delete recipient"
+                        title="Delete"
+                        className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
                       >
-                        <Trash2 size={16} />
+                        <Icon
+                          icon="solar:trash-bin-trash-outline"
+                          className="w-4 h-4"
+                        />
                       </button>
                     )}
                   </div>
@@ -362,33 +433,34 @@ function AddRegularizeModal({ open, data, onClose, onSuccess }) {
 
           {/* Remarks */}
           <div className="col-span-2">
-            <label className="text-gray-500 text-xs font-medium">Remarks</label>
+            <label className="block mb-1 font-medium text-gray-700">
+              Remarks
+            </label>
+
             <textarea
               name="remarks"
               value={form.remarks}
               onChange={handleChange}
               rows={3}
               placeholder="Reason for regularization..."
-              className="w-full mt-1 px-4 py-2 border rounded-lg bg-gray-50"
+              className="w-full border border-gray-200 p-3 rounded-2xl outline-none focus:border-gray-400 resize-y"
             />
           </div>
         </div>
 
         {/* Footer Actions */}
-        <div className="flex justify-end gap-3 px-6 py-4 border-t shrink-0">
+        <div className="flex justify-end gap-3 px-8 py-4 border-t border-gray-50 shrink-0">
           <button
+            type="button"
             onClick={() => onClose(false)}
-            className="px-6 py-2 border rounded-lg hover:bg-gray-50 transition-colors"
+            className="px-4 py-2 text-gray-600 hover:text-gray-800"
           >
             Cancel
           </button>
-          <button
-            disabled={loading}
-            onClick={handleSubmit}
-            className={`px-6 py-2 bg-black text-white rounded-lg transition-opacity ${loading ? "opacity-50 cursor-not-allowed" : "hover:opacity-90"}`}
-          >
+
+          <GlowButton disabled={loading} onClick={handleSubmit}>
             {loading ? "Submitting..." : "Apply"}
-          </button>
+          </GlowButton>
         </div>
       </div>
     </div>

@@ -7,6 +7,7 @@ import RegularizationTab from "../components/requests_tab/regularization_tab";
 import DeviceRequestTab from "../components/requests_tab/device_tab";
 import ClaimsRequestTab from "../components/requests_tab/claims_tab";
 import InsuranceClaimTab from "../components/requests_tab/insuranceclaim";
+import AdvanceSalaryReqTab from "../components/requests_tab/AdvanceSalaryReqTab"; // <- adjust path/file name if different
 import LeaveRequestes from "../components/tables/leaverequests";
 import DeviceApprovalModal from "../ui/devicestatusmodal";
 import InsuranceApprovalModal from "../ui/insurancestatusmodal";
@@ -126,6 +127,18 @@ function Requests() {
           >
             Insurance Claim
           </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("advance")}
+            className={`pb-2 px-1 transition-all relative font-medium whitespace-nowrap ${
+              activeTab === "advance"
+                ? "text-black font-semibold after:content-[''] after:absolute after:bottom-0 after:left-0 after:w-full after:h-[2px] after:bg-black"
+                : "text-gray-500 hover:text-black"
+            }`}
+          >
+            Advance Salary
+          </button>
         </div>
 
         {/* Tab Panels */}
@@ -146,6 +159,7 @@ function Requests() {
               onRowClick={handleInsuranceRowClick}
             />
           )}
+          {activeTab === "advance" && <AdvanceSalaryReqTab />}
         </div>
       </div>
 

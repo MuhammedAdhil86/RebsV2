@@ -17,6 +17,23 @@ const statusColors = {
   Rejected: "bg-red-100 text-red-600",
 };
 
+/* ================= DATE / TIME HELPERS ================= */
+// "2026-10-20T09:00:00Z" -> "09:00:00" (shown exactly as stored, no timezone shift)
+const formatTime = (raw) => {
+  if (!raw) return "--";
+  const d = new Date(raw);
+  return isNaN(d.getTime()) ? "--" : d.toISOString().slice(11, 19);
+};
+
+// "2026-10-20T09:00:00Z" -> "20/10/2026" (UTC, so the date never shifts)
+const formatDate = (raw) => {
+  if (!raw) return "--";
+  const d = new Date(raw);
+  return isNaN(d.getTime())
+    ? "--"
+    : d.toLocaleDateString("en-GB", { timeZone: "UTC" });
+};
+
 /* ================= MAIN COMPONENT ================= */
 export default function RegularizationTab() {
   const [data, setData] = useState([]);
@@ -48,25 +65,11 @@ export default function RegularizationTab() {
             : "Pending",
           remarks: item.remarks || "",
 
-          date: rawInDate ? new Date(rawInDate).toLocaleDateString() : "--",
-          checkIn: rawInDate
-            ? new Date(rawInDate).toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-              })
-            : "--",
-          checkOut: rawOutDate
-            ? new Date(rawOutDate).toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-              })
-            : "--",
-          displayInDate: rawInDate
-            ? new Date(rawInDate).toLocaleDateString()
-            : "--",
-          displayOutDate: rawOutDate
-            ? new Date(rawOutDate).toLocaleDateString()
-            : "--",
+          date: formatDate(rawInDate),
+          checkIn: formatTime(rawInDate),
+          checkOut: formatTime(rawOutDate),
+          displayInDate: formatDate(rawInDate),
+          displayOutDate: formatDate(rawOutDate),
           workingHours: item.total_work_hours || "--",
           remaining: 0,
         };
@@ -84,6 +87,8 @@ export default function RegularizationTab() {
   }, []);
 
   const handleOpenModal = async (req) => {
+    // Set the request first so the modal never renders with null data
+    setSelectedRequest(req);
     setIsModalOpen(true);
     try {
       const [shift, remainingRes] = await Promise.all([

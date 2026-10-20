@@ -14,7 +14,8 @@ function SideBar({ isCollapsed, toggleSidebar }) {
   const toggleMobileSidebar = () => setIsMobileOpen(!isMobileOpen);
 
   const user = useAuthStore((state) => state.user);
-  const logout = useAuthStore((state) => state.logout); // ✅ Extract standard logout action
+  const logout = useAuthStore((state) => state.logout); // ✅ Async logout (calls POST /staff/logout)
+  const isProcessing = useAuthStore((state) => state.isProcessing); // ✅ Loading state for the logout button
 
   const firstName = user?.first_name || "";
   const lastName = user?.last_name || "";
@@ -154,9 +155,11 @@ function SideBar({ isCollapsed, toggleSidebar }) {
     },
   ];
 
-  // ✅ Streamlined Logout Execution Handler
-  const handleLogoutClick = () => {
-    logout(); // 1. Completely purges auth credentials via Zustand
+  // ✅ Logout via API: waits for POST /staff/logout, then clears the session
+  // and redirects. The store clears local state even if the API call fails.
+  const handleLogoutClick = async () => {
+    if (isProcessing) return; // prevent double clicks
+    await logout(); // 1. Calls the logout API + purges auth credentials via Zustand
     navigate("/", { replace: true }); // 2. Directs to root path & eliminates the previous history reference line
   };
 
@@ -259,13 +262,24 @@ function SideBar({ isCollapsed, toggleSidebar }) {
                 <span className="text-sm flex-1 text-left">Settings</span>
               </Link>
 
-              {/* ✅ Wire up corrected logout callback */}
+              {/* ✅ Logout button wired to the API handler */}
               <button
                 onClick={handleLogoutClick}
-                className="w-full flex items-center space-x-3 px-4 py-2 rounded-lg text-gray-300 hover:bg-gray-600 transition-colors"
+                disabled={isProcessing}
+                className="w-full flex items-center space-x-3 px-4 py-2 rounded-lg text-gray-300 hover:bg-gray-600 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                <Icon icon="material-symbols:logout" width="20" height="20" />
-                <span className="text-sm flex-1 text-left">Logout</span>
+                <Icon
+                  icon={
+                    isProcessing
+                      ? "line-md:loading-loop"
+                      : "material-symbols:logout"
+                  }
+                  width="20"
+                  height="20"
+                />
+                <span className="text-sm flex-1 text-left">
+                  {isProcessing ? "Logging out..." : "Logout"}
+                </span>
               </button>
             </div>
           )}

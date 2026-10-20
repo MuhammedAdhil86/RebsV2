@@ -1,15 +1,15 @@
-import axios from "axios"; // ✅ FIXED: Added this import
-import axiosInstance from "./axiosinstance";
-import { 
-  postResetPassword, 
-  sendResetPasswordEmail, 
-  forgotPassword, 
-  confirmForgotPassword 
+import axios from "axios";
+import axiosInstance from "../service/axiosinstance";
+import {
+  postResetPassword,
+  sendResetPasswordEmail,
+  forgotPassword,
+  confirmForgotPassword,
+  staffLogout, // NEW: add `export const staffLogout = "/staff/logout";` in ../api/api
 } from "../api/api";
 
-// --- Base URL Configuration ---
-// It's best to define this once so you don't have to change it everywhere
-const BASE_URL = "http://localhost:5173/api_v1"; 
+// Same prefix as axiosInstance (proxied by vite.config.js)
+const BASE_URL = "/api_v1";
 
 /**
  * 1. Reset Password (Authenticated)
@@ -55,14 +55,12 @@ export const verifyForgotPasswordOTP = async (payload) => {
 
 /**
  * 4. Confirm Forgot Password (Forgot Password Step 3)
- * FIXED: Now correctly uses the raw axios import and bypasses interceptors
+ * Uses raw axios so axiosInstance can't overwrite the resetToken header.
  */
 export const finalizeForgotPassword = async (payload) => {
   try {
     const resetToken = localStorage.getItem("resetToken");
-    
-    // We use raw 'axios' here because axiosInstance might be attaching 
-    // a null/invalid login token that overwrites our resetToken.
+
     const response = await axios.post(`${BASE_URL}${confirmForgotPassword}`, payload, {
       headers: {
         Authorization: `Bearer ${resetToken}`,
@@ -74,5 +72,25 @@ export const finalizeForgotPassword = async (payload) => {
   } catch (error) {
     console.error("❌ Final Reset Error:", error.response?.data || error.message);
     throw error;
+  }
+};
+
+/**
+ * 5. Staff Logout  ->  POST /api_v1/staff/logout
+ * The Bearer token is added automatically by the axiosInstance interceptor.
+ * Local session is always cleared, even if the request fails
+ * (expired token, network error), so the user is never stuck logged in.
+ */
+export const logoutStaff = async () => {
+  try {
+    const response = await axiosInstance.post(staffLogout);
+    console.log("✅ Logout Response:", response.data);
+    return response.data;
+  } catch (error) {
+    console.error("❌ Logout Error:", error.response?.data || error.message);
+    throw error;
+  } finally {
+    localStorage.removeItem("authToken");
+    localStorage.removeItem("token");
   }
 };

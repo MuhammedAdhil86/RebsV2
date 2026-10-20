@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { Calendar, Clock, X, ChevronDown } from "lucide-react";
+import { X, ChevronDown } from "lucide-react";
+import { Icon } from "@iconify/react";
 import toast from "react-hot-toast";
 import axiosInstance from "../service/axiosinstance";
 
@@ -62,17 +63,23 @@ const RegularizationApprovalModal = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl overflow-hidden">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm font-poppins text-[12px]">
+      <div className="bg-white w-[95%] max-w-[500px] rounded-[2rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] border border-white/20">
         {/* HEADER */}
-        <div className="flex items-center justify-between px-6 py-4 border-b">
+        <div className="px-8 py-5 flex items-center justify-between border-b border-gray-50 bg-white">
           <div className="flex items-center gap-3">
-            <div className="p-2 border rounded-lg">
-              <Calendar size={18} />
+            <Icon
+              icon="solar:calendar-outline"
+              className="w-5 h-5 text-black"
+            />
+            <div>
+              <h2 className="text-gray-900 text-[16px] font-medium uppercase">
+                Attendance Regularization
+              </h2>
+              <p className="text-gray-400 text-[10px]">
+                Review and update the staff request
+              </p>
             </div>
-            <h2 className="font-semibold text-[15px]">
-              Attendance Regularization Request
-            </h2>
           </div>
           <button onClick={onClose}>
             <X size={20} />
@@ -80,111 +87,127 @@ const RegularizationApprovalModal = ({
         </div>
 
         {/* BODY */}
-        <div className="p-8">
+        <div className="p-8 space-y-5 overflow-y-auto">
           {/* GRID */}
-          <div className="grid grid-cols-2 gap-x-8 gap-y-2 mb-5">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-4">
             <div>
-              <label className="text-[11px] text-gray-400">Staff Name</label>
+              <label className="block mb-1 font-medium text-gray-700">
+                Staff Name
+              </label>
               <input
                 readOnly
                 value={data.name}
-                className="w-full px-4 py-2.5 bg-gray-50 border rounded-lg text-sm"
+                className="w-full border p-3 rounded-2xl bg-gray-50 text-gray-600"
               />
-              <p className="text-[10px] text-orange-500 text-right h-[14px]">
+              <p className="text-[10px] text-orange-500 text-right mt-1">
                 {data.designation}
               </p>
             </div>
 
             <div>
-              <label className="text-[11px] text-gray-400">Date</label>
-              <input
-                readOnly
-                value={data.date}
-                className="w-full px-4 py-2.5 bg-gray-50 border rounded-lg text-sm"
-              />
-              <div className="h-[14px]" />
+              <label className="block mb-1 font-medium text-gray-700">
+                Date
+              </label>
+              <div className="relative">
+                <input
+                  readOnly
+                  value={data.date}
+                  className="w-full border p-3 pr-10 rounded-2xl bg-gray-50 text-gray-600"
+                />
+                <Icon
+                  icon="solar:calendar-outline"
+                  className="w-4 h-4 text-black absolute right-4 top-1/2 -translate-y-1/2"
+                />
+              </div>
             </div>
 
             <div>
-              <label className="text-[11px] text-gray-400">Check In</label>
+              <label className="block mb-1 font-medium text-gray-700">
+                Check In
+              </label>
               <div className="relative">
                 <input
                   readOnly
                   value={data.checkIn}
-                  className="w-full px-4 py-2.5 bg-gray-50 border rounded-lg text-sm"
+                  className="w-full border p-3 pr-10 rounded-2xl bg-gray-50 text-gray-600"
                 />
-                <Clock
-                  size={16}
-                  className="absolute right-4 top-3 text-gray-400"
+                <Icon
+                  icon="solar:clock-circle-outline"
+                  className="w-4 h-4 text-black absolute right-4 top-1/2 -translate-y-1/2"
                 />
               </div>
-              <div className="h-[14px]" />
             </div>
 
             <div>
-              <label className="text-[11px] text-gray-400">Check Out</label>
+              <label className="block mb-1 font-medium text-gray-700">
+                Check Out
+              </label>
               <div className="relative">
                 <input
                   readOnly
                   value={data.checkOut}
-                  className="w-full px-4 py-2.5 bg-gray-50 border rounded-lg text-sm"
+                  className="w-full border p-3 pr-10 rounded-2xl bg-gray-50 text-gray-600"
                 />
-                <Clock
-                  size={16}
-                  className="absolute right-4 top-3 text-gray-400"
+                <Icon
+                  icon="solar:clock-circle-outline"
+                  className="w-4 h-4 text-black absolute right-4 top-1/2 -translate-y-1/2"
                 />
               </div>
-              <div className="h-[14px]" />
             </div>
 
             <div>
-              <label className="text-[11px] text-gray-400">Shift</label>
+              <label className="block mb-1 font-medium text-gray-700">
+                Shift
+              </label>
               <div className="relative">
                 <select
                   disabled
                   value={shiftData?.shift_name || "Not Allocated"}
-                  className="w-full px-4 py-2.5 bg-gray-50 border rounded-lg appearance-none text-sm cursor-not-allowed"
+                  className="w-full border p-3 pr-10 rounded-2xl appearance-none cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400"
                 >
                   <option>{shiftData?.shift_name || "Not Allocated"}</option>
                 </select>
                 <ChevronDown
                   size={14}
-                  className="absolute right-4 top-3.5 text-gray-400"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400"
                 />
               </div>
-              <div className="h-[14px]" />
             </div>
 
             <div>
-              <label className="text-[11px] text-gray-400">Hours Worked</label>
+              <label className="block mb-1 font-medium text-gray-700">
+                Hours Worked
+              </label>
               <input
                 readOnly
                 value={data.workingHours}
-                className="w-full px-4 py-2.5 bg-gray-50 border rounded-lg text-sm font-medium"
+                className="w-full border p-3 rounded-2xl bg-gray-50 text-gray-600 font-medium"
               />
-              <div className="h-[14px]" />
             </div>
           </div>
 
           {/* REMARKS */}
-          <div className="mb-5">
-            <label className="text-[11px] text-gray-400">Remarks</label>
+          <div>
+            <label className="block mb-1 font-medium text-gray-700">
+              Remarks
+            </label>
             <textarea
+              rows="3"
               value={remarks}
               onChange={(e) => setRemarks(e.target.value)}
-              className="w-full px-5 py-4 bg-gray-100 rounded-xl text-sm min-h-[110px]"
+              className="w-full border p-3 rounded-2xl"
             />
           </div>
 
           {/* FOOTER */}
-          <div className="flex justify-between items-center mt-5 border-t pt-4">
-            <div className="flex flex-col gap-0.5 text-[12px] text-gray-600">
+          <div className="flex justify-between items-center border-t border-gray-50 pt-4 gap-3">
+            <div className="flex flex-col gap-0.5 text-gray-600">
               <div>
                 <span>Quota Usage: </span>
                 <span className="font-semibold text-gray-900">{usedCount}</span>
                 <span className="text-gray-400"> / {limitCount}</span>
                 {policyType && (
-                  <span className="text-[11px] text-gray-500 ml-1 bg-gray-100 px-1.5 py-0.5 rounded capitalize">
+                  <span className="text-[10px] text-gray-500 ml-1 bg-gray-100 px-1.5 py-0.5 rounded capitalize">
                     {policyType.toLowerCase()}
                   </span>
                 )}
@@ -199,11 +222,11 @@ const RegularizationApprovalModal = ({
               </div>
             </div>
 
-            <div className="flex gap-4 text-[12px]">
+            <div className="flex gap-3">
               <button
                 disabled={loading}
                 onClick={() => handleAction("rejected")}
-                className="px-8 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg disabled:opacity-60 transition-colors"
+                className="px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-2xl disabled:opacity-60 transition-colors"
               >
                 Reject
               </button>
@@ -211,7 +234,7 @@ const RegularizationApprovalModal = ({
               <button
                 disabled={loading}
                 onClick={() => handleAction("approved")}
-                className="px-8 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg disabled:opacity-60 transition-colors"
+                className="px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-2xl disabled:opacity-60 transition-colors"
               >
                 Approve
               </button>

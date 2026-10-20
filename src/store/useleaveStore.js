@@ -162,7 +162,7 @@ const useLeaveStore = create((set, get) => ({
           ? { status, remarks, lop, dates, updated_by }
           : { status, remarks, updated_by };
 
-      await axiosInstance.put(endpoint, payload);
+      const response = await axiosInstance.put(endpoint, payload); // CHANGED: keep the response
 
       set((state) => ({
         ...state,
@@ -177,6 +177,8 @@ const useLeaveStore = create((set, get) => ({
             : l
         ),
       }));
+
+      return response.data; // CHANGED: { status_code, message, data } reaches the component
     } catch (error) {
       console.error("Error updating leave status:", error);
       throw error;

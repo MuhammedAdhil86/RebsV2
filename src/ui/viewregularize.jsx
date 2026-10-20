@@ -2,8 +2,18 @@ import React, { useState, useEffect } from "react";
 import { X, Clock, AlertCircle, CheckCircle2 } from "lucide-react";
 import toast from "react-hot-toast";
 
-// Import your dynamic endpoint function
 import { addregularize } from "../service/employeeService";
+
+/* Read "HH:MM" straight from the ISO string (same approach as the table).
+   No Date object, so no timezone shift. */
+const formatToTimeInput = (isoString) => {
+  if (!isoString) return "";
+  const [datePart, timePart] = String(isoString).replace("Z", "").split("T");
+  if (!datePart || !timePart) return "";
+  if (datePart.startsWith("0001")) return ""; // empty placeholder date
+  const [hour, minute] = timePart.split(":");
+  return `${hour}:${minute}`;
+};
 
 const ViewRegularizationModal = ({
   open,
@@ -13,44 +23,40 @@ const ViewRegularizationModal = ({
   onSuccess,
   onOptimisticUpdate,
 }) => {
-  // Capture current state adjustments locally for editing form inputs
   const [inTime, setInTime] = useState("");
   const [outTime, setOutTime] = useState("");
   const [remarks, setRemarks] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  // Initialize form fields gracefully from row selection objects
+  // Initialize form fields from the selected row
   useEffect(() => {
     if (open && data) {
       const raw = data.raw_data || {};
 
-      // Helper to parse ISO strings safely down into HTML input "HH:MM" format
-      const formatToTimeInput = (isoString) => {
-        if (!isoString) return "";
-        try {
-          const d = new Date(isoString);
-          // Return empty string if date object points to system base placeholder (0001-01-01)
-          if (d.getFullYear() <= 1) return "";
-          return d.toTimeString().slice(0, 5); // Returns "HH:MM"
-        } catch {
-          return "";
-        }
-      };
-
-      setInTime(formatToTimeInput(raw.in_date?.Time || raw.in));
-      setOutTime(formatToTimeInput(raw.out_date?.Time || raw.out));
+      setInTime(
+        formatToTimeInput(raw.in_date?.Valid ? raw.in_date?.Time : raw.in),
+      );
+      setOutTime(
+        formatToTimeInput(raw.out_date?.Valid ? raw.out_date?.Time : raw.out),
+      );
       setRemarks(raw.remarks || "Admin approved regularization");
     }
   }, [open, data]);
 
   if (!open || !data) return null;
 
-  // Extract date component safely from string mapping values (e.g., "2026-05-07")
+  // Show the Punch OUT field only when the fetched data actually has an out time
+  const rawData = data.raw_data || {};
+  const hasOutTime =
+    formatToTimeInput(
+      rawData.out_date?.Valid ? rawData.out_date?.Time : rawData.out,
+    ) !== "";
+
+  // Date part as YYYY-MM-DD (no timezone conversion)
   const targetDateStr = data.raw_data?.in_date?.Time
     ? data.raw_data.in_date.Time.split("T")[0]
-    : new Date().toISOString().split("T")[0]; // Fallback to YYYY-MM-DD
+    : new Date().toISOString().split("T")[0];
 
-  // Execution handler when submittal button fires
   const handleSubmitApproval = async (e) => {
     e.preventDefault();
     setSubmitting(true);
@@ -58,54 +64,50 @@ const ViewRegularizationModal = ({
     try {
       const apiItem = data.raw_data || {};
 
-      const numericId = apiItem.id; // The table sequence integer id (e.g., 91)
-      const employeeId = apiItem.user_id; // The employee unique identity token (e.g., "100336")
+      const numericId = apiItem.id; // table row id
+      const employeeId = apiItem.user_id; // employee id used in the path
 
-      // CRITICAL FIX: Pass the user_id (UUID string) as the path parameter flag
       const trackingIdentifier = String(employeeId);
 
       if (!trackingIdentifier || trackingIdentifier === "undefined") {
         throw new Error("Missing structural target user identification token.");
       }
 
-      // 1. Re-construct raw inputs back into explicit full ISO timestamps context strings
+      // Rebuild full ISO timestamps without any timezone conversion
       const finalInTimestamp = inTime ? `${targetDateStr}T${inTime}:00Z` : null;
       const finalOutTimestamp = outTime
         ? `${targetDateStr}T${outTime}:00Z`
         : null;
 
-      // 2. Build flat payload body matching your backend body expectations
       const payloadBody = {
-        request_id: Number(numericId), // The sequence row integer id goes into the body as request_id
+        request_id: Number(numericId),
         in: finalInTimestamp,
         out: finalOutTimestamp,
         remarks: remarks || "Admin approved regularization",
       };
 
-      // 3. Optimistic local state rendering injection before roundtrip resolution completes
+      // Optimistic update before the request resolves
       if (onOptimisticUpdate) {
         onOptimisticUpdate(data.id, "approved");
       }
 
-      // 4. Fire the addregularize function endpoint
       await addregularize(trackingIdentifier, targetDateStr, payloadBody);
 
       toast.success("Attendance successfully regularized!");
       if (onSuccess) onSuccess();
+      if (onClose) onClose(); // close the modal after a successful save
     } catch (error) {
       console.error("Submission action caught error failure:", error);
 
-      // Extract the real error message text directly from backend response payload if available
       const backendMessage =
         error.response?.data?.message ||
         error.response?.data?.error ||
         error.message ||
         "Failed to update record regularization.";
 
-      // Display the explicit backend error via react-hot-toast
       toast.error(backendMessage);
 
-      // Revert optimistic presentation state cleanly to pending if network drops out
+      // Revert optimistic state
       if (onOptimisticUpdate) {
         onOptimisticUpdate(data.id, "pending");
       }
@@ -116,18 +118,18 @@ const ViewRegularizationModal = ({
 
   return (
     <div className="fixed inset-0 z-[999999] flex items-center justify-center p-4">
-      {/* Backdrop background layer mask overlay shadow */}
+      {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/40 backdrop-blur-sm"
         onClick={onClose}
       />
 
-      {/* Primary content platform card box */}
+      {/* Modal card */}
       <form
         onSubmit={handleSubmitApproval}
         className="relative w-full max-w-md transform overflow-hidden rounded-xl bg-white p-6 shadow-2xl transition-all border border-gray-100 animate-in fade-in zoom-in-95 duration-200"
       >
-        {/* Title Context Header Alignment */}
+        {/* Header */}
         <div className="flex items-center justify-between border-b border-gray-100 pb-3 mb-4">
           <div className="flex items-center gap-2">
             <div className="p-1.5 bg-gray-50 rounded-lg text-gray-800">
@@ -146,8 +148,8 @@ const ViewRegularizationModal = ({
           </button>
         </div>
 
-        {/* Dynamic Display Layout Data Rows fields mapping container grids */}
         <div className="space-y-4">
+          {/* Employee info */}
           <div className="p-3 bg-gray-50 rounded-lg border border-gray-100 flex justify-between items-center text-xs">
             <div>
               <p className="font-medium text-gray-900">{data.name}</p>
@@ -158,8 +160,10 @@ const ViewRegularizationModal = ({
             </span>
           </div>
 
-          {/* Core Input Entry Boxes Elements */}
-          <div className="grid grid-cols-2 gap-3">
+          {/* Time inputs */}
+          <div
+            className={`grid gap-3 ${hasOutTime ? "grid-cols-2" : "grid-cols-1"}`}
+          >
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">
                 Modify Punch IN
@@ -171,20 +175,22 @@ const ViewRegularizationModal = ({
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-gray-900 font-mono"
               />
             </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">
-                Modify Punch OUT
-              </label>
-              <input
-                type="time"
-                value={outTime}
-                onChange={(e) => setOutTime(e.target.value)}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-gray-900 font-mono"
-              />
-            </div>
+            {hasOutTime && (
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">
+                  Modify Punch OUT
+                </label>
+                <input
+                  type="time"
+                  value={outTime}
+                  onChange={(e) => setOutTime(e.target.value)}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-gray-900 font-mono"
+                />
+              </div>
+            )}
           </div>
 
-          {/* Allocation Info Sheet summary block container */}
+          {/* Date / shift info */}
           <div className="bg-gray-50/50 p-2.5 rounded-lg border border-gray-100 flex items-center gap-2 text-xs text-gray-600">
             <AlertCircle className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
             <span>
@@ -194,7 +200,7 @@ const ViewRegularizationModal = ({
             </span>
           </div>
 
-          {/* Submission logging custom text field boxes elements inputs components */}
+          {/* Remarks */}
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">
               Approval Remarks
@@ -210,7 +216,7 @@ const ViewRegularizationModal = ({
           </div>
         </div>
 
-        {/* Lower actionable submission panels layers buttons layouts splits sets */}
+        {/* Actions */}
         <div className="mt-6 pt-3 border-t border-gray-100 flex justify-end gap-2">
           <button
             type="button"

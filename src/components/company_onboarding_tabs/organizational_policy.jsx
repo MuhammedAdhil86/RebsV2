@@ -6,11 +6,14 @@ import ShiftBulkAllocation from "./workshifts/shiftbulkallocation";
 import AttendancePolicy from "./workshifts/attendancepolicy";
 import LeavesAndVacations from "./leaves_and_vacations/leavepolicy";
 import WeekendsAndOffDays from "./leaves_and_vacations/weeklyoff";
-import EmailTemplates from "./email_template/emailtemplate";
+
 import Holidays from "./leaves_and_vacations/holidays";
 
 /* Imported Employee Code Sub-Component */
 import EmployeeCodeConfig from "./leaves_and_vacations/employeecodeconfig";
+
+/* Layout Setup Sub-Component */
+import LayoutSetup from "./email_layout/layoutsetup";
 
 /* Reusable TabsSwitch Component */
 import TabsSwitch from "../../ui/tabswitch";
@@ -34,14 +37,15 @@ const OrganizationalPolicy = () => {
   const tabs = [
     { id: "work-shift", label: "Work Shift" },
     { id: "leaves-holidays", label: "Leaves & Holidays" },
-    { id: "email-templates", label: "Email Templates" },
     { id: "employee-code", label: "Employee Code" },
+    { id: "layout-setup", label: "Layout Setup" },
   ];
 
   /* ----------------- Sub-Tabs States ----------------- */
   const [activeWorkShiftTab, setActiveWorkShiftTab] = useState("Shifts");
   const [activeLeaveTab, setActiveLeaveTab] = useState("Leave Policy");
   const [activeEmailTab, setActiveEmailTab] = useState("Email Template");
+  const [activeLayoutTab, setActiveLayoutTab] = useState("Email Layout");
 
   /* ----------------- Render Content for Active Tab ----------------- */
   const renderTabContent = (activeTab) => (
@@ -108,42 +112,24 @@ const OrganizationalPolicy = () => {
         </>
       )}
 
-      {/* ===== EMAIL TEMPLATES ===== */}
-      {activeTab === "email-templates" && (
-        <>
-          <div className="flex gap-4 border-b border-gray-200 mb-4">
-            {["Email Template"].map((subTab) => (
-              <button
-                key={subTab}
-                onClick={() => setActiveEmailTab(subTab)}
-                className={`pb-2 text-sm font-medium transition-all relative ${
-                  activeEmailTab === subTab
-                    ? "text-gray-900"
-                    : "text-gray-400 hover:text-gray-600"
-                }`}
-              >
-                {subTab}
-                {activeEmailTab === subTab && (
-                  <div className="absolute bottom-0 left-0 w-full h-[2px] bg-red-500" />
-                )}
-              </button>
-            ))}
-          </div>
-          <div>{activeEmailTab === "Email Template" && <EmailTemplates />}</div>
-        </>
-      )}
-
       {/* ===== EMPLOYEE CODE ===== */}
       {activeTab === "employee-code" && (
         <EmployeeCodeConfig initialData={employeeCodeData} />
+      )}
+
+      {/* ===== LAYOUT SETUP ===== */}
+      {activeTab === "layout-setup" && (
+        <>
+          <LayoutSetup activeSubTab={activeLayoutTab} />
+        </>
       )}
 
       {/* ===== OTHER PLACEHOLDERS ===== */}
       {![
         "work-shift",
         "leaves-holidays",
-        "email-templates",
         "employee-code",
+        "layout-setup",
       ].includes(activeTab) && (
         <div className="py-10 text-center text-gray-400 italic">
           {tabs.find((t) => t.id === activeTab)?.label} content is under

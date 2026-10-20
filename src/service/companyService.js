@@ -26,7 +26,10 @@ import {
   approveCompanyClaim,
   getCountry,
   getCompantClaims,
+
+  companyLayoutStatus,
   RemainingRegularization,
+   deleteCompanyLayout,
   updateCompanyDet,
   postBranch,
   getOrgType,
@@ -46,7 +49,9 @@ import {
   deleteDepartment,
   deleteShiftUrl,
   getAttendancepolicy,
-  getAllLeavePolicy
+  getCompanyLayouts,
+  companyLayoutByType,
+  getAllLeavePolicy,
 } from "../api/api";
 
 export const getBranchData = async () => {
@@ -759,7 +764,6 @@ export const createLetterPdfTemplateTest = async (templateData) => {
     throw error;
   }
 };
-
 /**
  * Updates a letter PDF template using query param id
  * @param {string|number} id - Template ID
@@ -775,5 +779,90 @@ export const updateLetterPdfTemplateService = async (id, payload) => {
   } catch (error) {
     if (error.response?.data) throw error.response.data;
     throw error;
+  }
+};// Make sure axiosInstance is imported at the top of companyService.js, e.g.
+// import axiosInstance from "./axiosInstance";
+const LAYOUT_TYPES = ["email", "letter"];
+
+// Always returns the backend body: { status_code, message, data }
+// - interceptor returns response.data  -> res already has message/status_code
+// - plain axios                        -> body is res.data
+const getBody = (res) =>
+  res && (res.message !== undefined || res.status_code !== undefined)
+    ? res
+    : res?.data ?? res;
+
+const normalizeError = (error, fallback) => {
+  if (error?.code === "ERR_CANCELED") return error;
+
+  const data = error?.response?.data ?? error;
+  const message =
+    (typeof data === "string" ? data : data?.error || data?.message) ||
+    error?.message ||
+    fallback;
+
+  if (error && typeof error === "object") {
+    error.message = message;
+    return error;
+  }
+  return new Error(message);
+};
+
+// GET /admin/company/layouts?layout_type=email|letter
+export const fetchCompanyLayouts = async ({ layoutType, signal } = {}) => {
+  try {
+    const res = await axiosInstance.get(getCompanyLayouts, {
+      params: layoutType ? { layout_type: layoutType } : undefined,
+      signal,
+    });
+    return getBody(res);
+  } catch (error) {
+    throw normalizeError(error, "Failed to load layouts");
+  }
+};
+
+// PUT /admin/company/layout/{layoutType}  (create or update)
+export const updateCompanyLayout = async (layoutType, formData, { signal } = {}) => {
+  if (!LAYOUT_TYPES.includes(layoutType)) {
+    throw new Error(`Invalid layout type: ${layoutType}`);
+  }
+  try {
+    const res = await axiosInstance.put(companyLayoutByType(layoutType), formData, {
+      signal,
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return getBody(res); // { status_code, message, data: { id, background_image_url } }
+  } catch (error) {
+    throw normalizeError(error, "Failed to save layout");
+  }
+};
+
+// DELETE /admin/company/delete-layout/{id}/{layout_type}
+export const deleteLayout = async (id, layoutType, { signal } = {}) => {
+  if (!LAYOUT_TYPES.includes(layoutType)) {
+    throw new Error(`Invalid layout type: ${layoutType}`);
+  }
+  try {
+    const res = await axiosInstance.delete(deleteCompanyLayout(id, layoutType), { signal });
+    return getBody(res);
+  } catch (error) {
+    throw normalizeError(error, "Failed to delete layout");
+  }
+};
+
+// PUT /admin/company/layout/{layout_type}/{layout_id}/status
+export const updateLayoutStatus = async (layoutType, layoutId, isActive, { signal } = {}) => {
+  if (!LAYOUT_TYPES.includes(layoutType)) {
+    throw new Error(`Invalid layout type: ${layoutType}`);
+  }
+  try {
+    const res = await axiosInstance.put(
+      companyLayoutStatus(layoutType, layoutId),
+      { is_active: Boolean(isActive) },
+      { signal },
+    );
+    return getBody(res);
+  } catch (error) {
+    throw normalizeError(error, "Failed to update layout status");
   }
 };

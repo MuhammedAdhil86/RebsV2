@@ -139,7 +139,17 @@ export const updateCompany = "/company/update";
 export const getCompantClaims = "/claims/company";
 export const approveCompanyClaim = (id) => `/claims/${id}/approve`;
 
+export const getCompanyLayouts = "/admin/company/layouts";
+export const companyLayoutByType = (layoutType) =>
+  `/admin/company/layout/${layoutType}`; // layoutType = "email" | "letter"
 
+// DELETE /admin/company/delete-layout/{id}/{layout_type}
+export const deleteCompanyLayout = (id, layoutType) =>
+  `/admin/company/delete-layout/${id}/${layoutType}`;
+
+// PUT /admin/company/layout/{layout_type}/{layout_id}/status
+export const companyLayoutStatus = (layoutType, layoutId) =>
+  `/admin/company/layout/${layoutType}/${layoutId}/status`;
 //Company Structure
 
 export const getBranch = "/branch/get"
@@ -272,7 +282,7 @@ export const getDepartmentTimeline = "/admin/department/heirarchy/get"
 
 //Advance Salary
 export const postCreateAdvanceSalary = "/advance-salary/add"
-export const getAdvanceSalary = "/advance-salary/get"
+
 
 
 //Travel
@@ -282,9 +292,12 @@ export const getTravelData = "/travel/get"
 
 //Salary policy
 
-export const getSalaryPolicy = "/salary-policy/get"
-export const postSalaryPolicy = "/salary-policy/add"
-export const deleteSalaryPolicy = "/salary-policy/delete/:id"
+//Advance salary
+
+export const getAdvanceSalary = "/advance-salary/get"
+export const postAdvanceSalary = "/advance-salary/add"
+export const putAdvanceSalaryStatus = "/advance-salary/change-status/:id"
+export const deleteAdvanceSalary = "/advance-salary/delete/:id"
 
 //Reset Password
 
@@ -292,7 +305,8 @@ export const postResetPassword = "/staff/reset-password"
 export const sendResetPasswordEmail = "/staff/forgot-password"
 export const forgotPassword = "/staff/forgot-otpverify"
 export const confirmForgotPassword = "/staff/forgot-confirm"
-
+// api/api.js
+export const staffLogout = "/staff/logout";
 //Work from home
 export const getWorkFromHome = "/admin/wfh/get"
 export const updateStatus = "/admin/wfh/update"

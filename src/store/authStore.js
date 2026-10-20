@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { resetUserPassword } from '../service/authservice';
+import { resetUserPassword, logoutStaff } from '../service/authservice';
 
 export const useAuthStore = create((set) => ({
   // --- Initial State ---
@@ -12,7 +12,7 @@ export const useAuthStore = create((set) => ({
       return null;
     }
   })(),
-  isProcessing: false, // New: To handle button loading states
+  isProcessing: false, // To handle button loading states
 
   // --- Actions ---
   login: (token, userData) => {
@@ -25,34 +25,49 @@ export const useAuthStore = create((set) => ({
     });
   },
 
-  logout: () => {
-    localStorage.removeItem('authToken');
-    localStorage.removeItem('user');
-    localStorage.removeItem('lastAuthUpdate');
-    set({
-      isAuthenticated: false,
-      user: null,
-    });
+  // --- Logout via API: POST /api_v1/staff/logout ---
+  // logoutStaff() removes authToken/token from localStorage itself.
+  // The store state is always reset afterwards, even if the API call fails
+  // (expired token, network error), so the user is never stuck logged in.
+  // Returns true if the server confirmed the logout, false otherwise.
+  logout: async () => {
+    set({ isProcessing: true });
+    let serverLoggedOut = false;
+    try {
+      await logoutStaff();
+      serverLoggedOut = true;
+    } catch (error) {
+      console.error('Logout API failed, clearing local session anyway:', error);
+    } finally {
+      localStorage.removeItem('user');
+      localStorage.removeItem('lastAuthUpdate');
+      set({
+        isAuthenticated: false,
+        user: null,
+        isProcessing: false,
+      });
+    }
+    return serverLoggedOut;
   },
 
-  // --- NEW: Reset Password Action ---
+  // --- Reset Password Action ---
   handleResetPassword: async (oldPassword, newPassword) => {
     set({ isProcessing: true });
     try {
       const payload = {
         old_password: oldPassword,
-        new_password: newPassword
+        new_password: newPassword,
       };
-      
+
       const response = await resetUserPassword(payload);
-      
+
       // Return response so the UI can show a success toast
-      return response; 
+      return response;
     } catch (error) {
       // Throw error so UI catch block can show error toast
-      throw error; 
+      throw error;
     } finally {
       set({ isProcessing: false });
     }
-  }
+  },
 }));
