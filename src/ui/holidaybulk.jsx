@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from "react";
-import { X, Upload, HelpCircle } from "lucide-react";
+import { X, Upload, HelpCircle, Download } from "lucide-react";
 import toast from "react-hot-toast";
 import { uploadHolidayCSV } from "../service/holidayservices";
 import { getBranchData } from "../service/companyService";
+// Demo CSV saved in src/assets/docs/holidays.csv
+// (Vite: "?url" gives the file URL. If you use CRA/webpack, remove "?url")
+import demoCsv from "../assets/docs/holidays.csv?url";
 
 const BulkUploadModal = ({ isOpen, onClose, onRefresh }) => {
   const [loading, setLoading] = useState(false);
@@ -133,9 +136,7 @@ const BulkUploadModal = ({ isOpen, onClose, onRefresh }) => {
 
       <div className="relative bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-200 flex flex-col max-h-[90vh]">
         <div className="p-6 border-b border-black/5 flex justify-between items-center bg-white sticky top-0 z-10">
-          <h2 className="text-lg font-semibold text-black">
-            Bulk Upload Holidays
-          </h2>
+          <h2 className="text-lg text-black">Bulk Upload Holidays</h2>
           <button
             type="button"
             disabled={loading}
@@ -154,7 +155,7 @@ const BulkUploadModal = ({ isOpen, onClose, onRefresh }) => {
             <div className="flex justify-between items-end mb-2">
               {/* Wrapped in 'group relative' to safely anchor the hover tooltip box */}
               <div className="flex items-center gap-1.5 relative group">
-                <label className="text-[10px] font-bold text-black/40 uppercase tracking-widest block">
+                <label className="text-[10px]  text-black/40 uppercase tracking-widest block">
                   Target Branches
                 </label>
 
@@ -164,7 +165,7 @@ const BulkUploadModal = ({ isOpen, onClose, onRefresh }) => {
 
                 {/* Hover Info Tooltip Box */}
                 <div className="invisible group-hover:visible absolute left-0 top-6 z-50 w-72 border border-zinc-200 bg-white shadow-xl rounded-xl p-4 text-xs space-y-2 pointer-events-none transition-all duration-150 animate-in fade-in slide-in-from-top-1">
-                  <div className="font-bold text-black border-b border-black/5 pb-1">
+                  <div className=" text-black border-b border-black/5 pb-1">
                     CSV Template Requirements
                   </div>
                   <p className="text-black/70">
@@ -239,12 +240,10 @@ const BulkUploadModal = ({ isOpen, onClose, onRefresh }) => {
                       }`}
                     >
                       {isAllBranchesSelected && (
-                        <span className="text-[10px] font-bold leading-none">
-                          ✓
-                        </span>
+                        <span className="text-[10px] leading-none">✓</span>
                       )}
                     </div>
-                    <span className="font-semibold text-xs tracking-wide truncate">
+                    <span className="text-xs tracking-wide truncate">
                       All Branches (General)
                     </span>
                   </label>
@@ -282,9 +281,7 @@ const BulkUploadModal = ({ isOpen, onClose, onRefresh }) => {
                           }`}
                         >
                           {isChecked && (
-                            <span className="text-[10px] font-bold leading-none">
-                              ✓
-                            </span>
+                            <span className="text-[10px] leading-none">✓</span>
                           )}
                         </div>
                         <span className="font-medium text-xs tracking-wide truncate">
@@ -299,9 +296,22 @@ const BulkUploadModal = ({ isOpen, onClose, onRefresh }) => {
           </div>
 
           <div>
-            <label className="text-[10px] font-bold text-black/40 uppercase tracking-widest block mb-1.5">
-              Choose CSV File
-            </label>
+            {/* Label on the left, Demo CSV download on the right (same row) */}
+            <div className="flex justify-between items-center mb-1.5">
+              <label className="text-[10px]  text-black/40 uppercase tracking-widest block">
+                Choose CSV File
+              </label>
+
+              <a
+                href={demoCsv}
+                download="holidays.csv"
+                className="flex items-center gap-1.5 px-3 py-1 border border-black/10 rounded-lg text-[11px] font-medium text-black/70 hover:text-black hover:bg-black/5 transition-colors"
+              >
+                <Download size={12} strokeWidth={1.75} />
+                Demo CSV
+              </a>
+            </div>
+
             <div className="relative border-2 border-dashed border-black/5 rounded-xl p-8 text-center hover:bg-black/[0.02] transition-colors cursor-pointer">
               <input
                 type="file"
@@ -322,7 +332,7 @@ const BulkUploadModal = ({ isOpen, onClose, onRefresh }) => {
                 }}
               />
               <Upload size={24} className="mx-auto text-black/20 mb-2" />
-              <p className="text-xs text-black/70 font-semibold mb-0.5">
+              <p className="text-xs text-black/70 mb-0.5">
                 {selectedFile
                   ? selectedFile.name
                   : "Click or drag your document here"}
@@ -347,7 +357,7 @@ const BulkUploadModal = ({ isOpen, onClose, onRefresh }) => {
             <button
               type="submit"
               disabled={loading}
-              className="flex-1 py-3 text-sm font-bold bg-black text-white rounded-xl hover:bg-black/90 disabled:bg-zinc-600 transition-colors"
+              className="flex-1 py-3 text-sm bg-black text-white rounded-xl hover:bg-black/90 disabled:bg-zinc-600 transition-colors"
             >
               {loading ? "Processing File..." : "Process Bulk Upload"}
             </button>

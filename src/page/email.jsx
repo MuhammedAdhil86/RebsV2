@@ -32,6 +32,42 @@ import {
 
 import toast, { Toaster } from "react-hot-toast";
 
+// ---------------------------------------------------------------------------
+// Display helpers: backend keeps snake_case, the UI never shows it.
+// ---------------------------------------------------------------------------
+
+// Words that must be fully upper-case when displayed
+const ACRONYMS = new Set(["pdf", "hr", "id", "ctc", "otp", "sms", "pf", "esi"]);
+
+// Exact overrides for special labels (optional)
+const PURPOSE_LABELS = {
+  // offer_letter_pdf: "Offer Letter PDF",
+};
+
+// "offer_letter_pdf" -> "Offer Letter PDF"
+const formatPurpose = (value) => {
+  if (!value || typeof value !== "string") return "-";
+  if (PURPOSE_LABELS[value]) return PURPOSE_LABELS[value];
+
+  return value
+    .replace(/[_-]+/g, " ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => {
+      const lower = word.toLowerCase();
+      if (ACRONYMS.has(lower)) return lower.toUpperCase();
+      return lower.charAt(0).toUpperCase() + lower.slice(1);
+    })
+    .join(" ");
+};
+
+// Also protects the "Template Name" column in case a name arrives as snake_case
+const formatDisplayText = (value) => {
+  if (!value || typeof value !== "string") return "-";
+  return /^[a-z0-9]+(_[a-z0-9]+)+$/.test(value) ? formatPurpose(value) : value;
+};
+
 const EmailTemplates = () => {
   // --- Navigation & View States ---
   const [subTab, setSubTab] = useState("my-templates"); // 'my-templates' or 'presets'
@@ -117,6 +153,7 @@ const EmailTemplates = () => {
           ? presetRes.data
           : [];
 
+      // Raw backend data is stored untouched (purpose stays snake_case).
       setCustomTemplates(parsedCustom);
       setPresetTemplates(parsedPresets);
     } catch (error) {
@@ -249,16 +286,30 @@ const EmailTemplates = () => {
     const query = searchQuery.trim().toLowerCase();
     if (!query) return emailOnly;
 
+    // Search works on raw value, readable label, and name
     return emailOnly.filter(
       (item) =>
         item?.name?.toLowerCase().includes(query) ||
-        item?.purpose?.toLowerCase().includes(query),
+        formatDisplayText(item?.name).toLowerCase().includes(query) ||
+        item?.purpose?.toLowerCase().includes(query) ||
+        formatPurpose(item?.purpose).toLowerCase().includes(query),
     );
   }, [subTab, presetTemplates, customTemplates, searchQuery, isCompany8]);
 
   const columns = [
-    { key: "name", label: "Template Name", align: "left" },
-    { key: "purpose", label: "Purpose", align: "left" },
+    {
+      key: "name",
+      label: "Template Name",
+      align: "left",
+      render: (val) => formatDisplayText(val),
+    },
+    {
+      key: "purpose",
+      label: "Purpose",
+      align: "left",
+      // Display only: "offer_letter_pdf" -> "Offer Letter PDF"
+      render: (val) => formatPurpose(val),
+    },
     {
       key: "is_active",
       label: "Status",
@@ -298,7 +349,11 @@ const EmailTemplates = () => {
                 <button
                   type="button"
                   onClick={() => {
-                    setSelectedForPreview(row);
+                    // Raw row is passed; purpose_label is an extra display-only field
+                    setSelectedForPreview({
+                      ...row,
+                      purpose_label: formatPurpose(row.purpose),
+                    });
                     setViewMode("preview");
                     setOpenMenuId(null);
                   }}
@@ -320,6 +375,7 @@ const EmailTemplates = () => {
                     <button
                       type="button"
                       onClick={() => {
+                        // Edit receives the raw row so the backend format is preserved
                         setInitialData(row);
                         setViewMode("edit");
                         setOpenMenuId(null);
@@ -334,7 +390,10 @@ const EmailTemplates = () => {
                         setDeleteModal({
                           show: true,
                           id: row.id,
-                          name: row.name || `Template #${row.id}`,
+                          name:
+                            formatDisplayText(row.name) !== "-"
+                              ? formatDisplayText(row.name)
+                              : `Template #${row.id}`,
                         });
                         setOpenMenuId(null);
                       }}

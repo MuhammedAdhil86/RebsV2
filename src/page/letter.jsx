@@ -92,6 +92,21 @@ const Letter = () => {
     );
   };
 
+  // Display only: "offer_letter_pdf" -> "Offer Letter PDF"
+  // The backend value stays snake_case everywhere else.
+  const formatPurposeLabel = (purpose) => {
+    if (!purpose) return "-";
+    return purpose
+      .split("_")
+      .filter(Boolean)
+      .map((word) =>
+        word.toLowerCase() === "pdf"
+          ? "PDF"
+          : word.charAt(0).toUpperCase() + word.slice(1).toLowerCase(),
+      )
+      .join(" ");
+  };
+
   // --- Data Fetching ---
   const loadTemplatesData = async () => {
     setLoading(true);
@@ -283,7 +298,12 @@ const Letter = () => {
 
   const columns = [
     { key: "name", label: "Template Name", align: "left" },
-    { key: "purpose", label: "Purpose", align: "left" },
+    {
+      key: "purpose",
+      label: "Purpose",
+      align: "left",
+      render: (val) => formatPurposeLabel(val),
+    },
     {
       key: "is_active",
       label: "Status",

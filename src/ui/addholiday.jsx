@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { X, Upload, ChevronDown } from "lucide-react";
+import { Icon } from "@iconify/react";
 import toast from "react-hot-toast";
 import { getBranchData } from "../service/companyService";
 
@@ -141,7 +142,7 @@ const HolidayModal = ({ isOpen, onClose, onSubmitAction, editData = null }) => {
       />
       <div className="relative bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-200">
         <div className="p-6 border-b border-black/5 flex justify-between items-center">
-          <h2 className="text-lg font-semibold text-black">
+          <h2 className="text-lg text-black">
             {isEditMode ? "Edit Holiday" : "Add New Holiday"}
           </h2>
           <button
@@ -155,7 +156,7 @@ const HolidayModal = ({ isOpen, onClose, onSubmitAction, editData = null }) => {
         </div>
         <form onSubmit={internalHandleSubmit} className="p-6 space-y-4">
           <div>
-            <label className="text-[10px] font-bold text-black/40 uppercase tracking-widest block mb-1.5">
+            <label className="text-[10px]  text-black/40 uppercase tracking-widest block mb-1.5">
               Holiday Title
             </label>
             <input
@@ -172,22 +173,37 @@ const HolidayModal = ({ isOpen, onClose, onSubmitAction, editData = null }) => {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-[10px] font-bold text-black/40 uppercase tracking-widest block mb-1.5">
+              <label className="text-[10px]  text-black/40 uppercase tracking-widest block mb-1.5">
                 Date
               </label>
-              <input
-                type="date"
-                required
-                disabled={loading}
-                value={formData.date}
-                className="w-full border border-black/10 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-black transition-colors"
-                onChange={(e) =>
-                  setFormData({ ...formData, date: e.target.value })
-                }
-              />
+              {/* Custom calendar icon. The browser's own icon is made invisible
+                  and stretched over the whole input, so clicking anywhere opens
+                  the picker. */}
+              <div className="relative">
+                <input
+                  type="date"
+                  required
+                  disabled={loading}
+                  value={formData.date}
+                  className="relative w-full border border-black/10 rounded-xl pl-4 pr-10 py-2.5 text-sm focus:outline-none focus:border-black transition-colors disabled:bg-gray-50
+                    [&::-webkit-calendar-picker-indicator]:absolute
+                    [&::-webkit-calendar-picker-indicator]:inset-0
+                    [&::-webkit-calendar-picker-indicator]:w-full
+                    [&::-webkit-calendar-picker-indicator]:h-full
+                    [&::-webkit-calendar-picker-indicator]:opacity-0
+                    [&::-webkit-calendar-picker-indicator]:cursor-pointer"
+                  onChange={(e) =>
+                    setFormData({ ...formData, date: e.target.value })
+                  }
+                />
+                <Icon
+                  icon="solar:calendar-outline"
+                  className="w-4 h-4 text-black absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none"
+                />
+              </div>
             </div>
             <div className="relative" ref={dropdownRef}>
-              <label className="text-[10px] font-bold text-black/40 uppercase tracking-widest block mb-1.5">
+              <label className="text-[10px]  text-black/40 uppercase tracking-widest block mb-1.5">
                 Branch
               </label>
               <button
@@ -206,7 +222,7 @@ const HolidayModal = ({ isOpen, onClose, onSubmitAction, editData = null }) => {
               </button>
               {dropdownOpen && (
                 <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-black/10 rounded-xl shadow-xl z-20 max-h-48 overflow-y-auto p-1.5 space-y-0.5 animate-in fade-in slide-in-from-top-1 duration-150">
-                  <label className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold cursor-pointer select-none hover:bg-black/[0.03]">
+                  <label className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs cursor-pointer select-none hover:bg-black/[0.03]">
                     <input
                       type="checkbox"
                       checked={isAllSelected}
@@ -242,7 +258,7 @@ const HolidayModal = ({ isOpen, onClose, onSubmitAction, editData = null }) => {
             </div>
           </div>
           <div>
-            <label className="text-[10px] font-bold text-black/40 uppercase tracking-widest block mb-1.5">
+            <label className="text-[10px]  text-black/40 uppercase tracking-widest block mb-1.5">
               {isEditMode ? "Replace Image (Optional)" : "Holiday Image"}
             </label>
             <div className="relative border-2 border-dashed border-black/5 rounded-xl p-6 text-center hover:bg-black/[0.02] transition-colors cursor-pointer">
@@ -273,7 +289,7 @@ const HolidayModal = ({ isOpen, onClose, onSubmitAction, editData = null }) => {
             <button
               type="submit"
               disabled={loading}
-              className="flex-1 py-3 text-sm font-bold bg-black text-white rounded-xl hover:bg-black/90 disabled:bg-zinc-600"
+              className="flex-1 py-3 text-sm  bg-black text-white rounded-xl hover:bg-black/90 disabled:bg-zinc-600"
             >
               {loading
                 ? "Processing..."

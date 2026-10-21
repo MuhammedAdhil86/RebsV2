@@ -62,24 +62,43 @@ export const fetchDeviceChangeRequests = async () => {
  * @param {number|string} requestId - The primary tracking database ID or user identifier
  * @param {string} targetStatus - Query parameter option ("approved" or "rejected")
  * @param {Object} payload - Body payload containing { remarks }
- */
+ */// Turns any backend `data` value (string / object / array / null) into readable text
+const stringifyData = (d) => {
+  if (d === null || d === undefined || d === "") return "";
+  if (typeof d === "string") return d;
+  if (Array.isArray(d)) return d.map(stringifyData).filter(Boolean).join(", ");
+  if (typeof d === "object") {
+    return Object.entries(d)
+      .map(([k, v]) => `${k}: ${stringifyData(v)}`)
+      .join(", ");
+  }
+  return String(d);
+};
+
+// "message — data", skipping empty parts and duplicates
+export const buildBackendMessage = (body) => {
+  const msg = body?.message || body?.error || "";
+  const extra = stringifyData(body?.data);
+  return [msg, extra !== msg ? extra : ""].filter(Boolean).join(" — ");
+};
+
 export const fetchUpdateDeviceStatus = async (requestId, targetStatus, payload) => {
   try {
     const response = await axiosInstance.put(
-      `${putApproveDeviceRequestBase}/${requestId}?action=${targetStatus}`, 
+      `${putApproveDeviceRequestBase}/${requestId}?action=${targetStatus}`,
       payload
     );
     return response.data;
   } catch (error) {
-    const backendMessage =
-      error.response?.data?.data || 
-      error.response?.data?.message || 
-      error.response?.data?.error || 
-      error.message;
-    throw new Error(String(backendMessage));
+    const body = error.response?.data;
+    const err = new Error(
+      (body && buildBackendMessage(body)) || error.message
+    );
+    err.status = error.response?.status;
+    err.response = body; // full backend body, if you ever need it
+    throw err;
   }
 };
-
 /**
  * High-Scale Enterprise Function
  * Fetches, flattens, and sanitizes multi-log histories cleanly.

@@ -1,12 +1,6 @@
 import React, { useEffect, useState } from "react";
-import {
-  X,
-  Laptop,
-  AlertCircle,
-  CheckCircle2,
-  XCircle,
-  UserCheck,
-} from "lucide-react";
+import { X } from "lucide-react";
+import { Icon } from "@iconify/react";
 import toast from "react-hot-toast";
 import { fetchUpdateDeviceStatus } from "../service/deviceService";
 
@@ -129,208 +123,215 @@ const DeviceApprovalModal = ({
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-[999999] flex items-center justify-center p-4">
-      <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-        onClick={onClose}
-      />
+  const inputCls =
+    "w-full border p-3 rounded-2xl bg-gray-50 text-gray-600 truncate";
+  const labelCls = "block mb-1 font-medium text-gray-700";
 
-      <div className="relative w-full max-w-md transform overflow-hidden rounded-xl bg-white p-6 shadow-2xl transition-all border border-gray-100 animate-in fade-in zoom-in-95 duration-200">
-        <div className="flex items-center justify-between border-b border-gray-100 pb-3 mb-4">
-          <div className="flex items-center gap-2">
-            <div className="p-1.5 bg-gray-50 rounded-lg text-gray-800">
-              <Laptop className="w-4 h-4" />
+  const detectedText =
+    data.change_detected_date?.Valid &&
+    data.change_detected_date.Time !== "0001-01-01T00:00:00Z"
+      ? formatExactTime12h(data.change_detected_date.Time)
+      : data.date || "N/A";
+
+  const spinner = (
+    <span className="inline-block w-3.5 h-3.5 mr-2 align-middle border-2 border-white/30 border-t-white rounded-full animate-spin" />
+  );
+
+  return (
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm font-poppins text-[12px]"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white w-[95%] max-w-[500px] rounded-[2rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] border border-white/20"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* HEADER */}
+        <div className="px-8 py-5 flex items-center justify-between border-b border-gray-50 bg-white">
+          <div className="flex items-center gap-3">
+            <Icon icon="solar:laptop-outline" className="w-5 h-5 text-black" />
+            <div>
+              <h2 className="text-gray-900 text-[16px] font-medium uppercase">
+                Device Request
+              </h2>
+              <p className="text-gray-400 text-[10px]">
+                Review and update the device change request
+              </p>
             </div>
-            <h3 className="text-base font-semibold text-gray-900">
-              Review Device Request
-            </h3>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg p-1 text-gray-400 hover:bg-gray-50 hover:text-gray-600 transition-colors"
-          >
-            <X className="w-5 h-5" />
+          <button type="button" onClick={onClose}>
+            <X size={20} />
           </button>
         </div>
 
-        <div className="space-y-4">
-          <div className="p-3 bg-gray-50 rounded-lg border border-gray-100 flex justify-between items-center text-xs">
+        {/* BODY */}
+        <div className="p-8 space-y-5 overflow-y-auto">
+          {/* GRID */}
+          <div className="grid grid-cols-2 gap-x-4 gap-y-4">
             <div>
-              <p className="font-medium text-gray-900">{data.name}</p>
-              <p className="text-gray-500 text-[11px]">{data.designation}</p>
+              <label className={labelCls}>Employee Name</label>
+              <input readOnly value={data.name || ""} className={inputCls} />
             </div>
-            <div className="flex flex-col items-end gap-1.5">
-              <span className="font-mono bg-gray-200/80 px-2 py-0.5 rounded text-gray-700 font-medium">
-                UUID #{data.user_uuid}
-              </span>
-              <span
-                className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+
+            <div>
+              <label className={labelCls}>Designation</label>
+              <input
+                readOnly
+                value={data.designation || ""}
+                className={inputCls}
+              />
+            </div>
+
+            <div>
+              <label className={labelCls}>User UUID</label>
+              <input
+                readOnly
+                value={`#${data.user_uuid ?? ""}`}
+                className={`${inputCls} font-mono`}
+              />
+            </div>
+
+            <div>
+              <label className={labelCls}>Device Type</label>
+              <input
+                readOnly
+                value={
                   data.is_first_device
-                    ? "bg-emerald-50 text-emerald-700 border-emerald-100"
-                    : "bg-amber-50 text-amber-700 border-amber-100"
-                }`}
-              >
-                {data.is_first_device
-                  ? "This is first device"
-                  : "This is not first device"}
-              </span>
+                    ? "This is first device"
+                    : "This is not first device"
+                }
+                className={inputCls}
+              />
             </div>
-          </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="bg-gray-50/50 p-2.5 rounded-lg border border-gray-100 flex flex-col justify-between">
+            <div>
+              <label className={labelCls}>Current Device</label>
+              <input
+                readOnly
+                title={data.oldDevice || data.device}
+                value={data.oldDevice || data.device || "None"}
+                className={`${inputCls} font-medium`}
+              />
+            </div>
+
+            <div>
+              <label className={labelCls}>Requested Device</label>
+              <input
+                readOnly
+                title={data.newDevice}
+                value={data.newDevice || "None"}
+                className={`${inputCls} font-medium`}
+              />
+            </div>
+
+            {resolvedCurrentDeviceId && (
               <div>
-                <label className="block text-[11px] font-medium text-gray-400 mb-0.5">
-                  Current Device
-                </label>
-                <p
-                  className="text-xs font-semibold text-gray-700 truncate"
-                  title={data.oldDevice || data.device}
-                >
-                  {data.oldDevice || data.device || "None"}
-                </p>
-              </div>
-              {resolvedCurrentDeviceId && (
-                <div className="text-[10px] border-t border-gray-200/60 pt-1.5 mt-2 text-gray-400 font-mono truncate">
-                  ID:{" "}
-                  <span className="text-gray-700 select-all">
-                    {resolvedCurrentDeviceId}
-                  </span>
-                </div>
-              )}
-            </div>
-
-            <div className="bg-blue-50/30 p-2.5 rounded-lg border border-blue-100/50 flex flex-col justify-between">
-              <div>
-                <label className="block text-[11px] font-medium text-blue-500 mb-0.5">
-                  Requested Device
-                </label>
-                <p
-                  className="text-xs font-semibold text-gray-800 truncate"
-                  title={data.newDevice}
-                >
-                  {data.newDevice || "None"}
-                </p>
-              </div>
-              {resolvedNewDeviceId && (
-                <div className="text-[10px] border-t border-blue-200/30 pt-1.5 mt-2 text-blue-400 font-mono truncate">
-                  ID:{" "}
-                  <span className="text-gray-700 select-all">
-                    {resolvedNewDeviceId}
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="bg-gray-50/50 p-2.5 rounded-lg border border-gray-100 flex items-center justify-between text-xs text-gray-600">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-              <span>
-                Detected:{" "}
-                <strong className="text-gray-800">
-                  {data.change_detected_date?.Valid &&
-                  data.change_detected_date.Time !== "0001-01-01T00:00:00Z"
-                    ? formatExactTime12h(data.change_detected_date.Time)
-                    : data.date || "N/A"}
-                </strong>
-              </span>
-            </div>
-            <span className="text-[11px] font-medium">
-              Current Status:{" "}
-              <span
-                className={`capitalize font-bold ${status === "approved" ? "text-emerald-600" : status === "rejected" ? "text-red-600" : "text-amber-600"}`}
-              >
-                {data.status}
-              </span>
-            </span>
-          </div>
-
-          {status === "approved" &&
-            (resolvedApprovedAt || resolvedApprovedByName) && (
-              <div className="p-3 bg-emerald-50/40 rounded-lg border border-emerald-100/70 text-xs text-gray-600 space-y-1">
-                <div className="flex items-center gap-1.5 font-medium text-emerald-800 mb-1">
-                  <UserCheck className="w-3.5 h-3.5" />
-                  <span>Approval Log Details</span>
-                </div>
-                {resolvedApprovedByName && (
-                  <p className="text-[11px]">
-                    Approved By:{" "}
-                    <strong className="text-gray-800">
-                      {resolvedApprovedByName}
-                    </strong>
-                  </p>
-                )}
-                {resolvedApprovedAt && (
-                  <p className="text-[11px]">
-                    Approved At:{" "}
-                    <span className="text-gray-700 font-medium">
-                      {resolvedApprovedAt}
-                    </span>
-                  </p>
-                )}
+                <label className={labelCls}>Current Device ID</label>
+                <input
+                  readOnly
+                  value={resolvedCurrentDeviceId}
+                  className={`${inputCls} font-mono select-all`}
+                />
               </div>
             )}
 
+            {resolvedNewDeviceId && (
+              <div>
+                <label className={labelCls}>Requested Device ID</label>
+                <input
+                  readOnly
+                  value={resolvedNewDeviceId}
+                  className={`${inputCls} font-mono select-all`}
+                />
+              </div>
+            )}
+
+            <div>
+              <label className={labelCls}>Detected</label>
+              <input readOnly value={detectedText} className={inputCls} />
+            </div>
+
+            <div>
+              <label className={labelCls}>Status</label>
+              <input readOnly value={data.status || ""} className={inputCls} />
+            </div>
+          </div>
+
+          {/* REMARKS */}
           {status === "pending" && (
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">
-                Action Remarks
-              </label>
+              <label className={labelCls}>Action Remarks</label>
               <textarea
-                rows={2}
+                rows="3"
                 value={remarks}
                 onChange={(e) => setRemarks(e.target.value)}
                 placeholder="Provide operation review log audit notes here..."
-                className="w-full border border-gray-200 rounded-lg p-2.5 text-xs bg-white focus:outline-none focus:border-gray-900 resize-none"
+                className="w-full border p-3 rounded-2xl bg-white text-gray-700 focus:outline-none focus:border-gray-900 resize-none"
                 required
               />
             </div>
           )}
-        </div>
 
-        <div className="mt-6 pt-3 border-t border-gray-100 flex justify-end gap-2">
-          {status === "pending" ? (
-            <>
-              <button
-                type="button"
-                disabled={submitting}
-                onClick={() => handleStatusAction("rejected")}
-                className="flex items-center gap-1.5 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-300 text-white rounded-lg text-xs font-medium transition-colors"
-              >
-                {submitting && actionType === "rejected" ? (
-                  <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                ) : (
-                  <XCircle className="w-3.5 h-3.5" />
+          {/* FOOTER */}
+          <div className="flex justify-between items-center border-t border-gray-50 pt-4 gap-3">
+            <div className="flex flex-col gap-0.5 text-gray-600">
+              {status === "approved" &&
+                (resolvedApprovedAt || resolvedApprovedByName) && (
+                  <>
+                    {resolvedApprovedByName && (
+                      <div>
+                        <span>Approved By: </span>
+                        <span className="font-semibold text-gray-900">
+                          {resolvedApprovedByName}
+                        </span>
+                      </div>
+                    )}
+                    {resolvedApprovedAt && (
+                      <div>
+                        <span>Approved At: </span>
+                        <span className="font-semibold text-gray-900">
+                          {resolvedApprovedAt}
+                        </span>
+                      </div>
+                    )}
+                  </>
                 )}
-                Reject
-              </button>
+            </div>
 
-              <button
-                type="button"
-                disabled={submitting}
-                onClick={() => handleStatusAction("approved")}
-                className="flex items-center gap-1.5 px-4 py-2 bg-black hover:bg-gray-800 disabled:bg-gray-300 text-white rounded-lg text-xs font-medium transition-colors"
-              >
-                {submitting && actionType === "approved" ? (
-                  <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                ) : (
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                )}
-                Approve
-              </button>
-            </>
-          ) : (
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 bg-gray-900 hover:bg-gray-800 text-white rounded-lg text-xs font-medium transition-colors"
-            >
-              Close
-            </button>
-          )}
+            <div className="flex gap-3">
+              {status === "pending" ? (
+                <>
+                  <button
+                    type="button"
+                    disabled={submitting}
+                    onClick={() => handleStatusAction("rejected")}
+                    className="px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-2xl disabled:opacity-60 transition-colors"
+                  >
+                    {submitting && actionType === "rejected" && spinner}
+                    Reject
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={submitting}
+                    onClick={() => handleStatusAction("approved")}
+                    className="px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-2xl disabled:opacity-60 transition-colors"
+                  >
+                    {submitting && actionType === "approved" && spinner}
+                    Approve
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-6 py-2.5 border border-gray-200 text-gray-600 hover:bg-gray-50 rounded-2xl transition-colors"
+                >
+                  Close
+                </button>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>

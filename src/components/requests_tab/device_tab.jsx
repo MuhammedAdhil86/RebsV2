@@ -1,7 +1,12 @@
 import React, { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import toast from "react-hot-toast";
+
+// Components
 import UniversalTable from "../../ui/universal_table";
-import DeviceApprovalModal from "../../ui/devicestatusmodal"; // Adjust path to your modal component if needed
+import DeviceApprovalModal from "../../ui/devicestatusmodal";
+
+// Services
 import { fetchDeviceChangeRequests } from "../../service/deviceService";
 
 const statusColors = {
@@ -10,47 +15,61 @@ const statusColors = {
   Rejected: "bg-red-100 text-red-600",
 };
 
+/* ================= HELPERS ================= */
+// "2026-10-20T09:00:00Z" -> "20/10/2026" (UTC, so the date never shifts)
+const formatDate = (raw) => {
+  if (!raw) return "--";
+  const d = new Date(raw);
+  return isNaN(d.getTime())
+    ? "--"
+    : d.toLocaleDateString("en-GB", { timeZone: "UTC" });
+};
+
+const capitalize = (s) =>
+  s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : "Pending";
+
+// One cell style for every text column: centered, truncated, full text on hover
+const TextCell = ({
+  value,
+  maxW = "max-w-[140px]",
+  className = "text-gray-500",
+}) => (
+  <span title={value} className={`truncate block ${maxW} mx-auto ${className}`}>
+    {value}
+  </span>
+);
+
+/* ================= MAIN COMPONENT ================= */
 export default function DeviceRequestTab() {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // --- MODAL STATES ---
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  // Modal states
   const [selectedRequest, setSelectedRequest] = useState(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
-  const fetchData = async () => {
-    setLoading(true);
+  const fetchData = async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const responseData = await fetchDeviceChangeRequests();
 
-      // Transform raw backend object formats safely matching your SQL Null object shapes
-      const transformed = responseData.map((item) => {
-        const rawStatus =
-          item.status && item.status.trim() !== "" ? item.status : "Pending";
-
-        // Parse nested SQL Nullable Date structure
+      // Transform raw backend shapes (SQL nullable objects) into flat row data
+      const transformed = (responseData || []).map((item) => {
         const rawDate = item.change_detected_date?.Valid
           ? item.change_detected_date.Time
-          : "";
-        const cleanDate = rawDate
-          ? new Date(rawDate).toLocaleDateString("en-US", {
-              year: "numeric",
-              month: "short",
-              day: "numeric",
-            })
-          : "--";
+          : null;
 
         return {
-          ...item, // Keeps original properties intact for the modal payload updates
+          ...item, // keeps original properties for the modal payload
+          id: item.id,
           name: item.name || "N/A",
           designation: item.designation || "N/A",
           oldDevice: item.device || "N/A",
-          // Safely extracts string property from nested Go/SQL nullable object
           newDevice: item.new_device?.Valid ? item.new_device.String : "N/A",
-          date: cleanDate,
-          status:
-            rawStatus.charAt(0).toUpperCase() +
-            rawStatus.slice(1).toLowerCase(),
+          date: formatDate(rawDate),
+          status: item.status?.trim()
+            ? capitalize(item.status.trim())
+            : "Pending",
         };
       });
 
@@ -66,9 +85,9 @@ export default function DeviceRequestTab() {
     fetchData();
   }, []);
 
-  // --- HANDLER ACTIONS ---
-  const handleRowClick = (reqRowObject) => {
-    setSelectedRequest(reqRowObject);
+  /* ================= HANDLERS ================= */
+  const handleOpenModal = (req) => {
+    setSelectedRequest(req);
     setIsModalOpen(true);
   };
 
@@ -78,34 +97,52 @@ export default function DeviceRequestTab() {
   };
 
   const handleOptimisticUpdate = (id, newStatus) => {
-    // Normalizes formatting to match row configurations (e.g., 'Approved')
-    const formattedStatus =
-      newStatus.charAt(0).toUpperCase() + newStatus.slice(1).toLowerCase();
-
-    setData((prevRows) =>
-      prevRows.map((row) =>
-        row.id === id ? { ...row, status: formattedStatus } : row,
+    const formattedStatus = capitalize(newStatus);
+    setData((prev) =>
+      prev.map((item) =>
+        item.id === id ? { ...item, status: formattedStatus } : item,
       ),
     );
   };
 
-  /* ================= COLUMNS CONFIGURATION ================= */
+  /* ================= UNIVERSAL TABLE COLUMNS ================= */
   const columns = [
     {
       key: "name",
       label: "Employee",
-      width: 150,
-      render: (val) => <span className="font-medium text-gray-800">{val}</span>,
+      width: 180,
+      render: (val) => (
+        <TextCell
+          value={val}
+          maxW="max-w-[150px]"
+          className="font-medium text-gray-700"
+        />
+      ),
     },
     {
       key: "designation",
       label: "Designation",
-      width: 120,
-      render: (val) => <span className="text-gray-600 text-xs">{val}</span>,
+      width: 160,
+      render: (val) => <TextCell value={val} maxW="max-w-[140px]" />,
     },
-    { key: "oldDevice", label: "Current Device", width: 150 },
-    { key: "newDevice", label: "Requested Device", width: 150 },
-    { key: "date", label: "Detected Date", width: 130 },
+    {
+      key: "oldDevice",
+      label: "Current Device",
+      width: 170,
+      render: (val) => <TextCell value={val} maxW="max-w-[150px]" />,
+    },
+    {
+      key: "newDevice",
+      label: "Requested Device",
+      width: 170,
+      render: (val) => <TextCell value={val} maxW="max-w-[150px]" />,
+    },
+    {
+      key: "date",
+      label: "Detected Date",
+      width: 130,
+      render: (val) => <TextCell value={val} maxW="max-w-[110px]" />,
+    },
     {
       key: "status",
       label: "Status",
@@ -122,13 +159,10 @@ export default function DeviceRequestTab() {
     },
   ];
 
-  if (loading) {
+  if (loading)
     return (
-      <div className="p-20 text-center text-gray-400">
-        Loading Device Requests...
-      </div>
+      <div className="p-20 text-center text-gray-400">Loading Board...</div>
     );
-  }
 
   return (
     <div className="bg-[#f9fafb] rounded-xl p-4 border border-gray-100 shadow-sm w-full">
@@ -138,21 +172,26 @@ export default function DeviceRequestTab() {
         </h3>
       </div>
 
+      {/* Same shared table component as the Regularization tab */}
       <UniversalTable
         columns={columns}
         data={data}
         rowsPerPage={10}
-        rowClickHandler={handleRowClick}
+        rowClickHandler={handleOpenModal}
       />
 
-      {/* --- INTEGRATED MODAL COMPONENT --- */}
-      <DeviceApprovalModal
-        open={isModalOpen}
-        data={selectedRequest}
-        onClose={handleCloseModal}
-        onSuccess={fetchData} // Re-fetches fresh table view state from backend on action completion
-        onOptimisticUpdate={handleOptimisticUpdate}
-      />
+      {/* THE MODAL */}
+      {isModalOpen &&
+        createPortal(
+          <DeviceApprovalModal
+            open={isModalOpen}
+            data={selectedRequest}
+            onClose={handleCloseModal}
+            onSuccess={() => fetchData(true)}
+            onOptimisticUpdate={handleOptimisticUpdate}
+          />,
+          document.body,
+        )}
     </div>
   );
 }

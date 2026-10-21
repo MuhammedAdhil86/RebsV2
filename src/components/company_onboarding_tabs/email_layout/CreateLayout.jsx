@@ -179,7 +179,7 @@ const isBlankHtml = (html) => {
 };
 
 // Static placeholders (no API call)
-const LAYOUT_PLACEHOLDERS = ["RebsLogoURL", "ReceiverLogoURL"];
+const LAYOUT_PLACEHOLDERS = ["SenderLogoURL", "ReceiverLogoURL"];
 
 const isLogoKey = (key) => key.toLowerCase().includes("logo");
 

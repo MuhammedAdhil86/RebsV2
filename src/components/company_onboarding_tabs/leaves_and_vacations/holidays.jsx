@@ -1,10 +1,6 @@
 import React, { useState, useEffect } from "react";
-import {
-  Plus,
-  Calendar as CalendarIcon,
-  List as ListIcon,
-  Upload,
-} from "lucide-react";
+import { Plus, List as ListIcon, Upload } from "lucide-react";
+import { Icon } from "@iconify/react";
 import toast from "react-hot-toast";
 import HolidayCalendar from "./holidayscalender";
 import HolidayList from "./holidayslist";
@@ -100,7 +96,7 @@ const Holidays = () => {
     }
 
     try {
-      // ✅ SUCCESS FIX: Now passing 'data' (the FormData variable), NOT 'formDataPayload'
+      // SUCCESS FIX: Now passing 'data' (the FormData variable), NOT 'formDataPayload'
       const response = isEditMode
         ? await modifyHoliday(editId, data)
         : await addHoliday(data);
@@ -148,7 +144,8 @@ const Holidays = () => {
               activeTab === "calendar" ? "text-black" : "text-black/30"
             }`}
           >
-            <CalendarIcon size={16} /> Calendar View
+            <Icon icon="solar:calendar-outline" className="w-4 h-4" /> Calendar
+            View
             {activeTab === "calendar" && (
               <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black rounded-full" />
             )}
@@ -201,6 +198,7 @@ const Holidays = () => {
             holidays={allHolidays}
             getBranchName={getBranchName}
             onRefresh={loadData}
+            onSubmitAction={handleHolidaySubmit}
           />
         )}
       </div>
