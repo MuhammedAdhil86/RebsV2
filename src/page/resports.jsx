@@ -15,7 +15,7 @@ const TAB_LIST = [
   "Attendance",
   "Leave",
   "Unapproved Leaves",
-  "Payroll Attendance",
+  "Payroll Complains",
   "Fine",
   "Feedback",
   "Distance Violation",
@@ -53,7 +53,7 @@ export default function Reports() {
       case "Unapproved Leaves":
         return <UnapprovedAbsentReports />;
 
-      case "Payroll Attendance":
+      case "Payroll Complains":
         return <PayrollAttendanceReport />;
 
       case "Fine":

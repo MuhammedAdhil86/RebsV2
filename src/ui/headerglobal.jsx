@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { FiBell } from "react-icons/fi";
 import Notification from "../page/notification";
 import { useAuthStore } from "../store/authStore"; // ✅ Import your Zustand store
 
 export default function HeaderGlobal() {
-  const [showVersion, setShowVersion] = useState(false);
+  const navigate = useNavigate();
   const [showNotifications, setShowNotifications] = useState(false);
 
   const notificationRef = useRef(null);
-  const settingsRef = useRef(null);
 
   // ✅ Extract live user data from Zustand store
   const user = useAuthStore((state) => state.user);
@@ -24,7 +24,7 @@ export default function HeaderGlobal() {
       ? user.image
       : `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=random&color=fff`;
 
-  // Close dropdowns cleanly if user clicks anywhere outside of them
+  // Close the notification popover if user clicks anywhere outside of it
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (
@@ -32,9 +32,6 @@ export default function HeaderGlobal() {
         !notificationRef.current.contains(event.target)
       ) {
         setShowNotifications(false);
-      }
-      if (settingsRef.current && !settingsRef.current.contains(event.target)) {
-        setShowVersion(false);
       }
     };
 
@@ -57,10 +54,7 @@ export default function HeaderGlobal() {
         <div className="relative" ref={notificationRef}>
           <button
             type="button"
-            onClick={() => {
-              setShowNotifications(!showNotifications);
-              setShowVersion(false);
-            }}
+            onClick={() => setShowNotifications(!showNotifications)}
             className={`w-9 h-9 flex items-center justify-center rounded-full border cursor-pointer transition-all ${
               showNotifications
                 ? "bg-blue-50 border-blue-300 text-blue-600 shadow-sm"
@@ -80,26 +74,18 @@ export default function HeaderGlobal() {
           )}
         </div>
 
-        {/* Settings Container Layout */}
-        <div className="relative" ref={settingsRef}>
-          <button
-            className="text-sm text-gray-700 border border-gray-300 px-4 py-1 rounded-full font-normal hover:bg-gray-50 transition-colors"
-            onClick={() => {
-              setShowVersion(!showVersion);
-              setShowNotifications(false);
-            }}
-          >
-            Settings
-          </button>
-
-          {/* Version Info Dropdown */}
-          {showVersion && (
-            <div className="absolute right-0 mt-2 w-48 bg-gray-900 text-white text-xs p-3 rounded-lg shadow-lg z-50">
-              <p className="font-semibold text-gray-300">rebs v2.112</p>
-              <p className="text-gray-400 mt-1">03-07-2026 17:17:28</p>
-            </div>
-          )}
-        </div>
+        {/* Settings button: opens the /settings page (version shown on hover) */}
+        <button
+          type="button"
+          title="rebs v2.112 · 03-07-2026 17:17:28"
+          className="text-sm text-gray-700 border border-gray-300 px-4 py-1 rounded-full font-normal hover:bg-gray-50 transition-colors"
+          onClick={() => {
+            setShowNotifications(false);
+            navigate("/settings");
+          }}
+        >
+          Settings
+        </button>
 
         {/* Dynamic Profile Avatar Box */}
         <div className="w-9 h-9 rounded-full border border-gray-200 overflow-hidden select-none flex items-center justify-center bg-gray-100">
