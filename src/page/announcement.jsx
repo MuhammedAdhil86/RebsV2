@@ -1,15 +1,20 @@
 import React, { useState, useEffect } from "react";
 import { FiMessageSquare, FiHeart, FiUser, FiSend } from "react-icons/fi";
+import toast from "react-hot-toast";
 import DashboardLayout from "../ui/pagelayout";
 import HeaderGlobal from "../ui/headerglobal";
 import announceService from "../service/announceService";
+
+const EMOJIS = ["👍", "❤️", "🔥", "🙌", "😍"];
 
 const Announcement = () => {
   const [announcements, setAnnouncements] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expandedComments, setExpandedComments] = useState({});
   const [commentInputs, setCommentInputs] = useState({});
+  const [likingIds, setLikingIds] = useState(new Set());
 
+  // Backend errors are toasted by the axios interceptor, so no toast here.
   const loadAnnouncements = async () => {
     try {
       const response = await announceService.fetchAnnouncements();
@@ -27,21 +32,21 @@ const Announcement = () => {
   }, []);
 
   const toggleComments = (id) => {
-    setExpandedComments((prev) => ({
-      ...prev,
-      [id]: !prev[id],
-    }));
+    setExpandedComments((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
   const handleInputChange = (id, value) => {
-    setCommentInputs((prev) => ({
-      ...prev,
-      [id]: value,
-    }));
+    setCommentInputs((prev) => ({ ...prev, [id]: value }));
   };
 
-  // 1. Like Toggle Handler with Optimistic UI adjustment
+  // Like toggle: POST /announcement/toggle/like/{id} -> { data: { liked } }
   const handleLikeToggle = async (id) => {
+    if (likingIds.has(id)) return;
+    setLikingIds((prev) => new Set(prev).add(id));
+
+    const previous = announcements;
+
+    // Optimistic update
     setAnnouncements((prev) =>
       prev.map((item) => {
         if (item.id !== id) return item;
@@ -49,47 +54,67 @@ const Announcement = () => {
         return {
           ...item,
           likes_count: hasLiked
-            ? Math.max(0, item.likes_count - 1)
-            : item.likes_count + 1,
-          user_interaction: {
-            ...item.user_interaction,
-            has_liked: !hasLiked,
-          },
+            ? Math.max(0, (item.likes_count || 0) - 1)
+            : (item.likes_count || 0) + 1,
+          user_interaction: { ...item.user_interaction, has_liked: !hasLiked },
         };
       }),
     );
 
     try {
-      await announceService.toggleLike(id);
-      loadAnnouncements(); // Sync with exact database records
+      const { liked } = await announceService.toggleLike(id);
+
+      // Reconcile with the server's real state
+      setAnnouncements((prev) =>
+        prev.map((item) => {
+          if (item.id !== id) return item;
+          const currentlyLiked = item.user_interaction?.has_liked || false;
+          if (currentlyLiked === liked) return item;
+          return {
+            ...item,
+            likes_count: liked
+              ? (item.likes_count || 0) + 1
+              : Math.max(0, (item.likes_count || 0) - 1),
+            user_interaction: { ...item.user_interaction, has_liked: liked },
+          };
+        }),
+      );
     } catch (error) {
-      console.error("Failed to toggle like record state:", error);
-      loadAnnouncements();
+      console.error("Failed to toggle like:", error);
+      setAnnouncements(previous); // rollback
+    } finally {
+      setLikingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
     }
   };
 
-  // 2. Post Comment Handler sending text string to backend
+  // Post comment (backend success/error toast comes from the interceptor)
   const handleCommentSubmit = async (id) => {
     const text = commentInputs[id]?.trim();
-    if (!text) return;
+    if (!text) {
+      toast.error("Please write a comment first");
+      return;
+    }
 
     try {
       await announceService.postComment(id, text);
-      handleInputChange(id, ""); // Reset specific form line text field
-      loadAnnouncements(); // Dynamic list reload sequence
+      handleInputChange(id, "");
+      loadAnnouncements();
     } catch (error) {
-      console.error("Failed to process comment transaction line:", error);
+      console.error("Failed to post comment:", error);
     }
   };
 
-  // 3. Post Emoji Interaction Handler (Fixed Object Payload Mismatch)
+  // Post emoji reaction
   const handleEmojiSelect = async (id, emojiChar) => {
     try {
-      // ✅ Pass the raw string directly ("👍") to match your service's argument signature
       await announceService.postEmoji(id, emojiChar);
-      loadAnnouncements(); // Refresh layout numbers dynamically
+      loadAnnouncements();
     } catch (error) {
-      console.error("Failed to append target emoji indicator:", error);
+      console.error("Failed to add emoji:", error);
     }
   };
 
@@ -107,11 +132,14 @@ const Announcement = () => {
       <div className="w-full space-y-4">
         <HeaderGlobal userName="Admin" />
 
-        {/* Main Feed Container */}
         <div className="p-4 mx-auto space-y-6 pb-10 max-w-4xl">
           {loading ? (
             <div className="bg-white p-12 flex justify-center rounded-lg shadow-sm">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-black"></div>
+            </div>
+          ) : announcements.length === 0 ? (
+            <div className="bg-white p-12 text-center rounded-xl shadow-sm border border-gray-100">
+              <p className="text-sm text-gray-400">No announcements yet.</p>
             </div>
           ) : (
             announcements.map((item) => (
@@ -121,7 +149,7 @@ const Announcement = () => {
                   item.attachment ? "md:flex-row" : ""
                 }`}
               >
-                {/* Media Section */}
+                {/* Media */}
                 {item.attachment && (
                   <div className="w-full md:w-1/3 lg:w-1/4 h-48 md:h-auto bg-gray-50 flex-shrink-0 border-r border-gray-100">
                     <img
@@ -132,7 +160,7 @@ const Announcement = () => {
                   </div>
                 )}
 
-                {/* Main Information Panel */}
+                {/* Content */}
                 <div className="p-6 flex-1 flex flex-col justify-between">
                   <div>
                     <div className="flex justify-between items-start mb-3">
@@ -153,7 +181,7 @@ const Announcement = () => {
                       {item.description}
                     </p>
 
-                    {/* Display Accumulated Emoji Counts */}
+                    {/* Emoji counts */}
                     {item.emojis_count && item.emojis_count.length > 0 && (
                       <div className="flex flex-wrap gap-1.5 mt-4">
                         {item.emojis_count.map((emo, index) => (
@@ -177,13 +205,13 @@ const Announcement = () => {
                     )}
                   </div>
 
-                  {/* Actions / Stats Dock Container */}
+                  {/* Actions */}
                   <div>
                     <div className="mt-6 pt-4 border-t border-gray-50 flex items-center justify-between gap-4">
                       <div className="flex items-center gap-6">
-                        {/* Like Activation Toggle Button */}
                         <button
                           onClick={() => handleLikeToggle(item.id)}
+                          disabled={likingIds.has(item.id)}
                           className={`flex items-center gap-2 transition-colors ${
                             item.user_interaction?.has_liked
                               ? "text-red-500 font-medium"
@@ -198,11 +226,10 @@ const Announcement = () => {
                             }
                           />
                           <span className="text-xs">
-                            {item.likes_count} Likes
+                            {item.likes_count || 0} Likes
                           </span>
                         </button>
 
-                        {/* Comment Action Area Trigger line */}
                         <button
                           onClick={() => toggleComments(item.id)}
                           className={`flex items-center gap-2 transition-colors ${
@@ -218,9 +245,9 @@ const Announcement = () => {
                         </button>
                       </div>
 
-                      {/* Floating Emoji Strip selection array list inline */}
+                      {/* Emoji picker */}
                       <div className="flex items-center gap-1 bg-gray-50 border border-gray-100 px-1.5 py-0.5 rounded-lg">
-                        {["👍", "❤️", "🔥", "🙌", "😍"].map((emoji) => (
+                        {EMOJIS.map((emoji) => (
                           <button
                             key={emoji}
                             type="button"
@@ -233,10 +260,9 @@ const Announcement = () => {
                       </div>
                     </div>
 
-                    {/* Collapsible Discussion Layout Drawer */}
+                    {/* Comments drawer */}
                     {expandedComments[item.id] && (
                       <div className="mt-4 pt-4 border-t border-gray-100 bg-gray-50/70 rounded-lg p-4 space-y-4">
-                        {/* Comment Post Input Box layout segment */}
                         <div className="flex gap-2 bg-white p-1 rounded-md border border-gray-200 shadow-sm">
                           <input
                             type="text"
@@ -259,7 +285,6 @@ const Announcement = () => {
                           </button>
                         </div>
 
-                        {/* Discussion Render Block Map cycle */}
                         <div className="space-y-3">
                           <h4 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">
                             Discussion Feed

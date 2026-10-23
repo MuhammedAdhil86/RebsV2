@@ -16,7 +16,8 @@ export const getAnnouncement = "/admin/announcement/get";
 export const addComment = (id) => `/announcement/comment/add/${id}`;
 export const addEmoji = (id) => `/announcement/emojis/add/${id}`;
 export const addLike = (id) => `/announcement/like/add/${id}`;
-//Employeelist
+
+export const toggleLikeApi = (id) => `/announcement/toggle/like/${id}`;
 export const uploadProfileImage = "staff/uploadimage";
 export const getMypersonalProfile = "/staff/getmypersonalprofile";
 export const updateMypersonalProfile = "staff/updatemypersonalprofile";

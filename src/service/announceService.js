@@ -1,13 +1,23 @@
 import axiosInstance from "./axiosinstance";
 // Added getAnnouncement to the imports below
-import { postAnnouncement, getDept, getStaff, getAllNotification,getAnnouncement,addLike,addComment,addEmoji, } from "../api/api"; 
+import {
+  postAnnouncement,
+  getDept,
+  getStaff,
+  getAllNotification,
+  getAnnouncement,
+  addLike,
+  addComment,
+  addEmoji,
+  toggleLikeApi,
+} from "../api/api";
 
 const announceService = {
   addAnnouncement: async (announcementData) => {
     try {
       console.log(
         "Data being sent to backend for announcement:",
-        announcementData
+        announcementData,
       );
 
       const response = await axiosInstance.post(
@@ -17,7 +27,7 @@ const announceService = {
           headers: {
             "Content-Type": "multipart/form-data",
           },
-        }
+        },
       );
 
       return response.data.data;
@@ -56,7 +66,7 @@ const announceService = {
     try {
       const response = await axiosInstance.get(getAnnouncement);
       console.log("Announcements fetched:", response.data);
-      
+
       // Returning response.data.data to match your addAnnouncement pattern
       // If your API returns the array directly, change this to response.data
       return response.data.data || response.data;
@@ -69,7 +79,7 @@ const announceService = {
     try {
       const response = await axiosInstance.get(getAllNotification);
       console.log("Notifications fetched:", response.data);
-      
+
       // Returning response.data.data or falling back to response.data
       return response.data.data || response.data;
     } catch (error) {
@@ -77,40 +87,55 @@ const announceService = {
       throw error;
     }
   },
-toggleLike: async (announcementId) => {
+
+  toggleLike: async (announcementId) => {
     try {
-      const response = await axiosInstance.post(addLike(announcementId));
+      const response = await axiosInstance.post(
+        toggleLikeApi(announcementId),
+        null,
+        { silent: true }, // no toast on success or failure for likes
+      );
+      return {
+        liked: response.data?.data?.liked ?? false,
+        message: response.data?.message,
+      };
+    } catch (error) {
+      console.error(
+        `Error toggling like on announcement #${announcementId}:`,
+        error,
+      );
+      throw error;
+    }
+  }, // Calls: POST /announcement/comment/add/{id}
+  postComment: async (announcementId, commentText) => {
+    try {
+      const response = await axiosInstance.post(addComment(announcementId), {
+        comment: commentText, // ✅ Fixed key name and resolved double-nesting payload issue
+      });
       return response.data;
     } catch (error) {
-      console.error(`Error adding like to announcement #${announcementId}:`, error);
+      console.error(
+        `Error posting comment on announcement #${announcementId}:`,
+        error,
+      );
       throw error;
     }
   },
-
-  // Calls: POST /announcement/comment/add/{id}
-postComment: async (announcementId, commentText) => {
-  try {
-    const response = await axiosInstance.post(addComment(announcementId), {
-      comment: commentText // ✅ Fixed key name and resolved double-nesting payload issue
-    });
-    return response.data;
-  } catch (error) {
-    console.error(`Error posting comment on announcement #${announcementId}:`, error);
-    throw error;
-  }
-},
   // Calls: POST /announcement/emojis/add/{id}
   postEmoji: async (announcementId, emojiType) => {
     try {
       const response = await axiosInstance.post(addEmoji(announcementId), {
-        emoji: emojiType
+        emoji: emojiType,
       });
       return response.data;
     } catch (error) {
-      console.error(`Error posting emoji on announcement #${announcementId}:`, error);
+      console.error(
+        `Error posting emoji on announcement #${announcementId}:`,
+        error,
+      );
       throw error;
     }
-  }
+  },
 };
 
 export default announceService;
