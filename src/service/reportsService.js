@@ -8,6 +8,7 @@ import {
   getFetchAttendanceFineRecords,
   getUnapprovedAbsentReport,
   getHappinessIndexReport,
+  getDistanceViolation,
 } from "../api/api";
 
 /**
@@ -195,6 +196,68 @@ export const fetchHappinessReport = async (filterData) => {
     return response.data?.data ?? [];
   } catch (error) {
     console.error("Error fetching happiness index report:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+/**
+ * Fetch attendance distance violation report.
+ * Lists check-in / check-out records made outside the allowed distance from the office.
+ * @param {Object} filterData
+ * @param {string|Date} filterData.from - Start date (YYYY-MM-DD or Date object).
+ * @param {string|Date} filterData.to - End date (YYYY-MM-DD or Date object).
+ * @param {number|string} [filterData.department_id] - Optional department filter.
+ * @param {number|string} [filterData.branch_id] - Optional branch filter.
+ * @returns {Promise<Array>} Resolves to an array of violation records.
+ */
+export const fetchDistanceViolationReport = async ({
+  from,
+  to,
+  department_id,
+  branch_id,
+} = {}) => {
+  try {
+    if (!from || !to) {
+      throw new Error("Validation Error: Both from and to dates are required.");
+    }
+
+    const clean = (d) => (d instanceof Date ? d.toISOString().split("T")[0] : d);
+
+    const payload = {
+      from: clean(from),
+      to: clean(to),
+      ...(department_id && { department_id: Number(department_id) }),
+      ...(branch_id && { branch_id: Number(branch_id) }),
+    };
+
+    const response = await axiosInstance.post(getDistanceViolation, payload);
+    const records = response.data?.data ?? [];
+
+    // Map to UI-friendly shape
+    return (Array.isArray(records) ? records : []).map((item) => ({
+      attendance_id: item.attendance_id,
+      user_id: item.user_id || "N/A",
+      employee_name: (item.employee_name || "N/A").trim().replace(/\s+/g, " "),
+      date: item.date ? item.date.split("T")[0] : "N/A",
+      time: item.time ? item.time.split("T")[1]?.replace("Z", "") : "N/A",
+      designation: (item.designation || "N/A").trim().replace(/\s+/g, " "),
+      department: item.department || "N/A",
+      branch_id: item.branch_id,
+      branch_name: item.branch_name || "N/A",
+      status: item.status || "N/A", // "CheckIn" | "CheckOut"
+      distance_meters: Number(item.distance_meters || 0),
+      office_latitude: Number(item.office_latitude || 0),
+      office_longitude: Number(item.office_longitude || 0),
+      violation_latitude: Number(item.violation_latitude || 0),
+      violation_longitude: Number(item.violation_longitude || 0),
+      // Keep original raw data if needed
+      original: item,
+    }));
+  } catch (error) {
+    console.error(
+      "Error fetching distance violation report:",
+      error.response?.data || error.message
+    );
     throw error;
   }
 };

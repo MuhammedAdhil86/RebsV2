@@ -15,6 +15,9 @@ import EmployeeCodeConfig from "./leaves_and_vacations/employeecodeconfig";
 /* Layout Setup Sub-Component */
 import LayoutSetup from "./email_layout/layoutsetup";
 
+/* KPI Configuration Sub-Component */
+import KpiConfiguration from "./kpi/kpiconfiguration";
+
 /* Reusable TabsSwitch Component */
 import TabsSwitch from "../../ui/tabswitch";
 
@@ -39,6 +42,7 @@ const OrganizationalPolicy = () => {
     { id: "leaves-holidays", label: "Leaves & Holidays" },
     { id: "employee-code", label: "Employee Code" },
     { id: "layout-setup", label: "Layout Setup" },
+    { id: "kpi-configuration", label: "KPI Configuration" },
   ];
 
   /* ----------------- Sub-Tabs States ----------------- */
@@ -124,12 +128,16 @@ const OrganizationalPolicy = () => {
         </>
       )}
 
+      {/* ===== KPI CONFIGURATION ===== */}
+      {activeTab === "kpi-configuration" && <KpiConfiguration />}
+
       {/* ===== OTHER PLACEHOLDERS ===== */}
       {![
         "work-shift",
         "leaves-holidays",
         "employee-code",
         "layout-setup",
+        "kpi-configuration",
       ].includes(activeTab) && (
         <div className="py-10 text-center text-gray-400 italic">
           {tabs.find((t) => t.id === activeTab)?.label} content is under

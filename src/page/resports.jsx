@@ -9,6 +9,7 @@ import UnapprovedAbsentReports from "../components/reports_tab/unapprovedleaves_
 import PayrollAttendanceReport from "../components/reports_tab/payrollattendancereport";
 import AttendanceFineRecordsReport from "../components/reports_tab/finereport_tab";
 import FeedbackReports from "../components/reports_tab/feedbacksreports";
+import DistanceViolationReport from "../components/reports_tab/distanceviolationreport";
 
 const TAB_LIST = [
   "Attendance",
@@ -17,13 +18,13 @@ const TAB_LIST = [
   "Payroll Attendance",
   "Fine",
   "Feedback",
+  "Distance Violation",
 ];
 
 const STORAGE_KEY = "activeReportTab";
-const DEFAULT_TAB = TAB_LIST[0]; // Always points directly to the first tab ("Attendance")
+const DEFAULT_TAB = TAB_LIST[0];
 
 export default function Reports() {
-  // Lazy-initialize state: check storage AND validate it belongs to TAB_LIST
   const [activeTab, setActiveTab] = useState(() => {
     try {
       const storedTab = localStorage.getItem(STORAGE_KEY);
@@ -33,7 +34,6 @@ export default function Reports() {
     }
   });
 
-  // Persist active tab selection safely
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, activeTab);
@@ -61,6 +61,9 @@ export default function Reports() {
 
       case "Feedback":
         return <FeedbackReports />;
+
+      case "Distance Violation":
+        return <DistanceViolationReport />;
 
       default:
         return <AttendanceReports />;
