@@ -38,14 +38,27 @@ const formatDate = (value) => {
 };
 
 // GET /admin/company/layouts?layout_type=email|letter
-// Handles both response shapes:
-//   { data: { ...singleLayout } }                       (?layout_type= response)
-//   { data: { email: {...} | null, letter: {...} | null } }
-const extractLayout = (res, type) => {
-  const d = res?.data?.data ?? res?.data;
-  if (!d) return null;
-  if (d.layout_type) return d; // single layout object
-  return d[type] ?? null; // keyed by type
+// Always returns an ARRAY of layouts for the requested type.
+// Handles every response shape:
+//   { data: [ {...layout}, ... ] }                       (array  <- your current API)
+//   { data: { ...singleLayout } }                        (single object)
+//   { data: { email: {...} | null, letter: {...} | null } } (keyed by type)
+const extractLayouts = (res, type) => {
+  const d = res?.data?.data ?? res?.data ?? res;
+  if (!d) return [];
+
+  // Array response
+  if (Array.isArray(d)) {
+    return d.filter((l) => l && (!l.layout_type || l.layout_type === type));
+  }
+
+  // Single layout object
+  if (d.layout_type) return d.layout_type === type ? [d] : [];
+
+  // Keyed by type
+  const keyed = d[type];
+  if (Array.isArray(keyed)) return keyed;
+  return keyed ? [keyed] : [];
 };
 
 // Works whether axios throws the full error ({ response: { status, data } })
@@ -173,7 +186,7 @@ const LayoutSetup = () => {
   const [editData, setEditData] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
 
-  // type -> layout object | null (none created yet). Missing key = not loaded.
+  // type -> array of layouts ([] = none created yet). Missing key = not loaded.
   const [layouts, setLayouts] = useState({});
   const [errors, setErrors] = useState({});
 
@@ -186,13 +199,13 @@ const LayoutSetup = () => {
     try {
       const res = await fetchCompanyLayouts({ layoutType: type, signal });
       if (signal?.aborted) return;
-      setLayouts((prev) => ({ ...prev, [type]: extractLayout(res, type) }));
+      setLayouts((prev) => ({ ...prev, [type]: extractLayouts(res, type) }));
     } catch (err) {
       if (err?.code === "ERR_CANCELED" || signal?.aborted) return;
 
       // No layout saved yet for this type -> empty list + Create button
       if (isNoLayoutError(err)) {
-        setLayouts((prev) => ({ ...prev, [type]: null }));
+        setLayouts((prev) => ({ ...prev, [type]: [] }));
         return;
       }
 
@@ -202,7 +215,7 @@ const LayoutSetup = () => {
     }
   }, []);
 
-  // Load the active tab's layout the first time it is opened
+  // Load the active tab's layouts the first time it is opened
   useEffect(() => {
     if (layouts[activeTab] !== undefined) return;
     const controller = new AbortController();
@@ -236,7 +249,11 @@ const LayoutSetup = () => {
     try {
       const body = await deleteLayout(id, layout_type);
       if (body?.message) toast.success(body.message); // message from backend
-      setLayouts((prev) => ({ ...prev, [layout_type]: null }));
+      // remove only the deleted row
+      setLayouts((prev) => ({
+        ...prev,
+        [layout_type]: (prev[layout_type] || []).filter((l) => l.id !== id),
+      }));
       setDeleteTarget(null);
     } catch (err) {
       console.error("DELETE ERROR:", err);
@@ -248,12 +265,7 @@ const LayoutSetup = () => {
 
   // Ask first (global modal), then send { is_active: true | false }
   const handleStatusChange = async (row) => {
-    const { layout_type, name } = row;
-    // Always use the layout loaded from the API (data.id, e.g. 34 for letter),
-    // not whatever the table passes back for the row.
-    const loaded = layouts[layout_type] ?? row;
-    const id = loaded.id;
-    const is_active = loaded.is_active;
+    const { layout_type, name, id, is_active } = row;
     const nextStatus = !is_active;
     const label = nextStatus ? "Active" : "Inactive";
 
@@ -268,12 +280,14 @@ const LayoutSetup = () => {
     if (!ok) return;
 
     try {
-      console.log("STATUS UPDATE ->", { layout_type, id, nextStatus }); // remove after testing
       const body = await updateLayoutStatus(layout_type, id, nextStatus);
       if (body?.message) toast.success(body.message); // message from backend
+      // update only the changed row
       setLayouts((prev) => ({
         ...prev,
-        [layout_type]: { ...prev[layout_type], is_active: nextStatus },
+        [layout_type]: (prev[layout_type] || []).map((l) =>
+          l.id === id ? { ...l, is_active: nextStatus } : l,
+        ),
       }));
     } catch (err) {
       console.error("STATUS ERROR:", err);
@@ -302,14 +316,15 @@ const LayoutSetup = () => {
     );
   }
 
-  // --- LIST VIEW (only the active tab's layout) ---
-  const layout = layouts[activeTab]; // undefined = loading, null = none yet
+  // --- LIST VIEW (only the active tab's layouts) ---
+  const tabLayouts = layouts[activeTab]; // undefined = loading, [] = none yet
   const error = errors[activeTab];
-  const isLoading = layout === undefined && !error;
+  const isLoading = tabLayouts === undefined && !error;
 
   const term = searchTerm.toLowerCase();
-  const rows =
-    layout && (layout.name || "").toLowerCase().includes(term) ? [layout] : [];
+  const rows = (tabLayouts || []).filter((l) =>
+    (l.name || "").toLowerCase().includes(term),
+  );
 
   const columns = [
     {
@@ -381,7 +396,6 @@ const LayoutSetup = () => {
   return (
     <div className="w-full bg-white rounded-xl">
       <div className="px-2 mb-4">
-        {/* fixed: missing space between text-[16px] and font-['Poppins'] */}
         <h2 className="text-[16px] font-['Poppins']">Layout Setup</h2>
       </div>
 
@@ -403,7 +417,7 @@ const LayoutSetup = () => {
         ))}
       </div>
 
-      {/* Search + Create button (button only when this type has no layout yet) */}
+      {/* Search + Create button */}
       <div className="flex justify-end items-center gap-3 px-2 py-3">
         <div className="relative">
           <Search
