@@ -183,11 +183,11 @@ function SideBar({ isCollapsed, toggleSidebar }) {
       items: [
         { title: "Job Creation", path: "/job", icon: icons.Hiring },
         { title: "Job Enquiry", path: "/jobenquiry", icon: icons.enquiry },
-        {
-          title: "Interview Process",
-          path: userId ? `/u/${userId}/${userNameSlug}/interviewprocess` : "#",
-          icon: icons.interview,
-        },
+        // {
+        //   title: "Interview Process",
+        //   path: userId ? `/u/${userId}/${userNameSlug}/interviewprocess` : "#",
+        //   icon: icons.interview,
+        // },
       ],
     },
   ];

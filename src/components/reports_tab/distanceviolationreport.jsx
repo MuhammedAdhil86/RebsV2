@@ -31,6 +31,13 @@ const PREVIEW_CHARS = 15;
 // Index of the "Violation Location" column in the Excel sheet
 const LOCATION_COL_INDEX = 10;
 
+// Minimum table width so columns never get squashed on small screens.
+// Below this width the table scrolls horizontally inside its card.
+const TABLE_MIN_WIDTH = 1200;
+
+// Same height for every control in the filter bar so everything lines up
+const CONTROL_HEIGHT = "h-9";
+
 // Excel column widths based on the longest content in each column
 const getColumnWidths = (aoa, minWidth = 8, maxWidth = 60) =>
   aoa[0].map((_, colIndex) => {
@@ -76,7 +83,7 @@ function LocationCell({ text, onClick }) {
 
   return (
     <div
-      className="mx-auto w-[150px] overflow-hidden cursor-pointer text-blue-600 hover:underline"
+      className="mx-auto w-[150px] max-w-full overflow-hidden cursor-pointer text-blue-600 hover:underline"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       onClick={onClick}
@@ -101,21 +108,21 @@ function LocationCell({ text, onClick }) {
 // ================= DATE FIELD (custom calendar icon) =================
 function DateField({ label, value, onChange, min }) {
   return (
-    <div className="flex flex-col gap-1">
-      <label className="text-gray-500">{label}</label>
+    <div className="flex flex-col gap-1 min-w-0">
+      <label className="text-gray-500 leading-4">{label}</label>
       <div className="relative">
         <input
           type="date"
           value={value}
           min={min}
           onChange={onChange}
-          className="relative w-full border border-gray-300 rounded px-3 py-2 pr-9 text-[12px] outline-none focus:border-black bg-white
+          className={`relative block w-full ${CONTROL_HEIGHT} appearance-none border border-gray-300 rounded-md px-3 pr-9 text-[12px] leading-none outline-none focus:border-black bg-white
             [&::-webkit-calendar-picker-indicator]:absolute
             [&::-webkit-calendar-picker-indicator]:inset-0
             [&::-webkit-calendar-picker-indicator]:w-full
             [&::-webkit-calendar-picker-indicator]:h-full
             [&::-webkit-calendar-picker-indicator]:opacity-0
-            [&::-webkit-calendar-picker-indicator]:cursor-pointer"
+            [&::-webkit-calendar-picker-indicator]:cursor-pointer`}
         />
         <Icon
           icon="solar:calendar-outline"
@@ -126,24 +133,26 @@ function DateField({ label, value, onChange, min }) {
   );
 }
 
-// ================= SELECT THAT FITS THE SELECTED NAME =================
-function FitSelect({ label, value, options, onChange, minWidth = 110 }) {
+// ================= SELECT =================
+// Full width inside the grid on mobile/tablet.
+// On large screens it shrinks to fit the selected name.
+function FitSelect({ label, value, options, onChange, minWidth = 130 }) {
   const selected = options.find((o) => String(o.value) === String(value));
   const text = (selected?.label ?? "").toString();
 
   return (
-    <div className="flex items-center gap-2">
-      {label && <span className="text-xs whitespace-nowrap">{label}:</span>}
+    <div
+      className="flex flex-col gap-1 min-w-0 lg:w-[var(--fit-w)]"
+      style={{
+        "--fit-w": `max(${minWidth}px, calc(${text.length}ch + 44px))`,
+      }}
+    >
+      {label && <label className="text-gray-500 leading-4">{label}</label>}
       <div className="relative">
         <select
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="appearance-none border px-3 py-2 text-xs cursor-pointer focus:outline-none focus:ring-1 focus:ring-black"
-          style={{
-            width: `calc(${text.length}ch + 44px)`,
-            minWidth: `${minWidth}px`,
-            borderRadius: "6px",
-          }}
+          className={`block w-full ${CONTROL_HEIGHT} appearance-none border border-gray-300 bg-white rounded-md pl-3 pr-8 text-[12px] leading-none cursor-pointer truncate focus:outline-none focus:border-black`}
         >
           {options.map((opt) => (
             <option key={opt.value} value={opt.value}>
@@ -152,7 +161,7 @@ function FitSelect({ label, value, options, onChange, minWidth = 110 }) {
           ))}
         </select>
 
-        <div className="pointer-events-none absolute inset-y-0 right-2 flex items-center">
+        <div className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center">
           <svg
             className="w-3 h-3 text-gray-500"
             viewBox="0 0 20 20"
@@ -401,7 +410,7 @@ export default function DistanceViolationReport() {
         if (val === FAILED) {
           return (
             <button
-              className="text-red-600 underline"
+              className="text-red-600 underline whitespace-nowrap"
               onClick={() =>
                 handleRetry(row.violation_latitude, row.violation_longitude)
               }
@@ -547,9 +556,13 @@ export default function DistanceViolationReport() {
   };
 
   return (
-    <div className="p-1 rounded-xl font-poppins text-[12px]">
-      <div className="flex items-end justify-between mb-4 flex-wrap gap-3">
-        <div className="flex items-end gap-3 flex-wrap">
+    <div className="w-full max-w-full p-1 sm:p-2 rounded-xl font-poppins text-[12px]">
+      {/* ================= FILTER BAR =================
+          Mobile  : 2 columns  -> From | To / Department | Branch / Download (full width)
+          Tablet  : 4 columns  -> all filters in one row, Download below
+          Desktop : one row    -> filters on the left, Download on the right */}
+      <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:flex lg:flex-wrap lg:items-end">
           <DateField label="From" value={from} onChange={handleFromChange} />
           <DateField
             label="To"
@@ -575,7 +588,7 @@ export default function DistanceViolationReport() {
         <button
           onClick={handleDownload}
           disabled={!records.length || loading || downloading}
-          className="flex items-center gap-2 px-4 py-2 rounded border bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
+          className={`flex items-center justify-center gap-2 ${CONTROL_HEIGHT} w-full lg:w-auto px-4 rounded-md border border-black bg-black text-white leading-none hover:bg-gray-700 disabled:opacity-60 disabled:cursor-not-allowed`}
         >
           {downloading ? (
             <Loader2 className="w-4 h-4 animate-spin" />
@@ -586,18 +599,25 @@ export default function DistanceViolationReport() {
         </button>
       </div>
 
-      <div className="bg-white rounded-lg border border-gray-200">
+      {/* ================= TABLE =================
+          The card clips its corners; the inner wrapper scrolls sideways on
+          small screens so columns keep their widths and stay aligned. */}
+      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20">
             <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
           </div>
         ) : (
-          <UniversalTable
-            columns={columns}
-            data={tableData}
-            rowsPerPage={10}
-            className="rounded-lg shadow-sm"
-          />
+          <div className="w-full overflow-x-auto">
+            <div style={{ minWidth: TABLE_MIN_WIDTH }}>
+              <UniversalTable
+                columns={columns}
+                data={tableData}
+                rowsPerPage={10}
+                className="rounded-lg shadow-sm"
+              />
+            </div>
+          </div>
         )}
       </div>
 
