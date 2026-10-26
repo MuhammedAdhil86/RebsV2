@@ -130,6 +130,7 @@ function SideBar({ isCollapsed, toggleSidebar }) {
     enquiry: <Icon icon="hugeicons:quill-write-02" width="20" />,
     interview: <Icon icon="mage:message-conversation" width="20" />,
     manageShift: <Icon icon="ic:twotone-manage-history" width="20" />,
+    kpi: <Icon icon="lucide:target" width="20" />,
   };
 
   const menuItems = [
@@ -157,6 +158,12 @@ function SideBar({ isCollapsed, toggleSidebar }) {
           title: "Manage Employees",
           path: `/manageemployee`,
           icon: icons.manageEmployees,
+        },
+
+        {
+          title: "KPI",
+          path: `/kpi`,
+          icon: icons.kpi,
         },
         { title: "Requests", path: `/requests`, icon: icons.workfromhome },
         { title: "Insurance", path: `/insurance`, icon: icons.insurance },
