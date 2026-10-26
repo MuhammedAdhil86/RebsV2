@@ -65,7 +65,7 @@ const steps = [
     component: EducationalDetails,
   },
   {
-    title: "Department Details",
+    title: "Depended Details ",
     desc: "Add department-specific and dependent details.",
     component: DepartmentDetails,
   },

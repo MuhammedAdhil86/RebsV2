@@ -5,6 +5,8 @@ import {
   Trash2,
   Edit,
   AlertTriangle,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { Icon } from "@iconify/react";
 import toast from "react-hot-toast";
@@ -22,6 +24,8 @@ const parseDate = (value) => {
 
 const HolidayList = ({
   holidays,
+  year,
+  onYearChange,
   getBranchName,
   onRefresh,
   onSubmitAction,
@@ -132,6 +136,37 @@ const HolidayList = ({
         editData={selectedHoliday}
       />
 
+      {/* --- YEAR SWITCHER --- */}
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <h2 className="text-2xl font-semibold text-black tracking-tight">
+            {year}
+          </h2>
+          <p className="text-xs text-black/40 mt-0.5">
+            {sorted.length === 0
+              ? "No holidays this year"
+              : `${sorted.length} holiday${sorted.length > 1 ? "s" : ""} this year`}
+          </p>
+        </div>
+        <div className="flex items-center border border-black/10 rounded-lg overflow-hidden">
+          <button
+            aria-label="Previous year"
+            onClick={() => onYearChange(-1)}
+            className="p-2 text-black hover:bg-black/5 transition-colors"
+          >
+            <ChevronLeft size={16} />
+          </button>
+          <div className="w-px h-5 bg-black/10" />
+          <button
+            aria-label="Next year"
+            onClick={() => onYearChange(1)}
+            className="p-2 text-black hover:bg-black/5 transition-colors"
+          >
+            <ChevronRight size={16} />
+          </button>
+        </div>
+      </div>
+
       {/* --- EMPTY STATE --- */}
       {sorted.length === 0 && (
         <div className="flex flex-col items-center justify-center py-24 text-center">
@@ -141,7 +176,9 @@ const HolidayList = ({
               className="w-7 h-7 text-black/40"
             />
           </div>
-          <p className="text-sm font-medium text-black">No holidays yet</p>
+          <p className="text-sm font-medium text-black">
+            No holidays in {year}
+          </p>
           <p className="text-xs text-black/40 mt-1">
             Add a holiday or bulk upload a CSV to see it here.
           </p>

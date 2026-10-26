@@ -27,15 +27,16 @@ const backendError = (error) => {
   return new Error(unique.length ? unique.join(": ") : error.message);
 };
 
-export const fetchAllHolidays = async () => {
+export const fetchAllHolidays = async (year) => {
   try {
-    const response = await axiosInstance.get(getFetchAllHolidays);
+    const response = await axiosInstance.get(getFetchAllHolidays, {
+      params: year ? { year } : {},
+    });
     return response.data?.data ?? [];
   } catch (error) {
     throw backendError(error);
   }
 };
-
 export const addHoliday = async (holidayData) => {
   try {
     const response = await axiosInstance.post(postAddHoliday, holidayData, {

@@ -19,28 +19,51 @@ const Holidays = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
   const [monthHolidays, setMonthHolidays] = useState([]);
-  const [allHolidays, setAllHolidays] = useState([]);
+  const [yearHolidays, setYearHolidays] = useState([]);
   const [branchOptions, setBranchOptions] = useState([]);
   const [currentMonth, setCurrentMonth] = useState(
     new Date(new Date().getFullYear(), new Date().getMonth(), 1),
   );
+
+  // Year shared by the calendar and the list
+  const selectedYear = currentMonth.getFullYear();
+
+  // Load every holiday of the selected year (GET /admin/holiday/get?year=YYYY)
+  const loadYearHolidays = async (year) => {
+    try {
+      const data = await fetchAllHolidays(year);
+      // Safety net: keep only rows that belong to the requested year
+      setYearHolidays(
+        (data || []).filter(
+          (h) => String(h.date || "").slice(0, 4) === String(year),
+        ),
+      );
+    } catch (e) {
+      console.error("Failed to load year holidays:", e);
+      toast.error(e?.message || "Failed to load holidays for this year.");
+    }
+  };
+
+  // Move the shared month by whole years (keeps the same month)
+  const changeYear = (offset) =>
+    setCurrentMonth(
+      new Date(selectedYear + offset, currentMonth.getMonth(), 1),
+    );
 
   const loadData = async () => {
     const syncToastId = "dashboard-sync-toast";
     toast.loading("Syncing holiday records...", { id: syncToastId });
 
     try {
-      const [rawMonthData, rawAllData, rawBranches] = await Promise.all([
+      const [rawMonthData, rawBranches] = await Promise.all([
         fetchHolidaysByDate(
           currentMonth.getMonth() + 1,
           currentMonth.getFullYear(),
         ),
-        fetchAllHolidays(),
         getBranchData(),
       ]);
 
       setMonthHolidays(rawMonthData || []);
-      setAllHolidays(rawAllData || []);
 
       if (rawBranches) {
         setBranchOptions(
@@ -59,9 +82,21 @@ const Holidays = () => {
     }
   };
 
+  // Calendar data + branches: reload when the month changes
   useEffect(() => {
     loadData();
   }, [currentMonth]);
+
+  // List data: reload only when the year changes
+  useEffect(() => {
+    loadYearHolidays(selectedYear);
+  }, [selectedYear]);
+
+  // Refresh both views (after add / edit / delete / bulk upload)
+  const refreshAll = () => {
+    loadData();
+    loadYearHolidays(selectedYear);
+  };
 
   /**
    * Lifted Form Submission Action Handler with Manual Toast Pipeline Integration
@@ -96,12 +131,11 @@ const Holidays = () => {
     }
 
     try {
-      // SUCCESS FIX: Now passing 'data' (the FormData variable), NOT 'formDataPayload'
       const response = isEditMode
         ? await modifyHoliday(editId, data)
         : await addHoliday(data);
 
-      // 3. Resolve loading toast with clean success tracking message from backend
+      // 3. Resolve loading toast with success message from backend
       toast.success(
         response?.message ||
           (isEditMode ? "Holiday updated!" : "Holiday added!"),
@@ -110,17 +144,17 @@ const Holidays = () => {
         },
       );
 
-      loadData(); // Sync parent dashboard charts and rows
-      setIsModalOpen(false); // Close Modal view layer
+      refreshAll(); // Sync calendar and list
+      setIsModalOpen(false); // Close modal
     } catch (error) {
       console.error("Core Processing Operation Rejection:", error);
 
-      // 4. Paint exact Go validator rejection message onto the viewport hot-toast canvas
+      // 4. Show the backend validation message
       toast.error(error.message || "Failed to save holiday structure.", {
         id: toastId,
         duration: 5000,
       });
-      throw error; // Bubble error down to preserve inner user state arrays
+      throw error; // Bubble error down to preserve inner user state
     }
   };
 
@@ -195,9 +229,11 @@ const Holidays = () => {
           />
         ) : (
           <HolidayList
-            holidays={allHolidays}
+            holidays={yearHolidays}
+            year={selectedYear}
+            onYearChange={changeYear}
             getBranchName={getBranchName}
-            onRefresh={loadData}
+            onRefresh={refreshAll}
             onSubmitAction={handleHolidaySubmit}
           />
         )}
@@ -215,7 +251,7 @@ const Holidays = () => {
       <BulkUploadModal
         isOpen={isBulkModalOpen}
         onClose={() => setIsBulkModalOpen(false)}
-        onRefresh={loadData}
+        onRefresh={refreshAll}
       />
     </div>
   );
