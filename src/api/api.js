@@ -515,5 +515,9 @@ export const RemainingRegularization = (uuid) =>
 // Notification
 export const getAllNotification = "/employee/notification/get";
 
+// KPI dashboards
+// KPI dashboards
 export const getKpiCompanyDashboard = "/kpi/dashboard/company";
-export const getDepartments = "/admin/department/get"; // replace with your real departments endpoint
+export const getKpiTeamDashboard = "/kpi/dashboard/team";
+export const getKpiEmployeeDashboard = (userId) =>
+  `/kpi/dashboard/employee/${userId}`;

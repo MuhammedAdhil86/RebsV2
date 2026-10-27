@@ -5,6 +5,9 @@ import {
   deleteKpiCriteria,
   getKpiSettings,
   putKpiSettings,
+  getKpiCompanyDashboard,
+  getKpiTeamDashboard,
+  getKpiEmployeeDashboard,
 } from "../api/api";
 
 /* -------------------------------------------------------------------------- */
@@ -23,6 +26,26 @@ const toDateString = (date) =>
 
 const logApiError = (context, error) =>
   console.error(`${context}:`, error.response?.data || error.message);
+
+/**
+ * Builds an Error whose message is the backend's own text (`message`, plus
+ * `data` when it is a string or list of strings). Falls back to the axios
+ * error text when the backend sent no body.
+ */
+const backendError = (error) => {
+  const body = error.response?.data;
+
+  const parts = [
+    body?.message,
+    typeof body?.data === "string" ? body.data : null,
+    Array.isArray(body?.data)
+      ? body.data.filter((d) => typeof d === "string").join(", ")
+      : null,
+  ].filter(Boolean);
+
+  const unique = [...new Set(parts)];
+  return new Error(unique.length ? unique.join(": ") : error.message);
+};
 
 /* -------------------------------------------------------------------------- */
 /*                               KPI Criteria                                 */
@@ -170,5 +193,74 @@ export const saveKpiSettings = async ({ tracking_start } = {}) => {
   } catch (error) {
     logApiError("Error saving KPI settings", error);
     throw error;
+  }
+};
+
+/* -------------------------------------------------------------------------- */
+/*                              KPI Dashboards                                */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Company dashboard. Calls GET /kpi/dashboard/company?month=&year=&department_id=
+ * @param {number} month - 1-12.
+ * @param {number} year - e.g. 2026.
+ * @param {number|string} [departmentId] - Optional; empty means all departments.
+ * @returns {Promise<Object|null>} Dashboard data.
+ */
+export const fetchCompanyKpi = async (month, year, departmentId) => {
+  try {
+    const response = await axiosInstance.get(getKpiCompanyDashboard, {
+      params: {
+        month,
+        year,
+        ...(departmentId ? { department_id: departmentId } : {}),
+      },
+    });
+
+    return response.data?.data ?? null;
+  } catch (error) {
+    logApiError("Error fetching company KPI dashboard", error);
+    throw backendError(error);
+  }
+};
+
+/**
+ * Team dashboard. Calls GET /kpi/dashboard/team?month=&year=
+ * @param {number} month - 1-12.
+ * @param {number} year - e.g. 2026.
+ * @returns {Promise<Object|null>} Dashboard data.
+ */
+export const fetchTeamKpi = async (month, year) => {
+  try {
+    const response = await axiosInstance.get(getKpiTeamDashboard, {
+      params: { month, year },
+    });
+
+    return response.data?.data ?? null;
+  } catch (error) {
+    logApiError("Error fetching team KPI dashboard", error);
+    throw backendError(error);
+  }
+};
+
+/**
+ * Individual dashboard. Calls GET /dashboard/employee/:user_id?month=&year=
+ * @param {number|string} userId - Employee id.
+ * @param {number} month - 1-12.
+ * @param {number} year - e.g. 2026.
+ * @returns {Promise<Object|null>} Dashboard data.
+ */
+export const fetchEmployeeKpi = async (userId, month, year) => {
+  try {
+    if (!userId) throw new Error("Employee id is required.");
+
+    const response = await axiosInstance.get(getKpiEmployeeDashboard(userId), {
+      params: { month, year },
+    });
+
+    return response.data?.data ?? null;
+  } catch (error) {
+    logApiError("Error fetching employee KPI dashboard", error);
+    throw backendError(error);
   }
 };
