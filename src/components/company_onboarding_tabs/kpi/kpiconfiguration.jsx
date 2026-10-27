@@ -428,7 +428,6 @@ export default function KpiConfiguration() {
     }));
 
   const tableColumns = [
-    { label: "Sl No", key: "sl_no", align: "center", width: 80 },
     { label: "Criteria Name", key: "name", align: "center", width: 220 },
     {
       label: "Department",

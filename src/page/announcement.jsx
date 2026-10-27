@@ -1,11 +1,42 @@
 import React, { useState, useEffect } from "react";
-import { FiMessageSquare, FiHeart, FiUser, FiSend } from "react-icons/fi";
+import {
+  FiMessageSquare,
+  FiHeart,
+  FiUser,
+  FiSend,
+  FiFileText,
+} from "react-icons/fi";
 import toast from "react-hot-toast";
 import DashboardLayout from "../ui/pagelayout";
 import HeaderGlobal from "../ui/headerglobal";
 import announceService from "../service/announceService";
 
 const EMOJIS = ["👍", "❤️", "🔥", "🙌", "😍"];
+const IMAGE_TYPES = ["jpg", "jpeg", "png", "gif", "webp", "svg"];
+
+// Use attachment_type from the API; fall back to the URL extension.
+const getAttachmentType = (item) => {
+  const type = (item.attachment_type || "").toLowerCase();
+  if (type) return type;
+  return (item.attachment?.split(".").pop() || "").toLowerCase();
+};
+
+// URLs can contain spaces and special characters (e.g. an en-dash), so encode them.
+const safeUrl = (url) => {
+  try {
+    return encodeURI(decodeURI(url));
+  } catch {
+    return url;
+  }
+};
+
+const getFileName = (url) => {
+  try {
+    return decodeURIComponent(url.split("/").pop());
+  } catch {
+    return url.split("/").pop();
+  }
+};
 
 const Announcement = () => {
   const [announcements, setAnnouncements] = useState([]);
@@ -127,6 +158,40 @@ const Announcement = () => {
     });
   };
 
+  // Image -> thumbnail. Anything else (pdf, doc, ...) -> file card that opens in a new tab.
+  const renderAttachment = (item) => {
+    const type = getAttachmentType(item);
+    const url = safeUrl(item.attachment);
+
+    if (IMAGE_TYPES.includes(type)) {
+      return (
+        <img
+          src={url}
+          alt={item.title}
+          className="w-full h-full object-cover"
+        />
+      );
+    }
+
+    return (
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="w-full h-full flex flex-col items-center justify-center gap-2 p-4 text-gray-500 hover:text-black transition-colors"
+      >
+        <FiFileText size={32} />
+        <span className="text-[10px] font-bold uppercase">
+          {type || "file"}
+        </span>
+        <span className="text-[11px] text-center line-clamp-2 break-all">
+          {getFileName(url)}
+        </span>
+        <span className="text-[10px] text-blue-600 font-medium">Open file</span>
+      </a>
+    );
+  };
+
   return (
     <DashboardLayout>
       <div className="w-full space-y-4">
@@ -152,11 +217,7 @@ const Announcement = () => {
                 {/* Media */}
                 {item.attachment && (
                   <div className="w-full md:w-1/3 lg:w-1/4 h-48 md:h-auto bg-gray-50 flex-shrink-0 border-r border-gray-100">
-                    <img
-                      src={item.attachment}
-                      alt={item.title}
-                      className="w-full h-full object-cover"
-                    />
+                    {renderAttachment(item)}
                   </div>
                 )}
 
@@ -177,9 +238,11 @@ const Announcement = () => {
                       </span>
                     </div>
 
-                    <p className="text-gray-600 text-[12px] leading-relaxed whitespace-pre-line">
-                      {item.description}
-                    </p>
+                    {item.description && (
+                      <p className="text-gray-600 text-[12px] leading-relaxed whitespace-pre-line">
+                        {item.description}
+                      </p>
+                    )}
 
                     {/* Emoji counts */}
                     {item.emojis_count && item.emojis_count.length > 0 && (
@@ -298,7 +361,7 @@ const Announcement = () => {
                                 <div className="w-8 h-8 rounded-full bg-gray-200 overflow-hidden flex-shrink-0 border border-white shadow-sm">
                                   {comment.user_image ? (
                                     <img
-                                      src={comment.user_image}
+                                      src={safeUrl(comment.user_image)}
                                       alt={comment.user_name}
                                       className="w-full h-full object-cover"
                                     />

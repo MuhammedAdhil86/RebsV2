@@ -1,5 +1,27 @@
 import axiosInstance from "./axiosinstance";
-import { getEmployeeInsuranceDetails, getInsuranceProviders,updateInsuranceClaimDecision, getInsuranceTypes,getinsuranceClaimList, getCoverageTypes } from "../api/api";
+import {
+  getEmployeeInsuranceDetails,
+  getInsuranceProviders,
+  updateInsuranceClaimDecision,
+  getInsuranceTypes,
+  getinsuranceClaimList,
+  getCoverageTypes,
+  updateEmployeeInsurance,
+  upsertInsuranceProvider,
+  upsertInsuranceType,
+  upsertCoverageType,
+  deleteInsuranceProvider,
+  deleteInsuranceType,
+  deleteCoverageType,
+
+  // ❌ remove this line: fetchInsuranceCoverageTypes,
+} from "../api/api";
+// Always returns an array, whatever shape the API sends back
+const toArray = (value) => {
+  if (Array.isArray(value)) return value;
+  if (value && Array.isArray(value.data)) return value.data;
+  return [];
+};
 
 export const fetchEmployeeInsuranceDetails = async (uuid) => {
   try {
@@ -16,7 +38,7 @@ export const fetchEmployeeInsuranceDetails = async (uuid) => {
 export const fetchInsuranceProviders = async () => {
   try {
     const response = await axiosInstance.get(getInsuranceProviders);
-    return response.data?.data || response.data;
+    return toArray(response.data?.data ?? response.data);
   } catch (error) {
     console.error("❌ Error fetching insurance providers:", error);
     throw error;
@@ -26,7 +48,7 @@ export const fetchInsuranceProviders = async () => {
 export const fetchInsuranceTypes = async () => {
   try {
     const response = await axiosInstance.get(getInsuranceTypes);
-    return response.data?.data || response.data;
+    return toArray(response.data?.data ?? response.data);
   } catch (error) {
     console.error("❌ Error fetching insurance types:", error);
     throw error;
@@ -36,7 +58,7 @@ export const fetchInsuranceTypes = async () => {
 export const fetchInsuranceCoverageTypes = async () => {
   try {
     const response = await axiosInstance.get(getCoverageTypes);
-    return response.data?.data || response.data;
+    return toArray(response.data?.data ?? response.data);
   } catch (error) {
     console.error("❌ Error fetching insurance coverage types:", error);
     throw error;
@@ -44,15 +66,8 @@ export const fetchInsuranceCoverageTypes = async () => {
 };
 
 // =========================================================================
-// 🆕 NEW ADDITIONS: UPDATE & UPSERT ACTIONS (DO NOT TOUCH EXISTING CODE)
+// UPDATE & UPSERT ACTIONS
 // =========================================================================
-
-import { 
-  updateEmployeeInsurance, 
-  upsertInsuranceProvider, 
-  upsertInsuranceType, 
-  upsertCoverageType 
-} from "../api/api";
 
 /**
  * Update an employee's active insurance details settings
@@ -68,7 +83,7 @@ export const saveEmployeeInsuranceUpdate = async (payload) => {
 };
 
 /**
- * Upsert an insurance provider profile
+ * Upsert an insurance provider profile (id: 0 = create, id > 0 = update)
  */
 export const submitUpsertInsuranceProvider = async (payload) => {
   try {
@@ -106,10 +121,50 @@ export const submitUpsertCoverageType = async (payload) => {
   }
 };
 
+// =========================================================================
+// DELETE ACTIONS
+// =========================================================================
+
+export const removeInsuranceProvider = async (id) => {
+  try {
+    const response = await axiosInstance.delete(deleteInsuranceProvider(id));
+    return response.data?.data || response.data;
+  } catch (error) {
+    console.error(`❌ Error deleting insurance provider ${id}:`, error);
+    throw error;
+  }
+};
+
+export const removeInsuranceType = async (id) => {
+  try {
+    const response = await axiosInstance.delete(deleteInsuranceType(id));
+    return response.data?.data || response.data;
+  } catch (error) {
+    console.error(`❌ Error deleting insurance type ${id}:`, error);
+    throw error;
+  }
+};
+
+export const removeCoverageType = async (id) => {
+  try {
+    const response = await axiosInstance.delete(deleteCoverageType(id));
+    return response.data?.data || response.data;
+  } catch (error) {
+    console.error(`❌ Error deleting coverage type ${id}:`, error);
+    throw error;
+  }
+};
+
+// =========================================================================
+// CLAIMS
+// =========================================================================
+
 export const fetchInsuranceClaimList = async () => {
   try {
     const response = await axiosInstance.get(getinsuranceClaimList);
-    return response.data?.data?.claims || response.data?.claims || response.data;
+    return (
+      response.data?.data?.claims || response.data?.claims || response.data
+    );
   } catch (error) {
     console.error("❌ Error fetching insurance claim list:", error);
     throw error;

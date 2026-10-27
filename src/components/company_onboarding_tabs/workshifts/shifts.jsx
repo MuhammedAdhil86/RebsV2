@@ -1,8 +1,14 @@
-import React, { useState, useEffect, useRef } from "react";
-import { Plus, MoreHorizontal, Trash2, AlertCircle } from "lucide-react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
+import {
+  Plus,
+  MoreHorizontal,
+  Trash2,
+  AlertCircle,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 import CreateShiftModal from "../../../ui/createshiftmodal";
 import { ShiftDataGet, deleteshift } from "../../../service/companyService";
-import PayrollTable from "../../../ui/payrolltable";
 import UpdateShiftTab from "../../../ui/updateshiftmodal";
 import toast, { Toaster } from "react-hot-toast";
 
@@ -48,6 +54,22 @@ const DeleteConfirmationModal = ({ isOpen, onClose, onConfirm, itemName }) => {
   );
 };
 
+// --- SHARED ALIGNMENT (used by BOTH <th> and <td>) ---
+const textAlign = {
+  left: "text-left",
+  center: "text-center",
+  right: "text-right",
+};
+const flexAlign = {
+  left: "justify-start",
+  center: "justify-center",
+  right: "justify-end",
+};
+// One single cell class so header and content can never differ
+const cellBase = "px-4 py-3 align-middle";
+
+const ROWS_PER_PAGE = 8;
+
 const Shifts = () => {
   const [viewMode, setViewMode] = useState("list");
   const [selectedShift, setSelectedShift] = useState(null);
@@ -56,6 +78,7 @@ const Shifts = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [page, setPage] = useState(1);
 
   // Menu & Delete Modal State
   const [openMenuId, setOpenMenuId] = useState(null);
@@ -100,10 +123,12 @@ const Shifts = () => {
         return {
           id: shift.id,
           name: shift.shift_name,
-          isDefault: !!shift.is_default, // <-- default flag from API
+          isDefault: !!shift.is_default,
           duration: `${policy?.working_hours || 0} Hrs`,
-          start: formatTime(policy?.start_time),
-          end: formatTime(policy?.end_time),
+          time:
+            policy?.start_time && policy?.end_time
+              ? `${formatTime(policy.start_time)} - ${formatTime(policy.end_time)}`
+              : "N/A",
           staff: shift.allocated_employees || 0,
           break: policy?.lunch_break_from
             ? `${formatTime(policy.lunch_break_from)} - ${formatTime(policy.lunch_break_to)}`
@@ -126,16 +151,21 @@ const Shifts = () => {
     fetchShiftsData();
   }, []);
 
+  // Reset to first page when searching
+  useEffect(() => {
+    setPage(1);
+  }, [searchTerm]);
+
   const toggleMenu = (e, rowId) => {
     e.stopPropagation();
     if (openMenuId === rowId) {
       setOpenMenuId(null);
     } else {
       const rect = e.currentTarget.getBoundingClientRect();
-      // Menu is position: fixed, so use viewport coordinates only
+      // fixed menu (w-40 = 160px), centered under the button
       setMenuPosition({
         top: rect.bottom + 5,
-        left: rect.left - 140,
+        left: rect.left + rect.width / 2 - 80,
       });
       setOpenMenuId(rowId);
     }
@@ -177,34 +207,38 @@ const Shifts = () => {
     }
   };
 
+  // --- COLUMNS: first = left, all others = center ---
   const columns = [
+    { key: "name", label: "Shift Name", align: "left", width: "22%" },
+    { key: "duration", label: "Duration", align: "center", width: "10%" },
+    { key: "time", label: "Time", align: "center", width: "20%" },
+    { key: "staff", label: "Allocated Staffs", align: "center", width: "12%" },
+    { key: "break", label: "Break Time", align: "center", width: "18%" },
     {
-      key: "name",
-      label: "Shift Name",
-      align: "left",
-      render: (_, row) => (
-        <div className="flex items-center gap-2">
+      key: "reg",
+      label: "Regularization",
+      align: "center",
+      width: "12%",
+    },
+    { key: "actions", label: "Actions", align: "center", width: "6%" },
+  ];
+
+  const renderCell = (col, row) => {
+    if (col.key === "name") {
+      return (
+        <div className="flex items-center gap-2 justify-start">
           <span>{row.name}</span>
           {row.isDefault && (
-            <span className="px-2 py-0.5 rounded-full bg-green-50 text-green-600 border border-green-200 text-[10px] font-medium">
+            <span className="px-2 py-0.5 rounded-full bg-green-50 text-green-600 border border-green-200 text-[10px] font-medium whitespace-nowrap">
               Default
             </span>
           )}
         </div>
-      ),
-    },
-    { key: "duration", label: "Duration" },
-    { key: "start", label: "Start Time" },
-    { key: "end", label: "End Time" },
-    { key: "staff", label: "Allocated Staffs" },
-    { key: "break", label: "Break Time" },
-    { key: "reg", label: "Regularization Count" },
-    {
-      key: "actions",
-      label: "Actions",
-      align: "right",
-      render: (_, row) => (
-        <div className="relative flex justify-end">
+      );
+    }
+    if (col.key === "actions") {
+      return (
+        <div className="relative flex justify-center">
           <button
             onClick={(e) => toggleMenu(e, row.id)}
             className="p-1 text-gray-400 hover:text-gray-900 transition-colors"
@@ -226,14 +260,40 @@ const Shifts = () => {
             </div>
           )}
         </div>
-      ),
-    },
-  ];
+      );
+    }
+    return (
+      <div className={`flex items-center ${flexAlign[col.align]}`}>
+        <span className="whitespace-nowrap">{row[col.key]}</span>
+      </div>
+    );
+  };
+
+  // --- SEARCH + PAGINATION ---
+  const filteredData = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase();
+    if (!q) return shiftData;
+    return shiftData.filter((r) =>
+      [r.name, r.duration, r.time, r.staff, r.break, r.reg]
+        .join(" ")
+        .toLowerCase()
+        .includes(q),
+    );
+  }, [shiftData, searchTerm]);
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredData.length / ROWS_PER_PAGE),
+  );
+  const currentPage = Math.min(page, totalPages);
+  const pagedData = filteredData.slice(
+    (currentPage - 1) * ROWS_PER_PAGE,
+    currentPage * ROWS_PER_PAGE,
+  );
 
   // --- RENDER LOGIC ---
   return (
     <div className="w-full bg-white rounded-xl p-2">
-      {/* Toaster stays mounted even when viewMode changes to 'create' or 'update' */}
       <Toaster position="top-right" />
 
       <DeleteConfirmationModal
@@ -290,13 +350,85 @@ const Shifts = () => {
                 {error}
               </div>
             ) : (
-              <PayrollTable
-                columns={columns}
-                data={shiftData}
-                rowsPerPage={8}
-                searchTerm={searchTerm}
-                rowClickHandler={handleRowClick}
-              />
+              <>
+                <div className="w-full overflow-x-auto border border-gray-100 rounded-xl">
+                  <table className="w-full table-fixed border-collapse min-w-[900px] font-['Poppins']">
+                    <colgroup>
+                      {columns.map((col) => (
+                        <col key={col.key} style={{ width: col.width }} />
+                      ))}
+                    </colgroup>
+                    <thead className="bg-[#f9f9f9]">
+                      <tr>
+                        {columns.map((col) => (
+                          <th
+                            key={col.key}
+                            className={`${cellBase} ${textAlign[col.align]} text-[12px] font-semibold text-gray-600`}
+                          >
+                            {col.label}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pagedData.length === 0 ? (
+                        <tr>
+                          <td
+                            colSpan={columns.length}
+                            className="py-12 text-center text-[12px] text-gray-400"
+                          >
+                            No shifts found
+                          </td>
+                        </tr>
+                      ) : (
+                        pagedData.map((row) => (
+                          <tr
+                            key={row.id}
+                            onClick={() => handleRowClick(row)}
+                            className="border-t border-gray-100 hover:bg-gray-50 cursor-pointer"
+                          >
+                            {columns.map((col) => (
+                              <td
+                                key={col.key}
+                                className={`${cellBase} ${textAlign[col.align]} text-[12px] text-gray-800`}
+                              >
+                                {renderCell(col, row)}
+                              </td>
+                            ))}
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* PAGINATION */}
+                {filteredData.length > ROWS_PER_PAGE && (
+                  <div className="flex items-center justify-between mt-4 text-[12px] text-gray-500">
+                    <span>
+                      Page {currentPage} of {totalPages}
+                    </span>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setPage((p) => Math.max(1, p - 1))}
+                        disabled={currentPage === 1}
+                        className="p-1.5 border border-gray-200 rounded-lg disabled:opacity-40"
+                      >
+                        <ChevronLeft size={16} />
+                      </button>
+                      <button
+                        onClick={() =>
+                          setPage((p) => Math.min(totalPages, p + 1))
+                        }
+                        disabled={currentPage === totalPages}
+                        className="p-1.5 border border-gray-200 rounded-lg disabled:opacity-40"
+                      >
+                        <ChevronRight size={16} />
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </>

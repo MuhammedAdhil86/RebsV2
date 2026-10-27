@@ -261,7 +261,7 @@ export default function WorkInfoSection({ onSuccess, onError }) {
 
   const fields = [
     {
-      label: "Employee Reference",
+      label: "Employee Code",
       key: "employeeRef",
       type: "text",
       readOnly: true,

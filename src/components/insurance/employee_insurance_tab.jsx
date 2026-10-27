@@ -8,7 +8,6 @@ import {
   fetchInsuranceTypes,
   fetchInsuranceCoverageTypes,
 } from "../../service/insuranceservice";
-
 import {
   saveEmployeeInsuranceUpdate,
   cancelEmployeeInsurance,

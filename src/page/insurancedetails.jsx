@@ -3,16 +3,16 @@ import { useParams, useLocation } from "react-router-dom";
 import DashboardLayout from "../ui/pagelayout";
 import HeaderGlobal from "../ui/headerglobal";
 import EmployeeInsuranceTab from "../components/insurance/employee_insurance_tab";
-import ProvidersTab from "../components/insurance/providers";
+import InsuranceSettingsTab from "../components/insurance/insurance_settings_tab";
 import InsuranceClaimsTab from "../components/insurance/claims_tab";
 
 const TabButton = ({ title, isActive, onClick }) => (
   <button
     type="button"
     onClick={onClick}
-    className={`pb-1 text-[13px] font-medium transition-all relative ${
+    className={`pb-1 text-[13px] transition-all relative ${
       isActive
-        ? "text-black font-semibold after:content-[''] after:absolute after:bottom-[-9px] after:left-0 after:w-full after:h-[2px] after:bg-black"
+        ? "text-black after:content-[''] after:absolute after:bottom-[-9px] after:left-0 after:w-full after:h-[2px] after:bg-black"
         : "text-gray-500 hover:text-black"
     }`}
   >
@@ -50,7 +50,7 @@ export default function InsuranceDetails() {
                 onClick={() => setActiveTab("employee_insurance")}
               />
               <TabButton
-                title="Providers"
+                title="Insurance Settings"
                 isActive={activeTab === "providers"}
                 onClick={() => setActiveTab("providers")}
               />
@@ -68,7 +68,9 @@ export default function InsuranceDetails() {
                   employeeImage={employeeImage}
                 />
               )}
-              {activeTab === "providers" && <ProvidersTab uuid={uuid} />}
+              {activeTab === "providers" && (
+                <InsuranceSettingsTab uuid={uuid} />
+              )}
               {activeTab === "claims" && <InsuranceClaimsTab uuid={uuid} />}
             </div>
           </div>

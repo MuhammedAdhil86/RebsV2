@@ -86,7 +86,16 @@ export const cancelInsurance =
 export const getinsuranceClaimList = "/admin/insurance/list-claims";
 export const updateInsuranceClaimDecision = (claimId) =>
   `/admin/insurance/claims/${claimId}/decision`;
-//assetManager
+
+// ---------- DELETE ----------
+export const deleteInsuranceProvider = (id) =>
+  `/admin/insurance/insurance-providers/${id}`;
+
+export const deleteInsuranceType = (id) =>
+  `/admin/insurance/insurance-types/${id}`;
+
+export const deleteCoverageType = (id) =>
+  `/admin/insurance/coverage-types/${id}`; //assetManager
 export const getAssetstype = "/master/asset-type";
 export const getAssetDashboard = "/admin/asset/dashboard";
 export const postCreateAsset = "/admin/asset/add";
