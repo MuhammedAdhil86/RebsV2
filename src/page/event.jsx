@@ -12,6 +12,7 @@ import {
 import { Drawer } from "@mui/material";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
+import toast from "react-hot-toast";
 
 // Layout & UI
 import DashboardLayout from "../ui/pagelayout";
@@ -50,6 +51,15 @@ const eventColors = {
 };
 
 const DEFAULT_AVATAR = "/person_img.jpg";
+
+// Pull the most useful message out of an API error
+const getErrorMessage = (err, fallback) => {
+  const body = err?.response?.data ?? err?.data ?? err;
+  const detail = typeof body?.data === "string" ? body.data : "";
+  const msg = typeof body?.message === "string" ? body.message : "";
+  if (msg && detail) return `${msg}: ${detail}`;
+  return detail || msg || err?.message || fallback;
+};
 
 const ChevronDownIcon = () => (
   <svg
@@ -113,8 +123,13 @@ export default function Events({ userId, userName }) {
           setBranches(Array.isArray(data) ? data : []);
         }
       })
-      .catch(() => {
-        if (isMounted) setBranches([]);
+      .catch((err) => {
+        if (isMounted) {
+          setBranches([]);
+          toast.error(getErrorMessage(err, "Failed to load branches"), {
+            id: "branches-error",
+          });
+        }
       });
     return () => {
       isMounted = false;
@@ -122,29 +137,35 @@ export default function Events({ userId, userName }) {
   }, []);
 
   const handleInstantRefresh = async () => {
-    await Promise.all([
-      queryClient.invalidateQueries({
-        queryKey: ["allEvents"],
-        refetchType: "all",
-      }),
-      queryClient.invalidateQueries({
-        queryKey: ["dailyDetails"],
-        refetchType: "all",
-      }),
-    ]);
+    try {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: ["allEvents"],
+          refetchType: "all",
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["dailyDetails"],
+          refetchType: "all",
+        }),
+      ]);
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Failed to refresh events"), {
+        id: "refresh-error",
+      });
+    }
   };
 
-  const { data: allEvents = [] } = useQuery({
+  const { data: allEvents = [], error: eventsError } = useQuery({
     queryKey: ["allEvents", currentMonth, currentYear],
     queryFn: () => fetchEvents(currentMonth, currentYear),
   });
 
-  const { data: allLeaves = [] } = useQuery({
+  const { data: allLeaves = [], error: leavesError } = useQuery({
     queryKey: ["allLeaves", currentMonth, currentYear],
     queryFn: () => fetchMonthlyLeaves(currentMonth, currentYear),
   });
 
-  const { data: holidays = [] } = useQuery({
+  const { data: holidays = [], error: holidaysError } = useQuery({
     queryKey: ["holidays", currentYear, selectedBranch],
     queryFn: () =>
       selectedBranch !== "all"
@@ -152,7 +173,7 @@ export default function Events({ userId, userName }) {
         : fetchAllHolidays(),
   });
 
-  const { data: weeklyOffs = [] } = useQuery({
+  const { data: weeklyOffs = [], error: weeklyOffsError } = useQuery({
     queryKey: ["weeklyOffs", currentYear, selectedBranch],
     queryFn: () =>
       selectedBranch !== "all"
@@ -161,10 +182,47 @@ export default function Events({ userId, userName }) {
     placeholderData: (prev) => prev,
   });
 
-  const { data: dailyData } = useQuery({
+  const { data: dailyData, error: dailyError } = useQuery({
     queryKey: ["dailyDetails", moment(selectedDate).format("YYYY-MM-DD")],
     queryFn: () => fetchDailyDetails(moment(selectedDate).format("YYYY-MM-DD")),
   });
+
+  // Toasts for failed queries (fixed ids prevent duplicate toasts)
+  useEffect(() => {
+    if (eventsError)
+      toast.error(getErrorMessage(eventsError, "Failed to load events"), {
+        id: "events-error",
+      });
+  }, [eventsError]);
+
+  useEffect(() => {
+    if (leavesError)
+      toast.error(getErrorMessage(leavesError, "Failed to load leaves"), {
+        id: "leaves-error",
+      });
+  }, [leavesError]);
+
+  useEffect(() => {
+    if (holidaysError)
+      toast.error(getErrorMessage(holidaysError, "Failed to load holidays"), {
+        id: "holidays-error",
+      });
+  }, [holidaysError]);
+
+  useEffect(() => {
+    if (weeklyOffsError)
+      toast.error(
+        getErrorMessage(weeklyOffsError, "Failed to load weekly offs"),
+        { id: "weeklyoffs-error" },
+      );
+  }, [weeklyOffsError]);
+
+  useEffect(() => {
+    if (dailyError)
+      toast.error(getErrorMessage(dailyError, "Failed to load daily details"), {
+        id: "daily-error",
+      });
+  }, [dailyError]);
 
   const calendarEvents = useMemo(() => {
     const events = (Array.isArray(allEvents) ? allEvents : []).map((e) => {
