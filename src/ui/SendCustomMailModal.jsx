@@ -437,16 +437,11 @@ const SendCustomMailModal = ({
                     {placeholders.map((key) => (
                       <div key={key} className="space-y-1.5">
                         <label
-                          className="flex items-baseline justify-between ml-1 text-[11px] text-zinc-600 font-normal"
+                          className="block ml-1 text-[11px] text-zinc-600 font-normal"
                           title={key}
                         >
-                          <span>
-                            {humanizeKey(key)}
-                            <span className="text-red-500 ml-0.5">*</span>
-                          </span>
-                          <span className="font-mono text-[9px] text-zinc-400">
-                            {`{{${key}}}`}
-                          </span>
+                          {humanizeKey(key)}
+                          <span className="text-red-500 ml-0.5">*</span>
                         </label>
                         <input
                           type="text"

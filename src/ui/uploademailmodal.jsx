@@ -590,7 +590,7 @@ const UploadEmailTemplateView = ({
                 Manual Dispatch
               </span>
               <span className="text-[10px] text-gray-400 block">
-                Allow manual send triggering (`is_manual: "true"`)
+                Allow manual send triggering
               </span>
             </div>
             <input
