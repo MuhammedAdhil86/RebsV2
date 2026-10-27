@@ -15,6 +15,8 @@ const selectCls =
   "w-full bg-transparent text-gray-600 tracking-widest uppercase outline-none cursor-pointer border border-gray-200 rounded-lg px-3 py-2 text-xs font-normal";
 const errCls = "text-red-500 text-[10px] mt-1 tracking-wide";
 
+const REMINDER_OPTIONS = ["5", "10", "15", "20", "30"];
+
 /* ---------- helpers ---------- */
 
 // "2026-10-21T10:00:00Z" -> { date: "2026-10-21", time: "10:00" }
@@ -25,19 +27,45 @@ const splitDateTime = (value) => {
   return { date, time: time.slice(0, 5) };
 };
 
-// "00:15:00" or "15" -> "15"
+// "15" | "00:15:00" | "15m0s" | "1h0m0s" | 900000000000 (ns) -> "15" (minutes)
 const reminderToMinutes = (v) => {
   if (v === undefined || v === null || v === "") return "";
-  const s = String(v);
+  const s = String(v).trim();
+
+  // HH:MM:SS or MM:SS
   if (s.includes(":")) {
-    const [h = 0, m = 0] = s.split(":").map(Number);
-    return String(h * 60 + m);
+    const parts = s.split(":").map(Number);
+    const [h, m] = parts.length === 3 ? parts : [0, parts[0] || 0];
+    return String((h || 0) * 60 + (m || 0));
   }
-  return s;
+
+  // Go duration, e.g. "15m0s", "1h30m0s"
+  const go = s.match(/^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+(?:\.\d+)?)s)?$/);
+  if (go && (go[1] || go[2] || go[3])) {
+    return String(Number(go[1] || 0) * 60 + Number(go[2] || 0));
+  }
+
+  // plain number
+  if (/^\d+$/.test(s)) {
+    const n = Number(s);
+    // very large numbers are nanoseconds from a Go time.Duration
+    return String(n >= 60_000_000_000 ? Math.round(n / 60_000_000_000) : n);
+  }
+
+  return "";
 };
 
 // "2026-10-21" + "10:00" -> "2026-10-21T10:00:00"
 const toApiDate = (d, t) => `${d}T${t.length === 5 ? `${t}:00` : t}`;
+
+// Pull the most useful message out of an API error
+const getErrorMessage = (err, fallback) => {
+  const body = err?.response?.data ?? err?.data ?? err;
+  const detail = typeof body?.data === "string" ? body.data : "";
+  const msg = typeof body?.message === "string" ? body.message : "";
+  if (msg && detail) return `${msg}: ${detail}`;
+  return detail || msg || err?.message || fallback;
+};
 
 // Maps the event object to the form state
 const eventToForm = (event) => {
@@ -122,6 +150,7 @@ export default function EventEdit({ event, onClose, onUpdateSuccess }) {
         if (mounted && response?.data) setStaffList(response.data);
       } catch (err) {
         console.error("Failed to fetch employees:", err);
+        toast.error(getErrorMessage(err, "Failed to load employees"));
       } finally {
         if (mounted) setStaffLoaded(true);
       }
@@ -138,6 +167,15 @@ export default function EventEdit({ event, onClose, onUpdateSuccess }) {
   const availableStaff = staffList.filter(
     (s) => !formData.participation.includes(s.uuid),
   );
+
+  // Standard reminder options, plus the event's current value if it's custom
+  const reminderOptions =
+    formData.when_to_notify &&
+    !REMINDER_OPTIONS.includes(formData.when_to_notify)
+      ? [...REMINDER_OPTIONS, formData.when_to_notify].sort(
+          (a, b) => Number(a) - Number(b),
+        )
+      : REMINDER_OPTIONS;
 
   /* ---------- handlers ---------- */
 
@@ -182,6 +220,8 @@ export default function EventEdit({ event, onClose, onUpdateSuccess }) {
     else if (Number.isNaN(Number(formData.timezone)))
       e.timezone = "Please select a timezone from the list";
     if (!formData.when_to_notify) e.when_to_notify = "Reminder is required";
+    else if (!/^\d+$/.test(String(formData.when_to_notify)))
+      e.when_to_notify = "Please select a reminder time";
     if (formData.event_type === "offline" && !formData.place.trim())
       e.place = "Place is required for offline events";
     if (formData.event_type === "online" && !formData.link.trim())
@@ -199,7 +239,10 @@ export default function EventEdit({ event, onClose, onUpdateSuccess }) {
     }
 
     setErrors(e);
-    return Object.keys(e).length === 0;
+
+    const hasErrors = Object.keys(e).length > 0;
+    if (hasErrors) toast.error("Please fix the highlighted fields");
+    return !hasErrors;
   };
 
   const handleSubmit = async (e) => {
@@ -215,7 +258,7 @@ export default function EventEdit({ event, onClose, onUpdateSuccess }) {
       participation: formData.participation.map((uuid) => ({ uuid })),
       place: formData.event_type === "offline" ? formData.place.trim() : "",
       meeting_url: formData.event_type === "online" ? formData.link.trim() : "",
-      reminder_before: String(formData.when_to_notify),
+      reminder_before: String(formData.when_to_notify), // minutes, e.g. "15"
       time_zone: String(formData.timezone), // string containing the numeric ID, e.g. "1"
     };
 
@@ -227,7 +270,9 @@ export default function EventEdit({ event, onClose, onUpdateSuccess }) {
       onClose?.();
     } catch (err) {
       console.error("Update failed:", err);
-      toast.error("Error updating event. Please try again");
+      toast.error(
+        getErrorMessage(err, "Error updating event. Please try again"),
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -393,7 +438,7 @@ export default function EventEdit({ event, onClose, onUpdateSuccess }) {
               className={selectCls}
             >
               <option value="">Select reminder time</option>
-              {["5", "10", "15", "20", "30"].map((m) => (
+              {reminderOptions.map((m) => (
                 <option key={m} value={m}>
                   {m} minutes before
                 </option>

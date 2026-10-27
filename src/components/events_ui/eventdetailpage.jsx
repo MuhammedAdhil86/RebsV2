@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   FiClock,
   FiCalendar,
@@ -7,19 +7,45 @@ import {
   FiTrash2,
   FiEdit2,
 } from "react-icons/fi";
+import toast from "react-hot-toast";
 import { deleteEventApi } from "../../service/eventservice";
+import { fetchTimeZone } from "../../service/eventservices";
 import DeleteConfirmationModal from "../../ui/deletemodal";
-import EventEdit from "./eventedit"; // ✅ adjust the path/filename to where you saved it
+import EventEdit from "./eventedit";
+
+// true only for real IANA names like "Asia/Kolkata" (not ids like "1")
+const isValidTimeZone = (tz) => {
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+};
 
 const EventDetailPage = ({ event, onBack, onDeleteSuccess }) => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isEditing, setIsEditing] = useState(false); // ✅ new
-  const [error, setError] = useState(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [timeZones, setTimeZones] = useState([]);
+
+  // Load the timezone list so an id like "1" can be turned into "Asia/Kolkata"
+  useEffect(() => {
+    let mounted = true;
+    fetchTimeZone()
+      .then((res) => {
+        const list = Array.isArray(res) ? res : res?.data;
+        if (mounted) setTimeZones(Array.isArray(list) ? list : []);
+      })
+      .catch(() => mounted && setTimeZones([]));
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   if (!event) return null;
 
-  // ✅ Show the edit window instead of the details
+  // Show the edit window instead of the details
   if (isEditing) {
     return (
       <EventEdit
@@ -33,7 +59,21 @@ const EventDetailPage = ({ event, onBack, onDeleteSuccess }) => {
     );
   }
 
-  const targetTimezone = event.time_zone || event.timezone || "Asia/Kolkata";
+  // Resolve the event's timezone (id or name) to a valid IANA name
+  const resolveTimezone = () => {
+    const raw = String(event.time_zone ?? event.timezone ?? "").trim();
+    if (!raw) return "Asia/Kolkata";
+
+    const match = timeZones.find(
+      (tz) => String(tz.id) === raw || tz.name === raw,
+    );
+    if (match && isValidTimeZone(match.name)) return match.name;
+
+    if (isValidTimeZone(raw)) return raw;
+    return "Asia/Kolkata";
+  };
+
+  const targetTimezone = resolveTimezone();
 
   const formatDate = (dateStr) => {
     try {
@@ -77,16 +117,16 @@ const EventDetailPage = ({ event, onBack, onDeleteSuccess }) => {
   const handleConfirmDelete = async () => {
     setIsModalOpen(false);
     setIsDeleting(true);
-    setError(null);
 
     try {
       const eventId = event.id || event._id;
       await deleteEventApi(eventId);
-      if (onDeleteSuccess) onDeleteSuccess();
+      toast.success("Event deleted successfully");
+      if (onDeleteSuccess) await onDeleteSuccess();
       if (onBack) onBack();
     } catch (err) {
       console.error("Failed to delete the event:", err);
-      setError("Failed to delete the event. Please try again.");
+      toast.error("Failed to delete the event. Please try again");
     } finally {
       setIsDeleting(false);
     }
@@ -156,16 +196,9 @@ const EventDetailPage = ({ event, onBack, onDeleteSuccess }) => {
             </div>
           </div>
         </div>
-
-        {error && (
-          <p className="text-red-500 text-sm bg-red-50 p-3 rounded-xl border border-red-100 font-poppins">
-            {error}
-          </p>
-        )}
       </div>
 
       <div className="pt-10 border-t border-gray-100 flex gap-4">
-        {/* ✅ Edit button now opens the edit window */}
         <button
           type="button"
           onClick={() => setIsEditing(true)}
