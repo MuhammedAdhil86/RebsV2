@@ -9,6 +9,7 @@ import {
   addLike,
   addComment,
   addEmoji,
+  deleteAnnouncement,
   toggleLikeApi,
 } from "../api/api";
 
@@ -132,6 +133,21 @@ const announceService = {
       console.error(
         `Error posting emoji on announcement #${announcementId}:`,
         error,
+      );
+      throw error;
+    }
+  },
+  deleteAnnouncement: async (id) => {
+    try {
+      const response = await axiosInstance.delete(deleteAnnouncement(id));
+
+      console.log("Announcement deleted:", response.data);
+
+      return response.data;
+    } catch (error) {
+      console.error(
+        `Error deleting announcement #${id}:`,
+        error.response?.data || error.message,
       );
       throw error;
     }

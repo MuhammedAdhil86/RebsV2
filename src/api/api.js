@@ -12,6 +12,7 @@ export const createEmployeeReferenceNoUrl = "/employee-ref-no/rule/add";
 export const postAnnouncement = "/admin/announcement/add";
 export const Login = "/staff/login";
 export const getAnnouncement = "/admin/announcement/get";
+export const deleteAnnouncement = (id) => `/admin/announcement/delete/${id}`;
 // Interactive Announcement Features (Likes, Comments, Emojis)
 export const addComment = (id) => `/announcement/comment/add/${id}`;
 export const addEmoji = (id) => `/announcement/emojis/add/${id}`;
