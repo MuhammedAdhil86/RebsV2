@@ -23,6 +23,25 @@ import ClaimInformationCard from "./sections/claimInformation_card";
 import AuditInformationCard from "./sections/auditInformation_card";
 import GlowButton from "../../components/helpers/glowbutton";
 
+/**
+ * Normalizes an API response into a plain array.
+ * Handles: [..], { data: [..] }, { results: [..] }, { providers: [..] },
+ * { items: [..] }, { data: { results: [..] } }, null, undefined.
+ */
+const toArray = (value) => {
+  if (Array.isArray(value)) return value;
+  if (!value || typeof value !== "object") return [];
+  const candidates = [value.data, value.results, value.providers, value.items];
+  for (const c of candidates) {
+    if (Array.isArray(c)) return c;
+    if (c && typeof c === "object") {
+      const nested = toArray(c);
+      if (nested.length) return nested;
+    }
+  }
+  return [];
+};
+
 export default function EmployeeInsuranceTab({
   uuid: propUuid,
   employeeImage,
@@ -73,9 +92,10 @@ export default function EmployeeInsuranceTab({
         fetchInsuranceTypes().catch(() => []),
         fetchInsuranceCoverageTypes().catch(() => []),
       ]);
-      if (providersData) setProviders(providersData);
-      if (typesData) setInsuranceTypes(typesData);
-      if (coverageData) setCoverageTypes(coverageData);
+      // Always store arrays so child components can safely .map()
+      setProviders(toArray(providersData));
+      setInsuranceTypes(toArray(typesData));
+      setCoverageTypes(toArray(coverageData));
     } catch (error) {
       console.error(
         "❌ Failed to refresh insurance system configurations details:",
@@ -100,9 +120,10 @@ export default function EmployeeInsuranceTab({
           fetchInsuranceCoverageTypes().catch(() => []),
         ]);
 
-      if (providersData) setProviders(providersData);
-      if (typesData) setInsuranceTypes(typesData);
-      if (coverageData) setCoverageTypes(coverageData);
+      // Always store arrays so child components can safely .map()
+      setProviders(toArray(providersData));
+      setInsuranceTypes(toArray(typesData));
+      setCoverageTypes(toArray(coverageData));
 
       if (insuranceData) {
         setEmployeeInfo(insuranceData.employee);
