@@ -42,6 +42,37 @@ export const RadioRow = ({ label, checked, onClick }) => (
   </div>
 );
 
+/* ---------- Backend error helpers ---------- */
+
+// Finds the backend body ({ status_code, message, data }) from any error shape:
+// 1. normal axios error      -> error.response.data
+// 2. service threw the body  -> error itself ({ message, data })
+const getErrorBody = (error) => {
+  if (error?.response?.data) return error.response.data;
+  if (error && typeof error === "object" && error.data !== undefined) {
+    return error;
+  }
+  return null;
+};
+
+// Shows backend "message" (bold) and "data" (below it) in the toast
+const showBackendError = (body, fallback) => {
+  const message = body?.message || body?.error || fallback;
+  const data = body?.data;
+
+  toast.error(
+    <div>
+      <div style={{ fontWeight: 600 }}>{message}</div>
+      {data && (
+        <div style={{ marginTop: 4, opacity: 0.8 }}>
+          {typeof data === "string" ? data : JSON.stringify(data)}
+        </div>
+      )}
+    </div>,
+    { duration: 6000 },
+  );
+};
+
 const CreateLeavePolicyTab = ({ onClose }) => {
   const [loading, setLoading] = useState(false);
 
@@ -115,29 +146,25 @@ const CreateLeavePolicyTab = ({ onClose }) => {
       console.log("-----------------------------------------");
 
       // 3. Send to API
-      await payrollService.addLeavePolicy(requestBody);
+      const response = await payrollService.addLeavePolicy(requestBody);
+      console.log("API RESPONSE:", response);
+
+      // If the backend answers HTTP 200 but the body says it failed
+      const failedBody = [response, response?.data].find(
+        (b) => b && (b.status_code >= 400 || b.success === false),
+      );
+      if (failedBody) {
+        showBackendError(failedBody, "Failed to create leave policy");
+        return;
+      }
+
       toast.success("Leave policy created successfully");
       onClose();
     } catch (error) {
-      const res = error.response?.data;
-      console.error("❌ Create failed detail:", res);
+      console.error("❌ Create failed:", error);
+      console.error("❌ Backend body:", getErrorBody(error));
 
-      // Show backend "message" (bold) and "data" below it
-      toast.error(
-        <div>
-          <div style={{ fontWeight: 600 }}>
-            {res?.message || res?.error || "Failed to create leave policy"}
-          </div>
-          {res?.data && (
-            <div style={{ marginTop: 4, opacity: 0.8 }}>
-              {typeof res.data === "string"
-                ? res.data
-                : JSON.stringify(res.data)}
-            </div>
-          )}
-        </div>,
-        { duration: 6000 },
-      );
+      showBackendError(getErrorBody(error), "Failed to create leave policy");
     } finally {
       setLoading(false);
     }
