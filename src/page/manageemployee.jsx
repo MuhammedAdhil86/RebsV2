@@ -510,17 +510,6 @@ function ManageEmployees() {
             </span>
 
             <div className="flex items-center space-x-3">
-              {!isDeletedTab && (
-                <Link to="/employeeonboarding">
-                  <button
-                    type="button"
-                    className="flex items-center bg-black hover:bg-gray-800 text-white px-3 sm:px-4 py-2 rounded-lg text-[12px]"
-                  >
-                    <FiPlus className="w-4 h-4 mr-1" /> Add Employee
-                  </button>
-                </Link>
-              )}
-
               {/* Operations Dropdown Panel */}
               {view === "table" && !isDeletedTab && (
                 <div className="relative">
