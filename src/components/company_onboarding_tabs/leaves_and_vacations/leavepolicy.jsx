@@ -17,7 +17,25 @@ import CreateLeavePolicyTab from "../leaves_and_vacations/createleavepolicymodal
 import UpdateLeavePolicyTab from "./updateleavepolicy";
 import DefaultTemplatesTable from "./leavepolicy/defaultleave";
 import BulkAllocationTab from "./leavepolicy/bulkallocationtab";
-import toast, { Toaster } from "react-hot-toast";
+import toast from "react-hot-toast";
+
+// Shows backend "message" (bold) and "data" (below it) in the toast.
+// Pass { id: toastId } as options to replace an existing loading toast.
+const showApiError = (error, fallback, options = {}) => {
+  const res = error?.response?.data;
+
+  toast.error(
+    <div>
+      <div style={{ fontWeight: 600 }}>{res?.message || fallback}</div>
+      {res?.data && (
+        <div style={{ marginTop: 4, opacity: 0.8 }}>
+          {typeof res.data === "string" ? res.data : JSON.stringify(res.data)}
+        </div>
+      )}
+    </div>,
+    { duration: 6000, ...options },
+  );
+};
 
 const LeavesAndVacations = () => {
   const [activeTab, setActiveTab] = useState("all_leaves");
@@ -45,7 +63,7 @@ const LeavesAndVacations = () => {
       setDefaultLeaves(defaultRes?.data || defaultRes || []);
     } catch (error) {
       console.error("Error fetching leave data:", error);
-      toast.error("Failed to load data");
+      showApiError(error, "Failed to load data");
     } finally {
       setLoading(false);
     }
@@ -71,8 +89,7 @@ const LeavesAndVacations = () => {
       setActiveTab("all_leaves");
       loadAllData();
     } catch (error) {
-      const msg = error.response?.data?.message || "Failed to clone";
-      toast.error(msg, { id: toastId });
+      showApiError(error, "Failed to clone", { id: toastId });
     }
   };
 
@@ -95,7 +112,7 @@ const LeavesAndVacations = () => {
       closeMenu();
       loadAllData();
     } catch (error) {
-      toast.error(error.response?.data?.message || "Failed to update status");
+      showApiError(error, "Failed to update status");
     }
   };
 
@@ -109,9 +126,7 @@ const LeavesAndVacations = () => {
       setSelectedRow(null);
       loadAllData();
     } catch (error) {
-      toast.error(error.response?.data?.message || "Failed to delete policy", {
-        id: toastId,
-      });
+      showApiError(error, "Failed to delete policy", { id: toastId });
     }
   };
 
@@ -229,8 +244,6 @@ const LeavesAndVacations = () => {
 
   return (
     <div className="w-full bg-white rounded-xl">
-      <Toaster position="top-right" />
-
       {/* Tabs Header */}
       <div className="flex items-center gap-8 border-b border-gray-100 mb-6">
         <button
@@ -322,7 +335,7 @@ const LeavesAndVacations = () => {
         </div>
       </div>
 
-      {/* Table Section - UPDATED LOGIC HERE */}
+      {/* Table Section */}
       <div className="w-full">
         {loading ? (
           <div className="flex items-center justify-center py-20 text-gray-400 text-[12px] font-['Poppins']">

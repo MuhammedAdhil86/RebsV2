@@ -43,6 +43,8 @@ export const RadioRow = ({ label, checked, onClick }) => (
 );
 
 const CreateLeavePolicyTab = ({ onClose }) => {
+  const [loading, setLoading] = useState(false);
+
   const [formData, setFormData] = useState({
     name: "",
     code: "",
@@ -62,7 +64,8 @@ const CreateLeavePolicyTab = ({ onClose }) => {
     encash_leave: false,
     encash_limit: 0,
     allow_negative_balance: false,
-    consider_negative_balance: "",
+    // API allowed values: "no limit", "till year end", "unlimited and mark as lop"
+    consider_negative_balance: "no limit",
     allow_past_leave: false,
     past_leave_limit: null,
     allow_future_leave: false,
@@ -81,9 +84,13 @@ const CreateLeavePolicyTab = ({ onClose }) => {
 
   const handleSubmit = async () => {
     try {
+      setLoading(true);
+
       // 1. Prepare the final payload
+      const { consider_negative_balance, ...rest } = formData;
+
       const requestBody = {
-        ...formData,
+        ...rest,
         employee_accrues: Number(formData.employee_accrues || 0),
         postpone_accrual_value: Number(formData.postpone_accrual_value || 0),
         carry_forward_limit: Number(formData.carry_forward_limit || 0),
@@ -95,9 +102,13 @@ const CreateLeavePolicyTab = ({ onClose }) => {
           ? Number(formData.future_leave_limit)
           : null,
         description: formData.description || `${formData.name} policy`,
+        // Only send when negative balance is enabled, always a valid value
+        ...(formData.allow_negative_balance && {
+          consider_negative_balance: consider_negative_balance || "no limit",
+        }),
       };
 
-      // 🔥 2. LOG THE PAYLOAD HERE 🔥
+      // 2. LOG THE PAYLOAD
       console.log("-----------------------------------------");
       console.log("FINAL PAYLOAD TO SEND:", requestBody);
       console.log("CRITERIA DETAILS:", requestBody.Criteria);
@@ -108,10 +119,27 @@ const CreateLeavePolicyTab = ({ onClose }) => {
       toast.success("Leave policy created successfully");
       onClose();
     } catch (error) {
-      console.error("API ERROR DETAILS:", error.response?.data);
+      const res = error.response?.data;
+      console.error("❌ Create failed detail:", res);
+
+      // Show backend "message" (bold) and "data" below it
       toast.error(
-        error.response?.data?.message || "Failed to create leave policy",
+        <div>
+          <div style={{ fontWeight: 600 }}>
+            {res?.message || res?.error || "Failed to create leave policy"}
+          </div>
+          {res?.data && (
+            <div style={{ marginTop: 4, opacity: 0.8 }}>
+              {typeof res.data === "string"
+                ? res.data
+                : JSON.stringify(res.data)}
+            </div>
+          )}
+        </div>,
+        { duration: 6000 },
       );
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -119,7 +147,7 @@ const CreateLeavePolicyTab = ({ onClose }) => {
     <div
       className={`w-full bg-[#F9FAFB] rounded-2xl shadow-inner ${globalFont}`}
     >
-      <div className="bg-[#F9FAFB] w-full max-w6xl rounded-2xl shadow-2xl overflow-hidden flex flex-col ">
+      <div className="bg-[#F9FAFB] w-full max-w-6xl rounded-2xl shadow-2xl overflow-hidden flex flex-col ">
         <div className="flex items-center p-5 bg-white border-b border-gray-200 gap-4">
           <button
             onClick={onClose}
@@ -147,6 +175,8 @@ const CreateLeavePolicyTab = ({ onClose }) => {
             setCriteria={handleCriteriaChange}
             onClose={onClose}
             handleSubmit={handleSubmit}
+            isUpdate={false}
+            loading={loading}
           />
         </div>
       </div>
