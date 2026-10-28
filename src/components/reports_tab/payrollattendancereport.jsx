@@ -51,6 +51,7 @@ export default function PayrollAttendanceReport() {
   const fetchData = async () => {
     try {
       setLoading(true);
+
       const response = await fetchPayrollAnalytics(
         monthNames.indexOf(month) + 1,
         Number(year),
@@ -73,6 +74,7 @@ export default function PayrollAttendanceReport() {
 
             return {
               ...emp,
+
               pay_date:
                 response?.pay_date ||
                 emp.pay_date ||
@@ -80,29 +82,35 @@ export default function PayrollAttendanceReport() {
                 emp.salary_date ||
                 emp.paid_date ||
                 "",
+
               full_name:
                 `${info.first_name || ""} ${info.last_name || ""}`.trim() ||
                 info.account_holder_name ||
                 "N/A",
+
               bank_name: info.bank_name || "N/A",
               account_no: info.account_number || "N/A",
               ifsc: info.ifsc || "N/A",
+
               pt: stat.pt || 0,
               epf: stat.epf_employee || 0,
               esi: stat.esi_employee || 0,
               lwf_employee: stat.lwf_employee || 0,
               lwf_employer: stat.lwf_employer || 0,
-              // Adding TDS Data
+
               tds: {
                 monthly: tds.monthly_tds || 0,
                 annual: tds.annual_tax || 0,
                 regime: tds.tax_regime || "N/A",
               },
+
               total_deductions_monthly: emp.total_deductions || 0,
+
               attendance_pct: emp.attendance_factor
                 ? `${(emp.attendance_factor * 100).toFixed(2)}%`
                 : "0%",
-              bank_info: info, // Ensure this object is passed properly
+
+              bank_info: info,
               statutory: stat,
             };
           })
@@ -121,6 +129,7 @@ export default function PayrollAttendanceReport() {
     fetchData();
   }, [month, year]);
 
+  // ================= ROW CLICK / PAYSLIP =================
   const handleRowClick = (row) => {
     navigate("/payslip", {
       state: {
@@ -133,44 +142,96 @@ export default function PayrollAttendanceReport() {
     });
   };
 
+  // ================= TABLE COLUMNS =================
   const columns = [
-    { label: "User ID", key: "user_id", align: "center", width: 100 },
+    {
+      label: "User ID",
+      key: "user_id",
+      align: "center",
+      width: 100,
+    },
     {
       label: "Employee Code",
       key: "employee_ref_no",
       align: "center",
       width: 130,
     },
-    { label: "Employee Name", key: "full_name", align: "center", width: 150 },
-    { label: "Attendance", key: "attendance_pct", align: "center", width: 120 },
-    { label: "Bank Name", key: "bank_name", align: "center", width: 150 },
-    { label: "Account No", key: "account_no", align: "center", width: 150 },
+    {
+      label: "Employee Name",
+      key: "full_name",
+      align: "center",
+      width: 150,
+    },
+    {
+      label: "Attendance",
+      key: "attendance_pct",
+      align: "center",
+      width: 120,
+    },
+    {
+      label: "Bank Name",
+      key: "bank_name",
+      align: "center",
+      width: 150,
+    },
+    {
+      label: "Account No",
+      key: "account_no",
+      align: "center",
+      width: 150,
+    },
     {
       label: "Gross Monthly",
       key: "gross_monthly",
       align: "center",
       width: 150,
     },
-    { label: "PT", key: "pt", align: "center", width: 100 },
-    { label: "EPF", key: "epf", align: "center", width: 100 },
-    { label: "TDS", key: "tds.monthly", align: "center", width: 100 },
+    {
+      label: "PT",
+      key: "pt",
+      align: "center",
+      width: 100,
+    },
+    {
+      label: "EPF",
+      key: "epf",
+      align: "center",
+      width: 100,
+    },
+    {
+      label: "TDS",
+      key: "tds.monthly",
+      align: "center",
+      width: 100,
+    },
     {
       label: "Total Deductions",
       key: "total_deductions_monthly",
       align: "center",
       width: 180,
     },
-    { label: "Net Monthly", key: "net_monthly", align: "center", width: 150 },
+    {
+      label: "Net Monthly",
+      key: "net_monthly",
+      align: "center",
+      width: 150,
+    },
   ];
 
+  // ================= DOWNLOAD SALARY REPORT =================
   const handleDownloadSalary = async () => {
     if (!records.length) return;
+
     try {
       setLoading(true);
+
       const componentNames = [];
+
       records.forEach((r) => {
         (r.components || []).forEach((c) => {
-          if (!componentNames.includes(c.name)) componentNames.push(c.name);
+          if (!componentNames.includes(c.name)) {
+            componentNames.push(c.name);
+          }
         });
       });
 
@@ -183,6 +244,7 @@ export default function PayrollAttendanceReport() {
         "Account Number",
         "IFSC",
       ];
+
       const headerRow2 = ["", "", "", "", "", "", ""];
 
       componentNames.forEach((name) => {
@@ -198,6 +260,7 @@ export default function PayrollAttendanceReport() {
         "Total Deductions",
         "Net Monthly",
       );
+
       headerRow2.push("", "", "", "", "", "");
 
       const dataRows = records.map((r) => {
@@ -210,13 +273,16 @@ export default function PayrollAttendanceReport() {
           r.account_no,
           r.ifsc,
         ];
+
         componentNames.forEach((name) => {
           const comp = (r.components || []).find((c) => c.name === name);
+
           row.push(
             comp ? comp.monthly_amount : 0,
             comp ? comp.annual_amount : 0,
           );
         });
+
         row.push(
           r.gross_monthly,
           r.pt,
@@ -225,17 +291,22 @@ export default function PayrollAttendanceReport() {
           r.total_deductions_monthly,
           r.net_monthly,
         );
+
         return row;
       });
 
       const wb = XLSX.utils.book_new();
+
       const ws = XLSX.utils.aoa_to_sheet([headerRow1, headerRow2, ...dataRows]);
 
       const range = XLSX.utils.decode_range(ws["!ref"] || "A1");
+
       for (let R = range.s.r; R <= range.e.r; R++) {
         for (let C = range.s.c; C <= range.e.c; C++) {
           const cell = ws[XLSX.utils.encode_cell({ r: R, c: C })];
+
           if (!cell) continue;
+
           cell.s =
             R < 2
               ? headerStyle
@@ -246,41 +317,72 @@ export default function PayrollAttendanceReport() {
       }
 
       XLSX.utils.book_append_sheet(wb, ws, "Detailed Payroll");
+
       XLSX.writeFile(wb, `payroll_report_${month}_${year}.xlsx`);
+    } catch (error) {
+      console.error("Salary report download failed:", error);
     } finally {
       setLoading(false);
     }
   };
 
+  // ================= DOWNLOAD BANK REPORT =================
   const handleDownloadBankExcel = async () => {
     if (!records.length) return;
+
     try {
       setLoading(true);
-      const today = new Date();
-      const formattedDate = `${String(today.getDate()).padStart(2, "0")}/${String(today.getMonth() + 1).padStart(2, "0")}/${today.getFullYear()}`;
 
+      // No header row. The first row contains employee data.
+      // Uses the same user_id displayed in the table, not UUID.
       const dataRows = records.map((r) => [
-        "AEDEN12",
-        "SALPAY",
-        "NEFT",
-        formattedDate,
-        r.account_no,
-        r.net_monthly,
-        "M",
-        r.full_name,
-        r.ifsc,
-        "SALARY_ACCOUNT_NUMBER", // Ensure this constant exists or replace with actual value
+        r.user_id ?? "",
+        r.employee_ref_no ?? "",
+        r.bank_name ?? "N/A",
+        r.full_name ?? "N/A",
+        r.account_no ?? "N/A",
+        r.ifsc ?? "N/A",
+        r.net_monthly ?? 0,
       ]);
 
       const wb = XLSX.utils.book_new();
       const ws = XLSX.utils.aoa_to_sheet(dataRows);
+
+      // Format data cells only; there is no header row.
+      const range = XLSX.utils.decode_range(ws["!ref"] || "A1");
+
+      for (let R = range.s.r; R <= range.e.r; R++) {
+        for (let C = range.s.c; C <= range.e.c; C++) {
+          const cell = ws[XLSX.utils.encode_cell({ r: R, c: C })];
+
+          if (!cell) continue;
+
+          cell.s = typeof cell.v === "number" ? numberCellStyle : textCellStyle;
+        }
+      }
+
+      // Excel column widths
+      ws["!cols"] = [
+        { wch: 15 }, // User ID
+        { wch: 18 }, // Employee Code
+        { wch: 22 }, // Bank Name
+        { wch: 25 }, // Employee Name
+        { wch: 22 }, // Account No
+        { wch: 18 }, // IFSC
+        { wch: 18 }, // Net Monthly
+      ];
+
       XLSX.utils.book_append_sheet(wb, ws, "Bank Sheet");
+
       XLSX.writeFile(wb, `bank_excel_${month}_${year}.xlsx`);
+    } catch (error) {
+      console.error("Bank Excel download failed:", error);
     } finally {
       setLoading(false);
     }
   };
 
+  // ================= UI =================
   return (
     <div className="p-1 rounded-xl font-poppins text-[12px]">
       <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
@@ -291,6 +393,7 @@ export default function PayrollAttendanceReport() {
             onChange={setMonth}
             options={monthNames}
           />
+
           <CustomSelect
             label="Year"
             value={year}
@@ -299,23 +402,28 @@ export default function PayrollAttendanceReport() {
             minWidth={80}
           />
         </div>
+
         <div className="flex items-center gap-2">
           <button
             onClick={handleDownloadSalary}
             disabled={!records.length || loading}
             className="flex items-center gap-2 px-4 py-2 rounded border bg-black text-white hover:bg-gray-800"
           >
-            <Download className="w-4 h-4" /> Download
+            <Download className="w-4 h-4" />
+            Download
           </button>
+
           <button
             onClick={handleDownloadBankExcel}
             disabled={!records.length || loading}
             className="flex items-center gap-2 px-4 py-2 rounded border bg-blue-600 text-white hover:bg-blue-700"
           >
-            <Download className="w-4 h-4" /> Bank Download
+            <Download className="w-4 h-4" />
+            Bank Download
           </button>
         </div>
       </div>
+
       <div className="bg-white rounded-lg border border-gray-200">
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20">

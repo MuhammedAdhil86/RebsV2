@@ -26,7 +26,10 @@ const VIEW = {
   SETTINGS: "settings",
 };
 
-const ALL_DEPARTMENTS_OPTION = { label: "All Departments", value: "" };
+const ALL_DEPARTMENTS_OPTION = {
+  label: "All Departments",
+  value: "",
+};
 
 const TABLE_ROWS_PER_PAGE = 10;
 
@@ -37,7 +40,9 @@ const TABLE_ROWS_PER_PAGE = 10;
 /** "2026-10-23T06:19:30.874218Z" -> "23-10-2026" */
 const formatDisplayDate = (isoString) => {
   if (!isoString) return "-";
+
   const [year, month, day] = isoString.split("T")[0].split("-");
+
   return `${day}-${month}-${year}`;
 };
 
@@ -48,6 +53,86 @@ const extractErrorMessage = (error) =>
   "Something went wrong";
 
 /* -------------------------------------------------------------------------- */
+/*                         Tracking Date Info Tooltip                         */
+/* -------------------------------------------------------------------------- */
+
+function InfoTooltip() {
+  const [isVisible, setIsVisible] = useState(false);
+
+  return (
+    <div
+      className="relative inline-flex items-center"
+      onMouseEnter={() => setIsVisible(true)}
+      onMouseLeave={() => setIsVisible(false)}
+    >
+      <button
+        type="button"
+        aria-label="Tracking start date information"
+        aria-describedby={isVisible ? "tracking-start-tooltip" : undefined}
+        onFocus={() => setIsVisible(true)}
+        onBlur={() => setIsVisible(false)}
+        className="inline-flex items-center justify-center text-black hover:text-gray-700 focus:outline-none"
+      >
+        <Icon
+          icon="solar:info-circle-outline"
+          className="w-3.5 h-3.5 text-black"
+        />
+      </button>
+
+      {isVisible && (
+        <div
+          id="tracking-start-tooltip"
+          role="tooltip"
+          className="absolute left-1/2 bottom-full z-[100] mb-2 w-[340px] max-w-[85vw] -translate-x-1/2 rounded-lg bg-black px-3 py-3 text-white shadow-xl"
+        >
+          <p className="mb-2 flex items-center gap-2 text-xs font-semibold">
+            <Icon icon="solar:calendar-outline" className="h-4 w-4 shrink-0" />
+            Tracking Start Date
+            <Icon icon="solar:info-circle-outline" className="h-3.5 w-3.5" />
+          </p>
+
+          <p className="mb-3 text-xs leading-5">
+            Set the date from which your organization wants employee KPIs to be
+            evaluated.
+          </p>
+
+          <ul className="list-disc space-y-2 pl-4 text-xs leading-5">
+            <li>
+              <strong>When should I set it?</strong> Set this when introducing
+              KPI tracking or when you want to begin evaluating employees from a
+              specific date.
+            </li>
+
+            <li>
+              <strong>How does it work?</strong> Attendance before the selected
+              date is excluded from the attendance-based KPI calculation for the
+              applicable period.
+            </li>
+
+            <li>
+              <strong>What if I leave it empty?</strong> No custom start date is
+              applied. KPI calculations use the available attendance data for
+              the requested period, excluding future or unelapsed dates as
+              applicable.
+            </li>
+
+            <li>
+              <strong>Can I change it later?</strong> Yes. Changing the date
+              affects subsequent KPI calculations. Historical attendance records
+              are not deleted by this setting.
+            </li>
+          </ul>
+
+          <div className="absolute left-1/2 top-full -translate-x-1/2">
+            <div className="border-x-[7px] border-t-[7px] border-x-transparent border-t-black" />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
 /*                              Reusable Fields                               */
 /* -------------------------------------------------------------------------- */
 
@@ -56,11 +141,13 @@ function FitSelect({ label, value, options, onChange, minWidth = 110 }) {
   const selectedOption = options.find(
     (option) => String(option.value) === String(value),
   );
+
   const selectedText = (selectedOption?.label ?? "").toString();
 
   return (
     <div className="flex items-center gap-2">
       {label && <span className="text-xs whitespace-nowrap">{label}:</span>}
+
       <div className="relative">
         <select
           value={value}
@@ -101,7 +188,12 @@ function FitSelect({ label, value, options, onChange, minWidth = 110 }) {
 function DateField({ label, value, onChange }) {
   return (
     <div className="flex flex-col gap-1">
-      <label className="text-gray-500">{label}</label>
+      <label className="flex items-center gap-1.5 text-gray-500">
+        {label}
+
+        {label === "Tracking Start Date" && <InfoTooltip />}
+      </label>
+
       <div className="relative">
         <input
           type="date"
@@ -115,6 +207,7 @@ function DateField({ label, value, onChange }) {
             [&::-webkit-calendar-picker-indicator]:opacity-0
             [&::-webkit-calendar-picker-indicator]:cursor-pointer"
         />
+
         <Icon
           icon="solar:calendar-outline"
           className="w-4 h-4 text-gray-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none"
@@ -136,6 +229,7 @@ function SubViewHeader({ title, onBack }) {
         <Icon icon="solar:arrow-left-outline" className="w-4 h-4" />
         Back
       </button>
+
       <h3 className="text-base font-medium text-gray-800">{title}</h3>
     </div>
   );
@@ -168,7 +262,7 @@ export default function KpiConfiguration() {
   const [editingCriteriaId, setEditingCriteriaId] = useState(null);
 
   /* ------------------------------ Row actions ------------------------------ */
-  const [actionMenu, setActionMenu] = useState(null); // { id, top, right }
+  const [actionMenu, setActionMenu] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -191,12 +285,16 @@ export default function KpiConfiguration() {
   /** Department dropdown value for an existing criteria ("" = all departments). */
   const resolveDepartmentValue = (criteria) => {
     const id = criteria.original?.department_id;
-    if (id !== null && id !== undefined && id !== "") return String(id);
+
+    if (id !== null && id !== undefined && id !== "") {
+      return String(id);
+    }
 
     const match = departmentOptions.find(
       (option) =>
         option.value !== "" && option.label === criteria.department_name,
     );
+
     return match ? match.value : "";
   };
 
@@ -210,6 +308,7 @@ export default function KpiConfiguration() {
   /* ------------------------------ Row action menu -------------------------- */
   const toggleActionMenu = (event, criteriaId) => {
     const rect = event.currentTarget.getBoundingClientRect();
+
     setActionMenu((current) =>
       current?.id === criteriaId
         ? null
@@ -227,12 +326,14 @@ export default function KpiConfiguration() {
 
   const handleMenuUpdate = () => {
     if (!menuCriteria || menuCriteria.is_default) return;
+
     setActionMenu(null);
     openEditView(menuCriteria);
   };
 
   const handleMenuDelete = () => {
     if (!menuCriteria || menuCriteria.is_default) return;
+
     setActionMenu(null);
     setDeleteTarget(menuCriteria);
   };
@@ -242,7 +343,9 @@ export default function KpiConfiguration() {
 
     try {
       setIsDeleting(true);
+
       await removeKpiCriteria(deleteTarget.id);
+
       toast.success("Criteria deleted successfully.");
       setDeleteTarget(null);
       reloadCriteria();
@@ -258,6 +361,7 @@ export default function KpiConfiguration() {
     if (!actionMenu) return;
 
     const closeMenu = () => setActionMenu(null);
+
     window.addEventListener("mousedown", closeMenu);
     window.addEventListener("scroll", closeMenu, true);
     window.addEventListener("resize", closeMenu);
@@ -278,6 +382,7 @@ export default function KpiConfiguration() {
     const loadDepartments = async () => {
       try {
         const departments = await getDepartmentData();
+
         setDepartmentOptions([
           ALL_DEPARTMENTS_OPTION,
           ...departments.map((department) => ({
@@ -303,10 +408,13 @@ export default function KpiConfiguration() {
     const loadCriteria = async () => {
       try {
         setIsCriteriaLoading(true);
+
         const data = await fetchKpiCriteria(selectedDepartmentId);
+
         if (!isOutdated) setCriteriaList(data);
       } catch (error) {
         console.error("KPI criteria fetch failed:", error);
+
         if (!isOutdated) {
           setCriteriaList([]);
           toast.error(extractErrorMessage(error));
@@ -332,13 +440,19 @@ export default function KpiConfiguration() {
     const loadSettings = async () => {
       try {
         setIsSettingsLoading(true);
+
         const settings = await fetchKpiSettings();
+
         if (isOutdated) return;
+
         setTrackingStart(settings.tracking_start);
         setSettingsUpdatedAt(settings.updated_at);
       } catch (error) {
         console.error("KPI settings fetch failed:", error);
-        if (!isOutdated) toast.error(extractErrorMessage(error));
+
+        if (!isOutdated) {
+          toast.error(extractErrorMessage(error));
+        }
       } finally {
         if (!isOutdated) setIsSettingsLoading(false);
       }
@@ -367,12 +481,14 @@ export default function KpiConfiguration() {
           name: criteriaName,
           department_id: criteriaDepartmentId,
         });
+
         toast.success("Criteria updated successfully.");
       } else {
         await createKpiCriteria({
           name: criteriaName,
           department_id: criteriaDepartmentId,
         });
+
         toast.success("Criteria saved successfully.");
       }
 
@@ -402,7 +518,9 @@ export default function KpiConfiguration() {
       });
 
       setSettingsUpdatedAt(savedSettings?.updated_at || null);
+
       toast.success("KPI settings saved successfully.");
+
       returnToList();
     } catch (error) {
       toast.error(extractErrorMessage(error));
@@ -428,7 +546,12 @@ export default function KpiConfiguration() {
     }));
 
   const tableColumns = [
-    { label: "Criteria Name", key: "name", align: "center", width: 220 },
+    {
+      label: "Criteria Name",
+      key: "name",
+      align: "center",
+      width: 220,
+    },
     {
       label: "Department",
       key: "department_name",
@@ -504,6 +627,7 @@ export default function KpiConfiguration() {
           <div className="flex items-end gap-3 flex-wrap">
             <div className="flex flex-col gap-1">
               <label className="text-gray-500">Criteria Name</label>
+
               <input
                 type="text"
                 placeholder="e.g. Technical Skills"
@@ -515,6 +639,7 @@ export default function KpiConfiguration() {
 
             <div className="flex flex-col gap-1">
               <label className="text-gray-500">Department</label>
+
               <select
                 value={criteriaDepartmentId}
                 onChange={(event) =>
@@ -537,6 +662,7 @@ export default function KpiConfiguration() {
               className="flex items-center gap-2 px-4 py-2 rounded border bg-black text-white hover:bg-gray-800 disabled:opacity-60"
             >
               {isCriteriaSaving && <Loader2 className="w-4 h-4 animate-spin" />}
+
               {editingCriteriaId ? "Update" : "Save"}
             </button>
           </div>
@@ -601,6 +727,7 @@ export default function KpiConfiguration() {
       <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
         <div className="flex items-center gap-3 flex-wrap">
           <h3 className="text-base font-medium text-gray-800">KPI Criteria</h3>
+
           <FitSelect
             label="Department"
             value={selectedDepartmentId}
@@ -636,6 +763,7 @@ export default function KpiConfiguration() {
               onChange={(event) => setSearchTerm(event.target.value)}
               className="border px-3 py-1.5 rounded w-full outline-none text-xs"
             />
+
             <Icon
               icon="mynaui:search"
               className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400"
@@ -684,6 +812,7 @@ export default function KpiConfiguration() {
             <Icon icon="solar:pen-outline" className="w-4 h-4" />
             Update
           </button>
+
           <button
             type="button"
             onClick={handleMenuDelete}
