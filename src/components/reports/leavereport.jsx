@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { Search, Loader2, Download } from "lucide-react";
+import React, { useState, useEffect, useCallback } from "react";
+import { Loader2, Download } from "lucide-react";
+import { Icon } from "@iconify/react";
 import * as XLSX from "xlsx-js-style";
-import CustomSelect from "../../ui/customselect";
 import ReportTable from "../../ui/reporttable";
 import { fetchLeaveReport } from "../../service/reportsService";
 import {
@@ -10,6 +10,72 @@ import {
   textCellStyle,
   numberCellStyle,
 } from "../helpers/exelsheet";
+
+/* Shared look so the date fields and the select are exactly the same size */
+const controlCls =
+  "w-full min-w-[170px] h-[38px] border rounded-md bg-white pl-3 pr-9 text-sm outline-none focus:ring-2 focus:ring-black";
+
+const iconCls =
+  "pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-black";
+
+const labelCls = "text-[10px] text-gray-400 uppercase ml-1";
+
+/* ---------- DATE FIELD (calendar icon, whole field opens the picker) ---------- */
+function DateInput({ label, value, onChange, min, max }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <label className={labelCls}>{label}</label>
+
+      <div className="relative">
+        <input
+          type="date"
+          value={value}
+          min={min}
+          max={max}
+          onChange={(e) => onChange(e.target.value)}
+          className={`${controlCls} relative
+            [&::-webkit-calendar-picker-indicator]:absolute
+            [&::-webkit-calendar-picker-indicator]:inset-0
+            [&::-webkit-calendar-picker-indicator]:h-full
+            [&::-webkit-calendar-picker-indicator]:w-full
+            [&::-webkit-calendar-picker-indicator]:cursor-pointer
+            [&::-webkit-calendar-picker-indicator]:opacity-0`}
+        />
+        <Icon icon="solar:calendar-outline" className={iconCls} />
+      </div>
+    </div>
+  );
+}
+
+/* ---------- SELECT FIELD (same box as the date field) ---------- */
+function SelectField({ label, value, onChange, options }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <label className={labelCls}>{label}</label>
+
+      <div className="relative">
+        <select
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className={`${controlCls} appearance-none cursor-pointer`}
+        >
+          {options.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+        <Icon icon="solar:alt-arrow-down-outline" className={iconCls} />
+      </div>
+    </div>
+  );
+}
+
+const APPROVAL_OPTIONS = [
+  { label: "All", value: "" },
+  { label: "Approved", value: "Approved" },
+  { label: "Rejected", value: "Rejected" },
+];
 
 export default function LeaveReports() {
   // --- Default Date Range (Past 30 Days) ---
@@ -22,28 +88,16 @@ export default function LeaveReports() {
   const [loading, setLoading] = useState(false);
   const [from, setFrom] = useState(thirtyDaysAgo);
   const [to, setTo] = useState(today);
-  const [searchUser, setSearchUser] = useState("");
-  const [mainFilter, setMainFilter] = useState("");
-  const [dynamicValue, setDynamicValue] = useState("");
+  const [managerApproval, setManagerApproval] = useState("");
 
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
 
-      const apiStatus =
-        mainFilter === "status" && dynamicValue
-          ? dynamicValue.toLowerCase()
-          : undefined;
-      const apiApproval =
-        mainFilter === "managerApproval" && dynamicValue
-          ? dynamicValue
-          : undefined;
-
       const data = await fetchLeaveReport({
         from,
         to,
-        status: apiStatus,
-        manager_approval: apiApproval,
+        manager_approval: managerApproval || undefined,
       });
 
       setRecords(data);
@@ -52,25 +106,11 @@ export default function LeaveReports() {
     } finally {
       setLoading(false);
     }
-  }, [from, to, mainFilter, dynamicValue]);
+  }, [from, to, managerApproval]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
-
-  // --- Search Filter Logic ---
-  const filteredRecords = useMemo(() => {
-    if (!searchUser.trim()) return records;
-    const search = searchUser.toLowerCase();
-
-    return records.filter(
-      (r) =>
-        r.employee_name?.toLowerCase().includes(search) ||
-        r.department_name?.toLowerCase().includes(search) ||
-        r.designation?.toLowerCase().includes(search) ||
-        r.user_id?.toString().toLowerCase().includes(search),
-    );
-  }, [records, searchUser]);
 
   const columns = [
     { label: "Date", key: "date" },
@@ -164,7 +204,7 @@ export default function LeaveReports() {
   ];
 
   const handleDownload = () => {
-    if (!filteredRecords.length) return;
+    if (!records.length) return;
     const headerRow = [
       "Date",
       "User ID",
@@ -176,7 +216,7 @@ export default function LeaveReports() {
       "Status",
       "Manager Approval",
     ];
-    const dataRows = filteredRecords.map((r) => [
+    const dataRows = records.map((r) => [
       r.date ? new Date(r.date).toLocaleDateString() : "",
       r.user_id?.toString() || "",
       r.employee_name || "",
@@ -222,94 +262,30 @@ export default function LeaveReports() {
 
   return (
     <div className="p-1 px-3 bg-white rounded-xl shadow-sm border border-gray-100">
-      <div className="flex justify-between items-center mb-2">
+      <div className="mb-2">
         <h2 className="text-[16px] text-gray-800">Leave Reports</h2>
-        <button
-          onClick={handleDownload}
-          disabled={loading || filteredRecords.length === 0}
-          className="flex items-center gap-2 px-4 py-1 text-[12px] font-medium rounded bg-black text-white hover:bg-gray-800 disabled:bg-gray-300 transition-all"
-        >
-          <Download className="w-3 h-3" /> Export Excel
-        </button>
       </div>
 
-      {/* ✅ Updated: Structured flex layout with items-stretch ensuring uniform element heights */}
-      <div className="flex flex-wrap gap-4 items-stretch mb-6 bg-gray-50 p-4 rounded-lg border border-gray-100">
-        <div className="flex flex-col gap-1">
-          <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">
-            From
-          </label>
-          <input
-            type="date"
-            value={from}
-            onChange={(e) => setFrom(e.target.value)}
-            className="border rounded-md px-3 h-[38px] text-sm focus:ring-2 focus:ring-black outline-none bg-white"
-          />
-        </div>
+      {/* Filters + download in one row, all controls 38px tall and bottom-aligned */}
+      <div className="flex flex-wrap gap-4 items-end mb-6 bg-gray-50 p-4 rounded-lg border border-gray-100">
+        <DateInput label="From" value={from} onChange={setFrom} max={to} />
 
-        <div className="flex flex-col gap-1">
-          <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">
-            To
-          </label>
-          <input
-            type="date"
-            value={to}
-            onChange={(e) => setToDate(e.target.value)}
-            className="border rounded-md px-3 h-[38px] text-sm focus:ring-2 focus:ring-black outline-none bg-white"
-          />
-        </div>
+        <DateInput label="To" value={to} onChange={setTo} min={from} />
 
-        <div className="flex flex-col gap-1">
-          <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">
-            Filter By
-          </label>
-          <CustomSelect
-            placeholder="Filter"
-            value={mainFilter}
-            onChange={(val) => {
-              setMainFilter(val === "Filter" ? "" : val);
-              setDynamicValue(val === "managerApproval" ? "Approved" : "");
-            }}
-            options={[
-              { label: "Filter", value: "Filter" },
-              { label: "Manager Approval", value: "managerApproval" },
-            ]}
-            minWidth={150}
-          />
-        </div>
+        <SelectField
+          label="Manager Approval"
+          value={managerApproval}
+          onChange={setManagerApproval}
+          options={APPROVAL_OPTIONS}
+        />
 
-        {/* ✅ Dynamic Value Select Field is structured to preserve layout heights seamlessly */}
-        {mainFilter ? (
-          <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">
-              Select Value
-            </label>
-            <CustomSelect
-              placeholder="Select Value"
-              value={dynamicValue}
-              onChange={setDynamicValue}
-              options={[
-                { label: "Approved", value: "Approved" },
-                { label: "Pending", value: "Pending" },
-                { label: "Rejected", value: "Rejected" },
-              ]}
-              minWidth={150}
-            />
-          </div>
-        ) : null}
-
-        <div className="flex flex-col gap-1 flex-1 min-w-[200px] justify-end">
-          <div className="relative w-full h-[38px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search Staff..."
-              value={searchUser}
-              onChange={(e) => setSearchUser(e.target.value)}
-              className="w-full h-full border rounded-md pl-10 pr-3 text-sm focus:ring-2 focus:ring-black outline-none bg-white"
-            />
-          </div>
-        </div>
+        <button
+          onClick={handleDownload}
+          disabled={loading || records.length === 0}
+          className="ml-auto flex items-center gap-2 h-[38px] px-4 text-sm rounded-md bg-black text-white hover:bg-gray-800 disabled:bg-gray-300 transition-all"
+        >
+          <Download className="w-4 h-4" /> Export Excel
+        </button>
       </div>
 
       {loading ? (
@@ -318,7 +294,7 @@ export default function LeaveReports() {
           <p className="text-gray-400 text-sm">Fetching report details...</p>
         </div>
       ) : (
-        <ReportTable columns={columns} data={filteredRecords} rowsPerPage={8} />
+        <ReportTable columns={columns} data={records} rowsPerPage={8} />
       )}
     </div>
   );

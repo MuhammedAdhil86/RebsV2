@@ -110,7 +110,7 @@ export const FetchAssets = "/admin/asset/get ";
 export const deleteAsset = (id) => `/admin/asset/delete/${id}`;
 
 //report
-
+export const getStaffReport = "/staff/report";
 export const getReport = "/admin/staffreport/:month";
 export const getReportIndia = "/admin/staff/fullreport";
 export const getDistanceViolation = "/admin/attendance/distance-violation";

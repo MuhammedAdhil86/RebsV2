@@ -5,7 +5,7 @@ import CommonUploadActions from "../../ui/commonupload";
 import {
   fetchEmployeeStatus,
   fetchEmployeeType,
-  fetchEmployeeRoles, // Added role service
+  fetchEmployeeRoles,
   addWorkInformation,
 } from "../../service/employeeService";
 import {
@@ -17,15 +17,13 @@ import {
 
 const WorkInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
   const [formData, setFormData] = useState({
-    company: "",
     location: "",
     employment_status_id: "",
-    branch: "",
     employee_type_id: "",
     date_of_join: "",
     department: "",
     designation: "",
-    role: "", // Holds selected role id (UI only)
+    role: "",
     total_experience: "",
     source_of_hiring: "",
   });
@@ -35,10 +33,12 @@ const WorkInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
     employeeType: [],
     departments: [],
     designations: [],
-    roles: [], // Added roles list
-    branches: [],
+    roles: [],
     organisations: [],
   });
+
+  // Branch is resolved automatically (no UI field)
+  const [branchId, setBranchId] = useState(null);
 
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -66,26 +66,34 @@ const WorkInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
           fetchEmployeeStatus(),
           getDepartmentData(),
           getDesignationData(),
-          fetchEmployeeRoles(), // Fetch role list
+          fetchEmployeeRoles(),
         ]);
 
         const extractData = (result) => {
           if (result.status === "fulfilled" && result.value) {
-            return Array.isArray(result.value) ? result.value : [];
+            if (Array.isArray(result.value)) return result.value;
+            if (Array.isArray(result.value.data)) return result.value.data;
           }
           return [];
         };
 
+        const branches = extractData(branchRes);
+
+        // Resolve branch: localStorage -> userData -> first branch in list
+        const resolvedBranch =
+          localStorage.getItem("branchId") ||
+          userData?.branch?.id ||
+          branches[0]?.id ||
+          null;
+        setBranchId(resolvedBranch);
+
         setDropdowns({
-          branches: extractData(branchRes),
           organisations: extractData(orgRes),
           employeeType: extractData(typeRes),
           employeeStatus: extractData(statusRes),
           departments: extractData(deptRes),
           designations: extractData(desigRes),
-          roles: Array.isArray(roleRes.value?.data)
-            ? roleRes.value.data
-            : extractData(roleRes),
+          roles: extractData(roleRes),
         });
 
         if (!companyId) {
@@ -111,14 +119,22 @@ const WorkInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
   /** ✅ Handle form submission */
   const handleSubmit = async () => {
     const employeeId = localStorage.getItem("employeeId");
-    const branchId = localStorage.getItem("branchId") || formData.branch || "1";
 
     if (!employeeId) {
       toast.error("Employee ID missing. Please restart onboarding.");
       return;
     }
+    if (!branchId) {
+      toast.error(
+        "No branch found for this company. Please create a branch first.",
+      );
+      return;
+    }
+    if (!formData.role) {
+      toast.error("Please select a role.");
+      return;
+    }
 
-    // Prepare Payload
     const payload = {
       ...formData,
       branch_id: Number(branchId),
@@ -127,23 +143,21 @@ const WorkInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
       employee_type_id: Number(formData.employee_type_id),
       department_id: Number(formData.department),
       designation_id: Number(formData.designation),
-      user_type: formData.role ? String(formData.role) : "", // Role id sent as string, e.g. "2"
+      user_type: String(formData.role),
     };
 
     // Date formatting to ISO string
     if (payload.date_of_join && !payload.date_of_join.includes("T")) {
       try {
-        const isoDate = new Date(
+        payload.date_of_join = new Date(
           payload.date_of_join + "T12:00:00Z",
         ).toISOString();
-        payload.date_of_join = isoDate;
       } catch (e) {
         console.error("Invalid Date format");
       }
     }
 
     // Clean up temporary UI keys
-    delete payload.branch;
     delete payload.department;
     delete payload.designation;
     delete payload.role;
@@ -242,7 +256,6 @@ const WorkInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
               options={designations}
             />
 
-            {/* Role Field uses opt.id as the value */}
             <SelectField
               label="Role"
               name="role"
@@ -292,10 +305,6 @@ const WorkInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
   );
 };
 
-/** 🔹 Atomic Input Component
- *  For type="date": hides the browser's default icon and shows a single
- *  Solar calendar icon that opens the native date picker on click.
- */
 const InputField = ({
   label,
   name,
@@ -311,9 +320,9 @@ const InputField = ({
     const el = inputRef.current;
     if (!el) return;
     if (typeof el.showPicker === "function") {
-      el.showPicker(); // modern browsers
+      el.showPicker();
     } else {
-      el.focus(); // fallback
+      el.focus();
       el.click();
     }
   };
@@ -348,14 +357,13 @@ const InputField = ({
   );
 };
 
-/** 🔹 Atomic Select Component */
 const SelectField = ({
   label,
   name,
   value,
   onChange,
   options,
-  valueKey = "id", // Supports binding either ID or Name
+  valueKey = "id",
 }) => (
   <div className="flex flex-col">
     <label className="text-sm font-medium text-gray-700 mb-1">{label}</label>

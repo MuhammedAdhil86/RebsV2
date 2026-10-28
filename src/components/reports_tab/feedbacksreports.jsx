@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import { FiDownload } from "react-icons/fi";
 import { Icon } from "@iconify/react";
 import ReportTable from "../../ui/reporttable";
-import CustomSelect from "../../ui/customselect";
 import * as XLSX from "xlsx-js-style";
 
 // ✅ API Service
@@ -21,38 +20,87 @@ const getCurrentMonthWeek = () => {
   return Math.min(Math.ceil(day / 7), 5);
 };
 
+// Local-time YYYY-MM-DD (toISOString shifts the day back for IST mornings)
+const formatDateString = (date) => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+};
+
 // ✅ SIMPLE TABLE COLUMNS
 const columns = [
-  {
-    key: "rating_date",
-    label: "Date",
-    width: 130,
-  },
-  {
-    key: "staff_name",
-    label: "Name",
-    width: 220,
-  },
-  {
-    key: "department",
-    label: "Department",
-    width: 200,
-  },
-  {
-    key: "designation",
-    label: "Designation",
-    width: 200,
-  },
-  {
-    key: "rating",
-    label: "Rating",
-    width: 100,
-  },
-  {
-    key: "feedback",
-    label: "Feedback / Comment",
-    width: 320,
-  },
+  { key: "rating_date", label: "Date", width: 130 },
+  { key: "staff_name", label: "Name", width: 220 },
+  { key: "department", label: "Department", width: 200 },
+  { key: "designation", label: "Designation", width: 200 },
+  { key: "rating", label: "Rating", width: 100 },
+  { key: "feedback", label: "Feedback / Comment", width: 320 },
+];
+
+/* One look for every control in the filter row (38px tall) */
+const controlCls =
+  "w-full min-w-[170px] h-[38px] border rounded-md bg-white pl-3 pr-9 text-sm outline-none focus:ring-2 focus:ring-black";
+
+const iconCls =
+  "pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-black";
+
+const labelCls = "text-[10px] text-gray-400 uppercase ml-1";
+
+/* ---------- DATE FIELD (calendar icon, whole field opens the picker) ---------- */
+function DateInput({ label, value, onChange, min, max }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <label className={labelCls}>{label}</label>
+
+      <div className="relative">
+        <input
+          type="date"
+          value={value}
+          min={min}
+          max={max}
+          onChange={(e) => onChange(e.target.value)}
+          className={`${controlCls} relative
+            [&::-webkit-calendar-picker-indicator]:absolute
+            [&::-webkit-calendar-picker-indicator]:inset-0
+            [&::-webkit-calendar-picker-indicator]:h-full
+            [&::-webkit-calendar-picker-indicator]:w-full
+            [&::-webkit-calendar-picker-indicator]:cursor-pointer
+            [&::-webkit-calendar-picker-indicator]:opacity-0`}
+        />
+        <Icon icon="solar:calendar-outline" className={iconCls} />
+      </div>
+    </div>
+  );
+}
+
+/* ---------- SELECT FIELD (same box as the date field) ---------- */
+function SelectField({ label, value, onChange, options }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <label className={labelCls}>{label}</label>
+
+      <div className="relative">
+        <select
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className={`${controlCls} appearance-none cursor-pointer`}
+        >
+          {options.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+        <Icon icon="solar:alt-arrow-down-outline" className={iconCls} />
+      </div>
+    </div>
+  );
+}
+
+const FILTER_TYPE_OPTIONS = [
+  { value: "date", label: "Date" },
+  { value: "week", label: "Week" },
 ];
 
 export default function FeedbackReports() {
@@ -60,9 +108,7 @@ export default function FeedbackReports() {
   const maxAvailableWeek = getCurrentMonthWeek();
 
   const [filterType, setFilterType] = useState("date");
-  const [selectedDate, setSelectedDate] = useState(
-    today.toISOString().split("T")[0],
-  );
+  const [selectedDate, setSelectedDate] = useState(formatDateString(today));
   const [selectedWeek, setSelectedWeek] = useState(maxAvailableWeek);
 
   const [searchTerm, setSearchTerm] = useState("");
@@ -118,13 +164,19 @@ export default function FeedbackReports() {
   }, [filterType, selectedDate, selectedWeek]);
 
   // ✅ SEARCH FILTER
-  const filteredData = apiData.filter(
-    (item) =>
-      item.staff_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.department?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.designation?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.staff_id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.feedback?.toLowerCase().includes(searchTerm.toLowerCase()),
+  const q = searchTerm.toLowerCase();
+  const filteredData = apiData.filter((item) =>
+    [
+      item.staff_name,
+      item.department,
+      item.designation,
+      item.staff_id,
+      item.feedback,
+    ].some((v) =>
+      String(v ?? "")
+        .toLowerCase()
+        .includes(q),
+    ),
   );
 
   // ✅ DOWNLOAD EXCEL
@@ -161,12 +213,7 @@ export default function FeedbackReports() {
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.aoa_to_sheet(sheetData);
 
-    ws["!merges"] = [
-      {
-        s: { r: 0, c: 0 },
-        e: { r: 0, c: 6 },
-      },
-    ];
+    ws["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 6 } }];
 
     ws["!cols"] = [
       { wch: 8 },
@@ -210,67 +257,50 @@ export default function FeedbackReports() {
 
   return (
     <div className="flex flex-col gap-4 text-[13px]">
-      {/* HEADER CONTROLS */}
-      <div className="flex justify-between items-center mb-4 px-2">
-        <div className="flex items-center gap-4">
-          <div className="text-[16px] font-medium min-w-fit">
-            Feedback Report
-          </div>
+      {/* Filters + search + download in one row, all controls 38px tall and bottom-aligned */}
+      <div className="flex flex-wrap gap-4 items-end bg-gray-50 p-4 rounded-lg border border-gray-100">
+        <SelectField
+          label="Filter By"
+          value={filterType}
+          onChange={setFilterType}
+          options={FILTER_TYPE_OPTIONS}
+        />
 
-          <CustomSelect
-            value={filterType}
-            onChange={(val) => setFilterType(val)}
-            options={[
-              { value: "date", label: "Date Filter" },
-              { value: "week", label: "Week Filter" },
-            ]}
+        {filterType === "date" ? (
+          <DateInput
+            label="Date"
+            value={selectedDate}
+            onChange={setSelectedDate}
           />
+        ) : (
+          <SelectField
+            label="Week"
+            value={selectedWeek}
+            onChange={(val) => setSelectedWeek(Number(val))}
+            options={weekOptions}
+          />
+        )}
 
-          {filterType === "date" ? (
-            <input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="border px-3 py-1 rounded outline-none text-[13px]"
-            />
-          ) : (
-            <div className="flex items-center gap-2">
-              <span className="text-gray-500 font-medium">Week:</span>
-              <CustomSelect
-                value={selectedWeek}
-                onChange={(val) => setSelectedWeek(Number(val))}
-                options={weekOptions}
-              />
-            </div>
-          )}
+        <div className="relative">
+          <input
+            type="text"
+            placeholder="Search"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className={`${controlCls} min-w-[220px]`}
+          />
+          <Icon icon="mynaui:search" className={iconCls} />
         </div>
 
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            className="flex items-center px-4 py-1 bg-black text-white rounded whitespace-nowrap disabled:opacity-50"
-            onClick={handleDownload}
-            disabled={loading || !filteredData.length}
-          >
-            <FiDownload className="mr-2" />
-            Download
-          </button>
-
-          <div className="relative w-[220px]">
-            <input
-              type="text"
-              placeholder="Search"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="border px-3 py-1 rounded w-full outline-none"
-            />
-
-            <Icon
-              icon="mynaui:search"
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400"
-            />
-          </div>
-        </div>
+        <button
+          type="button"
+          onClick={handleDownload}
+          disabled={loading || !filteredData.length}
+          className="ml-auto flex items-center gap-2 h-[38px] px-4 text-sm rounded-md bg-black text-white hover:bg-gray-800 disabled:bg-gray-300 transition-all whitespace-nowrap"
+        >
+          <FiDownload className="w-4 h-4" />
+          Download
+        </button>
       </div>
 
       <ReportTable columns={columns} data={filteredData} rowsPerPage={10} />

@@ -1,7 +1,7 @@
 import axiosInstance from "./axiosinstance";
-import { 
-  postPayrollAttendance, 
-  getEmployeeBankInfo, 
+import {
+  postPayrollAttendance,
+  getEmployeeBankInfo,
   getPayrollAnalyticsRun,
   getLeaveReport,
   attendanceFullReport,
@@ -9,13 +9,20 @@ import {
   getUnapprovedAbsentReport,
   getHappinessIndexReport,
   getDistanceViolation,
+  getStaffReport,
 } from "../api/api";
 
 /**
  * Fetch Leave Reports with dynamic filtering
  */
- 
-export const fetchLeaveReport = async ({ user_id, from, to, status, manager_approval }) => {
+
+export const fetchLeaveReport = async ({
+  user_id,
+  from,
+  to,
+  status,
+  manager_approval,
+}) => {
   try {
     const params = {
       ...(user_id && { user_id }),
@@ -35,11 +42,19 @@ export const fetchLeaveReport = async ({ user_id, from, to, status, manager_appr
 
     return response.data?.data?.records ?? [];
   } catch (error) {
-    console.error("Error fetching leave report:", error.response?.data || error.message);
+    console.error(
+      "Error fetching leave report:",
+      error.response?.data || error.message,
+    );
     throw error;
   }
 };
-export const fetchPayrollAttendance = async (month, year, leaveType, accrualMethod) => {
+export const fetchPayrollAttendance = async (
+  month,
+  year,
+  leaveType,
+  accrualMethod,
+) => {
   try {
     if (!month || !year) {
       throw new Error("Month and year are required.");
@@ -55,7 +70,10 @@ export const fetchPayrollAttendance = async (month, year, leaveType, accrualMeth
     const response = await axiosInstance.post(postPayrollAttendance, payload);
     return response.data?.data?.employees ?? [];
   } catch (error) {
-    console.error("Error fetching payroll attendance:", error.response?.data || error.message);
+    console.error(
+      "Error fetching payroll attendance:",
+      error.response?.data || error.message,
+    );
     throw error;
   }
 };
@@ -71,7 +89,10 @@ export const fetchEmployeeBankInfo = async (userUuid) => {
 
     return response.data?.data ?? [];
   } catch (error) {
-    console.error("Error fetching employee bank info:", error.response?.data || error.message);
+    console.error(
+      "Error fetching employee bank info:",
+      error.response?.data || error.message,
+    );
     throw error;
   }
 };
@@ -98,7 +119,7 @@ export const fetchPayrollAnalytics = async (month, year) => {
   } catch (error) {
     console.error(
       "Error fetching payroll analytics:",
-      error.response?.data || error.message
+      error.response?.data || error.message,
     );
     throw error;
   }
@@ -124,16 +145,17 @@ export const fetchFullAttendanceReport = async (month, year) => {
       net_salary: Number(item.net_salary || 0),
       lop: Number(item.absent_cut || 0),
       // Keep original raw data if needed
-      original: item, 
+      original: item,
     }));
   } catch (error) {
-    console.error("Error fetching full report:", error.response?.data || error.message);
+    console.error(
+      "Error fetching full report:",
+      error.response?.data || error.message,
+    );
     throw error;
   }
 };
 
-
- 
 export const fetchAttendanceFineRecords = async (month, year, userId = "") => {
   try {
     if (!month || !year) {
@@ -144,18 +166,21 @@ export const fetchAttendanceFineRecords = async (month, year, userId = "") => {
     const requestParams = {
       month: Number(month),
       year: Number(year),
-      ...(userId && { user_id: String(userId) })
+      ...(userId && { user_id: String(userId) }),
     };
 
     // Use axiosInstance instead of non-existent raw axios
     const response = await axiosInstance.get(getFetchAttendanceFineRecords, {
-      params: requestParams
+      params: requestParams,
     });
 
     // Match response layout data extraction pattern
     return response.data;
   } catch (error) {
-    console.error("Error fetching attendance fine records:", error.response?.data || error.message);
+    console.error(
+      "Error fetching attendance fine records:",
+      error.response?.data || error.message,
+    );
     throw error;
   }
 };
@@ -167,24 +192,30 @@ export const fetchAttendanceFineRecords = async (month, year, userId = "") => {
  * @returns {Promise<Array>} Resolves to an array of unapproved absence records.
  */
 export const fetchUnapprovedAbsentReport = async (from, to) => {
-  if (!from || !to) throw new Error("Validation Error: Both fields are required.");
+  if (!from || !to)
+    throw new Error("Validation Error: Both fields are required.");
 
   const clean = (d) => (d instanceof Date ? d.toISOString().split("T")[0] : d);
 
-
   try {
-    const res = await axiosInstance.get(getUnapprovedAbsentReport(clean(from), clean(to)));
+    const res = await axiosInstance.get(
+      getUnapprovedAbsentReport(clean(from), clean(to)),
+    );
     const records = res?.data?.data?.data ?? res?.data?.data ?? [];
     return Array.isArray(records) ? records : [];
   } catch (err) {
-    throw new Error(err.response?.data?.message || err.response?.data?.error || err.message);
+    throw new Error(
+      err.response?.data?.message || err.response?.data?.error || err.message,
+    );
   }
 };
 
 export const fetchHappinessReport = async (filterData) => {
   try {
     if (!filterData || (!filterData.date && !filterData.week)) {
-      throw new Error("Validation Error: Either date or week filter must be provided.");
+      throw new Error(
+        "Validation Error: Either date or week filter must be provided.",
+      );
     }
 
     const payload = {
@@ -195,7 +226,10 @@ export const fetchHappinessReport = async (filterData) => {
     const response = await axiosInstance.post(getHappinessIndexReport, payload);
     return response.data?.data ?? [];
   } catch (error) {
-    console.error("Error fetching happiness index report:", error.response?.data || error.message);
+    console.error(
+      "Error fetching happiness index report:",
+      error.response?.data || error.message,
+    );
     throw error;
   }
 };
@@ -221,7 +255,8 @@ export const fetchDistanceViolationReport = async ({
       throw new Error("Validation Error: Both from and to dates are required.");
     }
 
-    const clean = (d) => (d instanceof Date ? d.toISOString().split("T")[0] : d);
+    const clean = (d) =>
+      d instanceof Date ? d.toISOString().split("T")[0] : d;
 
     const payload = {
       from: clean(from),
@@ -256,7 +291,44 @@ export const fetchDistanceViolationReport = async ({
   } catch (error) {
     console.error(
       "Error fetching distance violation report:",
-      error.response?.data || error.message
+      error.response?.data || error.message,
+    );
+    throw error;
+  }
+};
+
+/**
+ * Fetch staff report with optional filters.
+ * GET /staff/report?name=&uuid=&employee_ref_no=&department=&branch=&gender=
+ * @returns {Promise<Array>} Resolves to an array of staff records.
+ */
+export const fetchStaffReport = async ({
+  name,
+  uuid,
+  employee_ref_no,
+  department,
+  branch,
+  gender,
+} = {}) => {
+  try {
+    const params = {
+      ...(name?.trim() && { name: name.trim() }),
+      ...(uuid?.trim() && { uuid: uuid.trim() }),
+      ...(employee_ref_no?.trim() && {
+        employee_ref_no: employee_ref_no.trim(),
+      }),
+      ...(department && { department: Number(department) }),
+      ...(branch && { branch: Number(branch) }),
+      ...(gender && { gender }),
+    };
+
+    const response = await axiosInstance.get(getStaffReport, { params });
+    const records = response.data?.data ?? [];
+    return Array.isArray(records) ? records : [];
+  } catch (error) {
+    console.error(
+      "Error fetching staff report:",
+      error.response?.data || error.message,
     );
     throw error;
   }

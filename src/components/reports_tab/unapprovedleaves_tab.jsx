@@ -30,10 +30,52 @@ const columns = [
   { key: "violation_count", label: "Violation Count", width: 120 },
 ];
 
+/* One look for every control in the filter row (38px tall) */
+const controlCls =
+  "w-full min-w-[170px] h-[38px] border rounded-md bg-white pl-3 pr-9 text-sm outline-none focus:ring-2 focus:ring-black";
+
+const iconCls =
+  "pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-black";
+
+const labelCls = "text-[10px] text-gray-400 uppercase ml-1";
+
+/* ---------- DATE FIELD (calendar icon, whole field opens the picker) ---------- */
+function DateInput({ label, value, onChange, min, max }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <label className={labelCls}>{label}</label>
+
+      <div className="relative">
+        <input
+          type="date"
+          value={value}
+          min={min}
+          max={max}
+          onChange={(e) => onChange(e.target.value)}
+          className={`${controlCls} relative
+            [&::-webkit-calendar-picker-indicator]:absolute
+            [&::-webkit-calendar-picker-indicator]:inset-0
+            [&::-webkit-calendar-picker-indicator]:h-full
+            [&::-webkit-calendar-picker-indicator]:w-full
+            [&::-webkit-calendar-picker-indicator]:cursor-pointer
+            [&::-webkit-calendar-picker-indicator]:opacity-0`}
+        />
+        <Icon icon="solar:calendar-outline" className={iconCls} />
+      </div>
+    </div>
+  );
+}
+
+// Local-time YYYY-MM-DD (toISOString shifts the day back for IST mornings)
+const formatDateString = (date) => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+};
+
 export default function UnapprovedAbsentReports() {
   const today = new Date();
-
-  const formatDateString = (date) => date.toISOString().split("T")[0];
   const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
 
   const [fromDate, setFromDate] = useState(formatDateString(firstDayOfMonth));
@@ -145,55 +187,41 @@ export default function UnapprovedAbsentReports() {
 
   return (
     <div className="flex flex-col gap-4 text-[13px]">
-      {/* HEADER CONTROLS */}
-      <div className="flex justify-between items-center mb-4 px-2 flex-wrap gap-4">
-        {/* LEFT: DATE RANGE INPUTS */}
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="flex items-center gap-2">
-            <span className="text-gray-500 font-medium">From:</span>
-            <input
-              type="date"
-              value={fromDate}
-              onChange={(e) => setFromDate(e.target.value)}
-              className="border border-gray-300 px-3 py-1 rounded outline-none text-gray-700 bg-white focus:border-black transition-colors"
-            />
-          </div>
+      {/* Filters + search + download in one row, all controls 38px tall and bottom-aligned */}
+      <div className="flex flex-wrap gap-4 items-end bg-gray-50 p-4 rounded-lg border border-gray-100">
+        <DateInput
+          label="From"
+          value={fromDate}
+          onChange={setFromDate}
+          max={toDate}
+        />
 
-          <div className="flex items-center gap-2">
-            <span className="text-gray-500 font-medium">To:</span>
-            <input
-              type="date"
-              value={toDate}
-              onChange={(e) => setToDate(e.target.value)}
-              className="border border-gray-300 px-3 py-1 rounded outline-none text-gray-700 bg-white focus:border-black transition-colors"
-            />
-          </div>
+        <DateInput
+          label="To"
+          value={toDate}
+          onChange={setToDate}
+          min={fromDate}
+        />
+
+        <div className="relative">
+          <input
+            type="text"
+            placeholder="Search"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className={`${controlCls} min-w-[220px]`}
+          />
+          <Icon icon="mynaui:search" className={iconCls} />
         </div>
 
-        {/* RIGHT: INTERACTION BLOCKS */}
-        <div className="flex items-center gap-3">
-          <button
-            className="flex items-center px-4 py-1 bg-black text-white rounded whitespace-nowrap"
-            onClick={handleDownload}
-          >
-            <FiDownload className="mr-2" />
-            Download
-          </button>
-
-          <div className="relative w-[220px]">
-            <input
-              type="text"
-              placeholder="Search"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="border px-3 py-1 rounded w-full outline-none"
-            />
-            <Icon
-              icon="mynaui:search"
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400"
-            />
-          </div>
-        </div>
+        <button
+          onClick={handleDownload}
+          disabled={!filteredData.length}
+          className="ml-auto flex items-center gap-2 h-[38px] px-4 text-sm rounded-md bg-black text-white hover:bg-gray-800 disabled:bg-gray-300 transition-all whitespace-nowrap"
+        >
+          <FiDownload className="w-4 h-4" />
+          Download
+        </button>
       </div>
 
       {/* RENDER REPORT TABLE */}
