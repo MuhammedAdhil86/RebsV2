@@ -135,6 +135,12 @@ export default function PayrollAttendanceReport() {
 
   const columns = [
     { label: "User ID", key: "user_id", align: "center", width: 100 },
+    {
+      label: "Employee Code",
+      key: "employee_ref_no",
+      align: "center",
+      width: 130,
+    },
     { label: "Employee Name", key: "full_name", align: "center", width: 150 },
     { label: "Attendance", key: "attendance_pct", align: "center", width: 120 },
     { label: "Bank Name", key: "bank_name", align: "center", width: 150 },
@@ -170,13 +176,14 @@ export default function PayrollAttendanceReport() {
 
       const headerRow1 = [
         "User ID",
+        "Employee Code",
         "Employee Name",
         "Attendance %",
         "Bank Name",
         "Account Number",
         "IFSC",
       ];
-      const headerRow2 = ["", "", "", "", "", ""];
+      const headerRow2 = ["", "", "", "", "", "", ""];
 
       componentNames.forEach((name) => {
         headerRow1.push(name, "");
@@ -196,6 +203,7 @@ export default function PayrollAttendanceReport() {
       const dataRows = records.map((r) => {
         const row = [
           r.user_id,
+          r.employee_ref_no,
           r.full_name,
           r.attendance_pct,
           r.bank_name,

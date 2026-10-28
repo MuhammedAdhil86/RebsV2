@@ -1,12 +1,5 @@
 import React, { useState } from "react";
-import {
-  ArrowLeft,
-  Save,
-  Landmark,
-  ShieldCheck,
-  User,
-  Info,
-} from "lucide-react";
+import { ArrowLeft, Save, Info } from "lucide-react";
 
 const FinalizePayroll = ({ data, onBack, onLocalSave }) => {
   // Local state for the specific employee
@@ -39,122 +32,168 @@ const FinalizePayroll = ({ data, onBack, onLocalSave }) => {
     });
   };
 
+  // ================= UI HELPERS (display only) =================
+  const statutoryKeys = ["epf_employee", "esi_employee", "pt", "lwf_employee"];
+  const maxRows = Math.max(formData.components.length, statutoryKeys.length);
+
   return (
-    <div className="font-poppins font-normal text-black animate-in fade-in slide-in-from-right-4">
-      {/* Standard Header */}
-      <div className="flex items-center justify-between mb-8 bg-white p-4 border border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] rounded-2xl">
-        <button
-          onClick={onBack}
-          className="flex items-center gap-2 px-4 text-zinc-500 hover:text-black transition-colors"
-        >
-          <ArrowLeft size={18} /> <span>Return without Saving</span>
-        </button>
-        <button
-          onClick={() => onLocalSave(formData)}
-          className="px-10 py-3 bg-black text-white rounded-xl flex items-center gap-2 hover:bg-zinc-800 transition-all shadow-md active:scale-95"
-        >
-          <Save size={16} /> <span>Apply Changes Locally</span>
-        </button>
+    <div className="font-poppins min-h-screen flex flex-col items-center bg-gray-100 py-6 animate-in fade-in slide-in-from-right-4">
+      {/* ================= TOPBAR ================= */}
+      <div className="w-full max-w-5xl bg-white px-8 pt-4 shadow-lg border border-gray-200 border-b-0">
+        <div className="flex justify-between items-center border-b border-gray-200 pb-4 flex-wrap gap-4">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={onBack}
+              className="w-9 h-9 rounded-full border border-gray-300 flex items-center justify-center hover:bg-gray-50 active:bg-gray-100 transition-colors"
+              title="Return without Saving"
+            >
+              <ArrowLeft size={16} className="text-gray-600" />
+            </button>
+            <h1 className="text-lg text-gray-800 font-medium">
+              Finalize Payroll
+            </h1>
+          </div>
+
+          <button
+            onClick={() => onLocalSave(formData)}
+            className="flex items-center gap-2 bg-indigo-600 text-white px-5 py-2 rounded-full text-sm font-medium hover:bg-indigo-700 transition-colors active:scale-95"
+          >
+            <Save size={15} />
+            Apply Changes Locally
+          </button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-12 gap-8 items-start">
-        {/* Profile Info */}
-        <div className="col-span-12 lg:col-span-4 space-y-6">
-          <div className="bg-white p-8 border border-black rounded-3xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
-            <div className="h-16 w-16 bg-zinc-100 border border-black flex items-center justify-center rounded-2xl mb-6">
-              <User size={28} />
-            </div>
-            <h2 className="text-xl uppercase tracking-tighter mb-1">
-              {formData.full_name}
+      {/* ================= BODY ================= */}
+      <div className="w-full max-w-5xl bg-white px-8 py-6 shadow-lg border border-gray-200 border-t-0">
+        {/* ================= EMPLOYEE SUMMARY ================= */}
+        <div className="mb-10">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xs uppercase tracking-[0.2em] text-gray-400">
+              Employee Summary
             </h2>
-            <p className="text-zinc-400 text-[10px] tracking-widest uppercase">
-              Employee ID: {formData.user_id}
-            </p>
-            <div className="mt-8 pt-8 border-t border-zinc-100 space-y-4">
-              <div className="flex justify-between text-[11px] uppercase tracking-widest text-zinc-400">
-                <span>Paid Days</span>
-                <span className="text-black">
-                  {formData.consolidated_summary?.paid_days || 0}
-                </span>
-              </div>
-              <div className="flex justify-between text-[11px] uppercase tracking-widest text-zinc-400">
-                <span>LOP Days</span>
-                <span className="text-black">
-                  {formData.consolidated_summary?.lop_days || 0}
-                </span>
+          </div>
+
+          <div className="flex flex-col lg:flex-row gap-8">
+            <div className="flex-1 grid grid-cols-2 gap-y-3 text-sm content-start">
+              <span className="text-gray-500">Employee Name</span>
+              <span className="text-gray-800">
+                : {formData.full_name || "N/A"}
+              </span>
+
+              <span className="text-gray-500">Employee ID</span>
+              <span className="text-gray-800">: {formData.user_id}</span>
+
+              <span className="text-gray-500">Employee Code</span>
+              <span className="text-gray-800">
+                : {formData.employee_ref_no || "N/A"}
+              </span>
+            </div>
+
+            <div className="w-full lg:w-80 bg-green-50 border border-green-200 rounded-2xl p-6">
+              <p className="text-xs uppercase tracking-widest text-green-700">
+                Attendance
+              </p>
+
+              <div className="mt-5 pt-5 border-t border-green-200 space-y-3 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Paid Days</span>
+                  <span className="">
+                    {formData.consolidated_summary?.paid_days || 0}
+                  </span>
+                </div>
+
+                <div className="flex justify-between">
+                  <span className="text-gray-500">LOP Days</span>
+                  <span className="">
+                    {formData.consolidated_summary?.lop_days || 0}
+                  </span>
+                </div>
               </div>
             </div>
-          </div>
-          <div className="bg-zinc-50 p-6 flex gap-3 items-start border border-zinc-200">
-            <Info size={16} className="text-zinc-400 mt-0.5" />
-            <p className="text-[10px] text-zinc-500 leading-relaxed italic">
-              Changes made here are stored in memory. You must click "Finalize
-              All Staff" on the main page to commit updates to the database.
-            </p>
           </div>
         </div>
 
-        {/* Data Grid */}
-        <div className="col-span-12 lg:col-span-8 space-y-8">
-          {/* Earnings */}
-          <div className="bg-white border border-black rounded-3xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
-            <div className="p-5 border-b border-black bg-zinc-50 flex items-center gap-3 font-normal uppercase tracking-widest text-[12px]">
-              <Landmark size={18} /> Earnings
-            </div>
-            <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
-              {formData.components.map((comp, idx) => (
-                <div key={comp.component_id} className="space-y-2 group">
-                  <label className="text-[10px] text-zinc-400 uppercase tracking-widest group-focus-within:text-black transition-colors">
-                    {comp.name}
-                  </label>
-                  <div className="relative border-b border-zinc-200 focus-within:border-black transition-all">
-                    <span className="absolute left-0 bottom-2 text-zinc-400 text-[14px]">
-                      ₹
-                    </span>
-                    <input
-                      type="number"
-                      value={comp.monthly_amount}
-                      onChange={(e) =>
-                        handleComponentChange(idx, e.target.value)
-                      }
-                      className="w-full pl-6 py-2 bg-transparent outline-none text-[15px]"
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+        {/* ================= NOTE ================= */}
+        <div className="mb-8 flex items-center gap-2.5 bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-xl text-xs font-medium">
+          <Info size={15} className="text-amber-600 shrink-0" />
+          <p>
+            Changes made here are stored in memory. You must click "Finalize All
+            Staff" on the main page to commit updates to the database.
+          </p>
+        </div>
 
-          {/* Statutory */}
-          <div className="bg-white border border-black rounded-3xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
-            <div className="p-5 border-b border-black bg-zinc-50 flex items-center gap-3 font-normal uppercase tracking-widest text-[12px]">
-              <ShieldCheck size={18} /> Statutory Deductions
-            </div>
-            <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
-              {["epf_employee", "esi_employee", "pt", "lwf_employee"].map(
-                (key) => (
-                  <div key={key} className="space-y-2 group">
-                    <label className="text-[10px] text-zinc-400 uppercase tracking-widest group-focus-within:text-black transition-colors">
-                      {key.replace("_", " ")}
-                    </label>
-                    <div className="relative border-b border-zinc-200 focus-within:border-black transition-all">
-                      <span className="absolute left-0 bottom-2 text-zinc-400 text-[14px]">
-                        ₹
-                      </span>
-                      <input
-                        type="number"
-                        value={formData.statutory[key]}
-                        onChange={(e) =>
-                          handleStatutoryChange(key, e.target.value)
-                        }
-                        className="w-full pl-6 py-2 bg-transparent outline-none text-[15px]"
-                      />
-                    </div>
-                  </div>
-                ),
-              )}
-            </div>
-          </div>
+        {/* ================= TABLE ================= */}
+        <div className="border border-gray-200 rounded-xl overflow-hidden">
+          <table className="w-full text-sm table-fixed">
+            <thead className="bg-gray-50 border-b border-gray-200">
+              <tr>
+                <th className="w-[25%] px-2 py-4 text-center text-gray-700 uppercase">
+                  Earnings
+                </th>
+                <th className="w-[25%] px-2 py-4 text-center text-gray-700 uppercase">
+                  Amount
+                </th>
+                <th className="w-[25%] px-2 py-4 text-center text-gray-700 uppercase border-l">
+                  Statutory Deductions
+                </th>
+                <th className="w-[25%] px-2 py-4 text-center text-gray-700 uppercase">
+                  Amount
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {[...Array(maxRows)].map((_, idx) => {
+                const comp = formData.components[idx];
+                const key = statutoryKeys[idx];
+
+                return (
+                  <tr key={idx} className="border-b border-gray-100">
+                    <td className="px-2 py-3 text-center text-gray-700 truncate">
+                      {comp?.name || ""}
+                    </td>
+                    <td className="px-2 py-3 text-center">
+                      {comp && (
+                        <div className="relative mx-auto w-32 border-b border-gray-200 focus-within:border-indigo-600 transition-all">
+                          <span className="absolute left-0 bottom-2 text-gray-400 text-[13px]">
+                            ₹
+                          </span>
+                          <input
+                            type="number"
+                            value={comp.monthly_amount}
+                            onChange={(e) =>
+                              handleComponentChange(idx, e.target.value)
+                            }
+                            className="w-full pl-5 py-1.5 bg-transparent outline-none text-center text-gray-800"
+                          />
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-2 py-3 text-center border-l text-gray-700 truncate">
+                      {key ? key.replace("_", " ") : ""}
+                    </td>
+                    <td className="px-2 py-3 text-center">
+                      {key && (
+                        <div className="relative mx-auto w-32 border-b border-gray-200 focus-within:border-indigo-600 transition-all">
+                          <span className="absolute left-0 bottom-2 text-gray-400 text-[13px]">
+                            ₹
+                          </span>
+                          <input
+                            type="number"
+                            value={formData.statutory[key]}
+                            onChange={(e) =>
+                              handleStatutoryChange(key, e.target.value)
+                            }
+                            className="w-full pl-5 py-1.5 bg-transparent outline-none text-center text-red-500"
+                          />
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

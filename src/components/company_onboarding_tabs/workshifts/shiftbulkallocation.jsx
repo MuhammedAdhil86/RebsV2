@@ -32,44 +32,100 @@ const ShiftBulkAllocation = () => {
   const [toDate, setToDate] = useState("");
 
   /* ================= COLUMN DEFINITION ================= */
+  const ALIGN = {
+    left: "justify-start text-left",
+    center: "justify-center text-center",
+  };
+
+  // Same wrapper for header + cell => identical alignment
+  const Cell = ({ align = "center", children }) => (
+    <div className={`flex items-center w-full ${ALIGN[align]}`}>{children}</div>
+  );
+
+  // Show first 15 chars + "...", full text on hover
+  const Truncate = ({ value, max = 15 }) => {
+    const text = value == null ? "" : String(value);
+    if (text.length <= max) return <span>{text}</span>;
+    return (
+      <span title={text} className="cursor-default">
+        {text.slice(0, max)}...
+      </span>
+    );
+  };
+
   const columns = [
     {
       key: "selection",
-      label: (
-        <input
-          type="checkbox"
-          className="cursor-pointer"
-          onChange={(e) => handleSelectAll(e.target.checked)}
-          checked={users.length > 0 && selectedUsers.length === users.length}
-        />
-      ),
+      align: "left",
       width: 50,
+      label: (
+        <Cell align="left">
+          <input
+            type="checkbox"
+            className="cursor-pointer"
+            onChange={(e) => handleSelectAll(e.target.checked)}
+            checked={users.length > 0 && selectedUsers.length === users.length}
+          />
+        </Cell>
+      ),
       render: (_, row) => (
-        <input
-          type="checkbox"
-          className="cursor-pointer"
-          checked={selectedUsers.includes(row.uuid)} // ✅ Matches your log: using row.uuid
-          onChange={() => toggleUserSelection(row.uuid)}
-        />
+        <Cell align="left">
+          <input
+            type="checkbox"
+            className="cursor-pointer"
+            checked={selectedUsers.includes(row.uuid)}
+            onChange={() => toggleUserSelection(row.uuid)}
+          />
+        </Cell>
       ),
     },
-    { key: "full_name", label: "Staff Name", align: "left" },
     {
-      key: "uuid", // ✅ Matches your log: uuid is the Staff ID
-      label: "Staff ID",
-      align: "center",
+      key: "full_name",
+      align: "left",
+      label: <Cell align="left">Staff Name</Cell>,
+      render: (val) => (
+        <Cell align="left">
+          <Truncate value={val} />
+        </Cell>
+      ),
     },
     {
-      key: "department", // ✅ Matches your log: department name is in 'department'
-      label: "Department",
+      key: "uuid",
       align: "center",
-      render: (val) => val || <span className="text-gray-400">N/A</span>,
+      label: <Cell align="center">Staff ID</Cell>,
+      render: (val) => (
+        <Cell align="center">
+          <Truncate value={val} />
+        </Cell>
+      ),
+    },
+    {
+      key: "department",
+      align: "center",
+      label: <Cell align="center">Department</Cell>,
+      render: (val) => (
+        <Cell align="center">
+          {val ? (
+            <Truncate value={val} />
+          ) : (
+            <span className="text-gray-400">N/A</span>
+          )}
+        </Cell>
+      ),
     },
     {
       key: "designation",
-      label: "Designation",
       align: "center",
-      render: (val) => val || <span className="text-gray-400">N/A</span>,
+      label: <Cell align="center">Designation</Cell>,
+      render: (val) => (
+        <Cell align="center">
+          {val ? (
+            <Truncate value={val} />
+          ) : (
+            <span className="text-gray-400">N/A</span>
+          )}
+        </Cell>
+      ),
     },
   ];
 

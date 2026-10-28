@@ -179,7 +179,7 @@ const Payslip = () => {
           {/* ================= HEADER ================= */}
           <div className="flex justify-between items-start border-b border-gray-200 pb-6 mb-8">
             <div className="flex items-start gap-4">
-              <div className="w-16 h-16 overflow-hidden flex items-center justify-center">
+              <div className="w-[16] h-16 overflow-hidden flex items-center justify-center">
                 <img
                   src={activeCompanyLogo}
                   alt="Company Logo"
@@ -191,7 +191,7 @@ const Payslip = () => {
               </div>
 
               <div>
-                <h1 className="text-2xl text-gray-800">{companyName}</h1>
+                <h1 className="text-xl text-gray-800">{companyName}</h1>
                 <p className="text-sm text-gray-500 mt-1 leading-relaxed max-w-md">
                   {companyAddress}
                 </p>
@@ -237,8 +237,13 @@ const Payslip = () => {
                   : {employee.full_name || "N/A"}
                 </span>
 
-                <span className="text-gray-500">Employee ID</span>
+                <span className="text-gray-500">User ID</span>
                 <span className="text-gray-800">: {employee.user_id}</span>
+
+                <span className="text-gray-500">Employee Code</span>
+                <span className="text-gray-800">
+                  : {employee.employee_ref_no || "N/A"}
+                </span>
 
                 <span className="text-gray-500">Designation</span>
                 <span className="text-gray-800">
