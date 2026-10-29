@@ -121,8 +121,21 @@ const getDesignation = (employee) => {
 // "2026-10-20T10:00:00Z" -> { date: "2026-10-20", time: "10:00" }
 const splitDateTime = (value) => {
   if (!value) return { date: "", time: "" };
-  const clean = value.includes("Z") ? value.split("Z")[0] : value;
-  const [date, time = ""] = clean.split("T");
+
+  // Date object (calendar events carry start/end as Dates) or a timestamp
+  if (value instanceof Date || typeof value === "number") {
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return { date: "", time: "" };
+    const pad = (n) => String(n).padStart(2, "0");
+    return {
+      date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
+      time: `${pad(d.getHours())}:${pad(d.getMinutes())}`,
+    };
+  }
+
+  const str = String(value);
+  const clean = str.includes("Z") ? str.split("Z")[0] : str;
+  const [date, time = ""] = clean.split(/[T ]/);
   return { date, time: time.slice(0, 5) };
 };
 
