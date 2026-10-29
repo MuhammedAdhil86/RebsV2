@@ -567,7 +567,12 @@ export default function Events({ userId, userName }) {
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         PaperProps={{
-          className: "w-full sm:w-[549px] max-w-full shadow-2xl border-none",
+          sx: {
+            width: { xs: "100%", md: "70vw", lg: "50vw" },
+            minWidth: { lg: 720 },
+            maxWidth: "100vw",
+            boxShadow: "0 25px 50px rgba(0,0,0,0.25)",
+          },
         }}
       >
         <div className="p-4 sm:p-6 h-full flex flex-col font-poppins text-[12px]">
