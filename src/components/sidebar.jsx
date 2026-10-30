@@ -102,99 +102,101 @@ function SideBar({ isCollapsed, toggleSidebar }) {
       : `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=random`;
 
   const userId = user?.id || "";
-  const userNameSlug = user
-    ? `${user.first_name}-${user.last_name}`.toLowerCase().replace(/\s+/g, "-")
-    : "user";
 
   const icons = {
-    hr: <Icon icon="si:dashboard-line" width="20" />,
-    muster: <Icon icon="mynaui:table" width="20" />,
-    events: <Icon icon="carbon:event" width="20" />,
-    email: <Icon icon="ic:outline-email" width="20" />,
-    announcement: <Icon icon="lucide:megaphone" width="20" />,
-    payroll: <Icon icon="fluent:payment-20-regular" width="20" />,
-    reports: <Icon icon="iconoir:reports" width="20" />,
-    asset: <Icon icon="fluent:web-asset-16-regular" width="20" />,
-    manageEmployees: <Icon icon="clarity:employee-group-line" width="20" />,
-    workfromhome: (
+    attendance: <Icon icon="si:dashboard-line" width="20" />,
+    requests: (
       <Icon
         icon="material-symbols-light:home-work-outline-rounded"
         width="20"
       />
     ),
+    performance: <Icon icon="lucide:target" width="20" />,
+    employees: <Icon icon="clarity:employee-group-line" width="20" />,
+    assets: <Icon icon="fluent:web-asset-16-regular" width="20" />,
+    shift: <Icon icon="ic:twotone-manage-history" width="20" />,
+    events: <Icon icon="carbon:event" width="20" />,
+    announcement: <Icon icon="lucide:megaphone" width="20" />,
+    letter: <Icon icon="mynaui:table" width="20" />,
+    email: <Icon icon="ic:outline-email" width="20" />,
     insurance: <Icon icon="solar:shield-user-outline" width="20" />,
     timesheet: <Icon icon="lucide:calendar-clock" width="20" />,
-    organisationonboard: <Icon icon="octicon:organization-24" width="20" />,
-    employeeOnboard: <Icon icon="clarity:employee-line" width="20" />,
-    Hiring: <Icon icon="hugeicons:job-link" width="20" />,
-    enquiry: <Icon icon="hugeicons:quill-write-02" width="20" />,
-    interview: <Icon icon="mage:message-conversation" width="20" />,
-    manageShift: <Icon icon="ic:twotone-manage-history" width="20" />,
-    kpi: <Icon icon="lucide:target" width="20" />,
+    reports: <Icon icon="iconoir:reports" width="20" />,
+    payroll: <Icon icon="fluent:payment-20-regular" width="20" />,
+    onboarding: <Icon icon="clarity:employee-line" width="20" />,
+    exit: <Icon icon="material-symbols:logout" width="20" />,
+    jobPosting: <Icon icon="hugeicons:job-link" width="20" />,
+    talentPool: <Icon icon="hugeicons:quill-write-02" width="20" />,
+    orgSettings: <Icon icon="octicon:organization-24" width="20" />,
   };
 
   const menuItems = [
     {
-      section: "HUMAN RESOURCES",
+      section: "PEOPLE MANAGEMENT",
       items: [
-        { title: "HR Dashboard", path: `/dashboard`, icon: icons.hr },
-        { title: "Letter", path: "/letter", icon: icons.muster },
-        { title: "Email", path: "/email", icon: icons.email },
+        { title: "Attendance", path: "/dashboard", icon: icons.attendance },
+        { title: "Requests", path: "/requests", icon: icons.requests },
+        { title: "Performance", path: "/kpi", icon: icons.performance },
+        { title: "Employees", path: "/manageemployee", icon: icons.employees },
+        { title: "Assets", path: "/asset", icon: icons.assets },
+        { title: "Shift Management", path: "/shift", icon: icons.shift },
         { title: "Events", path: "/events", icon: icons.events },
         {
           title: "Announcements",
           path: "/announcements",
           icon: icons.announcement,
         },
+        { title: "Letter", path: "/letter", icon: icons.letter },
+        { title: "Email", path: "/email", icon: icons.email },
+        {
+          title: "Insurance",
+          path: "/insurance",
+          icon: icons.insurance,
+        },
+        { title: "Timesheet", path: "/timesheet", icon: icons.timesheet },
+        {
+          title: "Reports & Analytics",
+          path: "/reports",
+          icon: icons.reports,
+        },
+      ],
+    },
+    {
+      section: "PAYROLL MANAGEMENT",
+      items: [
         {
           title: "Payroll",
-          path: userId ? `/payroll` : "#",
+          path: userId ? "/payroll" : "#",
           icon: icons.payroll,
         },
-        { title: "Manage Shift", path: `/shift`, icon: icons.manageShift },
-        { title: "Reports", path: "/reports", icon: icons.reports },
-        { title: "Asset Manager", path: "/asset", icon: icons.asset },
-        {
-          title: "Manage Employees",
-          path: `/manageemployee`,
-          icon: icons.manageEmployees,
-        },
-
-        {
-          title: "KPI",
-          path: `/kpi`,
-          icon: icons.kpi,
-        },
-        { title: "Requests", path: `/requests`, icon: icons.workfromhome },
-        { title: "Insurance", path: `/insurance`, icon: icons.insurance },
-        { title: "Timesheet", path: `/timesheet`, icon: icons.timesheet },
       ],
     },
     {
-      section: "ONBOARDING",
+      section: "EMPLOYEE LIFECYCLE",
       items: [
         {
-          title: "Organization",
+          title: "Onboarding",
+          path: "/employeeonboarding",
+          icon: icons.onboarding,
+        },
+        { title: "Exit & Clearance", path: "/exit", icon: icons.exit },
+      ],
+    },
+    {
+      section: "TALENT ACQUISITION",
+      items: [
+        { title: "Job Posting", path: "/job", icon: icons.jobPosting },
+        { title: "Talent Pool", path: "/jobenquiry", icon: icons.talentPool },
+      ],
+    },
+    {
+      section: "SETTINGS & CONFIGURATION",
+      items: [
+        {
+          title: "Organisational Settings",
           path: "/onboarding",
-          icon: icons.organisationonboard,
+          icon: icons.orgSettings,
         },
-        {
-          title: "Employee",
-          path: `/employeeonboarding`,
-          icon: icons.employeeOnboard,
-        },
-      ],
-    },
-    {
-      section: "HIRING PROCESS",
-      items: [
-        { title: "Job Creation", path: "/job", icon: icons.Hiring },
-        { title: "Job Enquiry", path: "/jobenquiry", icon: icons.enquiry },
-        // {
-        //   title: "Interview Process",
-        //   path: userId ? `/u/${userId}/${userNameSlug}/interviewprocess` : "#",
-        //   icon: icons.interview,
-        // },
       ],
     },
   ];

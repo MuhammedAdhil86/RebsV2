@@ -485,6 +485,8 @@ export const fetchShiftsUrl = "/shifts/fetch";
 export const allocateShiftUrl = "/shifts/allocate";
 export const userShiftDetailsUrl = (uuid) =>
   `/master/shift-attendance-user-type/${uuid}`;
+
+export const getShiftMappedPolicies = "/shifts/mapped-policies";
 export const userLocationDeviceUrl = (uuid) =>
   `/master/location-device/${uuid}`;
 export const getEmployeeLeavePolicy = (uuid) =>

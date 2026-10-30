@@ -7,8 +7,8 @@ import {
   allocateAttendancePolicy,
   getShifts,
   allocateLeavePolicy,
-   regularizeAttendanceApproval,
-   postCreateLetterPdfTemplate,
+  regularizeAttendanceApproval,
+  postCreateLetterPdfTemplate,
   allocateAllowance,
   allocateCompliance,
   getRoles,
@@ -19,17 +19,18 @@ import {
   allocateRoles,
   deleteDesignation,
   updateDesignation,
-  getPolicies,postLeaveBulkAllocation,
+  getPolicies,
+  postLeaveBulkAllocation,
   getLeavePolicy,
   getAllowanceData,
   getCompliances,
   approveCompanyClaim,
   getCountry,
   getCompantClaims,
-
+  getShiftMappedPolicies,
   companyLayoutStatus,
   RemainingRegularization,
-   deleteCompanyLayout,
+  deleteCompanyLayout,
   updateCompanyDet,
   postBranch,
   getOrgType,
@@ -41,7 +42,7 @@ import {
   getPresetAttendanceTemplate,
   deleteAttendancePolicyUrl,
   postDesignation,
-  getWeeklyOffDefault ,
+  getWeeklyOffDefault,
   postShiftcreate,
   getWeeklyOffBranch,
   companyPreview,
@@ -69,9 +70,9 @@ export const getDepartmentData = async () => {
   try {
     const response = await axiosInstance.get(getDepartment);
 
-    console.log("Full API Response:", response);           // full axios response
-    console.log("Department Data:", response.data);        // response.data
-    console.log("Department List:", response.data.data);   // actual array you use
+    console.log("Full API Response:", response); // full axios response
+    console.log("Department Data:", response.data); // response.data
+    console.log("Department List:", response.data.data); // actual array you use
 
     return response.data.data;
   } catch (error) {
@@ -83,7 +84,7 @@ export const getDepartmentData = async () => {
 export const getDesignationData = async () => {
   try {
     const response = await axiosInstance.get(getDesignations);
- 
+
     return response.data.data;
   } catch (error) {
     console.error("Error fetching designations details:", error);
@@ -110,7 +111,7 @@ export const allocateAttPolicy = async (uuid, attendanceData) => {
   try {
     const response = await axiosInstance.post(
       `${allocateAttendancePolicy}`,
-      attendanceData
+      attendanceData,
     );
     return response.data;
   } catch (error) {
@@ -130,14 +131,13 @@ export const ShiftDataGet = async () => {
   }
 };
 
-
 export const getShiftPolicyById = async (id) => {
   try {
     const response = await axiosInstance.get(`/shifts/staff/get/${id}`);
-    
+
     // FIX: Access the first element [0] because the API returns an array
     if (response.data && response.data.data && response.data.data.length > 0) {
-      return response.data.data[0]; 
+      return response.data.data[0];
     }
     return null;
   } catch (error) {
@@ -146,12 +146,11 @@ export const getShiftPolicyById = async (id) => {
   }
 };
 
-
 export const allocateLeaPolicy = async (uuid, policyData) => {
   try {
     const response = await axiosInstance.post(
       `${allocateLeavePolicy}/${uuid}`,
-      policyData
+      policyData,
     );
     return response.data;
   } catch (error) {
@@ -160,11 +159,10 @@ export const allocateLeaPolicy = async (uuid, policyData) => {
   }
 };
 
-
 export const fetchPrivilegeLeavePolicy = async (employeeUuid) => {
   try {
     const response = await axiosInstance.get(
-      `/leave-policy/allocated/get/${employeeUuid}`
+      `/leave-policy/allocated/get/${employeeUuid}`,
     );
     return response.data.data;
   } catch (error) {
@@ -175,7 +173,9 @@ export const fetchPrivilegeLeavePolicy = async (employeeUuid) => {
 
 export const fetchPrivilegeAllowance = async (employeeUuid) => {
   try {
-    const response = await axiosInstance.get(`/allowance/allocated/get/${employeeUuid}`);
+    const response = await axiosInstance.get(
+      `/allowance/allocated/get/${employeeUuid}`,
+    );
     return response.data.data;
   } catch (error) {
     console.error("Error fetching allowance policy:", error);
@@ -206,7 +206,7 @@ export const allocateAllowanceData = async (uuid, allowanceData) => {
   try {
     const response = await axiosInstance.post(
       `${allocateAllowance}/${uuid}`,
-      allowanceData
+      allowanceData,
     );
     return response.data;
   } catch (error) {
@@ -215,10 +215,11 @@ export const allocateAllowanceData = async (uuid, allowanceData) => {
   }
 };
 
-
 export const fetchPrivilegeCompliance = async (employeeUuid) => {
   try {
-    const response = await axiosInstance.get(`/compliance/allocated/get/${employeeUuid}`);
+    const response = await axiosInstance.get(
+      `/compliance/allocated/get/${employeeUuid}`,
+    );
     return response.data.data;
   } catch (error) {
     console.error("Error fetching compliance policy:", error);
@@ -226,12 +227,11 @@ export const fetchPrivilegeCompliance = async (employeeUuid) => {
   }
 };
 
-
 export const allocateComplianceData = async (uuid, complianceData) => {
   try {
     const response = await axiosInstance.post(
       `${allocateCompliance}/${uuid}`,
-      complianceData
+      complianceData,
     );
     return response.data;
   } catch (error) {
@@ -255,7 +255,7 @@ export const allocateRolesData = async (uuid, rolesData) => {
   try {
     const response = await axiosInstance.put(
       `${allocateRoles}/${uuid}`,
-      rolesData
+      rolesData,
     );
     return response.data;
   } catch (error) {
@@ -275,7 +275,6 @@ export const fetchPolicyData = async () => {
   }
 };
 
-
 export const fetchLeavePolicy = async () => {
   try {
     const response = await axiosInstance.get(getLeavePolicy);
@@ -286,7 +285,6 @@ export const fetchLeavePolicy = async () => {
     throw error;
   }
 };
-
 
 export const AllowanceDataGet = async () => {
   try {
@@ -312,7 +310,10 @@ export const ComplianceDataGet = async () => {
 
 export const changeAttendanceReq = async (uuid, attendanceStatus) => {
   try {
-    const response = await axiosInstance.put(`/staff/attendance-require/${uuid}`, attendanceStatus);
+    const response = await axiosInstance.put(
+      `/staff/attendance-require/${uuid}`,
+      attendanceStatus,
+    );
     return response.data;
   } catch (error) {
     console.error("Error updating attendance required status:", error);
@@ -320,9 +321,11 @@ export const changeAttendanceReq = async (uuid, attendanceStatus) => {
   }
 };
 
-export const fetchEmployeeShift = async (user_id,month,year) => {
+export const fetchEmployeeShift = async (user_id, month, year) => {
   try {
-    const response = await axiosInstance.get(`/shift-policy/get/${user_id}/${month}/${year}`);
+    const response = await axiosInstance.get(
+      `/shift-policy/get/${user_id}/${month}/${year}`,
+    );
     console.log("employee shift details:", response);
     return response.data.data;
   } catch (error) {
@@ -331,13 +334,12 @@ export const fetchEmployeeShift = async (user_id,month,year) => {
   }
 };
 
-
 export const addShift = async (shiftData, user_id, start_date, end_date) => {
   try {
     // Pass start_date and end_date directly in the URL path
     const response = await axiosInstance.post(
-      `/shift-policy/allocate/${user_id}/${start_date}/${end_date}`, 
-      shiftData
+      `/shift-policy/allocate/${user_id}/${start_date}/${end_date}`,
+      shiftData,
     );
     return response.data;
   } catch (error) {
@@ -346,10 +348,11 @@ export const addShift = async (shiftData, user_id, start_date, end_date) => {
   }
 };
 
-
 export const fetchTimeline = async (month, year, user_id) => {
   try {
-    const response = await axiosInstance.get(`/admin/staff/activity/timeline/${month}/${year}/${user_id}`);
+    const response = await axiosInstance.get(
+      `/admin/staff/activity/timeline/${month}/${year}/${user_id}`,
+    );
     console.log("timeline activity response:", response);
     return response.data.data;
   } catch (error) {
@@ -358,10 +361,11 @@ export const fetchTimeline = async (month, year, user_id) => {
   }
 };
 
-
 export const fetchPieChart = async (month, year, user_id) => {
   try {
-    const response = await axiosInstance.get(`/admin/staff/evaluation/${month}/${year}/${user_id}`);
+    const response = await axiosInstance.get(
+      `/admin/staff/evaluation/${month}/${year}/${user_id}`,
+    );
 
     return response.data.data;
   } catch (error) {
@@ -403,7 +407,6 @@ export const OrganizationType = async () => {
     throw error;
   }
 };
-
 
 export const addBranch = async (branchData) => {
   try {
@@ -494,7 +497,8 @@ export const addDesignation = async (DesignationData) => {
     console.error("Error adding designation:", error);
     throw error;
   }
-};export const editDivisionData = async (divisionData) => {
+};
+export const editDivisionData = async (divisionData) => {
   try {
     const response = await axiosInstance.put(updateDivision, divisionData);
     return response.data;
@@ -539,11 +543,13 @@ export const getAttendancePolicyData = async () => {
     console.log("Policies:", res.data.data);
     return res.data.data;
   } catch (err) {
-    console.error("Error fetching attendance policies:", err.response?.data || err.message);
+    console.error(
+      "Error fetching attendance policies:",
+      err.response?.data || err.message,
+    );
     return [];
   }
 };
-
 
 export const allocateShiftBulkUpsert = async (payload) => {
   try {
@@ -589,9 +595,9 @@ export const fetchPresetAttendanceTemplates = async () => {
   try {
     // Now 'getPresetAttendanceTemplate' refers correctly to the imported string "/attendance-policy/defaults"
     const response = await axiosInstance.get(getPresetAttendanceTemplate);
-    
+
     console.log("Preset Templates response:", response);
-    
+
     // Correctly drilling down into the data
     return response.data.data;
   } catch (error) {
@@ -603,14 +609,16 @@ export const fetchPresetAttendanceTemplates = async () => {
 export const updatePresetTemplate = async (id, payload) => {
   try {
     // This calls /attendance-policy/update/defaults/67
-    const response = await axiosInstance.put(updatePresetAttendanceTemplate(id), payload);
+    const response = await axiosInstance.put(
+      updatePresetAttendanceTemplate(id),
+      payload,
+    );
     return response.data;
   } catch (error) {
     console.error("Error updating preset template:", error);
     throw error;
   }
 };
-
 
 export const deleteattendancepolicy = async (id) => {
   try {
@@ -620,7 +628,6 @@ export const deleteattendancepolicy = async (id) => {
     throw error;
   }
 };
-
 
 export const deleteshift = async (id) => {
   if (!id) throw new Error("ID is required");
@@ -635,7 +642,11 @@ export const deleteshift = async (id) => {
   }
 };
 
-export const approveRegularization = async (requestId, status, remarks = "") => {
+export const approveRegularization = async (
+  requestId,
+  status,
+  remarks = "",
+) => {
   // 1. Basic Validation
   if (!requestId) throw new Error("Request ID is required");
   if (!status) throw new Error("Status is required (approved/rejected)");
@@ -644,7 +655,7 @@ export const approveRegularization = async (requestId, status, remarks = "") => 
     // 2. API Call
     const response = await axiosInstance.put(regularizeAttendanceApproval, {
       request_id: requestId,
-      status,  // Shorthand for status: status
+      status, // Shorthand for status: status
       remarks, // Shorthand for remarks: remarks
     });
 
@@ -652,7 +663,10 @@ export const approveRegularization = async (requestId, status, remarks = "") => 
     return response.data;
   } catch (error) {
     // 4. Log the error for developers and re-throw for the UI toast
-    console.error("Regularization Approval Error:", error.response?.data || error.message);
+    console.error(
+      "Regularization Approval Error:",
+      error.response?.data || error.message,
+    );
     throw error;
   }
 };
@@ -674,7 +688,9 @@ export const getWeeklyOffByYear = async (year) => {
 
 export const getWeeklyOffByBranch = async (year, branchId) => {
   try {
-    const url = getWeeklyOffBranch.replace(":year", year).replace(":branchId", branchId);
+    const url = getWeeklyOffBranch
+      .replace(":year", year)
+      .replace(":branchId", branchId);
     const response = await axiosInstance.get(url);
     // FIX: Same nesting here
     const list = response.data?.data?.weekly_offs || [];
@@ -689,12 +705,12 @@ export const fetchRemainingRegularization = async (uuid) => {
   try {
     // 💡 Simply execute the function directly instead of using .replace()
     const response = await axiosInstance.get(RemainingRegularization(uuid));
-    
+
     const data = response.data?.data || response.data || {};
     return data;
   } catch (error) {
     console.error("Error fetching remaining regularizations:", error);
-    return null; 
+    return null;
   }
 };
 
@@ -714,9 +730,9 @@ export const updateCompanyClaimStatus = async (id, action) => {
     const backendStatus = action.toLowerCase();
 
     const response = await axiosInstance.put(approveCompanyClaim(id), {
-      status: backendStatus
+      status: backendStatus,
     });
-    
+
     console.log("Approve/Reject claim response:", response);
     return response.data;
   } catch (error) {
@@ -742,7 +758,7 @@ export const createLetterPdfTemplate = async (templateData) => {
   try {
     const response = await axiosInstance.post(
       postCreateLetterPdfTemplate,
-      templateData
+      templateData,
     );
     return response.data;
   } catch (error) {
@@ -756,7 +772,7 @@ export const createLetterPdfTemplateTest = async (templateData) => {
   try {
     const response = await testingInstance.post(
       postCreateLetterPdfTemplate,
-      templateData
+      templateData,
     );
     return response.data;
   } catch (error) {
@@ -773,14 +789,14 @@ export const updateLetterPdfTemplateService = async (id, payload) => {
   try {
     const response = await axiosInstance.put(
       `${putUpdateLetterPdfTemplate}?id=${id}`,
-      payload
+      payload,
     );
     return response.data;
   } catch (error) {
     if (error.response?.data) throw error.response.data;
     throw error;
   }
-};// Make sure axiosInstance is imported at the top of companyService.js, e.g.
+}; // Make sure axiosInstance is imported at the top of companyService.js, e.g.
 // import axiosInstance from "./axiosInstance";
 const LAYOUT_TYPES = ["email", "letter"];
 
@@ -790,7 +806,7 @@ const LAYOUT_TYPES = ["email", "letter"];
 const getBody = (res) =>
   res && (res.message !== undefined || res.status_code !== undefined)
     ? res
-    : res?.data ?? res;
+    : (res?.data ?? res);
 
 const normalizeError = (error, fallback) => {
   if (error?.code === "ERR_CANCELED") return error;
@@ -822,15 +838,23 @@ export const fetchCompanyLayouts = async ({ layoutType, signal } = {}) => {
 };
 
 // PUT /admin/company/layout/{layoutType}  (create or update)
-export const updateCompanyLayout = async (layoutType, formData, { signal } = {}) => {
+export const updateCompanyLayout = async (
+  layoutType,
+  formData,
+  { signal } = {},
+) => {
   if (!LAYOUT_TYPES.includes(layoutType)) {
     throw new Error(`Invalid layout type: ${layoutType}`);
   }
   try {
-    const res = await axiosInstance.put(companyLayoutByType(layoutType), formData, {
-      signal,
-      headers: { "Content-Type": "multipart/form-data" },
-    });
+    const res = await axiosInstance.put(
+      companyLayoutByType(layoutType),
+      formData,
+      {
+        signal,
+        headers: { "Content-Type": "multipart/form-data" },
+      },
+    );
     return getBody(res); // { status_code, message, data: { id, background_image_url } }
   } catch (error) {
     throw normalizeError(error, "Failed to save layout");
@@ -843,7 +867,10 @@ export const deleteLayout = async (id, layoutType, { signal } = {}) => {
     throw new Error(`Invalid layout type: ${layoutType}`);
   }
   try {
-    const res = await axiosInstance.delete(deleteCompanyLayout(id, layoutType), { signal });
+    const res = await axiosInstance.delete(
+      deleteCompanyLayout(id, layoutType),
+      { signal },
+    );
     return getBody(res);
   } catch (error) {
     throw normalizeError(error, "Failed to delete layout");
@@ -851,7 +878,12 @@ export const deleteLayout = async (id, layoutType, { signal } = {}) => {
 };
 
 // PUT /admin/company/layout/{layout_type}/{layout_id}/status
-export const updateLayoutStatus = async (layoutType, layoutId, isActive, { signal } = {}) => {
+export const updateLayoutStatus = async (
+  layoutType,
+  layoutId,
+  isActive,
+  { signal } = {},
+) => {
   if (!LAYOUT_TYPES.includes(layoutType)) {
     throw new Error(`Invalid layout type: ${layoutType}`);
   }
@@ -864,5 +896,18 @@ export const updateLayoutStatus = async (layoutType, layoutId, isActive, { signa
     return getBody(res);
   } catch (error) {
     throw normalizeError(error, "Failed to update layout status");
+  }
+};
+// GET /shifts/mapped-policies?shift_id=2
+export const fetchShiftMappedPolicies = async (shiftId) => {
+  try {
+    const response = await axiosInstance.get(getShiftMappedPolicies, {
+      params: { shift_id: shiftId },
+    });
+    const list = response?.data?.data;
+    return Array.isArray(list) ? list : [];
+  } catch (error) {
+    console.error(`Error fetching policies for shift ${shiftId}:`, error);
+    throw error;
   }
 };

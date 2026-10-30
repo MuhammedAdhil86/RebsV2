@@ -4,6 +4,18 @@ import useEmployeeStore from "../../store/employeeStore";
 import axiosInstance from "../../service/axiosinstance";
 import toast from "react-hot-toast"; // uses the global <Toaster /> from App.jsx
 
+// Formats "2003-02-02T00:00:00Z" as "02 Feb 2003" (no timezone shift)
+const formatDob = (value) => {
+  if (!value) return "-";
+  const [y, m, d] = String(value).slice(0, 10).split("-").map(Number);
+  if (!y || !m || !d) return "-";
+  return new Date(y, m - 1, d).toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+};
+
 export default function BasicInfoSection() {
   const { selectedEmployee, setSelectedEmployee } = useEmployeeStore();
   const [isEditing, setIsEditing] = useState(false);
@@ -20,10 +32,11 @@ export default function BasicInfoSection() {
   const data = [
     { label: "First Name", key: "first_name" },
     { label: "Last Name", key: "last_name" },
+    { label: "Date of Birth", key: "date_of_birth", readOnly: true },
     { label: "Email Address", key: "email" },
     { label: "Contact Number", key: "ph_no" },
     { label: "Salary", key: "basic_salary" },
-    { label: "Employee ID", key: "uuid" },
+    { label: "Employee ID", key: "uuid", readOnly: true },
   ];
 
   const handleChange = (key, value) => {
@@ -36,6 +49,7 @@ export default function BasicInfoSection() {
     try {
       setLoading(true);
 
+      // date_of_birth is read-only and intentionally NOT part of the payload
       const payload = {
         first_name: formData.first_name,
         last_name: formData.last_name,
@@ -94,13 +108,15 @@ export default function BasicInfoSection() {
           >
             <span className="text-gray-500 text-[12px]">{item.label}</span>
             <span className="font-medium text-gray-800 min-w-0 break-words text-[13px]">
-              {isEditing && item.key !== "uuid" ? (
+              {isEditing && !item.readOnly ? (
                 <input
                   type={item.key === "basic_salary" ? "number" : "text"}
                   value={formData[item.key] || ""}
                   onChange={(e) => handleChange(item.key, e.target.value)}
                   className="border border-gray-300 rounded px-2 py-1 text-gray-800 w-full max-w-[160px]"
                 />
+              ) : item.key === "date_of_birth" ? (
+                formatDob(formData[item.key])
               ) : (
                 formData[item.key] || "-"
               )}
