@@ -22,6 +22,19 @@ import {
   numberCellStyle,
 } from "../helpers/exelsheet";
 
+// "2025-08-05" -> "05-08-2025" (falls back to the raw value / "-")
+const formatJoinDate = (value) => {
+  if (!value) return "-";
+  const parts = String(value).split("-");
+  if (parts.length === 3 && parts[0].length === 4) {
+    return `${parts[2]}-${parts[1]}-${parts[0]}`;
+  }
+  return value;
+};
+
+// Table head cell: Poppins Regular (font-normal overrides the browser's bold <th>)
+const TH = "font-['Poppins'] font-normal px-4 py-3";
+
 const ConsolidatedData = () => {
   const navigate = useNavigate();
   const [data, setData] = useState([]);
@@ -86,12 +99,13 @@ const ConsolidatedData = () => {
     }
   };
 
-  // NEW STYLED EXCEL DOWNLOAD LOGIC
+  // STYLED EXCEL DOWNLOAD LOGIC
   const handleDownload = () => {
     if (!data.length) return;
 
     const headerRow = [
       "Employee Name",
+      "Join Date",
       "On Time",
       "Delay Days",
       "Late Days",
@@ -99,10 +113,12 @@ const ConsolidatedData = () => {
       "Worked Days",
       "Total Work Days",
       "Total Days",
+      "Extra Worked Hours",
     ];
 
     const dataRows = data.map((item) => [
       item.user_name || "",
+      formatJoinDate(item.join_date),
       item.on_time || 0,
       item.delay_days || 0,
       item.late_days || 0,
@@ -110,6 +126,7 @@ const ConsolidatedData = () => {
       item.total_worked_days || 0,
       item.total_work_days || 0,
       item.total_days || 0,
+      item.extra_worked_hours || "00:00:00",
     ]);
 
     const sheetData = [
@@ -129,6 +146,7 @@ const ConsolidatedData = () => {
     // Column Widths
     ws["!cols"] = [
       { wch: 30 }, // Name
+      { wch: 14 }, // Join Date
       { wch: 12 }, // On Time
       { wch: 12 }, // Delay
       { wch: 12 }, // Late
@@ -136,6 +154,7 @@ const ConsolidatedData = () => {
       { wch: 15 }, // Worked
       { wch: 15 }, // Work Days
       { wch: 15 }, // Total Days
+      { wch: 20 }, // Extra Worked Hours
     ];
 
     // Applying Styles loop
@@ -170,7 +189,7 @@ const ConsolidatedData = () => {
               <ArrowLeft size={16} className="mr-1" />
               Back
             </button>
-            <h1 className="text-lg font-medium text-gray-800 font-[Poppins]">
+            <h1 className="text-lg font-medium text-gray-800 font-['Poppins']">
               Consolidated Data
             </h1>
           </div>
@@ -261,27 +280,33 @@ const ConsolidatedData = () => {
         ) : (
           <div className="overflow-x-auto rounded-xl border border-gray-100 bg-white shadow-sm">
             <table
-              className="min-w-full text-[12px] font-[Poppins] border-separate"
+              className="min-w-full text-[12px] font-['Poppins'] border-separate"
               style={{ borderSpacing: "0 10px" }}
             >
-              <thead className="text-black text-[12px] font-normal">
+              <thead className="text-black text-[12px] font-['Poppins'] font-normal">
                 <tr className="bg-white shadow-sm">
-                  <th className="text-left px-4 py-3 rounded-tl-lg">Name</th>
-                  <th className="text-center px-4 py-3">On Time</th>
-                  <th className="text-center px-4 py-3">Delay</th>
-                  <th className="text-center px-4 py-3">Late</th>
-                  <th className="text-center px-4 py-3">Absent</th>
-                  <th className="text-center px-4 py-3">Worked</th>
-                  <th className="text-center px-4 py-3">Work Days</th>
-                  <th className="text-center px-4 py-3 rounded-tr-lg">
-                    Total Days
+                  <th className={`${TH} text-left rounded-tl-lg`}>Name</th>
+                  <th className={`${TH} text-center whitespace-nowrap`}>
+                    Join Date
+                  </th>
+                  <th className={`${TH} text-center`}>On Time</th>
+                  <th className={`${TH} text-center`}>Delay</th>
+                  <th className={`${TH} text-center`}>Late</th>
+                  <th className={`${TH} text-center`}>Absent</th>
+                  <th className={`${TH} text-center`}>Worked</th>
+                  <th className={`${TH} text-center`}>Work Days</th>
+                  <th className={`${TH} text-center`}>Total Days</th>
+                  <th
+                    className={`${TH} text-center rounded-tr-lg whitespace-nowrap`}
+                  >
+                    Extra Work Hours
                   </th>
                 </tr>
               </thead>
               <tbody className="text-gray-700 font-normal">
                 {paginatedData.length === 0 ? (
                   <tr>
-                    <td colSpan="8" className="text-center py-8 text-gray-500">
+                    <td colSpan="10" className="text-center py-8 text-gray-500">
                       No records found
                     </td>
                   </tr>
@@ -293,6 +318,9 @@ const ConsolidatedData = () => {
                     >
                       <td className="px-4 py-3 text-left text-gray-900 rounded-l-lg font-medium">
                         {item.user_name}
+                      </td>
+                      <td className="px-4 py-3 text-center whitespace-nowrap">
+                        {formatJoinDate(item.join_date)}
                       </td>
                       {[
                         "on_time",
@@ -316,8 +344,11 @@ const ConsolidatedData = () => {
                       <td className="px-4 py-3 text-center">
                         {item.total_work_days}
                       </td>
-                      <td className="px-4 py-3 text-center rounded-r-lg">
+                      <td className="px-4 py-3 text-center">
                         {item.total_days}
+                      </td>
+                      <td className="px-4 py-3 text-center rounded-r-lg whitespace-nowrap">
+                        {item.extra_worked_hours || "00:00:00"}
                       </td>
                     </tr>
                   ))

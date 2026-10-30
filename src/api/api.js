@@ -439,6 +439,7 @@ export const putUpsertLwf = "/api/payroll/statutory/lwf/upsert";
 export const getptslabs =
   "/api/payroll/statutory/professional-tax/slabs/active";
 export const postCreateSalaryComponent = "/api/payroll/components";
+export const CalculatePayroll = "/api/payroll/calculate";
 
 export const getLwfStateRules = "/api/payroll/statutory/lwf/rules/states";
 export const getLwfRulesByState = "/api/payroll/statutory/lwf/rules";

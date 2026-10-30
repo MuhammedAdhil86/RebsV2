@@ -1,6 +1,6 @@
 import React, { useRef, useState } from "react";
 import { HiOutlineCloudUpload } from "react-icons/hi";
-import toast, { Toaster } from "react-hot-toast";
+import toast from "react-hot-toast";
 import { addBulkUpload } from "../service/employeeService";
 
 const CommonUploadActions = () => {
@@ -23,12 +23,14 @@ const CommonUploadActions = () => {
 
     try {
       const response = await addBulkUpload(formData);
-      toast.success(response?.data?.message || "Bulk upload completed successfully!");
+      toast.success(
+        response?.data?.message || "Bulk upload completed successfully!",
+      );
     } catch (error) {
       console.error("Bulk upload failed:", error);
       toast.error(
         error?.response?.data?.message ||
-          "Failed to upload employee data. Please try again."
+          "Failed to upload employee data. Please try again.",
       );
     } finally {
       setIsUploading(false);
@@ -90,7 +92,7 @@ const CommonUploadActions = () => {
         className="hidden"
       />
 
-      <Toaster />
+      {/* No <Toaster /> here: the single global one lives in App.jsx */}
     </div>
   );
 };

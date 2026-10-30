@@ -35,7 +35,7 @@ export default function BasicInfoSection() {
     { label: "Date of Birth", key: "date_of_birth", readOnly: true },
     { label: "Email Address", key: "email" },
     { label: "Contact Number", key: "ph_no" },
-    { label: "Salary", key: "basic_salary" },
+    { label: "Annual CTC", key: "basic_salary" },
     { label: "Employee ID", key: "uuid", readOnly: true },
   ];
 
