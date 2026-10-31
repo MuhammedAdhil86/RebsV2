@@ -53,8 +53,13 @@ export default function DeviceRequestTab() {
     try {
       const responseData = await fetchDeviceChangeRequests();
 
+      // Guard: make sure we always map over an array
+      const list = Array.isArray(responseData)
+        ? responseData
+        : responseData?.data || [];
+
       // Transform raw backend shapes (SQL nullable objects) into flat row data
-      const transformed = (responseData || []).map((item) => {
+      const transformed = list.map((item) => {
         const rawDate = item.change_detected_date?.Valid
           ? item.change_detected_date.Time
           : null;
@@ -75,7 +80,13 @@ export default function DeviceRequestTab() {
 
       setData(transformed);
     } catch (err) {
-      toast.error(err.message || "Failed to load device requests");
+      // Prefer the backend's own message over the generic axios 500 text
+      toast.error(
+        err.response?.data?.message ||
+          err.response?.data?.error ||
+          err.message ||
+          "Failed to load device requests",
+      );
     } finally {
       setLoading(false);
     }

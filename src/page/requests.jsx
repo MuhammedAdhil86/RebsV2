@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
+import { Toaster } from "react-hot-toast";
 import DashboardLayout from "../ui/pagelayout";
 import HeaderGlobal from "../ui/headerglobal";
 import WfhTab from "../components/requests_tab/wtf_tab";
@@ -45,6 +46,9 @@ function Requests() {
 
   return (
     <DashboardLayout userName="Admin" onLogout={() => {}}>
+      {/* Single page-level Toaster: shows toasts from every tab immediately */}
+      <Toaster position="top-right" />
+
       <div className="w-full space-y-4">
         <HeaderGlobal userName="Admin" />
 

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import toast, { Toaster } from "react-hot-toast";
+import toast from "react-hot-toast";
 import UniversalTable from "../../ui/universal_table";
 import {
   fetchCompanyClaims,
@@ -27,32 +27,45 @@ export default function ClaimsRequestTab() {
     setLoading(true);
     try {
       const responseData = await fetchCompanyClaims();
-      const claimsArray = Array.isArray(responseData) ? responseData : [];
 
-      const transformed = claimsArray.map((item) => {
-        const rawStatus =
-          item.status && item.status.trim() !== "" ? item.status : "Pending";
+      // Accept: plain array, { claims: [] }, { data: [] }, or { items: [] }
+      const claimsArray = Array.isArray(responseData)
+        ? responseData
+        : responseData?.claims ||
+          responseData?.data ||
+          responseData?.items ||
+          [];
 
-        const cleanExpenseDate = item.expense_date
-          ? new Date(item.expense_date).toLocaleDateString("en-US", {
-              year: "numeric",
-              month: "short",
-              day: "numeric",
-            })
-          : "--";
+      const transformed = (Array.isArray(claimsArray) ? claimsArray : []).map(
+        (item) => {
+          const rawStatus =
+            item.status && String(item.status).trim() !== ""
+              ? String(item.status)
+              : "Pending";
 
-        return {
-          ...item,
-          name: item.employee_name?.trim() || `ID: ${item.employee_id}`,
-          designation: item.employee_designation || "N/A",
-          expenseType: item.expense_type || "General Expense",
-          amountDisplay: `₹ ${item.amount?.toLocaleString("en-IN") || 0}`,
-          date: cleanExpenseDate,
-          status:
-            rawStatus.charAt(0).toUpperCase() +
-            rawStatus.slice(1).toLowerCase(),
-        };
-      });
+          const cleanExpenseDate = item.expense_date
+            ? new Date(item.expense_date).toLocaleDateString("en-US", {
+                year: "numeric",
+                month: "short",
+                day: "numeric",
+              })
+            : "--";
+
+          return {
+            ...item,
+            id: item.id ?? item.claim_id,
+            name: item.employee_name?.trim() || `ID: ${item.employee_id}`,
+            designation: item.employee_designation || "N/A",
+            expenseType: item.expense_type || "General Expense",
+            amountDisplay: `₹ ${Number(item.amount || 0).toLocaleString("en-IN")}`,
+            date: cleanExpenseDate,
+            attachments: item.attachments || item.claim_attachments || [],
+            status:
+              rawStatus.charAt(0).toUpperCase() +
+              rawStatus.slice(1).toLowerCase(),
+          };
+        },
+      );
 
       setData(transformed);
     } catch (err) {
@@ -74,7 +87,6 @@ export default function ClaimsRequestTab() {
   const handleStatusUpdate = async (id, action) => {
     setSubmittingModal(true);
     try {
-      // Calls your precise 2-argument API signature
       await updateCompanyClaimStatus(id, action);
       toast.success(
         `Claim #${id} has been successfully ${action.toLowerCase()}!`,
@@ -219,8 +231,6 @@ export default function ClaimsRequestTab() {
 
   return (
     <div className="bg-[#f9fafb] rounded-xl p-4 border border-gray-100 shadow-sm w-full">
-      <Toaster position="top-right" />
-
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-sm font-semibold text-gray-800">
           Company Claims Requests

@@ -16,16 +16,31 @@ const formatDob = (value) => {
   });
 };
 
+// Converts 360000, "360000", 1.2e+06, "1.2E+6" -> "1200000" (plain digits, no
+// scientific notation, no commas)
+const normalizeSalary = (value) => {
+  if (value === null || value === undefined || value === "") return "";
+  const n = Number(value);
+  if (!Number.isFinite(n)) return String(value);
+  return n.toLocaleString("en-US", {
+    useGrouping: false,
+    maximumFractionDigits: 2,
+  });
+};
+
 export default function BasicInfoSection() {
   const { selectedEmployee, setSelectedEmployee } = useEmployeeStore();
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState(null);
 
-  // Initialize formData from store
+  // Initialize formData from store (salary normalized so it never shows 1.2e+06)
   useEffect(() => {
     if (selectedEmployee) {
-      setFormData({ ...selectedEmployee });
+      setFormData({
+        ...selectedEmployee,
+        basic_salary: normalizeSalary(selectedEmployee.basic_salary),
+      });
     }
   }, [selectedEmployee]);
 
@@ -55,7 +70,7 @@ export default function BasicInfoSection() {
         last_name: formData.last_name,
         email: formData.email,
         ph_no: formData.ph_no,
-        basic_salary: formData.basic_salary,
+        basic_salary: normalizeSalary(formData.basic_salary), // e.g. "1200000"
       };
 
       await axiosInstance.put(`/staff/updatebasicinfo/${formData.id}`, payload);
@@ -109,14 +124,24 @@ export default function BasicInfoSection() {
             <span className="text-gray-500 text-[12px]">{item.label}</span>
             <span className="font-medium text-gray-800 min-w-0 break-words text-[13px]">
               {isEditing && !item.readOnly ? (
+                // type="number" is what turns 1200000 into 1.2e+06, so use text
                 <input
-                  type={item.key === "basic_salary" ? "number" : "text"}
-                  value={formData[item.key] || ""}
-                  onChange={(e) => handleChange(item.key, e.target.value)}
+                  type="text"
+                  inputMode={item.key === "basic_salary" ? "numeric" : "text"}
+                  value={formData[item.key] ?? ""}
+                  onChange={(e) => {
+                    const val =
+                      item.key === "basic_salary"
+                        ? e.target.value.replace(/[^\d.]/g, "") // digits and dot only
+                        : e.target.value;
+                    handleChange(item.key, val);
+                  }}
                   className="border border-gray-300 rounded px-2 py-1 text-gray-800 w-full max-w-[160px]"
                 />
               ) : item.key === "date_of_birth" ? (
                 formatDob(formData[item.key])
+              ) : item.key === "basic_salary" ? (
+                normalizeSalary(formData[item.key]) || "-"
               ) : (
                 formData[item.key] || "-"
               )}
