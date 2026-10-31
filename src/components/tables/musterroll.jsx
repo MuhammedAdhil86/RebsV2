@@ -1,8 +1,15 @@
 import React, { useEffect, useState } from "react";
 import { Search, Download, ChevronLeft, ChevronRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import * as XLSX from "xlsx-js-style";
 import { fetchEmployeeCalendar } from "../../service/employeeService";
 import CustomSelect from "../../ui/customselect";
+import {
+  titleStyle,
+  headerStyle,
+  textCellStyle,
+  numberCellStyle,
+} from "../helpers/exelsheet";
 
 function MusterRoll() {
   const navigate = useNavigate();
@@ -161,6 +168,90 @@ function MusterRoll() {
   const endIdx = startIdx + rowsPerPage;
   const paginatedEmployees = filteredEmployees.slice(startIdx, endIdx);
 
+  // -------------------- DOWNLOAD EXCEL --------------------
+  const handleDownload = () => {
+    if (!filteredEmployees.length) return;
+
+    const monthName = monthNames[month - 1];
+    const daysInMonth = new Date(year, month, 0).getDate();
+
+    const headerRow = [
+      "Sl No",
+      "Employee Name",
+      ...Array.from({ length: daysInMonth }, (_, i) => `${i + 1}`),
+    ];
+
+    const dataRows = filteredEmployees.map((emp, idx) => [
+      idx + 1,
+      emp.user_name,
+      ...emp.attendance.slice(0, daysInMonth).map((d) => {
+        const status = !d.status || d.status === "--" ? "NO STATUS" : d.status;
+        const lines = [status, d.work_hour];
+        if (d.display_checkout) lines.push(d.display_checkout);
+        return lines.join("\n");
+      }),
+    ]);
+
+    const sheetData = [
+      [`MUSTER ROLL - ${monthName.toUpperCase()} ${year}`],
+      headerRow,
+      ...dataRows,
+    ];
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(sheetData);
+
+    // Merge title across all columns
+    ws["!merges"] = [
+      { s: { r: 0, c: 0 }, e: { r: 0, c: headerRow.length - 1 } },
+    ];
+
+    // Column widths
+    ws["!cols"] = [
+      { wch: 8 },
+      { wch: 30 },
+      ...Array.from({ length: daysInMonth }, () => ({ wch: 16 })),
+    ];
+
+    // Taller rows for the multi-line day cells
+    ws["!rows"] = sheetData.map((_, r) => (r > 1 ? { hpt: 48 } : {}));
+
+    // Same styles as the helper, with wrap text for day cells
+    const wrapCellStyle = {
+      ...textCellStyle,
+      alignment: {
+        ...(textCellStyle.alignment || {}),
+        wrapText: true,
+        vertical: "center",
+        horizontal: "center",
+      },
+    };
+
+    const range = XLSX.utils.decode_range(ws["!ref"]);
+
+    for (let R = range.s.r; R <= range.e.r; R++) {
+      for (let C = range.s.c; C <= range.e.c; C++) {
+        const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
+        if (!ws[cellRef]) continue;
+
+        if (R === 0) {
+          ws[cellRef].s = titleStyle;
+        } else if (R === 1) {
+          ws[cellRef].s = headerStyle;
+        } else if (typeof ws[cellRef].v === "number") {
+          ws[cellRef].s = numberCellStyle;
+        } else if (C === 1) {
+          ws[cellRef].s = textCellStyle; // employee name
+        } else {
+          ws[cellRef].s = wrapCellStyle; // day cells
+        }
+      }
+    }
+
+    XLSX.utils.book_append_sheet(wb, ws, "Muster Roll");
+    XLSX.writeFile(wb, `Muster_Roll_${monthName}_${year}.xlsx`);
+  };
+
   return (
     <div className="bg-[#f9fafb] rounded-lg pt-0 px-4 pb-4 w-full font-poppins text-[12px]">
       {/* HEADER SECTION */}
@@ -182,7 +273,10 @@ function MusterRoll() {
             options={years.map((y) => ({ label: y, value: y }))}
             minWidth={100}
           />
-          <button className="bg-black text-white px-3 py-1.5 rounded-md text-xs flex items-center gap-1">
+          <button
+            onClick={handleDownload}
+            className="bg-black text-white px-3 py-1.5 rounded-md text-xs flex items-center gap-1"
+          >
             <Download className="w-4 h-4" /> Download
           </button>
           <button
@@ -195,6 +289,7 @@ function MusterRoll() {
             <input
               type="text"
               placeholder="Search"
+              value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="bg-transparent w-full focus:outline-none text-xs text-gray-700 placeholder:text-gray-400"
             />

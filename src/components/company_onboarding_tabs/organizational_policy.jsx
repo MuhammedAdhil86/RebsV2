@@ -2,7 +2,6 @@ import React, { useState } from "react";
 
 /* Sub-Tab Components */
 import Shifts from "./workshifts/shifts";
-import ShiftBulkAllocation from "./workshifts/shiftbulkallocation";
 import AttendancePolicy from "./workshifts/attendancepolicy";
 import LeavesAndVacations from "./leaves_and_vacations/leavepolicy";
 import WeekendsAndOffDays from "./leaves_and_vacations/weeklyoff";
@@ -58,30 +57,25 @@ const OrganizationalPolicy = () => {
       {activeTab === "work-shift" && (
         <>
           <div className="flex gap-4 border-b border-gray-200 mb-4">
-            {["Shifts", "Shift Bulk Allocation", "Attendance Policy"].map(
-              (subTab) => (
-                <button
-                  key={subTab}
-                  onClick={() => setActiveWorkShiftTab(subTab)}
-                  className={`pb-2 text-sm font-medium transition-all relative ${
-                    activeWorkShiftTab === subTab
-                      ? "text-gray-900"
-                      : "text-gray-400 hover:text-gray-600"
-                  }`}
-                >
-                  {subTab}
-                  {activeWorkShiftTab === subTab && (
-                    <div className="absolute bottom-0 left-0 w-full h-[2px] bg-red-500" />
-                  )}
-                </button>
-              ),
-            )}
+            {["Shifts", "Attendance Policy"].map((subTab) => (
+              <button
+                key={subTab}
+                onClick={() => setActiveWorkShiftTab(subTab)}
+                className={`pb-2 text-sm font-medium transition-all relative ${
+                  activeWorkShiftTab === subTab
+                    ? "text-gray-900"
+                    : "text-gray-400 hover:text-gray-600"
+                }`}
+              >
+                {subTab}
+                {activeWorkShiftTab === subTab && (
+                  <div className="absolute bottom-0 left-0 w-full h-[2px] bg-red-500" />
+                )}
+              </button>
+            ))}
           </div>
           <div>
             {activeWorkShiftTab === "Shifts" && <Shifts />}
-            {activeWorkShiftTab === "Shift Bulk Allocation" && (
-              <ShiftBulkAllocation />
-            )}
             {activeWorkShiftTab === "Attendance Policy" && <AttendancePolicy />}
           </div>
         </>
