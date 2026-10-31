@@ -2,10 +2,17 @@ import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Icon } from "@iconify/react";
 import { MoreHorizontal, Trash2, AlertTriangle, X } from "lucide-react";
-import toast, { Toaster } from "react-hot-toast";
+import toast from "react-hot-toast"; // <Toaster /> lives globally in App.jsx
 
 // Services
 import payrollService from "../../../service/payrollService";
+
+// Helpers
+import {
+  getApiMessage,
+  getApiError,
+  isApiFailure,
+} from "../../helpers/apiMessage.js"; // adjust path if needed
 
 // UI Components
 import PayrollTable from "../../../ui/payrolltable.jsx";
@@ -18,6 +25,73 @@ import StatutoryComponents from "./statutorycomponents.jsx";
 import CreateSalaryTemplate from "./statutory_component_tabs/createsalarytemplate.jsx";
 import CreateSalaryComponent from "./statutory_component_tabs/createsalarycomponents.jsx";
 import UpdateSalaryTemplate from "./salary_component_tabs/updatesalarytemplate.jsx";
+
+// ---------------- HELPERS ----------------
+const TRUNCATE_LIMIT = 27;
+
+// Cell wrapper so the content always lines up with the header alignment
+const ALIGN_CLASS = {
+  left: "justify-start text-left",
+  center: "justify-center text-center",
+  right: "justify-end text-right",
+};
+
+const CellWrap = ({ align = "left", children }) => (
+  <div className={`flex items-center w-full ${ALIGN_CLASS[align]}`}>
+    {children}
+  </div>
+);
+
+// Shows the first characters + "..." and the full text in a tooltip on hover.
+// The tooltip is rendered in a portal so table overflow never clips it.
+const TruncatedText = ({ text, limit = TRUNCATE_LIMIT }) => {
+  const [tooltip, setTooltip] = useState(null);
+
+  const value = text && String(text).trim() ? String(text) : "-";
+  const isLong = value.length > limit;
+  const display = isLong ? `${value.slice(0, limit)}...` : value;
+
+  const showTooltip = (e) => {
+    if (!isLong) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    setTooltip({
+      top: rect.bottom + 6,
+      left: Math.min(rect.left, window.innerWidth - 280),
+    });
+  };
+
+  const hideTooltip = () => setTooltip(null);
+
+  return (
+    <>
+      <span
+        onMouseEnter={showTooltip}
+        onMouseLeave={hideTooltip}
+        className={`text-gray-600 whitespace-nowrap ${
+          isLong ? "cursor-help" : "cursor-default"
+        }`}
+      >
+        {display}
+      </span>
+
+      {tooltip &&
+        createPortal(
+          <div
+            style={{
+              position: "fixed",
+              top: tooltip.top,
+              left: tooltip.left,
+              zIndex: 10002,
+            }}
+            className="max-w-[260px] bg-gray-900 text-white text-[11px] font-['Poppins'] leading-snug rounded-lg px-3 py-2 shadow-lg whitespace-normal break-words pointer-events-none"
+          >
+            {value}
+          </div>,
+          document.body,
+        )}
+    </>
+  );
+};
 
 export default function SalaryTemplate() {
   const [tableData, setTableData] = useState([]);
@@ -62,7 +136,10 @@ export default function SalaryTemplate() {
       }));
       setTableData(formatted);
     } catch (err) {
-      setError("Failed to load salary templates.");
+      console.log("[fetch templates] error:", err, err?.response?.data); // DEBUG - remove later
+      const msg = getApiError(err, "Failed to load salary templates.");
+      setError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -106,14 +183,26 @@ export default function SalaryTemplate() {
     toast.loading("Deleting template...", { id: toastId });
 
     try {
-      await payrollService.deleteTemplate(selectedRow.id);
-      toast.success("Template deleted successfully", { id: toastId });
+      const res = await payrollService.deleteTemplate(selectedRow.id);
+      console.log("[delete template] success:", res); // DEBUG - remove later
+      // Backend may reply 200 with { ok: false, error: "..." }
+      if (isApiFailure(res)) {
+        toast.error(
+          getApiError({ response: { data: res } }, "Failed to delete template"),
+          { id: toastId },
+        );
+        return;
+      }
+      toast.success(getApiMessage(res, "Template deleted successfully"), {
+        id: toastId,
+      });
       closeDeleteModal();
       fetchTemplates();
-    } catch (error) {
-      const errorMsg =
-        error.response?.data?.message || "Failed to delete template";
-      toast.error(errorMsg, { id: toastId });
+    } catch (err) {
+      console.log("[delete template] error:", err, err?.response?.data); // DEBUG - remove later
+      toast.error(getApiError(err, "Failed to delete template"), {
+        id: toastId,
+      });
     }
   };
 
@@ -121,6 +210,72 @@ export default function SalaryTemplate() {
     setSelectedTemplate(rowData);
     setIsEditingTemplate(true);
   };
+
+  // ---------------- TABLE COLUMNS ----------------
+  // Template Name is left aligned; all other columns are center aligned.
+  // Each render wraps its content in <CellWrap align="..."> so header and content line up.
+  const templateColumns = [
+    {
+      key: "name",
+      label: "Template Name",
+      align: "left",
+      render: (value) => (
+        <CellWrap align="left">
+          <span className="font-medium text-gray-800">{value}</span>
+        </CellWrap>
+      ),
+    },
+    {
+      key: "description",
+      label: "Description",
+      align: "center",
+      render: (value) => (
+        <CellWrap align="center">
+          <TruncatedText text={value} limit={TRUNCATE_LIMIT} />
+        </CellWrap>
+      ),
+    },
+    {
+      key: "annualCTC",
+      label: "Annual CTC",
+      align: "center",
+      render: (value) => (
+        <CellWrap align="center">
+          <span className="text-gray-800 tabular-nums">{value}</span>
+        </CellWrap>
+      ),
+    },
+    {
+      key: "status",
+      label: "Status",
+      align: "center",
+      render: (value) => {
+        const isActive = value === "Active";
+        return (
+          <CellWrap align="center">
+            <span className={isActive ? "text-green-600" : "text-red-600"}>
+              {value}
+            </span>
+          </CellWrap>
+        );
+      },
+    },
+    {
+      key: "action",
+      label: "Action",
+      align: "center",
+      render: (_, row) => (
+        <CellWrap align="center">
+          <button
+            onClick={(e) => openMenu(e, row)}
+            className="text-gray-400 hover:text-gray-900 p-1"
+          >
+            <MoreHorizontal size={18} />
+          </button>
+        </CellWrap>
+      ),
+    },
+  ];
 
   // ---------------- EXTRA BUTTONS ----------------
   const extraButtons = (tab) => {
@@ -163,41 +318,7 @@ export default function SalaryTemplate() {
         return (
           <>
             <PayrollTable
-              columns={[
-                { key: "name", label: "Template Name", align: "left" },
-                { key: "description", label: "Description", align: "left" },
-                { key: "annualCTC", label: "Annual CTC", align: "right" },
-                {
-                  key: "status",
-                  label: "Status",
-                  align: "center",
-                  render: (value) => {
-                    const isActive = value === "Active";
-                    return (
-                      <div className="flex items-center justify-center gap-2">
-                        <span
-                          className={` ${isActive ? "text-green-600" : "text-red-600"}`}
-                        >
-                          {value}
-                        </span>
-                      </div>
-                    );
-                  },
-                },
-                {
-                  key: "action",
-                  label: "Action",
-                  align: "center",
-                  render: (_, row) => (
-                    <button
-                      onClick={(e) => openMenu(e, row)}
-                      className="text-gray-400 hover:text-gray-900 p-1"
-                    >
-                      <MoreHorizontal size={18} />
-                    </button>
-                  ),
-                },
-              ]}
+              columns={templateColumns}
               data={tableData}
               rowClickHandler={handleEditClick}
             />
@@ -206,10 +327,13 @@ export default function SalaryTemplate() {
                 Loading templates...
               </div>
             )}
+            {error && !loading && (
+              <div className="text-center py-4 text-red-500">{error}</div>
+            )}
           </>
         );
       case "salary-components":
-        // NEW: Render the create component view INSIDE the tab content
+        // Render the create component view INSIDE the tab content
         if (showCreateComponent) {
           return (
             <CreateSalaryComponent
@@ -227,7 +351,7 @@ export default function SalaryTemplate() {
 
   return (
     <div className="rounded-2xl shadow-sm min-h-screen font-[Poppins] text-sm bg-white p-4">
-      <Toaster position="top-right" />
+      {/* No <Toaster /> here: the global one in App.jsx handles all toasts */}
 
       {showCreateTemplate ? (
         <CreateSalaryTemplate onCancel={() => setShowCreateTemplate(false)} />
@@ -240,7 +364,7 @@ export default function SalaryTemplate() {
           }}
         />
       ) : (
-        /* IMPORTANT: showCreateComponent is handled inside renderTabContent now. 
+        /* IMPORTANT: showCreateComponent is handled inside renderTabContent.
           This keeps TabsSwitch mounted so activeTab ("salary-components") is preserved.
         */
         <TabsSwitch
