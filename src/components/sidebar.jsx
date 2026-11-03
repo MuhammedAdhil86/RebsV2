@@ -111,7 +111,7 @@ function SideBar({ isCollapsed, toggleSidebar }) {
         width="20"
       />
     ),
-    performance: <Icon icon="lucide:target" width="20" />,
+    performance: <Icon icon="mdi:chart-line" width="20" />, // KPI icon updated
     employees: <Icon icon="clarity:employee-group-line" width="20" />,
     assets: <Icon icon="fluent:web-asset-16-regular" width="20" />,
     shift: <Icon icon="ic:twotone-manage-history" width="20" />,
@@ -350,10 +350,8 @@ function SideBar({ isCollapsed, toggleSidebar }) {
                   key={idx}
                   to={item.path}
                   className={({ isActive }) =>
-                    `h-[40px] flex items-center space-x-3 px-3 rounded-lg transition-all duration-200 text-sm ${
-                      isActive
-                        ? "bg-[#1C2526] text-white font-light"
-                        : "text-neutral-600 hover:text-white hover:bg-gray-800"
+                    `h-[40px] flex items-center space-x-3 px-3 rounded-lg transition-all duration-200 text-sm text-white ${
+                      isActive ? "bg-[#1C2526] font-light" : "hover:bg-gray-800"
                     }`
                   }
                   style={{ width: collapsed ? "100%" : "90%" }}

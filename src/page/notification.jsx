@@ -1,4 +1,11 @@
-import React, { useState, useEffect } from "react";
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  useRef,
+} from "react";
+import { createPortal } from "react-dom";
 import announceService from "../service/announceService";
 import {
   Calendar,
@@ -6,16 +13,24 @@ import {
   ThumbsUp,
   Megaphone,
   XCircle,
-  Loader2,
   Paperclip,
   Layers,
   RefreshCw,
+  ChevronDown,
+  CheckCheck,
+  Check,
+  X,
 } from "lucide-react";
 
-const formatNotificationDate = (dateString) => {
-  if (!dateString || dateString.startsWith("0001")) return "N/A";
-  const date = new Date(dateString);
-  return date.toLocaleDateString("en-US", {
+/* ----------------------------- helpers ----------------------------- */
+
+const IMAGE_TYPES = ["png", "jpg", "jpeg", "gif", "webp", "svg"];
+
+const isValidDate = (s) => s && !String(s).startsWith("0001");
+
+const formatFullDate = (s) => {
+  if (!isValidDate(s)) return "N/A";
+  return new Date(s).toLocaleString("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -24,303 +39,760 @@ const formatNotificationDate = (dateString) => {
   });
 };
 
-const Notification = () => {
+const formatShortDate = (s) => {
+  if (!isValidDate(s)) return "N/A";
+  return new Date(s).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+};
+
+const timeAgo = (s) => {
+  if (!isValidDate(s)) return "";
+  const diff = Math.floor((Date.now() - new Date(s).getTime()) / 1000);
+  if (diff < 60) return "Just now";
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
+  return formatShortDate(s);
+};
+
+/* The API returns many rows with completely empty `data`.
+   Hide them instead of rendering blank cards. */
+const hasContent = (n) => {
+  const d = n.data || {};
+  switch (n.type) {
+    case "leave":
+      return Boolean(d.name || d.reason || d.leave_ref_no);
+    case "shift_swap":
+      return Boolean(d.requester_name || d.target_name);
+    case "announcement":
+    case "announcement_like":
+    case "announcement_comment":
+      return Boolean(d.title || d.description || d.attachment);
+    default:
+      return false;
+  }
+};
+
+const TABS = [
+  { key: "all", label: "All" },
+  { key: "unread", label: "Unread" },
+  { key: "announcement", label: "Announcements" },
+  { key: "leave", label: "Leave" },
+  { key: "shift_swap", label: "Shifts" },
+  { key: "activity", label: "Activity" },
+];
+
+const tabOf = (type) =>
+  type === "announcement_like" || type === "announcement_comment"
+    ? "activity"
+    : type;
+
+const STATUS_STYLES = {
+  approved: {
+    icon: "bg-green-50 text-green-600",
+    pill: "bg-green-100 text-green-700",
+  },
+  rejected: {
+    icon: "bg-red-50 text-red-600",
+    pill: "bg-red-100 text-red-700",
+  },
+  pending: {
+    icon: "bg-amber-50 text-amber-600",
+    pill: "bg-amber-100 text-amber-700",
+  },
+  cancelled: {
+    icon: "bg-gray-100 text-gray-600",
+    pill: "bg-gray-200 text-gray-700",
+  },
+};
+
+const statusStyle = (status) =>
+  STATUS_STYLES[(status || "pending").toLowerCase()] || STATUS_STYLES.pending;
+
+/* ----------------------------- main ----------------------------- */
+
+const CURTAIN_MS = 300;
+// A row counts as "seen" once ~60% of it has been on screen this long.
+const SEEN_DELAY_MS = 800;
+
+const Notification = ({ onClose }) => {
   const [notifications, setNotifications] = useState([]);
+  // Server-side unread total (from GET /employee/notification/count)
+  const [unreadTotal, setUnreadTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [markingAll, setMarkingAll] = useState(false);
   const [error, setError] = useState(null);
+  const [actionError, setActionError] = useState(null);
+  const [activeTab, setActiveTab] = useState("all");
+  // Snapshot of which items were unread when the list loaded. Sections use
+  // this so rows don't jump around while you scroll and they get marked read.
+  const [newIds, setNewIds] = useState(() => new Set());
+  // Ids already sent to the server, so each one is only sent once.
+  const requestedRef = useRef(new Set());
+
+  /* Curtain animation: mount closed, then drop down on the next frame.
+     Closing slides it back up first, then tells the parent to unmount. */
+  const [isOpen, setIsOpen] = useState(false);
 
   useEffect(() => {
-    const getNotifications = async () => {
-      try {
-        setLoading(true);
-        const res = await announceService.fetchNotifications();
-        setNotifications(res || []);
-      } catch (err) {
-        console.error("Failed to load notifications:", err);
-        setError("Could not retrieve notifications. Please try refreshing.");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    getNotifications();
+    const id = requestAnimationFrame(() => setIsOpen(true));
+    return () => cancelAnimationFrame(id);
   }, []);
 
-  if (loading) {
-    return (
-      <div className="bg-white rounded-xl p-12 text-center flex flex-col items-center justify-center gap-2">
-        <Loader2 className="w-6 h-6 text-blue-600 animate-spin" />
-        <p className="text-xs font-medium text-gray-500">
-          Loading tracking feeds...
-        </p>
-      </div>
-    );
-  }
+  // Once the close animation finishes we render nothing at all, so the
+  // full-screen backdrop can never be left behind blocking clicks.
+  const [closed, setClosed] = useState(false);
 
-  if (error) {
-    return (
-      <div className="bg-white p-6 rounded-xl border border-red-100 text-center max-w-md mx-auto my-4">
-        <XCircle className="w-8 h-8 text-red-500 mx-auto mb-2" />
-        <h3 className="text-xs font-semibold text-gray-900">
-          Connection Error
-        </h3>
-        <p className="text-[11px] text-gray-500 mt-1">{error}</p>
-      </div>
+  const handleClose = useCallback(() => {
+    if (!onClose) {
+      console.warn(
+        "<Notification> closed without an onClose prop: the parent still thinks it is open, so the next click on the bell will not reopen it. Pass onClose={() => setShow(false)}.",
+      );
+    }
+    setIsOpen(false);
+    setTimeout(() => {
+      setClosed(true);
+      if (onClose) onClose();
+    }, CURTAIN_MS);
+  }, [onClose]);
+
+  useEffect(() => {
+    const onKey = (e) => e.key === "Escape" && handleClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [handleClose]);
+
+  const load = useCallback(async (isRefresh = false) => {
+    try {
+      isRefresh ? setRefreshing(true) : setLoading(true);
+      setError(null);
+      setActionError(null);
+
+      const [list, count] = await Promise.all([
+        announceService.fetchNotifications(),
+        // The badge is non-critical: a failing count must not break the list.
+        announceService.fetchNotificationCount().catch((e) => {
+          console.error("Failed to load notification count:", e);
+          return null;
+        }),
+      ]);
+
+      const rows = Array.isArray(list) ? list : [];
+      setNotifications(rows);
+      setNewIds(
+        new Set(
+          rows.filter((n) => hasContent(n) && !n.is_read).map((n) => n.id),
+        ),
+      );
+      setUnreadTotal(
+        count && typeof count.unread === "number"
+          ? count.unread
+          : rows.filter((n) => hasContent(n) && !n.is_read).length,
+      );
+    } catch (err) {
+      console.error("Failed to load notifications:", err);
+      setError(
+        "We couldn't load your notifications. Check your connection and try again.",
+      );
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  /* Mark one notification as read — optimistic, rolls back on failure. */
+  const markRead = useCallback(async (id) => {
+    if (requestedRef.current.has(id)) return;
+    requestedRef.current.add(id);
+
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, is_read: true } : n)),
     );
-  }
+    setUnreadTotal((c) => Math.max(0, c - 1));
+    setActionError(null);
+
+    try {
+      await announceService.markNotificationRead(id);
+    } catch (err) {
+      console.error("Failed to mark notification read:", err);
+      requestedRef.current.delete(id); // allow a retry on the next view
+      setNotifications((prev) =>
+        prev.map((n) => (n.id === id ? { ...n, is_read: false } : n)),
+      );
+      setUnreadTotal((c) => c + 1);
+      setActionError("Couldn't update that notification. Please try again.");
+    }
+  }, []);
+
+  /* Mark everything as read. We re-sync from the server afterwards so the
+     list and badge reflect the real final state. */
+  const markAllRead = useCallback(async () => {
+    setMarkingAll(true);
+    setActionError(null);
+    try {
+      await announceService.markAllNotificationsRead();
+      setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+      setUnreadTotal(0);
+    } catch (err) {
+      console.error("Failed to mark all as read:", err);
+      setActionError("Couldn't mark all as read. Please try again.");
+    } finally {
+      setMarkingAll(false);
+    }
+  }, []);
+
+  const visible = useMemo(
+    () =>
+      notifications
+        .filter(hasContent)
+        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at)),
+    [notifications],
+  );
+
+  const counts = useMemo(() => {
+    const c = { all: visible.length, unread: 0 };
+    visible.forEach((n) => {
+      const k = tabOf(n.type);
+      c[k] = (c[k] || 0) + 1;
+      if (!n.is_read) c.unread += 1;
+    });
+    return c;
+  }, [visible]);
+
+  const grouped = useMemo(() => {
+    let list = visible;
+    if (activeTab === "unread") list = visible.filter((n) => newIds.has(n.id));
+    else if (activeTab !== "all")
+      list = visible.filter((n) => tabOf(n.type) === activeTab);
+
+    // New (unread) first; old (read) always shown below.
+    // If nothing is new, only the "Old notifications" header appears.
+    const fresh = list.filter((n) => newIds.has(n.id));
+    const old = list.filter((n) => !newIds.has(n.id));
+    const sections = [];
+    if (fresh.length)
+      sections.push({ label: "New notifications", items: fresh });
+    if (old.length) sections.push({ label: "Old notifications", items: old });
+    return sections;
+  }, [visible, activeTab, newIds]);
+
+  if (closed) return null;
+
+  // Portal to <body> so no parent (overflow, transform, z-index) can clip
+  // or trap the full-screen curtain.
+  return createPortal(
+    <>
+      {/* Dim backdrop */}
+      <div
+        onClick={handleClose}
+        aria-hidden="true"
+        className={`fixed inset-0 z-40 bg-black/40 transition-opacity duration-300 motion-reduce:transition-none ${
+          isOpen ? "opacity-100" : "opacity-0 pointer-events-none"
+        }`}
+      />
+
+      {/* Curtain panel: full width, 80% of viewport height */}
+      <div
+        role="dialog"
+        aria-label="Notifications"
+        className={`fixed inset-x-0 top-0 z-50 w-full h-[80vh] bg-white rounded-b-2xl shadow-2xl flex flex-col overflow-hidden transition-transform duration-300 ease-out motion-reduce:transition-none ${
+          isOpen ? "translate-y-0" : "-translate-y-full pointer-events-none"
+        }`}
+      >
+        {/* Header */}
+        <div className="px-4 pt-4 pb-3 bg-white shrink-0 border-b border-gray-100">
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-bold text-black">Notifications</h2>
+                {unreadTotal > 0 && (
+                  <span
+                    className="text-[10px] font-semibold bg-black text-white px-1.5 py-0.5 rounded-full leading-none"
+                    aria-label={`${unreadTotal} unread notifications`}
+                  >
+                    {unreadTotal > 99 ? "99+" : unreadTotal}
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-gray-500">
+                Announcements, leave and shift updates
+              </p>
+            </div>
+
+            <div className="flex items-center gap-1 shrink-0">
+              <button
+                onClick={() => load(true)}
+                disabled={refreshing || loading}
+                aria-label="Refresh notifications"
+                className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-black disabled:opacity-50 transition-colors"
+              >
+                <RefreshCw
+                  className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`}
+                />
+              </button>
+              <button
+                onClick={handleClose}
+                aria-label="Close notifications"
+                className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-black transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* Filter tabs */}
+          <div
+            className="flex gap-1.5 mt-3 overflow-x-auto [scrollbar-width:none]"
+            role="tablist"
+          >
+            {TABS.map((tab) => {
+              const count = counts[tab.key] || 0;
+              const active = activeTab === tab.key;
+              if (tab.key !== "all" && count === 0 && !active) return null;
+              return (
+                <button
+                  key={tab.key}
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => setActiveTab(tab.key)}
+                  className={`shrink-0 text-[11px] font-medium px-2.5 py-1 rounded-full transition-colors ${
+                    active
+                      ? "bg-black text-white"
+                      : "bg-gray-100 text-black hover:bg-gray-200"
+                  }`}
+                >
+                  {tab.label}
+                  <span
+                    className={
+                      active ? "ml-1 opacity-80" : "ml-1 text-gray-400"
+                    }
+                  >
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {actionError && (
+            <p
+              role="alert"
+              className="mt-2 text-[11px] text-red-600 bg-red-50 border border-red-100 rounded px-2 py-1"
+            >
+              {actionError}
+            </p>
+          )}
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 min-h-0 overflow-y-auto [scrollbar-width:thin]">
+          {loading ? (
+            <Skeleton />
+          ) : error ? (
+            <div className="p-8 text-center">
+              <XCircle className="w-8 h-8 text-red-500 mx-auto mb-2" />
+              <h3 className="text-xs font-semibold text-black">
+                Couldn't load notifications
+              </h3>
+              <p className="text-[11px] text-gray-500 mt-1 mb-3">{error}</p>
+              <button
+                onClick={() => load()}
+                className="text-[11px] font-semibold text-black hover:bg-gray-200 bg-gray-100 px-3 py-1.5 rounded-lg"
+              >
+                Try again
+              </button>
+            </div>
+          ) : grouped.length === 0 ? (
+            <div className="p-12 text-center">
+              <Layers className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+              <p className="text-xs font-medium text-black">
+                You're all caught up
+              </p>
+              <p className="text-[11px] text-gray-400 mt-0.5">
+                New announcements and requests will show up here.
+              </p>
+            </div>
+          ) : (
+            grouped.map((group) => (
+              <section key={group.label}>
+                <h3 className="sticky top-0 px-4 py-1.5 text-[11px] font-semibold text-gray-500 bg-gray-50/95 backdrop-blur border-y border-gray-100">
+                  {group.label}
+                </h3>
+                <div className="divide-y divide-gray-50">
+                  {group.items.map((n) => (
+                    <NotificationCard key={n.id} item={n} onRead={markRead} />
+                  ))}
+                </div>
+              </section>
+            ))
+          )}
+        </div>
+      </div>
+    </>,
+    document.body,
+  );
+};
+
+/* ----------------------------- pieces ----------------------------- */
+
+const Skeleton = () => (
+  <div className="divide-y divide-gray-50" aria-busy="true">
+    {[0, 1, 2, 3].map((i) => (
+      <div key={i} className="p-3.5 flex gap-3 animate-pulse">
+        <div className="w-8 h-8 rounded-xl bg-gray-100 shrink-0" />
+        <div className="flex-1 space-y-2">
+          <div className="h-3 bg-gray-100 rounded w-2/3" />
+          <div className="h-2.5 bg-gray-100 rounded w-full" />
+          <div className="h-2.5 bg-gray-100 rounded w-1/2" />
+        </div>
+      </div>
+    ))}
+  </div>
+);
+
+/* Unread rows are marked read automatically once they've been on screen
+   (≥60% visible) for SEEN_DELAY_MS — no click needed. */
+const Row = ({
+  icon,
+  iconClass = "bg-gray-100 text-black",
+  time,
+  createdAt,
+  children,
+  tint = "",
+  unread = false,
+  onMarkRead,
+}) => {
+  const rowRef = useRef(null);
+  const onSeenRef = useRef(onMarkRead);
+  onSeenRef.current = onMarkRead;
+
+  useEffect(() => {
+    const el = rowRef.current;
+    if (!unread || !el || typeof IntersectionObserver === "undefined") return;
+
+    let timer;
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        clearTimeout(timer);
+        if (entry.isIntersecting) {
+          timer = setTimeout(() => onSeenRef.current?.(), SEEN_DELAY_MS);
+        }
+      },
+      { threshold: 0.6 },
+    );
+    io.observe(el);
+    return () => {
+      clearTimeout(timer);
+      io.disconnect();
+    };
+  }, [unread]);
 
   return (
-    <div className="w-full bg-white max-w-xl mx-auto rounded-xl overflow-hidden">
-      <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-white sticky top-0 z-10">
-        <div>
-          <h2 className="text-sm font-bold text-gray-900">Notifications</h2>
-          <p className="text-[11px] text-gray-500">
-            System updates and team interactions
-          </p>
-        </div>
-        <span className="bg-blue-50 text-blue-600 text-[10px] font-bold px-2 py-0.5 rounded-full">
-          {notifications.length} Alerts
-        </span>
+    <div
+      ref={rowRef}
+      className={`p-3.5 hover:bg-gray-50 transition-colors duration-700 flex items-start gap-3 ${
+        unread ? "bg-gray-50" : tint
+      }`}
+    >
+      <div className={`p-2 rounded-xl shrink-0 mt-0.5 ${iconClass}`}>
+        {icon}
       </div>
-
-      <div className="divide-y divide-gray-50 max-h-[450px] overflow-y-auto [scrollbar-width:thin]">
-        {notifications.map((notification) => (
-          <NotificationCard key={notification.id} item={notification} />
-        ))}
-
-        {notifications.length === 0 && (
-          <div className="p-12 text-center">
-            <Layers className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-            <p className="text-gray-400 text-xs italic">
-              No workspace actions logged.
-            </p>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">{children.head}</div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <time
+              dateTime={createdAt}
+              title={formatFullDate(createdAt)}
+              className="text-[10px] text-gray-400 font-medium"
+            >
+              {time}
+            </time>
+            {!unread && (
+              <Check
+                className="w-3.5 h-3.5 text-green-600"
+                strokeWidth={3}
+                aria-label="Read"
+              />
+            )}
           </div>
-        )}
+        </div>
+        {children.body}
       </div>
     </div>
   );
 };
 
-/* Polymorphic Layout Card Component */
-const NotificationCard = ({ item }) => {
-  const { id, type, created_at, data = {} } = item;
-
-  // 1. LEAVE APPLICATIONS Layout Card
-  if (type === "leave") {
-    const isApproved = data.status === "Approved";
-    const isRejected = data.status === "Rejected";
-
-    return (
-      <div className="p-3.5 hover:bg-gray-50 transition-colors flex items-start gap-3">
-        <div
-          className={`p-2 rounded-xl shrink-0 mt-0.5 ${
-            isApproved
-              ? "bg-green-50 text-green-600"
-              : isRejected
-                ? "bg-red-50 text-red-600"
-                : "bg-amber-50 text-amber-600"
-          }`}
+const ExpandableText = ({ text }) => {
+  const [open, setOpen] = useState(false);
+  const long = text.length > 140;
+  return (
+    <div className="mt-1">
+      <p
+        className={`text-[11px] text-black whitespace-pre-line leading-relaxed ${
+          !open && long ? "line-clamp-2" : ""
+        }`}
+      >
+        {text}
+      </p>
+      {long && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setOpen((o) => !o);
+          }}
+          className="mt-0.5 inline-flex items-center gap-0.5 text-[10px] font-semibold text-black underline hover:text-gray-600"
         >
-          <Calendar className="w-4 h-4" />
-        </div>
+          {open ? "Show less" : "Read more"}
+          <ChevronDown
+            className={`w-3 h-3 transition-transform ${open ? "rotate-180" : ""}`}
+          />
+        </button>
+      )}
+    </div>
+  );
+};
 
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-2">
-            <p className="text-xs text-gray-800 leading-snug">
-              <span className="font-semibold text-gray-900">
+const Attachment = ({ url, type }) => {
+  const [open, setOpen] = useState(false);
+  const [broken, setBroken] = useState(false);
+  const isImage = IMAGE_TYPES.includes((type || "").toLowerCase()) && !broken;
+
+  return (
+    <div className="mt-2">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-black bg-gray-100 hover:bg-gray-200 px-2.5 py-1 rounded-lg border border-gray-200 transition-colors"
+      >
+        <Paperclip className="w-3.5 h-3.5" />
+        Attachment{type ? ` · ${type.toUpperCase()}` : ""}
+        <ChevronDown
+          className={`w-3.5 h-3.5 transition-transform duration-200 ${
+            open ? "rotate-180" : ""
+          }`}
+        />
+      </button>
+
+      {open && (
+        <div className="mt-2">
+          {isImage ? (
+            <a
+              href={url}
+              target="_blank"
+              rel="noreferrer"
+              className="block overflow-hidden rounded-xl border border-gray-200 bg-gray-50"
+            >
+              <img
+                src={url}
+                alt="Announcement attachment"
+                loading="lazy"
+                onError={() => setBroken(true)}
+                className="w-full max-h-72 object-contain"
+              />
+            </a>
+          ) : (
+            <a
+              href={url}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 text-[11px] font-semibold text-black underline hover:text-gray-600"
+            >
+              <Paperclip className="w-3 h-3" />
+              {broken ? "Couldn't preview — open file" : "Open file"}
+            </a>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* ----------------------------- cards ----------------------------- */
+
+const NotificationCard = ({ item, onRead }) => {
+  const { id, type, created_at, data = {} } = item;
+  const time = timeAgo(created_at);
+  const unread = !item.is_read;
+  const markRead = () => onRead(id);
+
+  if (type === "leave") {
+    const s = statusStyle(data.status);
+    return (
+      <Row
+        icon={<Calendar className="w-4 h-4" />}
+        iconClass={s.icon}
+        time={time}
+        createdAt={created_at}
+        unread={unread}
+        onMarkRead={markRead}
+      >
+        {{
+          head: (
+            <p className="text-xs text-black leading-snug">
+              <span className="font-semibold text-black">
                 {data.name || "Employee"}
-              </span>{" "}
-              {data.designation ? `(${data.designation})` : ""} applied for
+              </span>
+              {data.designation ? ` (${data.designation})` : ""} applied for
               leave.
             </p>
-            <span className="text-[10px] text-gray-400 shrink-0 font-medium">
-              {formatNotificationDate(created_at)}
-            </span>
-          </div>
-
-          {data.reason && (
-            <p className="text-[11px] text-gray-600 mt-1 bg-gray-50 px-2 py-1.5 rounded border border-gray-100 italic">
-              "{data.reason}"
-            </p>
-          )}
-
-          <div className="flex items-center gap-2.5 mt-2 text-[10px] font-medium text-gray-500">
-            {data.no_of_days && (
-              <span className="bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded flex items-center gap-1">
-                Duration: {data.no_of_days} d
-              </span>
-            )}
-            {data.leave_ref_no && (
-              <span className="text-gray-400">Ref: #{data.leave_ref_no}</span>
-            )}
-            <span
-              className={`px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider text-[9px] ml-auto ${
-                isApproved
-                  ? "bg-green-100 text-green-700"
-                  : isRejected
-                    ? "bg-red-100 text-red-700"
-                    : "bg-amber-100 text-amber-700"
-              }`}
-            >
-              {data.status || "Pending"}
-            </span>
-          </div>
-        </div>
-      </div>
+          ),
+          body: (
+            <>
+              {data.reason && (
+                <p className="text-[11px] text-black mt-1.5 bg-gray-50 px-2 py-1.5 rounded border border-gray-100">
+                  {data.reason}
+                </p>
+              )}
+              <div className="flex items-center gap-2.5 mt-2 text-[10px] font-medium text-gray-500">
+                {data.no_of_days && (
+                  <span className="bg-gray-100 text-black px-1.5 py-0.5 rounded">
+                    {data.no_of_days}{" "}
+                    {Number(data.no_of_days) === 1 ? "day" : "days"}
+                  </span>
+                )}
+                {data.leave_ref_no && (
+                  <span className="text-gray-400">
+                    Ref #{data.leave_ref_no}
+                  </span>
+                )}
+                <span
+                  className={`px-2 py-0.5 rounded-full font-semibold text-[10px] ml-auto ${s.pill}`}
+                >
+                  {data.status || "Pending"}
+                </span>
+              </div>
+            </>
+          ),
+        }}
+      </Row>
     );
   }
 
-  // 2. SYSTEM ANNOUNCEMENTS Layout Card (Read-Only)
   if (type === "announcement") {
     return (
-      <div className="p-3.5 hover:bg-gray-50 transition-colors flex items-start gap-3 bg-blue-50/10">
-        <div className="p-2 rounded-xl bg-blue-50 text-blue-600 shrink-0 mt-0.5">
-          <Megaphone className="w-4 h-4" />
-        </div>
-
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-2">
-            <h4 className="text-xs font-bold text-gray-900 truncate">
-              {data.title || "System Announcement"}
+      <Row
+        icon={<Megaphone className="w-4 h-4" />}
+        time={time}
+        createdAt={created_at}
+        unread={unread}
+        onMarkRead={markRead}
+      >
+        {{
+          head: (
+            <h4 className="text-xs font-bold text-black truncate">
+              {data.title || "Announcement"}
             </h4>
-            <span className="text-[10px] text-gray-400 shrink-0 font-medium">
-              {formatNotificationDate(created_at)}
-            </span>
-          </div>
-
-          {data.description && (
-            <p className="text-[11px] text-gray-600 mt-1 whitespace-pre-line leading-relaxed">
-              {data.description}
-            </p>
-          )}
-
-          {data.attachment && (
-            <div className="mt-2">
-              <a
-                href={data.attachment}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1 text-[10px] text-blue-600 hover:text-blue-800 font-semibold bg-blue-50/50 hover:bg-blue-50 px-2 py-1 rounded border border-blue-100"
-              >
-                <Paperclip className="w-3 h-3" /> View{" "}
-                {data.attachment_type || "Attachment"}
-              </a>
-            </div>
-          )}
-        </div>
-      </div>
+          ),
+          body: (
+            <>
+              {data.description && <ExpandableText text={data.description} />}
+              {data.attachment && (
+                <Attachment url={data.attachment} type={data.attachment_type} />
+              )}
+            </>
+          ),
+        }}
+      </Row>
     );
   }
 
-  // 3. ANNOUNCEMENT ENGAGEMENTS Layout Cards (Social Feed logs / History summaries)
   if (type === "announcement_like" || type === "announcement_comment") {
     const isLike = type === "announcement_like";
     return (
-      <div className="p-3.5 hover:bg-gray-50 transition-colors flex items-start gap-3">
-        <div
-          className={`p-2 rounded-xl shrink-0 mt-0.5 ${
-            isLike
-              ? "bg-indigo-50 text-indigo-600"
-              : "bg-purple-50 text-purple-600"
-          }`}
-        >
-          {isLike ? (
+      <Row
+        icon={
+          isLike ? (
             <ThumbsUp className="w-3.5 h-3.5" />
           ) : (
             <MessageSquare className="w-3.5 h-3.5" />
-          )}
-        </div>
-
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-2">
-            <div className="text-xs text-gray-700 leading-snug">
-              <span className="font-semibold text-gray-900 block mb-0.5">
-                {data.title ||
-                  (isLike
-                    ? "Announcement Interaction"
-                    : "New Activity Summary")}
+          )
+        }
+        time={time}
+        createdAt={created_at}
+        unread={unread}
+        onMarkRead={markRead}
+      >
+        {{
+          head: (
+            <p className="text-xs text-black leading-snug">
+              <span className="font-semibold text-black">
+                {isLike ? "New like on " : "New comment on "}
               </span>
-              <span
-                className={isLike ? "text-gray-500" : "text-gray-800 italic"}
-              >
-                {data.description
-                  ? isLike
-                    ? data.description
-                    : `"${data.description}"`
-                  : "Workspace update logged."}
-              </span>
-            </div>
-            <span className="text-[10px] text-gray-400 shrink-0 font-medium">
-              {formatNotificationDate(created_at)}
-            </span>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // 4. SHIFT SWAPPING UPDATES Layout Card
-  if (type === "shift_swap") {
-    const isApproved = data.status?.toLowerCase() === "approved";
-    return (
-      <div className="p-3.5 hover:bg-gray-50 transition-colors flex items-start gap-3 bg-slate-50/30">
-        <div
-          className={`p-2 rounded-xl shrink-0 mt-0.5 ${
-            isApproved
-              ? "bg-emerald-50 text-emerald-600"
-              : "bg-zinc-50 text-slate-600"
-          }`}
-        >
-          <RefreshCw className="w-3.5 h-3.5" />
-        </div>
-
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-2">
-            <div className="text-xs text-gray-700 leading-snug">
-              <span className="font-semibold text-gray-900 block mb-0.5">
-                Shift Swap Request Update
-              </span>
-              <p className="text-gray-600">
-                <span className="font-medium text-gray-800">
-                  {data.requester_name}
-                </span>{" "}
-                requested a swap with{" "}
-                <span className="font-medium text-gray-800">
-                  {data.target_name}
-                </span>{" "}
-                for date{" "}
-                <span className="font-medium text-gray-700">
-                  {formatNotificationDate(data.swap_date).split(",")[0]}
-                </span>
-                .
-              </p>
-            </div>
-            <span className="text-[10px] text-gray-400 shrink-0 font-medium">
-              {formatNotificationDate(created_at)}
-            </span>
-          </div>
-          <div className="flex items-center gap-2 mt-2 text-[10px]">
-            <span
-              className={`px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider text-[9px] ${
-                isApproved
-                  ? "bg-emerald-100 text-emerald-700"
-                  : "bg-gray-100 text-gray-700"
+              {data.title || "an announcement"}
+            </p>
+          ),
+          body: data.description ? (
+            <p
+              className={`text-[11px] mt-1 line-clamp-2 ${
+                isLike ? "text-gray-500" : "text-black italic"
               }`}
             >
-              {data.status || "Pending"}
-            </span>
-          </div>
-        </div>
-      </div>
+              {isLike ? data.description : `"${data.description}"`}
+            </p>
+          ) : null,
+        }}
+      </Row>
     );
   }
 
-  // Universal Fallback Catch-All layout
-  return (
-    <div className="p-3.5 text-[11px] text-gray-400 italic bg-gray-50/50">
-      Workspace activity updated (ID: #{id || "N/A"})
-    </div>
-  );
+  if (type === "shift_swap") {
+    const s = statusStyle(data.status);
+    return (
+      <Row
+        icon={<RefreshCw className="w-3.5 h-3.5" />}
+        iconClass={s.icon}
+        time={time}
+        createdAt={created_at}
+        unread={unread}
+        onMarkRead={markRead}
+      >
+        {{
+          head: (
+            <p className="text-xs text-black leading-snug">
+              <span className="font-semibold text-black">
+                {data.requester_name || "Someone"}
+              </span>{" "}
+              requested a shift swap with{" "}
+              <span className="font-semibold text-black">
+                {data.target_name || "a teammate"}
+              </span>
+              {isValidDate(data.swap_date) && (
+                <>
+                  {" "}
+                  on{" "}
+                  <span className="font-medium text-black">
+                    {formatShortDate(data.swap_date)}
+                  </span>
+                </>
+              )}
+              .
+            </p>
+          ),
+          body: (
+            <div className="mt-2">
+              <span
+                className={`px-2 py-0.5 rounded-full font-semibold text-[10px] ${s.pill}`}
+              >
+                {data.status || "Pending"}
+              </span>
+            </div>
+          ),
+        }}
+      </Row>
+    );
+  }
+
+  return null; // unknown types with no data are hidden by hasContent()
 };
 
 export default Notification;

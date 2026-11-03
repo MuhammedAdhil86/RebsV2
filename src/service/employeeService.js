@@ -1,42 +1,42 @@
 // employeeService.js
 
-import { 
-  getEmployeeDetails, 
+import {
+  getEmployeeDetails,
   getActiveUsersLightUrl,
-  employeeDelete, 
-  updateBasicInfo ,
+  employeeDelete,
+  updateBasicInfo,
   getEmployeeStatus,
   getEmployeeType,
   getGender,
   postBasicInformation,
   getEmployeeRole,
   postAddBankInformation,
-updateWorkInformation,
-updateIDInfo,
-updateWorkExperience,
-getDailyAttendance,
-getConsolidatedData,
-updateHierarchyInfo,
-updateEducationalDetails,
-postBulkUpload,
-updateDependantDetails,
-updateAdditionalInformation,
-updateContactInfo,
-updatePersonalInfo,
-getStaff,
-getEmployeeCalendar,
-getEmployeeShifts,
-getDeleteUser,
-getEmployeePolicy,
-getMypersonalProfile,
-uploadProfileImage,
-updateMypersonalProfile,
-getEmployeeReferenceNo,
-getWorkFromHome,
- updateStatus,
-// updateEmployeeReferenceNo,
-// createEmployeeReferenceNoUrl,
-  getMaritalStatus// make sure you export this from your api.js
+  updateWorkInformation,
+  updateIDInfo,
+  updateWorkExperience,
+  getDailyAttendance,
+  getConsolidatedData,
+  updateHierarchyInfo,
+  updateEducationalDetails,
+  postBulkUpload,
+  updateDependantDetails,
+  updateAdditionalInformation,
+  updateContactInfo,
+  updatePersonalInfo,
+  getStaff,
+  getEmployeeCalendar,
+  getEmployeeShifts,
+  getDeleteUser,
+  getEmployeePolicy,
+  getMypersonalProfile,
+  uploadProfileImage,
+  updateMypersonalProfile,
+  getEmployeeReferenceNo,
+  getWorkFromHome,
+  updateStatus,
+  // updateEmployeeReferenceNo,
+  // createEmployeeReferenceNoUrl,
+  getMaritalStatus, // make sure you export this from your api.js
 } from "../api/api";
 import axiosInstance from "../service/axiosinstance";
 import { extractErrorMessage } from "../utils/errorUtils";
@@ -64,7 +64,9 @@ export const getActiveUsersLight = async () => {
 // Fetch bar attendance
 export const fetchBarAttendance = async () => {
   try {
-    const response = await axiosInstance.get("/admin/staff/getattendancestatus");
+    const response = await axiosInstance.get(
+      "/admin/staff/getattendancestatus",
+    );
 
     return response.data;
   } catch (error) {
@@ -77,7 +79,7 @@ export const fetchBarAttendance = async () => {
 export const fetchMusterRoll = async (month, year, user_id) => {
   try {
     const response = await axiosInstance.get(
-      `/admin/staff/workhours/${month}/${year}`
+      `/admin/staff/workhours/${month}/${year}`,
     );
     console.log("Muster roll response:", response.data);
     return response.data.data;
@@ -107,7 +109,10 @@ export const deleteEmployee = async (id, reason) => {
 // Update employee basic info
 export const updateEmployeeBasicInfo = async (employeeId, updatedData) => {
   try {
-    const response = await axiosInstance.put(updateBasicInfo(employeeId), updatedData);
+    const response = await axiosInstance.put(
+      updateBasicInfo(employeeId),
+      updatedData,
+    );
     console.log("Updated employee basic info response:", response);
     return response.data;
   } catch (error) {
@@ -131,7 +136,9 @@ export const addEmployee = async (employeeData) => {
 // Fetch single employee details by ID
 export const getEmployeeById = async (employeeId) => {
   try {
-    const response = await axiosInstance.get(`${getEmployeeDetails}/${employeeId}`);
+    const response = await axiosInstance.get(
+      `${getEmployeeDetails}/${employeeId}`,
+    );
     console.log("Single employee details response:", response);
     return response.data.data;
   } catch (error) {
@@ -139,7 +146,6 @@ export const getEmployeeById = async (employeeId) => {
     throw error;
   }
 };
-
 
 export const fetchEmployeeStatus = async () => {
   try {
@@ -165,7 +171,6 @@ export const addBulkUpload = async (formData) => {
     throw error;
   }
 };
-
 
 export const fetchEmployeeType = async () => {
   try {
@@ -223,7 +228,7 @@ export const updateBankInformation = async (bankData) => {
         headers: {
           "Content-Type": "application/json",
         },
-      }
+      },
     );
     return response.data;
   } catch (error) {
@@ -243,7 +248,7 @@ export const addWorkInformation = async (workData) => {
 
     const response = await axiosInstance.put(
       `/staff/updateworkinfo/${employeeId}`,
-      formData // send formdata instead of JSON
+      formData, // send formdata instead of JSON
     );
 
     return response.data;
@@ -267,7 +272,7 @@ export const addHierarchyInfo = async (hierarchyData) => {
     const employeeId = localStorage.getItem("employeeId");
     const response = await axiosInstance.put(
       `${updateHierarchyInfo}/${employeeId}`,
-      hierarchyData
+      hierarchyData,
     );
     return response.data;
   } catch (error) {
@@ -276,13 +281,12 @@ export const addHierarchyInfo = async (hierarchyData) => {
   }
 };
 
-
 export const addPersonalInfo = async (personalData) => {
   try {
     const employeeId = localStorage.getItem("employeeId");
     const response = await axiosInstance.put(
       `${updatePersonalInfo}/${employeeId}`,
-      personalData
+      personalData,
     );
     return response.data;
   } catch (error) {
@@ -296,7 +300,7 @@ export const addIDInfo = async (IDData) => {
     const employeeId = localStorage.getItem("employeeId");
     const response = await axiosInstance.put(
       `${updateIDInfo}/${employeeId}`,
-      IDData
+      IDData,
     );
     return response.data;
   } catch (error) {
@@ -310,7 +314,7 @@ export const addContactInfo = async (contactData) => {
     const employeeId = localStorage.getItem("employeeId");
     const response = await axiosInstance.put(
       `${updateContactInfo}/${employeeId}`,
-      contactData
+      contactData,
     );
     return response.data;
   } catch (error) {
@@ -324,7 +328,7 @@ export const addWorkExperience = async (experienceData) => {
     const employeeId = localStorage.getItem("employeeId");
     const response = await axiosInstance.post(
       `${updateWorkExperience}/${employeeId}`,
-      experienceData
+      experienceData,
     );
     return response.data;
   } catch (error) {
@@ -337,7 +341,7 @@ export const addEducationalDetails = async (educationData) => {
     const employeeId = localStorage.getItem("employeeId");
     const response = await axiosInstance.post(
       `${updateEducationalDetails}/${employeeId}`,
-      educationData
+      educationData,
     );
     return response.data;
   } catch (error) {
@@ -346,13 +350,12 @@ export const addEducationalDetails = async (educationData) => {
   }
 };
 
-
 export const addDependantDetails = async (dependantData) => {
   try {
     const employeeId = localStorage.getItem("employeeId");
     const response = await axiosInstance.put(
       `${updateDependantDetails}/${employeeId}`,
-      dependantData
+      dependantData,
     );
     return response.data;
   } catch (error) {
@@ -361,14 +364,12 @@ export const addDependantDetails = async (dependantData) => {
   }
 };
 
-
-
 export const addAdditionalInfo = async (additionalData) => {
   try {
     const employeeId = localStorage.getItem("employeeId");
     const response = await axiosInstance.post(
       `${updateAdditionalInformation}/${employeeId}`,
-      additionalData
+      additionalData,
     );
     return response.data;
   } catch (error) {
@@ -381,7 +382,7 @@ export const addAdditionalInfo = async (additionalData) => {
 export const fetchConsolidatedData = async (month, year) => {
   try {
     const response = await axiosInstance.get(
-      `${getConsolidatedData}/${month}/${year}`
+      `${getConsolidatedData}/${month}/${year}`,
     );
     console.log("✅ Consolidated data response:", response.data);
     return response.data.data;
@@ -390,7 +391,7 @@ export const fetchConsolidatedData = async (month, year) => {
       console.error(
         "❌ Server returned:",
         error.response.status,
-        error.response.data
+        error.response.data,
       );
     } else {
       console.error("❌ Network/other error:", error.message);
@@ -399,21 +400,19 @@ export const fetchConsolidatedData = async (month, year) => {
   }
 };
 
-
 export const fetchDailyAttendance = async (date) => {
   try {
     const response = await axiosInstance.get(
-      `${getDailyAttendance}?date=${date}`
+      `${getDailyAttendance}?date=${date}`,
     );
 
- 
     return response.data.data;
   } catch (error) {
     if (error.response) {
       console.error(
         "❌ Server returned:",
         error.response.status,
-        error.response.data
+        error.response.data,
       );
     } else {
       console.error("❌ Network error:", error.message);
@@ -441,7 +440,7 @@ export const fetchEmployeeWorkHours = async (user_id, dateRange) => {
   try {
     const response = await axiosInstance.post(
       `/admin/staff/daterange/workhours/${user_id}`,
-      dateRange
+      dateRange,
     );
     return response.data.data;
   } catch (error) {
@@ -450,12 +449,11 @@ export const fetchEmployeeWorkHours = async (user_id, dateRange) => {
   }
 };
 
-
 export const editWorkHours = async (user_id, date, data) => {
   try {
     const response = await axiosInstance.put(
       `/admin/staff/attendance/regularize/${user_id}/${date}`,
-      data
+      data,
     );
     return response.data;
   } catch (error) {
@@ -475,7 +473,7 @@ export const getStaffData = async () => {
 };
 export const fetchRegularizationRequests = async () => {
   const response = await axiosInstance.get(
-    "admin/attendance/regularize/requests"
+    "admin/attendance/regularize/requests",
   );
 
   console.log("Regularization Requests API Response 👉", response.data);
@@ -483,12 +481,9 @@ export const fetchRegularizationRequests = async () => {
   return response.data;
 };
 
-
 export const fetchShiftAllocation = async (staffId) => {
   try {
-    const response = await axiosInstance.get(
-      `shifts/allocation/${staffId}`
-    );
+    const response = await axiosInstance.get(`shifts/allocation/${staffId}`);
     return response.data; // expected: {status_code, message, data:{shift_name,...}}
   } catch (err) {
     console.error("Failed to fetch shift allocation: ", err);
@@ -506,7 +501,7 @@ export const fetchEmployeeShifts = async (from, to, user_uuid) => {
       },
     });
     // Return the array of shifts directly
-    return response.data; 
+    return response.data;
   } catch (error) {
     console.error("❌ Error fetching employee shifts:", error);
     throw error;
@@ -518,7 +513,7 @@ export const addregularize = async (requestId, date, data) => {
     // Dynamically prefixes "fromReq" directly to match your real route design rules
     const response = await axiosInstance.put(
       `/admin/staff/attendance/regularize/fromReq${requestId}/${date}`,
-      data
+      data,
     );
     return response.data;
   } catch (error) {
@@ -592,7 +587,7 @@ export const updateMyPersonalProfile = async (profilePayload) => {
   try {
     const response = await axiosInstance.put(
       updateMypersonalProfile,
-      profilePayload
+      profilePayload,
     );
     console.log("Updated personal profile response:", response.data);
     return response.data.data || response.data;
@@ -600,7 +595,7 @@ export const updateMyPersonalProfile = async (profilePayload) => {
     console.error("❌ Error updating personal profile:", error);
     throw error;
   }
-}
+};
 
 export const fetchEmployeeReferenceNo = async () => {
   try {
@@ -612,24 +607,28 @@ export const fetchEmployeeReferenceNo = async () => {
     throw error;
   }
 };
-export const updateEmployeeReferenceNo = (id) => `/employee-ref-no/rule/update/${id}`;
+export const updateEmployeeReferenceNo = (id) =>
+  `/employee-ref-no/rule/update/${id}`;
 
 export const editEmployeeReferenceNo = async (id, payload) => {
   if (!id) throw new Error("Rule ID is required to perform update.");
 
   try {
     const response = await axiosInstance.put(
-      updateEmployeeReferenceNo(id), 
+      updateEmployeeReferenceNo(id),
       payload,
       {
         headers: {
           "Content-Type": "application/json",
         },
-      }
+      },
     );
     return response.data;
   } catch (error) {
-    const message = extractErrorMessage(error, "Failed to update employee reference rule.");
+    const message = extractErrorMessage(
+      error,
+      "Failed to update employee reference rule.",
+    );
     throw new Error(message);
   }
 };
@@ -660,7 +659,6 @@ export const createEmployeeReferenceNoUrl = "/employee-ref-no/rule/add";
 //   }
 // };
 
-
 // 2. CREATE RULE API (POST)
 export const createEmployeeReferenceNo = async (payload) => {
   try {
@@ -671,7 +669,7 @@ export const createEmployeeReferenceNo = async (payload) => {
         headers: {
           "Content-Type": "application/json",
         },
-      }
+      },
     );
     return response.data;
   } catch (error) {

@@ -9,13 +9,28 @@ import DeviceRequestTab from "../components/requests_tab/device_tab";
 import ClaimsRequestTab from "../components/requests_tab/claims_tab";
 import InsuranceClaimTab from "../components/requests_tab/insuranceclaim";
 import AdvanceSalaryReqTab from "../components/requests_tab/AdvanceSalaryReqTab"; // <- adjust path/file name if different
+import ShiftSwapTab from "../components/requests_tab/shift_swap_tab";
 import LeaveRequestes from "../components/tables/leaverequests";
 import DeviceApprovalModal from "../ui/devicestatusmodal";
 import InsuranceApprovalModal from "../ui/insurancestatusmodal";
 
+// Tabs shown in the header, in order.
+const TABS = [
+  { key: "wfh", label: "Work From Home" },
+  { key: "leave", label: "Leave Requests" },
+  { key: "regularization", label: "Regularization" },
+  { key: "device", label: "Change Device" },
+  { key: "claims", label: "Expense Claim" },
+  { key: "insurance", label: "Insurance Claim" },
+  { key: "advance", label: "Advance Salary" },
+  { key: "shiftswap", label: "Shift Swap" },
+];
+
 function Requests() {
   const [activeTab, setActiveTab] = useState(() => {
-    return localStorage.getItem("requests_active_tab") || "wfh";
+    const saved = localStorage.getItem("requests_active_tab");
+    // Ignore an old/unknown saved tab so the page never opens blank.
+    return TABS.some((t) => t.key === saved) ? saved : "wfh";
   });
 
   const [selectedDeviceRow, setSelectedDeviceRow] = useState(null);
@@ -60,89 +75,20 @@ function Requests() {
           }}
           className="flex gap-4 border-b px-4 text-[14px] bg-white pt-2 shadow-sm rounded-t-lg select-none overflow-x-auto scrollbar-none [&::-webkit-scrollbar]:hidden"
         >
-          <button
-            type="button"
-            onClick={() => setActiveTab("wfh")}
-            className={`pb-2 px-1 transition-all relative font-medium whitespace-nowrap ${
-              activeTab === "wfh"
-                ? "text-black font-semibold after:content-[''] after:absolute after:bottom-0 after:left-0 after:w-full after:h-[2px] after:bg-black"
-                : "text-gray-500 hover:text-black"
-            }`}
-          >
-            Work From Home
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab("leave")}
-            className={`pb-2 px-1 transition-all relative font-medium whitespace-nowrap ${
-              activeTab === "leave"
-                ? "text-black font-semibold after:content-[''] after:absolute after:bottom-0 after:left-0 after:w-full after:h-[2px] after:bg-black"
-                : "text-gray-500 hover:text-black"
-            }`}
-          >
-            Leave Requests
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab("regularization")}
-            className={`pb-2 px-1 transition-all relative font-medium whitespace-nowrap ${
-              activeTab === "regularization"
-                ? "text-black font-semibold after:content-[''] after:absolute after:bottom-0 after:left-0 after:w-full after:h-[2px] after:bg-black"
-                : "text-gray-500 hover:text-black"
-            }`}
-          >
-            Regularization
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab("device")}
-            className={`pb-2 px-1 transition-all relative font-medium whitespace-nowrap ${
-              activeTab === "device"
-                ? "text-black font-semibold after:content-[''] after:absolute after:bottom-0 after:left-0 after:w-full after:h-[2px] after:bg-black"
-                : "text-gray-500 hover:text-black"
-            }`}
-          >
-            Change Device
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab("claims")}
-            className={`pb-2 px-1 transition-all relative font-medium whitespace-nowrap ${
-              activeTab === "claims"
-                ? "text-black font-semibold after:content-[''] after:absolute after:bottom-0 after:left-0 after:w-full after:h-[2px] after:bg-black"
-                : "text-gray-500 hover:text-black"
-            }`}
-          >
-            Expense Claim
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab("insurance")}
-            className={`pb-2 px-1 transition-all relative font-medium whitespace-nowrap ${
-              activeTab === "insurance"
-                ? "text-black font-semibold after:content-[''] after:absolute after:bottom-0 after:left-0 after:w-full after:h-[2px] after:bg-black"
-                : "text-gray-500 hover:text-black"
-            }`}
-          >
-            Insurance Claim
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab("advance")}
-            className={`pb-2 px-1 transition-all relative font-medium whitespace-nowrap ${
-              activeTab === "advance"
-                ? "text-black font-semibold after:content-[''] after:absolute after:bottom-0 after:left-0 after:w-full after:h-[2px] after:bg-black"
-                : "text-gray-500 hover:text-black"
-            }`}
-          >
-            Advance Salary
-          </button>
+          {TABS.map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setActiveTab(tab.key)}
+              className={`pb-2 px-1 transition-all relative font-medium whitespace-nowrap ${
+                activeTab === tab.key
+                  ? "text-black font-semibold after:content-[''] after:absolute after:bottom-0 after:left-0 after:w-full after:h-[2px] after:bg-black"
+                  : "text-gray-500 hover:text-black"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
 
         {/* Tab Panels */}
@@ -164,6 +110,7 @@ function Requests() {
             />
           )}
           {activeTab === "advance" && <AdvanceSalaryReqTab />}
+          {activeTab === "shiftswap" && <ShiftSwapTab />}
         </div>
       </div>
 

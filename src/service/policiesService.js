@@ -1,16 +1,18 @@
 import axiosInstance from "./axiosinstance";
 
 // Named imports must match the exact names exported in your api.js file
-import { 
-  getEmployeeLeavePolicy, 
-  fetchShiftsUrl, 
-  userShiftDetailsUrl, 
-  userLocationDeviceUrl, 
+import {
+  getEmployeeLeavePolicy,
+  fetchShiftsUrl,
+  userShiftDetailsUrl,
+  userLocationDeviceUrl,
   allocateShiftUrl,
   allocateEmployeePolicy,
   fetchEffectiveAllocations,
+  companyShiftSwapLogsUrl,
+  ShiftSwapStatusChangeUrl,
   postSwapShift,
-} from "../api/api"; 
+} from "../api/api";
 
 /**
  * 1. Fetch Employee Policy
@@ -20,14 +22,15 @@ import {
 export const fetchEmployeePolicy = async (uuid) => {
   try {
     const response = await axiosInstance.get(getEmployeeLeavePolicy(uuid));
-    const data = response.data?.data; // This contains { count, policies }
+    const data = response.data?.data; // Contains { count, policies }
+    const policies = Array.isArray(data?.policies) ? data.policies : [];
 
     return {
       count: data?.count || 0,
-      // Return the full array so the component can see all names for the hover effect
-      policies: Array.isArray(data?.policies) ? data.policies : [],
-      // Keep 'policy' as the first item for your existing UI logic
-      policy: Array.isArray(data?.policies) && data.policies.length > 0 ? data.policies[0] : null
+      // Full array so the component can show all names for the hover effect
+      policies,
+      // First item, kept for existing UI logic
+      policy: policies.length > 0 ? policies[0] : null,
     };
   } catch (error) {
     console.error("Error in fetchEmployeePolicy:", error);
@@ -47,6 +50,72 @@ export const fetchShifts = async () => {
     console.error("Error in fetchShifts:", error);
     throw error;
   }
+};
+
+/**
+ * Shift swap service (object-style API)
+ */
+export const shiftSwapService = {
+  // Shift swap requests of the company.
+  //   no departmentId -> whole company
+  //   departmentId    -> only that department (?department_id=104)
+  fetchCompanyShiftSwaps: async (departmentId) => {
+    try {
+      const response = await axiosInstance.get(companyShiftSwapLogsUrl, {
+        params: departmentId ? { department_id: departmentId } : undefined,
+      });
+
+      // Handles both shapes:
+      //  - plain axios response  -> response.data = { data: [...] }
+      //  - unwrapping interceptor -> response     = { data: [...] }
+      const body = response?.data;
+      const list = Array.isArray(body)
+        ? body
+        : Array.isArray(body?.data)
+          ? body.data
+          : Array.isArray(response)
+            ? response
+            : [];
+
+      console.log("[shift swaps] parsed rows:", list.length, list);
+      return list;
+    } catch (error) {
+      console.error(
+        "Error fetching shift swap requests:",
+        error.response?.data || error.message,
+      );
+      throw error;
+    }
+  },
+
+  // 7. Respond to Swap Request (approve / reject)
+  // POST /shifts/employee/shift-swap-requests/respond
+  // Body: { request_id, status: "approved" | "rejected", rejection_reason? }
+  // rejection_reason is required when status is "rejected".
+  respondToSwapRequest: async ({ requestId, status, rejectionReason }) => {
+    try {
+      const normalized = String(status).toLowerCase();
+      const payload = {
+        request_id: Number(requestId),
+        status: normalized,
+      };
+      if (normalized === "rejected") {
+        payload.rejection_reason = (rejectionReason || "").trim();
+      }
+
+      const response = await axiosInstance.post(
+        ShiftSwapStatusChangeUrl,
+        payload,
+      );
+      return response.data;
+    } catch (error) {
+      console.error(
+        "Error responding to shift swap request:",
+        error.response?.data || error.message,
+      );
+      throw error;
+    }
+  },
 };
 
 /**
@@ -97,6 +166,9 @@ export const fetchLeavePolicyByEmployee = async (uuid) => {
   return await fetchEmployeePolicy(uuid);
 };
 
+/**
+ * 7. Allocate Leave Policy
+ */
 export const allocateLeavePolicy = async (payload) => {
   try {
     const response = await axiosInstance.post(allocateEmployeePolicy, payload);
@@ -107,29 +179,33 @@ export const allocateLeavePolicy = async (payload) => {
   }
 };
 
-
+/**
+ * 8. Create Shift
+ * TIP: move "/shifts/add" into api.js as createShiftUrl for consistency.
+ */
 export const createShift = async (payload) => {
   try {
-    // If you haven't defined createShiftUrl in api.js yet, 
-    // you can use "/shifts/add" directly, but consistency is better.
     const response = await axiosInstance.post("/shifts/add", payload);
     return response.data;
   } catch (error) {
     console.error("Error in createShift service:", error);
-    // We throw the error so the Component's catch block can handle the toast messages
+    // Rethrow so the component's catch block can show toast messages
     throw error;
   }
 };
 
+/**
+ * 9. Fetch shift allocations for swap (optionally filtered by user)
+ */
 export const fetchShiftAllocationsforSwap = async (uuid = null) => {
   try {
     const cleanedUuid = typeof uuid === "string" ? uuid.trim() : uuid;
 
     const response = await axiosInstance.get(fetchEffectiveAllocations, {
-      // If cleanedUuid is empty string or null, it skips appending query strings completely
+      // Empty string / null -> no query string appended
       params: cleanedUuid ? { user_id: cleanedUuid } : {},
     });
-    
+
     return response.data;
   } catch (error) {
     console.error("Failed to fetch shift allocations inside service:", error);
@@ -137,47 +213,60 @@ export const fetchShiftAllocationsforSwap = async (uuid = null) => {
   }
 };
 
+/**
+ * 10. Execute Shift Swap
+ * NOTE: unlike most functions here, this does NOT throw.
+ * It returns { success, message, data } for both success and failure.
+ */
 export const executeShiftSwap = async (payload) => {
   try {
     const response = await axiosInstance.post(postSwapShift, payload);
-    
+
     return {
       success: true,
       message: response.data?.message || "Shifts swapped successfully.",
-      data: response.data?.data || null
+      data: response.data?.data || null,
     };
   } catch (error) {
     console.error("Error inside executeShiftSwap service:", error);
-    
-    // 1. Safely extract the inner response object whether it is a pre-parsed object or a raw text string
+
+    // Safely extract the response body whether it is parsed or raw text
     let serverData = error.response?.data;
     if (typeof serverData === "string") {
       try {
         serverData = JSON.parse(serverData);
       } catch (e) {
-        // Leave as string if it isn't JSON format
+        // Leave as string if it isn't JSON
       }
     }
 
-    // 2. Map the extracted backend variables directly to the return block
     const serverMessage = serverData?.message || "shift swap failed";
-    const detailedReason = serverData?.data || "Failed to process shift swap request.";
-    
+    const detailedReason =
+      serverData?.data || "Failed to process shift swap request.";
+
     return {
       success: false,
-      message: serverMessage,  // <-- "shift swap failed"
-      data: detailedReason     // <-- "both employees already have the same shift on..."
+      message: serverMessage, // e.g. "shift swap failed"
+      data: detailedReason, // e.g. "both employees already have the same shift on..."
     };
   }
 };
+
+/**
+ * 11. Get effective allocations (month / department / user filters)
+ */
 export const getEffectiveAllocations = async ({
   month,
   departmentId,
   userId,
 } = {}) => {
-  const params = { month };
+  const params = {};
+  if (month) params.month = month;
   if (departmentId) params.department = departmentId;
   if (userId) params.user_id = userId;
+
   const res = await axiosInstance.get(fetchEffectiveAllocations, { params });
   return res.data;
 };
+
+export default shiftSwapService;

@@ -13,6 +13,16 @@ export const postAnnouncement = "/admin/announcement/add";
 export const Login = "/staff/login";
 export const getAnnouncement = "/admin/announcement/get";
 export const deleteAnnouncement = (id) => `/admin/announcement/delete/${id}`;
+export const updateAnnouncement = (id) => `/admin/announcement/update/${id}`;
+export const postCelebration = "/employee/celebration/upsert";
+export const getCelebrations = "/employee/celebration/list";
+export const deleteCelebration = (type) =>
+  `/employee/celebration/delete?celebration_type=${encodeURIComponent(type)}`;
+
+// Notifications (employee)
+export const getNotificationCount = "/employee/notification/count";
+export const markNotificationRead = (id) => `/employee/notification/${id}/read`;
+export const markAllNotificationsRead = "/employee/notification/read-all";
 // Interactive Announcement Features (Likes, Comments, Emojis)
 export const addComment = (id) => `/announcement/comment/add/${id}`;
 export const addEmoji = (id) => `/announcement/emojis/add/${id}`;
@@ -484,8 +494,12 @@ export const getDeviceHistoryByUser = (uuid) => `/staff/device-history/${uuid}`;
 // Shift & Privilege Endpoints
 export const fetchShiftsUrl = "/shifts/fetch";
 export const allocateShiftUrl = "/shifts/allocate";
+export const companyShiftSwapLogsUrl = "/shifts/company/shift-swap-logs";
 export const userShiftDetailsUrl = (uuid) =>
   `/master/shift-attendance-user-type/${uuid}`;
+
+export const ShiftSwapStatusChangeUrl =
+  "/shifts/employee/shift-swap-requests/respond";
 
 export const getShiftMappedPolicies = "/shifts/mapped-policies";
 export const userLocationDeviceUrl = (uuid) =>
