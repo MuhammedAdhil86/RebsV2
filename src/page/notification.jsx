@@ -9,6 +9,7 @@ import { createPortal } from "react-dom";
 import announceService from "../service/announceService";
 import {
   Calendar,
+  Bell,
   MessageSquare,
   ThumbsUp,
   Megaphone,
@@ -58,23 +59,10 @@ const timeAgo = (s) => {
   return formatShortDate(s);
 };
 
-/* The API returns many rows with completely empty `data`.
-   Hide them instead of rendering blank cards. */
-const hasContent = (n) => {
-  const d = n.data || {};
-  switch (n.type) {
-    case "leave":
-      return Boolean(d.name || d.reason || d.leave_ref_no);
-    case "shift_swap":
-      return Boolean(d.requester_name || d.target_name);
-    case "announcement":
-    case "announcement_like":
-    case "announcement_comment":
-      return Boolean(d.title || d.description || d.attachment);
-    default:
-      return false;
-  }
-};
+/* Every notification is shown, even when the server sends empty `data`
+   (e.g. a like whose announcement was removed). The cards below have fallback
+   text for that, which keeps the list in sync with the server count. */
+const hasContent = () => true;
 
 const TABS = [
   { key: "all", label: "All" },
@@ -699,6 +687,11 @@ const NotificationCard = ({ item, onRead }) => {
               {data.attachment && (
                 <Attachment url={data.attachment} type={data.attachment_type} />
               )}
+              {!data.title && !data.description && !data.attachment && (
+                <p className="text-[11px] text-gray-500 mt-1">
+                  No details available for this announcement.
+                </p>
+              )}
             </>
           ),
         }}
@@ -792,7 +785,25 @@ const NotificationCard = ({ item, onRead }) => {
     );
   }
 
-  return null; // unknown types with no data are hidden by hasContent()
+  // Unknown types still get a row, so nothing is silently hidden.
+  return (
+    <Row
+      icon={<Bell className="w-4 h-4" />}
+      time={time}
+      createdAt={created_at}
+      unread={unread}
+      onMarkRead={markRead}
+    >
+      {{
+        head: (
+          <p className="text-xs text-black leading-snug">
+            {item.action ? String(item.action) : "New notification"}
+          </p>
+        ),
+        body: null,
+      }}
+    </Row>
+  );
 };
 
 export default Notification;
