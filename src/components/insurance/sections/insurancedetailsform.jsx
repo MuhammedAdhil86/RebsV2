@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import {
   ChevronDown,
   Plus,
@@ -9,11 +9,71 @@ import {
   Info,
   Ban,
 } from "lucide-react";
+import { Icon } from "@iconify/react";
 import { FiAlertTriangle, FiX } from "react-icons/fi";
 
 import InsuranceProviderModal from "../../../ui/insuranceprovidermodal";
 import InsuranceTypeModal from "../../../ui/insurancetypemodal";
 import CoverageTypeModal from "../../../ui/coveragetypemodal";
+
+// Badge styles per policy status (keys are lowercase for case-insensitive lookup)
+const STATUS_BADGE_STYLES = {
+  active: {
+    badge: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    dot: "bg-emerald-500",
+  },
+  cancelled: {
+    badge: "bg-red-50 text-red-700 border-red-200",
+    dot: "bg-red-500",
+  },
+  expired: {
+    badge: "bg-orange-50 text-orange-700 border-orange-200",
+    dot: "bg-orange-500",
+  },
+};
+
+const NO_STATUS_STYLE = {
+  badge: "bg-gray-100 text-gray-500 border-gray-200",
+  dot: "bg-gray-400",
+};
+
+// Date input with the Solar calendar icon (native browser icon hidden)
+const DateField = ({ name, value, onChange, disabled, className }) => {
+  const inputRef = useRef(null);
+
+  const openPicker = () => {
+    if (disabled || !inputRef.current) return;
+    try {
+      inputRef.current.showPicker();
+    } catch {
+      inputRef.current.focus();
+    }
+  };
+
+  return (
+    <div className="relative">
+      <input
+        ref={inputRef}
+        type="date"
+        name={name}
+        value={value}
+        onChange={onChange}
+        disabled={disabled}
+        className={`${className} pr-9 [&::-webkit-calendar-picker-indicator]:hidden`}
+      />
+      <button
+        type="button"
+        onClick={openPicker}
+        disabled={disabled}
+        tabIndex={-1}
+        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-black disabled:cursor-not-allowed focus:outline-none"
+        title="Select date"
+      >
+        <Icon icon="solar:calendar-outline" className="w-4 h-4" />
+      </button>
+    </div>
+  );
+};
 
 // Inline Cancel Confirmation Modal to guarantee availability without path resolution errors
 const CancelConfirmationModal = ({ isOpen, onClose, onConfirm, itemName }) => {
@@ -37,27 +97,27 @@ const CancelConfirmationModal = ({ isOpen, onClose, onConfirm, itemName }) => {
 
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 transition-colors"
+              className="text-gray-400 hover:text-black transition-colors"
             >
               <FiX size={20} />
             </button>
           </div>
 
-          <h3 className="text-xl font-semibold text-gray-900 mb-2">
+          <h3 className="text-xl font-medium text-black mb-2">
             Confirm Cancellation
           </h3>
 
-          <p className="text-gray-500 text-sm leading-relaxed">
+          <p className="text-black text-sm leading-relaxed">
             Are you sure you want to cancel{" "}
-            <span className="font-semibold text-gray-800">"{itemName}"</span>?
-            This action cannot be undone.
+            <span className="font-medium text-black">"{itemName}"</span>? This
+            action cannot be undone.
           </p>
         </div>
 
         <div className="bg-gray-50 px-6 py-4 flex gap-3 justify-end">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 rounded-lg transition-colors cursor-pointer"
+            className="px-4 py-2 text-sm font-medium text-black hover:bg-gray-200 rounded-lg transition-colors cursor-pointer"
           >
             Keep
           </button>
@@ -133,14 +193,43 @@ export default function InsuranceDetailsForm({
     setIsCancelModalOpen(false);
   };
 
-  const isCancelled = formData.policyStatus === "Cancelled";
+  // ---- Policy status handling ----
+  const rawStatus = String(formData.policyStatus || "").trim();
+  const statusKey = rawStatus.toLowerCase();
+  const hasStatus = rawStatus !== "";
+
+  const statusLabel = hasStatus ? rawStatus : "No Status";
+  const statusStyle = hasStatus
+    ? STATUS_BADGE_STYLES[statusKey] || NO_STATUS_STYLE
+    : NO_STATUS_STYLE;
+
+  // Cancel option only when a policy exists and its status is Active
+  const canCancelPolicy =
+    !!(formData.id || formData.insuranceId) && statusKey === "active";
+
+  // Shared field styles (black text, no blue, no bold)
+  const inputClass = `w-full border rounded-md p-2 text-black focus:outline-none focus:ring-1 focus:ring-gray-400 transition-colors ${
+    isEditMode
+      ? "border-gray-300 bg-white"
+      : "border-gray-200 bg-gray-50/70 cursor-not-allowed"
+  }`;
+
+  const selectClass = `w-full border rounded-md p-2 appearance-none focus:outline-none focus:ring-1 focus:ring-gray-400 text-black pr-8 transition-colors ${
+    isEditMode
+      ? "border-gray-300 bg-white cursor-pointer"
+      : "border-gray-200 bg-gray-50/70 cursor-not-allowed"
+  }`;
+
+  const labelClass = "block text-black font-medium mb-1";
+  const addBtnClass =
+    "flex items-center gap-0.5 text-black hover:text-gray-500 transition-colors cursor-pointer text-[11px] focus:outline-none outline-none";
 
   return (
     <div className="bg-white shadow-sm rounded-lg p-5 border border-gray-200 space-y-4 font-poppins relative transition-all duration-300 h-full flex flex-col justify-between">
       <div>
         {/* Header section with inline action controls */}
         <div className="flex justify-between items-center border-b border-gray-100 pb-2 mb-4">
-          <h3 className="text-xs text-blue-600 uppercase tracking-wider font-bold">
+          <h3 className="text-xs text-black uppercase tracking-wider font-medium">
             Insurance Details
           </h3>
 
@@ -172,7 +261,7 @@ export default function InsuranceDetailsForm({
                       className="animate-spin text-emerald-600 stroke-[2.5]"
                     />
                   ) : (
-                    <Check size={15} className="stroke-[3]" />
+                    <Check size={15} className="stroke-[2.5]" />
                   )}
                 </button>
               </>
@@ -194,16 +283,16 @@ export default function InsuranceDetailsForm({
           {/* Insurance Provider Lookup */}
           <div className="relative">
             <div className="flex justify-between items-center mb-1">
-              <label className="block text-gray-600 font-medium">
+              <label className="block text-black font-medium">
                 Insurance Provider <span className="text-red-500">*</span>
               </label>
               {isEditMode && (
                 <button
                   type="button"
                   onClick={() => setIsProviderOpen(true)}
-                  className="flex items-center gap-0.5 text-blue-600 hover:text-blue-800 transition-colors cursor-pointer text-[11px] focus:outline-none outline-none"
+                  className={addBtnClass}
                 >
-                  <Plus size={12} className="stroke-[3]" />
+                  <Plus size={12} className="stroke-[2.5]" />
                   <span>Add</span>
                 </button>
               )}
@@ -214,11 +303,7 @@ export default function InsuranceDetailsForm({
                 value={formData.insuranceProvider}
                 onChange={handleChange}
                 disabled={!isEditMode}
-                className={`w-full border rounded-md p-2 appearance-none focus:outline-none focus:ring-1 focus:ring-blue-500 text-gray-800 pr-8 transition-colors ${
-                  isEditMode
-                    ? "border-gray-300 bg-white cursor-pointer"
-                    : "border-gray-200 bg-gray-50/70 text-gray-600 cursor-not-allowed"
-                }`}
+                className={selectClass}
               >
                 <option value="">Select Insurance Provider</option>
                 {providers.map((provider) => (
@@ -238,7 +323,7 @@ export default function InsuranceDetailsForm({
 
           {/* Policy Number */}
           <div>
-            <label className="block text-gray-600 font-medium mb-1">
+            <label className={labelClass}>
               Policy Number <span className="text-red-500">*</span>
             </label>
             <input
@@ -247,27 +332,23 @@ export default function InsuranceDetailsForm({
               value={formData.policyNumber}
               onChange={handleChange}
               disabled={!isEditMode}
-              className={`w-full border rounded-md p-2 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-colors ${
-                isEditMode
-                  ? "border-gray-300 bg-white"
-                  : "border-gray-200 bg-gray-50/70 text-gray-600 cursor-not-allowed"
-              }`}
+              className={inputClass}
             />
           </div>
 
           {/* Insurance Type Lookup */}
           <div className="relative">
             <div className="flex justify-between items-center mb-1">
-              <label className="block text-gray-600 font-medium">
+              <label className="block text-black font-medium">
                 Insurance Type <span className="text-red-500">*</span>
               </label>
               {isEditMode && (
                 <button
                   type="button"
                   onClick={() => setIsInsuranceTypeOpen(true)}
-                  className="flex items-center gap-0.5 text-blue-600 hover:text-blue-800 transition-colors cursor-pointer text-[11px] focus:outline-none outline-none"
+                  className={addBtnClass}
                 >
-                  <Plus size={12} className="stroke-[3]" />
+                  <Plus size={12} className="stroke-[2.5]" />
                   <span>Add</span>
                 </button>
               )}
@@ -278,11 +359,7 @@ export default function InsuranceDetailsForm({
                 value={formData.insuranceType}
                 onChange={handleChange}
                 disabled={!isEditMode}
-                className={`w-full border rounded-md p-2 appearance-none focus:outline-none focus:ring-1 focus:ring-blue-500 text-gray-800 pr-8 transition-colors ${
-                  isEditMode
-                    ? "border-gray-300 bg-white cursor-pointer"
-                    : "border-gray-200 bg-gray-50/70 text-gray-600 cursor-not-allowed"
-                }`}
+                className={selectClass}
               >
                 <option value="">Select Insurance Type</option>
                 {insuranceTypes.map((typeItem) => (
@@ -303,16 +380,16 @@ export default function InsuranceDetailsForm({
           {/* Coverage Type Lookup */}
           <div className="relative">
             <div className="flex justify-between items-center mb-1">
-              <label className="block text-gray-600 font-medium">
+              <label className="block text-black font-medium">
                 Coverage Type <span className="text-red-500">*</span>
               </label>
               {isEditMode && (
                 <button
                   type="button"
                   onClick={() => setIsCoverageTypeOpen(true)}
-                  className="flex items-center gap-0.5 text-blue-600 hover:text-blue-800 transition-colors cursor-pointer text-[11px] focus:outline-none outline-none"
+                  className={addBtnClass}
                 >
-                  <Plus size={12} className="stroke-[3]" />
+                  <Plus size={12} className="stroke-[2.5]" />
                   <span>Add</span>
                 </button>
               )}
@@ -323,11 +400,7 @@ export default function InsuranceDetailsForm({
                 value={formData.coverageType}
                 onChange={handleChange}
                 disabled={!isEditMode}
-                className={`w-full border rounded-md p-2 appearance-none focus:outline-none focus:ring-1 focus:ring-blue-500 text-gray-800 pr-8 transition-colors ${
-                  isEditMode
-                    ? "border-gray-300 bg-white cursor-pointer"
-                    : "border-gray-200 bg-gray-50/70 text-gray-600 cursor-not-allowed"
-                }`}
+                className={selectClass}
               >
                 <option value="">Select Coverage Type</option>
                 {coverageTypes.map((coverage) => (
@@ -347,7 +420,7 @@ export default function InsuranceDetailsForm({
 
           {/* Sum Insured */}
           <div>
-            <label className="block text-gray-600 font-medium mb-1">
+            <label className={labelClass}>
               Sum Insured <span className="text-red-500">*</span>
             </label>
             <input
@@ -356,17 +429,13 @@ export default function InsuranceDetailsForm({
               value={stripCurrency(formData.sumInsured)}
               onChange={handleChange}
               disabled={!isEditMode}
-              className={`w-full border rounded-md p-2 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-colors ${
-                isEditMode
-                  ? "border-gray-300 bg-white"
-                  : "border-gray-200 bg-gray-50/70 text-gray-600 font-semibold cursor-not-allowed"
-              }`}
+              className={inputClass}
             />
           </div>
 
           {/* Premium Amount */}
           <div>
-            <label className="block text-gray-600 font-medium mb-1">
+            <label className={labelClass}>
               Premium Amount <span className="text-red-500">*</span>
             </label>
             <input
@@ -375,17 +444,13 @@ export default function InsuranceDetailsForm({
               value={stripCurrency(formData.premiumAmount)}
               onChange={handleChange}
               disabled={!isEditMode}
-              className={`w-full border rounded-md p-2 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-colors ${
-                isEditMode
-                  ? "border-gray-300 bg-white"
-                  : "border-gray-200 bg-gray-50/70 text-gray-600 font-semibold cursor-not-allowed"
-              }`}
+              className={inputClass}
             />
           </div>
 
           {/* Premium Paid By Selector */}
           <div className="relative">
-            <label className="block text-gray-600 font-medium mb-1">
+            <label className={labelClass}>
               Premium Paid By <span className="text-red-500">*</span>
             </label>
             <div className="relative flex items-center">
@@ -394,11 +459,7 @@ export default function InsuranceDetailsForm({
                 value={formData.premiumPaidBy}
                 onChange={handleChange}
                 disabled={!isEditMode}
-                className={`w-full border rounded-md p-2 appearance-none focus:outline-none focus:ring-1 focus:ring-blue-500 text-gray-800 pr-8 transition-colors ${
-                  isEditMode
-                    ? "border-gray-300 bg-white cursor-pointer"
-                    : "border-gray-200 bg-gray-50/70 text-gray-600 cursor-not-allowed"
-                }`}
+                className={selectClass}
               >
                 <option value="">Select Premium Paid By</option>
                 <option value="Company">Company</option>
@@ -418,7 +479,7 @@ export default function InsuranceDetailsForm({
           {(currentPremiumPaidBy === "Company" ||
             currentPremiumPaidBy === "Shared") && (
             <div>
-              <label className="block text-gray-600 font-medium mb-1">
+              <label className={labelClass}>
                 Company Contribution <span className="text-red-500">*</span>
               </label>
               <input
@@ -427,11 +488,7 @@ export default function InsuranceDetailsForm({
                 value={stripCurrency(formData.companyContribution)}
                 onChange={handleChange}
                 disabled={!isEditMode}
-                className={`w-full border rounded-md p-2 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-colors ${
-                  isEditMode
-                    ? "border-gray-300 bg-white"
-                    : "border-gray-200 bg-gray-50/70 text-gray-600 cursor-not-allowed"
-                }`}
+                className={inputClass}
               />
             </div>
           )}
@@ -440,7 +497,7 @@ export default function InsuranceDetailsForm({
           {(currentPremiumPaidBy === "Employee" ||
             currentPremiumPaidBy === "Shared") && (
             <div>
-              <label className="block text-gray-600 font-medium mb-1">
+              <label className={labelClass}>
                 Employee Contribution <span className="text-red-500">*</span>
               </label>
               <input
@@ -449,58 +506,42 @@ export default function InsuranceDetailsForm({
                 value={stripCurrency(formData.employeeContribution)}
                 onChange={handleChange}
                 disabled={!isEditMode}
-                className={`w-full border rounded-md p-2 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-colors ${
-                  isEditMode
-                    ? "border-gray-300 bg-white"
-                    : "border-gray-200 bg-gray-50/70 text-gray-600 cursor-not-allowed"
-                }`}
+                className={inputClass}
               />
             </div>
           )}
 
           {/* Policy Start Date */}
           <div>
-            <label className="block text-gray-600 font-medium mb-1">
+            <label className={labelClass}>
               Policy Start Date <span className="text-red-500">*</span>
             </label>
-            <input
-              type="date"
+            <DateField
               name="policyStartDate"
               value={formData.policyStartDate}
               onChange={handleChange}
               disabled={!isEditMode}
-              className={`w-full border rounded-md p-2 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-colors ${
-                isEditMode
-                  ? "border-gray-300 bg-white"
-                  : "border-gray-200 bg-gray-50/70 text-gray-600 cursor-not-allowed"
-              }`}
+              className={inputClass}
             />
           </div>
 
           {/* Policy End Date */}
           <div>
-            <label className="block text-gray-600 font-medium mb-1">
+            <label className={labelClass}>
               Policy End Date <span className="text-red-500">*</span>
             </label>
-            <input
-              type="date"
+            <DateField
               name="policyEndDate"
               value={formData.policyEndDate}
               onChange={handleChange}
               disabled={!isEditMode}
-              className={`w-full border rounded-md p-2 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-colors ${
-                isEditMode
-                  ? "border-gray-300 bg-white"
-                  : "border-gray-200 bg-gray-50/70 text-gray-600 cursor-not-allowed"
-              }`}
+              className={inputClass}
             />
           </div>
 
           {/* Coverage Duration (Calculated dynamically) */}
           <div>
-            <label className="block text-gray-600 font-medium mb-1">
-              Coverage Duration
-            </label>
+            <label className={labelClass}>Coverage Duration</label>
             <input
               type="text"
               disabled
@@ -512,13 +553,13 @@ export default function InsuranceDetailsForm({
                     )
                   : formData.coverageDuration || "365 Days"
               }
-              className="w-full border border-gray-200 bg-gray-50 text-gray-700 font-semibold rounded-md p-2 cursor-not-allowed"
+              className="w-full border border-gray-200 bg-gray-50 text-black font-medium rounded-md p-2 cursor-not-allowed"
             />
           </div>
 
           {/* Renewal Reminder Threshold Option Menus */}
           <div className="relative">
-            <label className="block text-gray-600 font-medium mb-1">
+            <label className={labelClass}>
               Renewal Reminder <span className="text-red-500">*</span>
             </label>
             <div className="relative flex items-center">
@@ -527,11 +568,7 @@ export default function InsuranceDetailsForm({
                 value={formData.renewalReminder}
                 onChange={handleChange}
                 disabled={!isEditMode}
-                className={`w-full border rounded-md p-2 appearance-none focus:outline-none focus:ring-1 focus:ring-blue-500 text-gray-800 pr-8 transition-colors ${
-                  isEditMode
-                    ? "border-gray-300 bg-white cursor-pointer"
-                    : "border-gray-200 bg-gray-50/70 text-gray-600 cursor-not-allowed"
-                }`}
+                className={selectClass}
               >
                 <option value="">Select Renewal Reminder</option>
                 <option value="7">7 Days</option>
@@ -551,23 +588,15 @@ export default function InsuranceDetailsForm({
 
           {/* Policy Status Badge Information & Actions Context */}
           <div className="md:col-span-2">
-            <label className="block text-gray-600 font-medium mb-1">
-              Policy Status
-            </label>
+            <label className={labelClass}>Policy Status</label>
             <div className="flex items-center gap-2 mt-2">
               <span
-                className={`inline-flex items-center px-2.5 py-0.5 rounded text-xs font-medium border ${
-                  isCancelled
-                    ? "bg-red-50 text-red-700 border-red-200"
-                    : "bg-emerald-50 text-emerald-700 border-emerald-200"
-                }`}
+                className={`inline-flex items-center px-2.5 py-0.5 rounded text-xs font-medium border ${statusStyle.badge}`}
               >
                 <span
-                  className={`w-1.5 h-1.5 rounded-full mr-1.5 ${
-                    isCancelled ? "bg-red-500" : "bg-emerald-500"
-                  }`}
+                  className={`w-1.5 h-1.5 rounded-full mr-1.5 ${statusStyle.dot}`}
                 ></span>{" "}
-                {formData.policyStatus || "Active"}
+                {statusLabel}
               </span>
 
               {/* Status Info Tooltip Toggle */}
@@ -577,7 +606,7 @@ export default function InsuranceDetailsForm({
                   onMouseEnter={() => setShowStatusTooltip(true)}
                   onMouseLeave={() => setShowStatusTooltip(false)}
                   onClick={() => setShowStatusTooltip(!showStatusTooltip)}
-                  className="text-gray-400 hover:text-blue-600 transition-colors cursor-pointer focus:outline-none p-0.5"
+                  className="text-gray-400 hover:text-black transition-colors cursor-pointer focus:outline-none p-0.5"
                   title="View policy status details"
                 >
                   <Info size={15} />
@@ -586,7 +615,7 @@ export default function InsuranceDetailsForm({
                 {/* Information Popover Details */}
                 {showStatusTooltip && (
                   <div className="absolute bottom-full left-0 mb-2 w-64 p-3 bg-gray-900 text-white text-[11px] rounded-lg shadow-xl z-50 pointer-events-none leading-relaxed">
-                    <p className="font-semibold text-blue-300 mb-1">
+                    <p className="font-medium text-white mb-1">
                       Policy Metadata
                     </p>
                     <p>
@@ -602,8 +631,8 @@ export default function InsuranceDetailsForm({
                 )}
               </div>
 
-              {/* Cancel Policy Action Button (Shown only in READ-ONLY mode and if NOT cancelled) */}
-              {!isEditMode && !isCancelled && (
+              {/* Cancel Policy Action Button (READ-ONLY mode, only when status is Active) */}
+              {!isEditMode && canCancelPolicy && (
                 <button
                   type="button"
                   onClick={() => setIsCancelModalOpen(true)}
@@ -624,18 +653,14 @@ export default function InsuranceDetailsForm({
 
         {/* Narrative Notes Block Component View */}
         <div className="pt-2 text-xs">
-          <label className="block text-gray-600 font-medium mb-1">Notes</label>
+          <label className={labelClass}>Notes</label>
           <textarea
             name="notes"
             rows="3"
             value={formData.notes || ""}
             onChange={handleChange}
             disabled={!isEditMode}
-            className={`w-full border rounded-md p-2 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-colors ${
-              isEditMode
-                ? "border-gray-300 bg-white"
-                : "border-gray-200 bg-gray-50/70 text-gray-600 cursor-not-allowed"
-            }`}
+            className={inputClass}
             maxLength={500}
           ></textarea>
           {isEditMode && (

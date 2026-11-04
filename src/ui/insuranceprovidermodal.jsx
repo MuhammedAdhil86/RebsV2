@@ -77,7 +77,7 @@ const InsuranceProviderModal = ({
       <div className="bg-white w-[40%] rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] border border-white/20">
         <div className="px-8 py-6 border-b border-gray-50 flex justify-between items-center">
           <div>
-            <h2 className="text-xs font-bold text-blue-600 uppercase tracking-wider">
+            <h2 className="text-xs  text-blue-600 uppercase tracking-wider">
               {formData.id === 0
                 ? "Add Insurance Provider"
                 : "Edit Insurance Provider"}

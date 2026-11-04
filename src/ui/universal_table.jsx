@@ -38,12 +38,12 @@ function UniversalTable({ columns, data, rowsPerPage = 6, rowClickHandler }) {
         className="w-full min-w-[600px] text-[12px] bg-white border-separate border-spacing-0 rounded-2xl overflow-hidden"
         ref={headerRef}
       >
-        <thead className="bg-white text-gray-600 text-[12.5px]">
+        <thead className="bg-white text-black text-[12.5px]">
           <tr className="rounded-lg overflow-hidden">
             {columns.map((col, idx) => (
               <th
                 key={col.key}
-                className={`px-4 py-3 font-medium text-gray-700 text-center whitespace-nowrap align-middle 
+                className={`px-4 py-3 font-medium text-black text-center whitespace-nowrap align-middle 
                 ${
                   idx === 0
                     ? "rounded-tl-2xl"
@@ -70,7 +70,7 @@ function UniversalTable({ columns, data, rowsPerPage = 6, rowClickHandler }) {
 
       {/* Body */}
       <table className="w-full min-w-[600px] bg-white border-separate border-spacing-0 rounded-2xl overflow-hidden">
-        <tbody className="text-gray-800">
+        <tbody className="text-black">
           {currentData.length === 0 ? (
             <tr>
               <td
@@ -95,7 +95,7 @@ function UniversalTable({ columns, data, rowsPerPage = 6, rowClickHandler }) {
                     <td
                       key={col.key}
                       data-label={col.label}
-                      className="px-4 py-4 truncate text-center align-middle relative text-[12px] border-b border-[#f9fafb]"
+                      className="px-4 py-4 truncate text-center align-middle relative text-[12px] text-black border-b border-[#f9fafb]"
                       style={{
                         width: colWidths[colIdx]
                           ? `${colWidths[colIdx]}px`
@@ -128,7 +128,7 @@ function UniversalTable({ columns, data, rowsPerPage = 6, rowClickHandler }) {
                         currentPage > 1 && setCurrentPage(currentPage - 1)
                       }
                       disabled={currentPage === 1}
-                      className="p-2 rounded disabled:opacity-50 hover:bg-gray-300"
+                      className="p-2 rounded text-black disabled:opacity-50 hover:bg-gray-300"
                     >
                       <ChevronLeft className="w-4 h-4" />
                     </button>
@@ -138,7 +138,7 @@ function UniversalTable({ columns, data, rowsPerPage = 6, rowClickHandler }) {
                         setCurrentPage(currentPage + 1)
                       }
                       disabled={currentPage === totalPages}
-                      className="p-2 rounded disabled:opacity-50 hover:bg-gray-300"
+                      className="p-2 rounded text-black disabled:opacity-50 hover:bg-gray-300"
                     >
                       <ChevronRight className="w-4 h-4" />
                     </button>

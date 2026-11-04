@@ -29,6 +29,7 @@ export default function InsuranceDetails() {
   const location = useLocation();
   const navigate = useNavigate();
   const employeeImage = location.state?.employeeImage;
+  const listEmployee = location.state?.employee; // record from Manage Insurance
 
   const [activeTab, setActiveTab] = useState(() => {
     return (
@@ -90,6 +91,7 @@ export default function InsuranceDetails() {
                 <EmployeeInsuranceTab
                   uuid={uuid}
                   employeeImage={employeeImage}
+                  listEmployee={listEmployee}
                 />
               )}
               {activeTab === "providers" && (

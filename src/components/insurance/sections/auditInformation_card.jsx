@@ -27,33 +27,29 @@ export default function AuditInformationCard({ auditData }) {
 
   return (
     <div className="bg-white shadow-sm rounded-lg p-4 border border-gray-200">
-      <h3 className="text-xs font-bold text-blue-600 uppercase tracking-wider">
+      <h3 className="text-xs font-medium text-black uppercase tracking-wider">
         Audit Information
       </h3>
 
       <div className="divide-y divide-gray-100 text-xs">
         <div className="grid grid-cols-2 py-2.5 items-center">
-          <div className="text-gray-600 font-medium">action</div>
-          <div className="text-gray-700 text-right sm:text-left">{action}</div>
+          <div className="text-black font-medium">action</div>
+          <div className="text-black text-right sm:text-left">{action}</div>
         </div>
 
         <div className="grid grid-cols-2 py-2.5 items-center">
-          <div className="text-gray-600 font-medium">remarks</div>
-          <div className="text-gray-700 text-right sm:text-left">{remarks}</div>
+          <div className="text-black font-medium">remarks</div>
+          <div className="text-black text-right sm:text-left">{remarks}</div>
         </div>
 
         <div className="grid grid-cols-2 py-2.5 items-center">
-          <div className="text-gray-600 font-medium">changed_by</div>
-          <div className="text-gray-700 text-right sm:text-left">
-            {changedBy}
-          </div>
+          <div className="text-black font-medium">changed_by</div>
+          <div className="text-black text-right sm:text-left">{changedBy}</div>
         </div>
 
         <div className="grid grid-cols-2 py-2.5 items-center">
-          <div className="text-gray-600 font-medium">changed_at</div>
-          <div className="text-gray-700 text-right sm:text-left">
-            {changedAt}
-          </div>
+          <div className="text-black font-medium">changed_at</div>
+          <div className="text-black text-right sm:text-left">{changedAt}</div>
         </div>
       </div>
     </div>

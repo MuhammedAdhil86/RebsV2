@@ -10,24 +10,26 @@ import {
   FileText,
 } from "lucide-react";
 
+const EMPTY_DOCS = [];
+
+const toDocArray = (data) => (Array.isArray(data) ? data : data ? [data] : []);
+
 export default function InsuranceDocumentCard({
-  documentData = [],
+  documentData = EMPTY_DOCS,
   onDocumentChange,
   onSave,
   saving = false,
 }) {
   const [isEditMode, setIsEditMode] = useState(false);
-  const [localDocs, setLocalDocs] = useState([]);
+  const [localDocs, setLocalDocs] = useState(() => toDocArray(documentData));
   const fileInputRef = useRef(null);
 
+  // Sync from the parent only when NOT editing, so picked files are never wiped
   useEffect(() => {
-    const parsed = Array.isArray(documentData)
-      ? documentData
-      : documentData
-        ? [documentData]
-        : [];
-    setLocalDocs(parsed);
-  }, [documentData]);
+    if (!isEditMode) {
+      setLocalDocs(toDocArray(documentData));
+    }
+  }, [documentData, isEditMode]);
 
   const getFileName = (doc) => {
     if (doc?.document_name) return doc.document_name;
@@ -67,21 +69,12 @@ export default function InsuranceDocumentCard({
   };
 
   const handleEditClick = () => {
-    const parsed = Array.isArray(documentData)
-      ? documentData
-      : documentData
-        ? [documentData]
-        : [];
-    setLocalDocs(parsed);
+    setLocalDocs(toDocArray(documentData));
     setIsEditMode(true);
   };
 
   const handleCancelAction = () => {
-    const resetDocs = Array.isArray(documentData)
-      ? documentData
-      : documentData
-        ? [documentData]
-        : [];
+    const resetDocs = toDocArray(documentData);
     setLocalDocs(resetDocs);
     if (onDocumentChange) onDocumentChange(resetDocs);
     setIsEditMode(false);
@@ -106,7 +99,7 @@ export default function InsuranceDocumentCard({
     let updatedList = [...localDocs];
 
     if (replaceIndex !== null) {
-      // REPLACE: Retain original ID (e.g. 1) to inform backend to replace existing
+      // REPLACE: Retain original ID to inform backend to replace existing
       const existingDoc = localDocs[replaceIndex];
       const newFile = selectedFiles[0];
 
@@ -148,19 +141,19 @@ export default function InsuranceDocumentCard({
     }
   };
 
-  const listToRender = isEditMode ? localDocs : documentData;
+  const listToRender = isEditMode ? localDocs : toDocArray(documentData);
 
   return (
     <div
       className={`bg-white shadow-sm rounded-lg p-5 border border-gray-200 space-y-4 font-poppins transition-all duration-300 ${
         isEditMode
-          ? "col-span-full w-full ring-2 ring-blue-500/20 shadow-md"
+          ? "col-span-full w-full ring-2 ring-gray-300/40 shadow-md"
           : "w-full"
       }`}
     >
       {/* Header section */}
       <div className="flex justify-between items-center border-b border-gray-100 pb-2">
-        <h3 className="text-xs font-bold text-blue-600 uppercase tracking-wider">
+        <h3 className="text-xs font-medium text-black uppercase tracking-wider">
           Insurance Documents
         </h3>
 
@@ -171,7 +164,7 @@ export default function InsuranceDocumentCard({
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded bg-blue-50 text-blue-600 hover:bg-blue-100 transition-all font-medium mr-1 cursor-pointer"
+                className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded bg-gray-100 text-black hover:bg-gray-200 hover:text-gray-500 transition-all font-medium mr-1 cursor-pointer"
               >
                 <Plus size={13} className="stroke-[2.5]" />
                 <span>Upload Document</span>
@@ -202,7 +195,7 @@ export default function InsuranceDocumentCard({
                     className="animate-spin text-emerald-600 stroke-[2.5]"
                   />
                 ) : (
-                  <Check size={15} className="stroke-[3]" />
+                  <Check size={15} className="stroke-[2.5]" />
                 )}
               </button>
             </>
@@ -246,10 +239,10 @@ export default function InsuranceDocumentCard({
                 {/* File Extension & Metadata */}
                 <div className="flex items-center space-x-3 overflow-hidden">
                   <div
-                    className={`w-9 h-9 rounded flex items-center justify-center font-bold text-[10px] border flex-shrink-0 ${
+                    className={`w-9 h-9 rounded flex items-center justify-center font-medium text-[10px] border flex-shrink-0 ${
                       ext === "PDF"
                         ? "bg-red-50 text-red-500 border-red-100"
-                        : "bg-blue-50 text-blue-500 border-blue-100"
+                        : "bg-gray-100 text-black border-gray-200"
                     }`}
                   >
                     {ext}
@@ -257,7 +250,7 @@ export default function InsuranceDocumentCard({
                   <div className="text-xs truncate">
                     <span
                       title={name}
-                      className="font-semibold text-gray-800 block truncate max-w-[200px] sm:max-w-[320px]"
+                      className="font-medium text-black block truncate max-w-[200px] sm:max-w-[320px]"
                     >
                       {name}
                     </span>
@@ -278,7 +271,7 @@ export default function InsuranceDocumentCard({
                     <button
                       type="button"
                       onClick={() => handleDownload(doc)}
-                      className="flex items-center gap-1 px-2.5 py-1 border border-gray-200 rounded text-[11px] text-gray-700 bg-white hover:bg-gray-100 transition cursor-pointer"
+                      className="flex items-center gap-1 px-2.5 py-1 border border-gray-200 rounded text-[11px] text-black bg-white hover:bg-gray-100 transition cursor-pointer"
                       title="Download Document"
                     >
                       <Download size={12} />
@@ -288,7 +281,7 @@ export default function InsuranceDocumentCard({
 
                   {isEditMode && (
                     <label
-                      className="p-1.5 text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded transition cursor-pointer"
+                      className="p-1.5 text-black hover:text-gray-500 hover:bg-gray-100 rounded transition cursor-pointer"
                       title={`Replace document preserving id: ${doc.id}`}
                     >
                       <RefreshCw size={14} />

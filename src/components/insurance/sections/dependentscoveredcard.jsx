@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   CheckCircle2,
   XCircle,
@@ -9,6 +9,44 @@ import {
   Trash2,
   Loader2,
 } from "lucide-react";
+import { Icon } from "@iconify/react";
+
+const DateField = ({ name, value, onChange, disabled, className }) => {
+  const inputRef = useRef(null);
+
+  const openPicker = () => {
+    if (disabled || !inputRef.current) return;
+    try {
+      inputRef.current.showPicker();
+    } catch {
+      inputRef.current.focus();
+    }
+  };
+
+  return (
+    <div className="relative">
+      <input
+        ref={inputRef}
+        type="date"
+        name={name}
+        value={value}
+        onChange={onChange}
+        disabled={disabled}
+        className={`${className} pr-9 [&::-webkit-calendar-picker-indicator]:hidden`}
+      />
+      <button
+        type="button"
+        onClick={openPicker}
+        disabled={disabled}
+        tabIndex={-1}
+        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-black disabled:cursor-not-allowed focus:outline-none"
+        title="Select date"
+      >
+        <Icon icon="solar:calendar-outline" className="w-4 h-4" />
+      </button>
+    </div>
+  );
+};
 
 export default function DependentsCoveredCard({
   dependents = [],
@@ -82,13 +120,13 @@ export default function DependentsCoveredCard({
     <div
       className={`bg-white shadow-sm rounded-lg p-5 border border-gray-200 space-y-4 font-poppins transition-all duration-300 ${
         isEditMode
-          ? "col-span-full w-full ring-2 ring-blue-500/20 shadow-md"
+          ? "col-span-full w-full ring-2 ring-gray-300/40 shadow-md"
           : "w-full"
       }`}
     >
       {/* Header section with inline actions */}
       <div className="flex justify-between items-center border-b border-gray-100 pb-2">
-        <h3 className="text-xs font-bold text-blue-600 uppercase tracking-wider">
+        <h3 className="text-xs font-medium text-black uppercase tracking-wider">
           Dependents Covered
         </h3>
 
@@ -99,7 +137,7 @@ export default function DependentsCoveredCard({
               <button
                 type="button"
                 onClick={handleAddRow}
-                className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded bg-blue-50 text-blue-600 hover:bg-blue-100 transition-all font-medium mr-1 cursor-pointer"
+                className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded bg-gray-100 text-black hover:bg-gray-200 hover:text-gray-500 transition-all font-medium mr-1 cursor-pointer"
               >
                 <Plus size={13} className="stroke-[2.5]" />
                 <span>Add Dependent</span>
@@ -130,7 +168,7 @@ export default function DependentsCoveredCard({
                     className="animate-spin text-emerald-600 stroke-[2.5]"
                   />
                 ) : (
-                  <Check size={15} className="stroke-[3]" />
+                  <Check size={15} className="stroke-[2.5]" />
                 )}
               </button>
             </>
@@ -155,7 +193,7 @@ export default function DependentsCoveredCard({
           }`}
         >
           <thead>
-            <tr className="bg-gray-50 text-gray-600 border-b border-gray-200">
+            <tr className="bg-gray-50 text-black border-b border-gray-200">
               <th className="p-3 font-medium text-center w-12">Covered</th>
               <th
                 className={`p-3 font-medium ${isEditMode ? "min-w-[160px]" : ""}`}
@@ -177,7 +215,7 @@ export default function DependentsCoveredCard({
               )}
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-200 text-gray-800">
+          <tbody className="divide-y divide-gray-200 text-black">
             {listToRender.length > 0 ? (
               listToRender.map((dep, index) => (
                 <tr
@@ -197,7 +235,7 @@ export default function DependentsCoveredCard({
                             e.target.checked,
                           )
                         }
-                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer h-4 w-4"
+                        className="rounded border-gray-300 text-black accent-black focus:ring-gray-400 cursor-pointer h-4 w-4"
                       />
                     ) : dep.is_covered ? (
                       <CheckCircle2
@@ -228,10 +266,12 @@ export default function DependentsCoveredCard({
                           )
                         }
                         placeholder="Dependent Name"
-                        className="w-full border border-gray-300 rounded px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white text-xs"
+                        className="w-full border border-gray-300 rounded px-2.5 py-1.5 text-black focus:outline-none focus:ring-1 focus:ring-gray-400 bg-white text-xs"
                       />
                     ) : (
-                      <span className="font-medium">{dep.dependent_name}</span>
+                      <span className="font-medium text-black">
+                        {dep.dependent_name}
+                      </span>
                     )}
                   </td>
 
@@ -249,18 +289,17 @@ export default function DependentsCoveredCard({
                           )
                         }
                         placeholder="Relationship"
-                        className="w-full border border-gray-300 rounded px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white text-xs"
+                        className="w-full border border-gray-300 rounded px-2.5 py-1.5 text-black focus:outline-none focus:ring-1 focus:ring-gray-400 bg-white text-xs"
                       />
                     ) : (
-                      <span>{dep.relationship}</span>
+                      <span className="text-black">{dep.relationship}</span>
                     )}
                   </td>
 
                   {/* Date of Birth Input */}
                   <td className="p-2.5 align-middle">
                     {isEditMode ? (
-                      <input
-                        type="date"
+                      <DateField
                         value={formatDateForInput(dep.date_of_birth)}
                         onChange={(e) =>
                           handleFieldChange(
@@ -269,10 +308,10 @@ export default function DependentsCoveredCard({
                             e.target.value,
                           )
                         }
-                        className="w-full border border-gray-300 rounded px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white text-xs"
+                        className="w-full border border-gray-300 rounded px-2.5 py-1.5 text-black focus:outline-none focus:ring-1 focus:ring-gray-400 bg-white text-xs"
                       />
                     ) : (
-                      <span>
+                      <span className="text-black">
                         {dep.date_of_birth &&
                         !dep.date_of_birth.startsWith("0001")
                           ? new Date(dep.date_of_birth).toLocaleDateString(

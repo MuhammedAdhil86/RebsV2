@@ -12,6 +12,7 @@ import {
   saveEmployeeInsuranceUpdate,
   cancelEmployeeInsurance,
 } from "../../service/insurance";
+import { getActiveUsersLight } from "../../service/employeeService";
 
 import EmployeeInfoCard from "./sections/employeeunfocard";
 import InsuranceDetailsForm from "./sections/insurancedetailsform";
@@ -41,9 +42,23 @@ const toArray = (value) => {
   return [];
 };
 
+// Pulls the message the backend sent, in the common response shapes
+const getBackendError = (error) => {
+  const data = error?.response?.data;
+  if (typeof data === "string" && data.trim()) return data;
+  return (
+    data?.message ||
+    data?.error ||
+    (Array.isArray(data?.errors) ? data.errors.join(", ") : data?.errors) ||
+    error?.message ||
+    "Something went wrong."
+  );
+};
+
 export default function EmployeeInsuranceTab({
   uuid: propUuid,
   employeeImage,
+  listEmployee: listEmployeeProp,
 }) {
   const params = useParams();
   const uuid = propUuid || params.uuid || params.id;
@@ -53,10 +68,12 @@ export default function EmployeeInsuranceTab({
   const [saving, setSaving] = useState(false);
   const [employeeInfo, setEmployeeInfo] = useState(null);
 
+  // Employee record from the light API (router state first, API lookup as fallback)
+  const [listEmployee, setListEmployee] = useState(listEmployeeProp || null);
+
   const [beneficiaries, setBeneficiaries] = useState([]);
   const [dependents, setDependents] = useState([]);
   const [documents, setDocuments] = useState([]);
-  const [rawFiles, setRawFiles] = useState([]);
 
   const [claims, setClaims] = useState([]);
   const [providers, setProviders] = useState([]);
@@ -167,11 +184,38 @@ export default function EmployeeInsuranceTab({
       }
     } catch (error) {
       console.error("❌ Failed to load employee insurance data:", error);
-      toast.error("Failed to fetch employee insurance details.");
+      toast.error(getBackendError(error));
     } finally {
       setLoading(false);
     }
   };
+
+  // Employee info: use router state if present, otherwise look it up in the light API
+  useEffect(() => {
+    if (listEmployeeProp) {
+      setListEmployee(listEmployeeProp);
+      return;
+    }
+    if (!uuid) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const list = await getActiveUsersLight();
+        const found = (Array.isArray(list) ? list : []).find(
+          (u) =>
+            String(u.uuid) === String(uuid) || String(u.id) === String(uuid),
+        );
+        if (!cancelled) setListEmployee(found || null);
+      } catch (err) {
+        console.error("❌ Failed to load employee from light API:", err);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [uuid, listEmployeeProp]);
 
   useEffect(() => {
     loadData();
@@ -200,23 +244,21 @@ export default function EmployeeInsuranceTab({
       await loadData();
     } catch (error) {
       console.error("❌ Cancellation Failure:", error);
-      toast.error(
-        error.response?.data?.message ||
-          error.message ||
-          "Failed to cancel insurance policy.",
-      );
+      toast.error(getBackendError(error));
     } finally {
       setSaving(false);
     }
   };
 
+  // Photo from the light list first, then the details API.
+  // Empty string -> EmployeeInfoCard shows the first-letter avatar.
   const backendBaseUrl = "https://rebs.blr1.digitaloceanspaces.com/";
-  const rawImage = employeeImage || employeeInfo?.image;
+  const rawImage = employeeImage || listEmployee?.image || employeeInfo?.image;
   const finalImageSrc = rawImage
     ? rawImage.startsWith("http")
       ? rawImage
       : `${backendBaseUrl}${rawImage.startsWith("/") ? rawImage.slice(1) : rawImage}`
-    : "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80";
+    : "";
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -229,11 +271,9 @@ export default function EmployeeInsuranceTab({
     return Number(cleanStr) || 0;
   };
 
-  const handleDocumentChange = (updatedDocs, freshlySelectedFiles = []) => {
-    setDocuments(updatedDocs);
-    if (freshlySelectedFiles.length > 0) {
-      setRawFiles((prev) => [...prev, ...freshlySelectedFiles]);
-    }
+  // The card sends the full list; each new/replaced doc carries its own File
+  const handleDocumentChange = (updatedDocs) => {
+    setDocuments(Array.isArray(updatedDocs) ? updatedDocs : []);
   };
 
   const handleSave = async () => {
@@ -244,6 +284,7 @@ export default function EmployeeInsuranceTab({
       let companyShare = cleanNumericString(formData.companyContribution);
       let employeeShare = cleanNumericString(formData.employeeContribution);
 
+      // Auto-fill shares (calculation only, no front-end validation)
       if (formData.premiumPaidBy === "Company") {
         companyShare = premium;
         employeeShare = 0;
@@ -252,27 +293,10 @@ export default function EmployeeInsuranceTab({
         employeeShare = premium;
       }
 
-      if (premium > 0 && companyShare + employeeShare !== premium) {
-        toast.error(
-          `Premium allocation fault! Company Share (${companyShare}) + Employee Share (${employeeShare}) must equal Total Premium (${premium}).`,
-        );
-        setSaving(false);
-        return false;
-      }
-
-      if (beneficiaries.length > 0) {
-        const totalAllocation = beneficiaries.reduce(
-          (sum, b) => sum + (Number(b.allocation_percentage) || 0),
-          0,
-        );
-        if (totalAllocation !== 100) {
-          toast.error(
-            `Invalid beneficiary configurations! Total shares equal ${totalAllocation}%, but must sum up to exactly 100%.`,
-          );
-          setSaving(false);
-          return false;
-        }
-      }
+      // Files are taken straight from the documents list (same order as payload)
+      const filesToUpload = documents
+        .filter((doc) => doc.file instanceof File)
+        .map((doc) => doc.file);
 
       const insurancePayload = {
         ...(policyRecordId && policyRecordId !== 0
@@ -327,26 +351,34 @@ export default function EmployeeInsuranceTab({
           is_covered: !!d.is_covered,
         })),
 
-        documents: documents
-          .filter((doc) => doc.file_url || (doc.id && doc.id !== 0))
-          .map((doc) => ({
-            ...(doc.id && doc.id !== 0 ? { id: doc.id } : {}),
-            document_name: doc.document_name,
-            file_url: doc.file_url || "",
-          })),
+        // No filter: new uploads (id 0, no file_url) must be included too
+        documents: documents.map((doc) => ({
+          ...(doc.id && doc.id !== 0 ? { id: doc.id } : {}),
+          document_name: doc.document_name,
+          file_url: doc.file_url || "",
+        })),
       };
 
-      await saveEmployeeInsuranceUpdate(insurancePayload, rawFiles);
+      await saveEmployeeInsuranceUpdate(insurancePayload, filesToUpload);
       toast.success("Insurance configurations synchronized successfully!");
-      setRawFiles([]);
+
+      // Quietly refresh documents so File objects are replaced by saved records
+      // (prevents re-uploading the same files on the next save)
+      try {
+        const fresh = await fetchEmployeeInsuranceDetails(uuid);
+        setDocuments(fresh?.documents || []);
+      } catch (refreshError) {
+        console.error(
+          "❌ Failed to refresh documents after save:",
+          refreshError,
+        );
+      }
+
       return true;
     } catch (error) {
       console.error("❌ Submission Sync Failure:", error);
-      toast.error(
-        error.response?.data?.message ||
-          error.message ||
-          "Failed to finalize updates.",
-      );
+      // Show only what the backend says
+      toast.error(getBackendError(error));
       return false;
     } finally {
       setSaving(false);
@@ -366,6 +398,7 @@ export default function EmployeeInsuranceTab({
       <EmployeeInfoCard
         uuid={uuid}
         employeeInfo={employeeInfo}
+        listEmployee={listEmployee}
         finalImageSrc={finalImageSrc}
       />
 

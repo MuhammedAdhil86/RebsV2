@@ -88,13 +88,12 @@ export const saveEmployeeInsuranceUpdate = async (payload) => {
 export const submitUpsertInsuranceProvider = async (payload) => {
   try {
     const response = await axiosInstance.put(upsertInsuranceProvider, payload);
-    return response.data?.data || response.data;
+    return response.data; // { status_code, message, data }
   } catch (error) {
     console.error("❌ Error upserting insurance provider:", error);
     throw error;
   }
 };
-
 /**
  * Upsert an insurance type option
  */

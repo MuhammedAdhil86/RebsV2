@@ -21,6 +21,10 @@ const toArray = (value) => {
   return [];
 };
 
+// Prefer the backend's message; handles both a raw body and an axios response
+const getSuccessMessage = (res, fallback) =>
+  res?.message || res?.data?.message || fallback;
+
 // One config per settings section – the panel below is fully driven by it
 const SECTIONS = {
   providers: {
@@ -140,9 +144,12 @@ function SettingsPanel({ config }) {
 
     try {
       setSaving(true);
-      await config.save(payload);
+      const res = await config.save(payload);
       toast.success(
-        `${config.singular} ${editing ? "updated" : "created"} successfully!`,
+        getSuccessMessage(
+          res,
+          `${config.singular} ${editing ? "updated" : "created"} successfully!`,
+        ),
       );
       setModalOpen(false);
       await loadItems();
@@ -162,8 +169,10 @@ function SettingsPanel({ config }) {
     if (!deleteTarget) return;
 
     try {
-      await config.remove(deleteTarget.id);
-      toast.success(`${config.singular} deleted successfully!`);
+      const res = await config.remove(deleteTarget.id);
+      toast.success(
+        getSuccessMessage(res, `${config.singular} deleted successfully!`),
+      );
       setDeleteTarget(null);
       await loadItems();
     } catch (err) {
@@ -200,10 +209,12 @@ function SettingsPanel({ config }) {
         <table className="w-full text-left text-xs">
           <thead className="bg-gray-50 border-b border-gray-200 text-gray-500">
             <tr>
-              <th className="p-3">{config.nameLabel}</th>
-              {config.hasDescription && <th className="p-3">Description</th>}
-              {config.showStatus && <th className="p-3">Status</th>}
-              <th className="p-3 text-right">Actions</th>
+              <th className="p-3 font-normal">{config.nameLabel}</th>
+              {config.hasDescription && (
+                <th className="p-3 font-normal">Description</th>
+              )}
+              {config.showStatus && <th className="p-3 font-normal">Status</th>}
+              <th className="p-3 text-right font-normal">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100 text-gray-700">

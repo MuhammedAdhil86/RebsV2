@@ -90,13 +90,13 @@ export default function BeneficiaryDetailsCard({
     <div
       className={`bg-white shadow-sm rounded-lg p-5 border border-gray-200 space-y-4 font-poppins transition-all duration-300 ${
         isEditMode
-          ? "col-span-full w-full ring-2 ring-blue-500/20 shadow-md"
+          ? "col-span-full w-full ring-2 ring-gray-300/40 shadow-md"
           : "w-full"
       }`}
     >
       {/* Header section with inline action buttons */}
       <div className="flex justify-between items-center border-b border-gray-100 pb-2">
-        <h3 className="text-xs font-bold text-blue-600 uppercase tracking-wider">
+        <h3 className="text-xs font-medium text-black uppercase tracking-wider">
           Beneficiary Details
         </h3>
 
@@ -106,10 +106,10 @@ export default function BeneficiaryDetailsCard({
               <button
                 type="button"
                 onClick={handleAddRow}
-                className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded bg-blue-50 text-blue-600 hover:bg-blue-100 transition-all font-medium mr-1 cursor-pointer"
+                className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded bg-gray-100 text-black hover:bg-gray-200 hover:text-gray-500 transition-all font-medium mr-1 cursor-pointer"
               >
                 <Plus size={13} className="stroke-[2.5]" />
-                <span>Add Beneficiary</span>
+                <span>Add </span>
               </button>
 
               <button
@@ -135,7 +135,7 @@ export default function BeneficiaryDetailsCard({
                     className="animate-spin text-emerald-600 stroke-[2.5]"
                   />
                 ) : (
-                  <Check size={15} className="stroke-[3]" />
+                  <Check size={15} className="stroke-[2.5]" />
                 )}
               </button>
             </>
@@ -160,7 +160,7 @@ export default function BeneficiaryDetailsCard({
           }`}
         >
           <thead>
-            <tr className="bg-gray-50 text-gray-600 border-b border-gray-200">
+            <tr className="bg-gray-50 text-black border-b border-gray-200">
               <th className="p-3 font-medium text-center w-12">Primary</th>
               <th
                 className={`p-3 font-medium ${isEditMode ? "min-w-[160px]" : ""}`}
@@ -190,7 +190,7 @@ export default function BeneficiaryDetailsCard({
               )}
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-200 text-gray-800">
+          <tbody className="divide-y divide-gray-200 text-black">
             {listToRender.length > 0 ? (
               listToRender.map((b, index) => (
                 <tr
@@ -210,7 +210,7 @@ export default function BeneficiaryDetailsCard({
                             e.target.checked,
                           )
                         }
-                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer h-4 w-4"
+                        className="rounded border-gray-300 text-black accent-black focus:ring-gray-400 cursor-pointer h-4 w-4"
                       />
                     ) : b.is_primary ? (
                       <CheckCircle2
@@ -241,10 +241,12 @@ export default function BeneficiaryDetailsCard({
                           )
                         }
                         placeholder="Beneficiary Name"
-                        className="w-full border border-gray-300 rounded px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white text-xs"
+                        className="w-full border border-gray-300 rounded px-2.5 py-1.5 text-black focus:outline-none focus:ring-1 focus:ring-gray-400 bg-white text-xs"
                       />
                     ) : (
-                      <span className="font-medium">{b.beneficiary_name}</span>
+                      <span className="font-medium text-black">
+                        {b.beneficiary_name}
+                      </span>
                     )}
                   </td>
 
@@ -262,10 +264,10 @@ export default function BeneficiaryDetailsCard({
                           )
                         }
                         placeholder="Relationship"
-                        className="w-full border border-gray-300 rounded px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white text-xs"
+                        className="w-full border border-gray-300 rounded px-2.5 py-1.5 text-black focus:outline-none focus:ring-1 focus:ring-gray-400 bg-white text-xs"
                       />
                     ) : (
-                      <span>{b.relationship}</span>
+                      <span className="text-black">{b.relationship}</span>
                     )}
                   </td>
 
@@ -283,10 +285,10 @@ export default function BeneficiaryDetailsCard({
                           )
                         }
                         placeholder="Contact Number"
-                        className="w-full border border-gray-300 rounded px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white text-xs"
+                        className="w-full border border-gray-300 rounded px-2.5 py-1.5 text-black focus:outline-none focus:ring-1 focus:ring-gray-400 bg-white text-xs"
                       />
                     ) : (
-                      <span>{b.contact_number}</span>
+                      <span className="text-black">{b.contact_number}</span>
                     )}
                   </td>
 
@@ -300,10 +302,10 @@ export default function BeneficiaryDetailsCard({
                           handleFieldChange(index, "email", e.target.value)
                         }
                         placeholder="Email Address"
-                        className="w-full border border-gray-300 rounded px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white text-xs"
+                        className="w-full border border-gray-300 rounded px-2.5 py-1.5 text-black focus:outline-none focus:ring-1 focus:ring-gray-400 bg-white text-xs"
                       />
                     ) : (
-                      <span>{b.email}</span>
+                      <span className="text-black">{b.email}</span>
                     )}
                   </td>
 
@@ -321,10 +323,10 @@ export default function BeneficiaryDetailsCard({
                           )
                         }
                         placeholder="0"
-                        className="w-20 border border-gray-300 rounded px-2 py-1.5 text-center focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white font-semibold text-xs mx-auto block"
+                        className="w-20 border border-gray-300 rounded px-2 py-1.5 text-center text-black focus:outline-none focus:ring-1 focus:ring-gray-400 bg-white font-medium text-xs mx-auto block"
                       />
                     ) : (
-                      <span className="font-semibold">
+                      <span className="font-medium text-black">
                         {b.allocation_percentage}%
                       </span>
                     )}
