@@ -74,9 +74,9 @@ const INITIAL = [
     ],
   },
   {
-    id: "c-hr",
-    kind: "channel",
-    name: "hr-team",
+    id: "t-hr",
+    kind: "team",
+    name: "HR Team",
     topic: "Everything HR: leave, attendance, policies",
     members: ["u0", "u1", "u2", "u3"],
     unread: 4,
@@ -118,9 +118,9 @@ const INITIAL = [
     ],
   },
   {
-    id: "c-eng",
-    kind: "channel",
-    name: "engineering",
+    id: "t-eng",
+    kind: "team",
+    name: "Engineering",
     topic: "Builds, releases and code reviews",
     members: ["u0", "u6", "u7", "u4"],
     unread: 0,
@@ -163,11 +163,11 @@ const INITIAL = [
     ],
   },
   {
-    id: "c-pay",
-    kind: "channel",
+    id: "t-pay",
+    kind: "team",
     private: true,
-    name: "payroll-ops",
-    topic: "Private: payroll processing",
+    name: "Payroll Ops",
+    topic: "Private team for payroll processing",
     members: ["u0", "u2", "u3"],
     unread: 0,
     messages: [
@@ -177,6 +177,74 @@ const INITIAL = [
         user: "u2",
         time: "2:15 PM",
         text: "October payroll draft is ready for approval.",
+      },
+    ],
+  },
+  {
+    id: "t-fin",
+    kind: "team",
+    name: "Finance",
+    topic: "Budgets, claims and reimbursements",
+    members: ["u0", "u2", "u8"],
+    unread: 0,
+    messages: [
+      { day: "Monday" },
+      {
+        id: 1,
+        user: "u8",
+        time: "1:20 PM",
+        text: "Expense claims for October are in. Reviewing today.",
+      },
+    ],
+  },
+  {
+    id: "t-des",
+    kind: "team",
+    name: "Design",
+    topic: "UI, branding and assets",
+    members: ["u0", "u7", "u5"],
+    unread: 0,
+    messages: [
+      { day: "Monday" },
+      {
+        id: 1,
+        user: "u7",
+        time: "12:05 PM",
+        text: "New dashboard mockups are ready for feedback.",
+      },
+    ],
+  },
+  {
+    id: "c-it",
+    kind: "channel",
+    name: "it-support",
+    topic: "Laptops, access and software requests",
+    members: ["u0", "u4", "u6"],
+    unread: 0,
+    messages: [
+      { day: "Yesterday" },
+      {
+        id: 1,
+        user: "u4",
+        time: "3:30 PM",
+        text: "VPN issue from this morning is resolved.",
+      },
+    ],
+  },
+  {
+    id: "c-rand",
+    kind: "channel",
+    name: "random",
+    topic: "Water-cooler talk",
+    members: ["u0", "u1", "u2", "u3", "u4"],
+    unread: 0,
+    messages: [
+      { day: "Today" },
+      {
+        id: 1,
+        user: "u1",
+        time: "9:15 AM",
+        text: "Anyone up for chai at 4? ☕",
       },
     ],
   },
@@ -269,6 +337,62 @@ const INITIAL = [
       { id: 2, user: ME, time: "3:55 PM", text: "Yes, until the 15th." },
     ],
   },
+  {
+    id: "d-2",
+    kind: "dm",
+    with: "u2",
+    unread: 0,
+    messages: [
+      { day: "Today" },
+      {
+        id: 1,
+        user: "u2",
+        time: "8:40 AM",
+        text: "Can you approve the payroll draft today?",
+      },
+    ],
+  },
+  {
+    id: "d-3",
+    kind: "dm",
+    with: "u3",
+    unread: 0,
+    messages: [
+      { day: "Yesterday" },
+      {
+        id: 1,
+        user: ME,
+        time: "5:00 PM",
+        text: "Please send the exceptions list by EOD.",
+      },
+      { id: 2, user: "u3", time: "5:10 PM", text: "On it!" },
+    ],
+  },
+  {
+    id: "d-6",
+    kind: "dm",
+    with: "u6",
+    unread: 0,
+    messages: [
+      { day: "Tuesday" },
+      { id: 1, user: "u6", time: "10:00 AM", text: "Staging is up for QA." },
+    ],
+  },
+  {
+    id: "d-7",
+    kind: "dm",
+    with: "u7",
+    unread: 0,
+    messages: [
+      { day: "Monday" },
+      {
+        id: 1,
+        user: "u7",
+        time: "4:45 PM",
+        text: "Thanks for the feedback on the banner.",
+      },
+    ],
+  },
 ];
 
 /* -------------------------------------------------------------------------- */
@@ -347,7 +471,7 @@ function UserAvatar({ id, size = 36 }) {
         background: u.color,
         fontSize: size * 0.38,
       }}
-      className="flex shrink-0 items-center justify-center rounded-[6px] font-semibold text-white"
+      className="flex shrink-0 items-center justify-center rounded-[6px] font-medium text-white"
     >
       {initials(u.name)}
     </div>
@@ -369,34 +493,48 @@ function Presence({ online, bg = C.side }) {
 }
 
 const titleOf = (c) => (c.kind === "dm" ? USERS[c.with].name : c.name);
+const iconOf = (c) =>
+  c.kind === "team" ? I.users : c.private ? I.lock : I.hash;
+const prefixOf = (c) => (c.kind === "team" ? "" : c.private ? "🔒 " : "#");
+const noun = (c) => (c.kind === "team" ? "team" : "channel");
 
 /* -------------------------------------------------------------------------- */
 /*  Sidebar                                                                   */
 /* -------------------------------------------------------------------------- */
-function SectionHeader({ label, open, onToggle, onAdd }) {
+function Section({ label, open, onToggle, addLabel, children }) {
   return (
-    <div className="group mt-3 flex items-center justify-between px-4 py-1">
-      <button
-        onClick={onToggle}
-        className="flex items-center gap-1.5 text-[15px] hover:text-white"
-        style={{ color: C.sideText }}
-      >
-        <Svg
-          size={10}
-          className={`transition-transform ${open ? "rotate-90" : ""}`}
+    <div
+      className="flex min-h-0 flex-col"
+      style={{ flex: open ? "1 1 0%" : "0 0 auto" }}
+    >
+      <div className="group flex shrink-0 items-center justify-between px-4 py-1.5">
+        <button
+          onClick={onToggle}
+          className="flex items-center gap-1.5 text-[15px] hover:text-white"
+          style={{ color: C.sideText }}
         >
-          {I.caret}
-        </Svg>
-        {label}
-      </button>
-      <button
-        onClick={onAdd}
-        className="rounded p-0.5 opacity-0 transition hover:bg-white/10 hover:text-white group-hover:opacity-100"
-        style={{ color: C.sideText }}
-        aria-label={`Add to ${label}`}
-      >
-        <Svg size={14}>{I.plus}</Svg>
-      </button>
+          <Svg
+            size={10}
+            className={`transition-transform ${open ? "rotate-90" : ""}`}
+          >
+            {I.caret}
+          </Svg>
+          {label}
+        </button>
+        <button
+          className="rounded p-0.5 opacity-0 transition hover:bg-white/10 hover:text-white group-hover:opacity-100"
+          style={{ color: C.sideText }}
+          aria-label={addLabel}
+        >
+          <Svg size={14}>{I.plus}</Svg>
+        </button>
+      </div>
+      {/* each section scrolls on its own; the sidebar itself never scrolls */}
+      {open && (
+        <div className="chat-scroll min-h-0 flex-1 overflow-y-auto pb-1">
+          {children}
+        </div>
+      )}
     </div>
   );
 }
@@ -405,11 +543,11 @@ function SidebarRow({ active, unread, onClick, children }) {
   return (
     <button
       onClick={onClick}
-      className="flex h-[28px] w-full items-center gap-2 px-4 text-left text-[15px] transition"
+      className="flex h-[28px] w-full shrink-0 items-center gap-2 px-4 text-left text-[15px] transition"
       style={{
         background: active ? C.active : "transparent",
         color: active ? "#fff" : unread ? "#fff" : C.sideText,
-        fontWeight: unread && !active ? 700 : 400,
+        fontWeight: unread && !active ? 500 : 400,
       }}
       onMouseEnter={(e) => {
         if (!active) e.currentTarget.style.background = C.sideHover;
@@ -421,7 +559,7 @@ function SidebarRow({ active, unread, onClick, children }) {
       {children}
       {unread > 0 && !active && (
         <span
-          className="ml-auto rounded-full px-1.5 text-[12px] font-bold leading-[18px] text-white"
+          className="ml-auto rounded-full px-1.5 text-[12px] font-medium leading-[18px] text-white"
           style={{ background: C.badge }}
         >
           {unread}
@@ -431,22 +569,58 @@ function SidebarRow({ active, unread, onClick, children }) {
   );
 }
 
+function AddRow({ label }) {
+  return (
+    <button
+      className="flex h-[28px] w-full shrink-0 items-center gap-2 px-4 text-[15px] hover:bg-[#2b2b2e]"
+      style={{ color: C.sideText }}
+    >
+      <span className="flex h-[18px] w-[18px] items-center justify-center rounded bg-white/15">
+        <Svg size={12}>{I.plus}</Svg>
+      </span>
+      {label}
+    </button>
+  );
+}
+
 function Sidebar({ convos, activeId, onSelect }) {
   const [q, setQ] = useState("");
-  const [open, setOpen] = useState({ channels: true, dms: true });
+  const [open, setOpen] = useState({ teams: true, channels: true, dms: true });
+  const toggle = (k) => setOpen((o) => ({ ...o, [k]: !o[k] }));
 
   const match = (c) =>
     !q.trim() || titleOf(c).toLowerCase().includes(q.trim().toLowerCase());
+  const teams = convos.filter((c) => c.kind === "team" && match(c));
   const channels = convos.filter((c) => c.kind === "channel" && match(c));
   const dms = convos.filter((c) => c.kind === "dm" && match(c));
 
+  const row = (c, lead) => (
+    <SidebarRow
+      key={c.id}
+      active={c.id === activeId}
+      unread={c.unread}
+      onClick={() => onSelect(c.id)}
+    >
+      {lead}
+      <span className="truncate">{titleOf(c)}</span>
+    </SidebarRow>
+  );
+  const icon = (c) => (
+    <Svg size={15} className="shrink-0 opacity-80">
+      {iconOf(c)}
+    </Svg>
+  );
+
   return (
-    <div className="flex h-full flex-col" style={{ background: C.side }}>
+    <div
+      className="flex h-full flex-col overflow-hidden"
+      style={{ background: C.side }}
+    >
       <div
-        className="flex h-[52px] shrink-0 items-center justify-between border-b px-4"
+        className="flex h-[52px] shrink-0 items-center justify-between border-b pl-16 pr-4 md:pl-4"
         style={{ borderColor: "rgba(255,255,255,0.12)" }}
       >
-        <div className="text-[17px] font-bold text-white">REBS Workspace</div>
+        <div className="text-[17px] font-medium text-white">REBS Workspace</div>
         <span
           className="h-2 w-2 rounded-full"
           style={{ background: C.online }}
@@ -454,7 +628,7 @@ function Sidebar({ convos, activeId, onSelect }) {
         />
       </div>
 
-      <div className="px-3 py-2.5">
+      <div className="shrink-0 px-3 py-2.5">
         <div
           className="flex h-[30px] items-center gap-2 rounded-md px-2.5"
           style={{ background: "rgba(255,255,255,0.15)" }}
@@ -465,92 +639,56 @@ function Sidebar({ convos, activeId, onSelect }) {
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Jump to a channel or person"
+            placeholder="Jump to a team, channel or person"
             className="w-full bg-transparent text-[13.5px] text-white outline-none placeholder:text-white/70"
           />
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto pb-4">
-        <SectionHeader
+      {/* Teams / Channels / Direct messages share the remaining height equally */}
+      <div className="flex min-h-0 flex-1 flex-col">
+        <Section
+          label="Teams"
+          open={open.teams}
+          onToggle={() => toggle("teams")}
+          addLabel="Add team"
+        >
+          {teams.map((c) => row(c, icon(c)))}
+          <AddRow label="Create team" />
+        </Section>
+        <Section
           label="Channels"
           open={open.channels}
-          onToggle={() => setOpen((o) => ({ ...o, channels: !o.channels }))}
-          onAdd={() => {}}
-        />
-        {open.channels && (
-          <>
-            {channels.map((c) => (
-              <SidebarRow
-                key={c.id}
-                active={c.id === activeId}
-                unread={c.unread}
-                onClick={() => onSelect(c.id)}
-              >
-                <Svg size={15} className="shrink-0 opacity-80">
-                  {c.private ? I.lock : I.hash}
-                </Svg>
-                <span className="truncate">{c.name}</span>
-              </SidebarRow>
-            ))}
-            <button
-              className="flex h-[28px] w-full items-center gap-2 px-4 text-[15px] hover:bg-[#2b2b2e]"
-              style={{ color: C.sideText }}
-            >
-              <span className="flex h-[18px] w-[18px] items-center justify-center rounded bg-white/15">
-                <Svg size={12}>{I.plus}</Svg>
-              </span>
-              Add channels
-            </button>
-          </>
-        )}
-
-        <SectionHeader
+          onToggle={() => toggle("channels")}
+          addLabel="Add channel"
+        >
+          {channels.map((c) => row(c, icon(c)))}
+          <AddRow label="Add channels" />
+        </Section>
+        <Section
           label="Direct messages"
           open={open.dms}
-          onToggle={() => setOpen((o) => ({ ...o, dms: !o.dms }))}
-          onAdd={() => {}}
-        />
-        {open.dms && (
-          <>
-            {dms.map((c) => (
-              <SidebarRow
-                key={c.id}
-                active={c.id === activeId}
-                unread={c.unread}
-                onClick={() => onSelect(c.id)}
-              >
-                <Presence online={USERS[c.with].online} />
-                <span className="truncate">{USERS[c.with].name}</span>
-              </SidebarRow>
-            ))}
-            <button
-              className="flex h-[28px] w-full items-center gap-2 px-4 text-[15px] hover:bg-[#2b2b2e]"
-              style={{ color: C.sideText }}
-            >
-              <span className="flex h-[18px] w-[18px] items-center justify-center rounded bg-white/15">
-                <Svg size={12}>{I.plus}</Svg>
-              </span>
-              Add teammates
-            </button>
-          </>
-        )}
-
-        {channels.length + dms.length === 0 && (
-          <div className="px-4 py-6 text-[14px]" style={{ color: C.sideText }}>
-            Nothing matches “{q}”.
-          </div>
-        )}
+          onToggle={() => toggle("dms")}
+          addLabel="New message"
+        >
+          {dms.map((c) => row(c, <Presence online={USERS[c.with].online} />))}
+          <AddRow label="Add teammates" />
+        </Section>
       </div>
 
-      {/* current user */}
+      {teams.length + channels.length + dms.length === 0 && (
+        <div className="px-4 py-3 text-[14px]" style={{ color: C.sideText }}>
+          Nothing matches “{q}”.
+        </div>
+      )}
+
       <div
         className="flex shrink-0 items-center gap-2.5 border-t px-4 py-2.5"
         style={{ borderColor: "rgba(255,255,255,0.12)" }}
       >
         <UserAvatar id={ME} size={30} />
         <div className="min-w-0">
-          <div className="truncate text-[14px] font-bold text-white">
+          <div className="truncate text-[14px] font-medium text-white">
             {USERS[ME].name}
           </div>
           <div
@@ -593,7 +731,7 @@ function Message({ m, head, onReact }) {
         {head && (
           <div className="flex items-baseline gap-2">
             <span
-              className="text-[15px] font-bold hover:underline"
+              className="text-[15px] font-medium hover:underline"
               style={{ color: C.text }}
             >
               {u.name}
@@ -622,7 +760,10 @@ function Message({ m, head, onReact }) {
               <Svg size={20}>{I.file}</Svg>
             </span>
             <div>
-              <div className="text-[14px] font-bold" style={{ color: C.link }}>
+              <div
+                className="text-[14px] font-medium"
+                style={{ color: C.link }}
+              >
                 {m.file.name}
               </div>
               <div className="text-[12px]" style={{ color: C.sub }}>
@@ -661,7 +802,7 @@ function Message({ m, head, onReact }) {
             className="mt-1 flex items-center gap-2 text-[13px] hover:underline"
             style={{ color: C.link }}
           >
-            <span className="font-bold">
+            <span className="font-medium">
               {m.replies} {m.replies === 1 ? "reply" : "replies"}
             </span>
             <span style={{ color: C.sub }}>View thread</span>
@@ -721,7 +862,7 @@ function Pane({ convo, onBack, onSend, onReact }) {
     <div className="flex h-full flex-col bg-white">
       {/* header */}
       <div
-        className="flex h-[52px] shrink-0 items-center justify-between border-b px-4"
+        className="flex h-[52px] shrink-0 items-center justify-between border-b pl-16 pr-4 md:pl-4"
         style={{ borderColor: C.line }}
       >
         <div className="flex min-w-0 items-center gap-2">
@@ -737,7 +878,7 @@ function Pane({ convo, onBack, onSend, onReact }) {
             <>
               <UserAvatar id={convo.with} size={26} />
               <span
-                className="truncate text-[17px] font-black"
+                className="truncate text-[17px] font-medium"
                 style={{ color: C.text }}
               >
                 {title}
@@ -747,10 +888,10 @@ function Pane({ convo, onBack, onSend, onReact }) {
           ) : (
             <>
               <Svg size={17} style={{ color: C.text }}>
-                {convo.private ? I.lock : I.hash}
+                {iconOf(convo)}
               </Svg>
               <span
-                className="truncate text-[17px] font-black"
+                className="truncate text-[17px] font-medium"
                 style={{ color: C.text }}
               >
                 {title}
@@ -791,7 +932,7 @@ function Pane({ convo, onBack, onSend, onReact }) {
       )}
 
       {/* messages */}
-      <div className="flex-1 overflow-y-auto pb-2 pt-3">
+      <div className="chat-main min-h-0 flex-1 overflow-y-auto pb-2 pt-3">
         {/* intro */}
         <div className="px-5 pb-4 pt-2">
           {isDm ? (
@@ -799,28 +940,33 @@ function Pane({ convo, onBack, onSend, onReact }) {
               <UserAvatar id={convo.with} size={56} />
               <div>
                 <div
-                  className="text-[20px] font-black"
+                  className="text-[20px] font-medium"
                   style={{ color: C.text }}
                 >
                   {title}
                 </div>
                 <div className="text-[14px]" style={{ color: C.sub }}>
                   This is the start of your direct message history with{" "}
-                  <b>{title}</b>.
+                  <span className="font-medium">{title}</span>.
                 </div>
               </div>
             </div>
           ) : (
             <>
-              <div className="text-[22px] font-black" style={{ color: C.text }}>
-                {convo.private ? "🔒" : "#"} {title}
+              <div
+                className="text-[22px] font-medium"
+                style={{ color: C.text }}
+              >
+                {prefixOf(convo)}
+                {title}
               </div>
               <div className="mt-1 text-[14px]" style={{ color: C.sub }}>
                 This is the beginning of the{" "}
-                <b>
-                  {convo.private ? "🔒" : "#"} {title}
-                </b>{" "}
-                channel. {convo.topic}.
+                <span className="font-medium">
+                  {prefixOf(convo)}
+                  {title}
+                </span>{" "}
+                {noun(convo)}. {convo.topic}.
               </div>
             </>
           )}
@@ -835,7 +981,7 @@ function Pane({ convo, onBack, onSend, onReact }) {
                   style={{ borderColor: C.line }}
                 />
                 <span
-                  className="relative rounded-full border bg-white px-3 py-[3px] text-[12.5px] font-bold"
+                  className="relative rounded-full border bg-white px-3 py-[3px] text-[12.5px] font-medium"
                   style={{ borderColor: C.line, color: C.text }}
                 >
                   {m.day}
@@ -867,8 +1013,8 @@ function Pane({ convo, onBack, onSend, onReact }) {
             style={{ color: C.sub }}
           >
             {[
-              ["B", "font-black"],
-              ["I", "italic font-serif"],
+              ["B", "font-medium"],
+              ["I", "italic"],
               ["S", "line-through"],
             ].map(([l, cls]) => (
               <button
@@ -879,7 +1025,7 @@ function Pane({ convo, onBack, onSend, onReact }) {
               </button>
             ))}
             <span className="mx-1 h-4 w-px bg-[#cfd3d1]" />
-            <button className="rounded p-1.5 hover:bg-[#dfe3e1] text-[13px] font-bold">
+            <button className="rounded p-1.5 hover:bg-[#dfe3e1] text-[13px] font-medium">
               &lt;/&gt;
             </button>
           </div>
@@ -894,9 +1040,7 @@ function Pane({ convo, onBack, onSend, onReact }) {
               }
             }}
             placeholder={
-              isDm
-                ? `Message ${title}`
-                : `Message ${convo.private ? "🔒" : "#"}${title}`
+              isDm ? `Message ${title}` : `Message ${prefixOf(convo)}${title}`
             }
             className="block max-h-40 w-full resize-none bg-transparent px-3 py-2 text-[15px] outline-none placeholder:text-[#8a8e8d]"
             style={{ color: C.text }}
@@ -943,7 +1087,8 @@ function Pane({ convo, onBack, onSend, onReact }) {
           className="mt-1 px-1 text-right text-[11.5px]"
           style={{ color: C.sub }}
         >
-          <b>Enter</b> to send · <b>Shift + Enter</b> for a new line
+          <span className="font-medium">Enter</span> to send ·{" "}
+          <span className="font-medium">Shift + Enter</span> for a new line
         </div>
       </div>
     </div>
@@ -953,12 +1098,35 @@ function Pane({ convo, onBack, onSend, onReact }) {
 /* -------------------------------------------------------------------------- */
 /*  Page                                                                      */
 /* -------------------------------------------------------------------------- */
-// Full screen height. If DashboardLayout adds padding around the page, subtract it here, e.g. "calc(100dvh - 2rem)".
-const CHAT_HEIGHT = "100dvh";
+// The app's own sidebar is fixed on the left (20% wide, 6% when collapsed).
+// Measure it so the chat starts exactly at its edge, with no gap, even when it collapses.
+function useAppSidebarWidth() {
+  const [w, setW] = useState(0);
+  useEffect(() => {
+    const el = document.querySelector("div.fixed.left-0.top-0.bg-black");
+    const update = () => {
+      if (window.innerWidth < 768) return setW(0); // mobile: the app sidebar is an overlay drawer
+      setW(el ? el.getBoundingClientRect().width : window.innerWidth * 0.2);
+    };
+    update();
+    const ro =
+      typeof ResizeObserver !== "undefined" && el
+        ? new ResizeObserver(update)
+        : null;
+    ro?.observe(el);
+    window.addEventListener("resize", update);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener("resize", update);
+    };
+  }, []);
+  return w;
+}
 
 function Chat() {
   const [convos, setConvos] = useState(INITIAL);
-  const [activeId, setActiveId] = useState("c-hr");
+  const [activeId, setActiveId] = useState("t-hr");
+  const left = useAppSidebarWidth();
   const active = convos.find((c) => c.id === activeId) || null;
 
   const select = (id) => {
@@ -1018,31 +1186,30 @@ function Chat() {
 
   return (
     <DashboardLayout userName="Admin" onLogout={() => {}}>
-      <div className="w-full">
-        <div
-          className="flex min-h-[480px] overflow-hidden rounded-lg border shadow-sm"
-          style={{ height: CHAT_HEIGHT, borderColor: C.line }}
+      {/* Pinned to the screen: full height, flush against the app sidebar, z-30 keeps the app's sidebar and menu button above it */}
+      <div
+        className="fixed bottom-0 right-0 top-0 z-30 flex bg-white font-normal"
+        style={{ left, fontFamily: "Poppins, sans-serif" }}
+      >
+        <aside
+          className={`${active ? "hidden md:block" : "block"} h-full w-full shrink-0 md:w-[250px] lg:w-[280px]`}
         >
-          <aside
-            className={`${active ? "hidden md:block" : "block"} w-full shrink-0 md:w-[260px]`}
-          >
-            <Sidebar convos={convos} activeId={activeId} onSelect={select} />
-          </aside>
+          <Sidebar convos={convos} activeId={activeId} onSelect={select} />
+        </aside>
 
-          <section
-            className={`${active ? "block" : "hidden md:block"} min-w-0 flex-1`}
-          >
-            {active && (
-              <Pane
-                key={active.id}
-                convo={active}
-                onBack={() => setActiveId(null)}
-                onSend={send}
-                onReact={react}
-              />
-            )}
-          </section>
-        </div>
+        <section
+          className={`${active ? "block" : "hidden md:block"} h-full min-w-0 flex-1`}
+        >
+          {active && (
+            <Pane
+              key={active.id}
+              convo={active}
+              onBack={() => setActiveId(null)}
+              onSend={send}
+              onReact={react}
+            />
+          )}
+        </section>
       </div>
     </DashboardLayout>
   );

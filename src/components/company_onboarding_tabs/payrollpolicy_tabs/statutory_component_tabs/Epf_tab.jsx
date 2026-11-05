@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import axiosInstance from "../../../../service/axiosinstance";
 import { Check, X } from "lucide-react";
 import { Icon } from "@iconify/react";
-import UpsertEPF from "./UpsertEPF"; // adjust path if needed
+import UpsertEPF from "./upsertepf"; // adjust path if needed
 
 const EpfTab = () => {
   const [epfData, setEpfData] = useState(null);

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Icon } from "@iconify/react";
-import UpsertESI from "./UpsertESI"; // adjust path if needed
+import UpsertESI from "./upsertesi"; // adjust path if needed
 
 /**
  * Props:
