@@ -548,3 +548,16 @@ export const getKpiCompanyDashboard = "/kpi/dashboard/company";
 export const getKpiTeamDashboard = "/kpi/dashboard/team";
 export const getKpiEmployeeDashboard = (userId) =>
   `/kpi/dashboard/employee/${userId}`;
+
+//chat
+export const getChatConversations = "/employee/chat/conversations"; // confirm: must return "Conversations retrieved"
+export const getChatMessages = (id) => `/employee/chat/${id}/messages`; // GET: same path as send, guess
+export const sendChatMessage = (id) => `/employee/chat/${id}/messages`; // confirmed from your docs
+export const markChatRead = (id) => `/employee/chat/${id}/read`; // guess
+export const reactChatMessage = (messageId) =>
+  `/employee/chat/messages/${messageId}/react`; // guess
+export const getChatMembers = (id) => `/employee/chat/${id}/members`; // guess
+export const createChatTeam = "/employee/chat/team/create"; // guess
+export const createChatChannel = "/employee/chat/channel/create"; // guess
+export const startChatDm = "/employee/chat/direct"; // confirmed
+export const uploadChatFile = "/employee/chat/file/upload"; // guess
