@@ -7,7 +7,7 @@ import ChatSidebar, {
   titleOf,
 } from "./chat_sidebar";
 import chatService, { toMessage } from "../../service/chatService";
-import { connectChatSocket } from "../../service/chatSocket";
+import { connectChatSocket } from "../../service/chatsocket";
 
 // After a refetch, keep messages we already loaded (the list API has none)
 const mergeConvos = (fresh, old) =>
