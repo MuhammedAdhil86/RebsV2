@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import toast from "react-hot-toast";
 import axiosInstance from "../../../../service/axiosinstance";
 
@@ -26,22 +26,58 @@ const CustomCheckbox = ({ checked, onChange, label }) => (
   </label>
 );
 
-export default function UpsertESI() {
-  const [state, setState] = useState({
-    esiNumber: "",
-    deductionCycle: "",
-    employeeContribution: "",
-    employerContribution: "",
-    includeEmployer: true,
-    otherDetails: "",
-  });
+const emptyState = {
+  esiNumber: "",
+  deductionCycle: "",
+  employeeContribution: "",
+  employerContribution: "",
+  includeEmployer: true,
+  otherDetails: "",
+};
 
-  const handleEnable = async () => {
+// Map API data (snake_case) -> form state
+const fromApi = (data) => ({
+  esiNumber: data?.esi_number ?? "",
+  deductionCycle: data?.deduction_cycle ?? "",
+  employeeContribution:
+    data?.employee_contribution !== undefined &&
+    data?.employee_contribution !== null
+      ? String(data.employee_contribution)
+      : "",
+  employerContribution:
+    data?.employer_contribution !== undefined &&
+    data?.employer_contribution !== null
+      ? String(data.employer_contribution)
+      : "",
+  includeEmployer: data?.include_employer_contribution_in_structure ?? true,
+  otherDetails: data?.other_details ?? "",
+});
+
+/**
+ * Used for BOTH create and update.
+ * - initialData: existing ESI data (when editing). Leave empty for create.
+ * - onCancel:    called when Cancel is clicked
+ * - onSuccess:   called after a successful save (e.g. refetch / close edit mode)
+ */
+export default function UpsertESI({ initialData, onCancel, onSuccess }) {
+  const isEdit = !!initialData?.esi_number;
+
+  const [state, setState] = useState(
+    initialData ? fromApi(initialData) : emptyState,
+  );
+  const [saving, setSaving] = useState(false);
+
+  // Re-fill the form whenever the existing data changes
+  useEffect(() => {
+    if (initialData) setState(fromApi(initialData));
+  }, [initialData]);
+
+  const handleSave = async () => {
     if (
       !state.esiNumber ||
       !state.deductionCycle ||
-      !state.employeeContribution ||
-      !state.employerContribution
+      state.employeeContribution === "" ||
+      state.employerContribution === ""
     ) {
       toast.error("Please fill all required fields");
       return;
@@ -58,17 +94,25 @@ export default function UpsertESI() {
     };
 
     try {
+      setSaving(true);
       const res = await axiosInstance.put(
         "api/payroll/statutory/esi/upsert",
-        payload
+        payload,
       );
 
-      toast.success(res.data?.message || "ESI configuration saved successfully!");
+      toast.success(
+        res.data?.message ||
+          (isEdit
+            ? "ESI configuration updated successfully!"
+            : "ESI configuration saved successfully!"),
+      );
 
-      // 🔄 Refresh tab after success
-      setTimeout(() => {
-        window.location.reload();
-      }, 800);
+      if (onSuccess) {
+        onSuccess(payload, res.data);
+      } else {
+        // fallback: refresh the tab
+        setTimeout(() => window.location.reload(), 800);
+      }
     } catch (err) {
       console.error(err);
       if (err.response) {
@@ -76,6 +120,8 @@ export default function UpsertESI() {
       } else {
         toast.error("Network error while saving ESI configuration");
       }
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -134,10 +180,7 @@ export default function UpsertESI() {
             step="0.01"
             value={state.employeeContribution}
             onChange={(e) =>
-              setState((s) => ({
-                ...s,
-                employeeContribution: e.target.value,
-              }))
+              setState((s) => ({ ...s, employeeContribution: e.target.value }))
             }
             placeholder="1.75"
             className={inputClass}
@@ -158,10 +201,7 @@ export default function UpsertESI() {
             step="0.01"
             value={state.employerContribution}
             onChange={(e) =>
-              setState((s) => ({
-                ...s,
-                employerContribution: e.target.value,
-              }))
+              setState((s) => ({ ...s, employerContribution: e.target.value }))
             }
             placeholder="4.75"
             className={`${inputClass} w-[75%] mb-6`}
@@ -170,10 +210,7 @@ export default function UpsertESI() {
           <CustomCheckbox
             checked={state.includeEmployer}
             onChange={() =>
-              setState((s) => ({
-                ...s,
-                includeEmployer: !s.includeEmployer,
-              }))
+              setState((s) => ({ ...s, includeEmployer: !s.includeEmployer }))
             }
             label="Include employer's contribution in employee's salary structure."
           />
@@ -198,14 +235,21 @@ export default function UpsertESI() {
 
       {/* Footer */}
       <div className="flex justify-end gap-3 border-t pt-4 mt-8">
-        <button className="h-9 px-5 border border-gray-300 rounded text-[12px]">
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={saving}
+          className="h-9 px-5 border border-gray-300 rounded text-[12px]"
+        >
           Cancel
         </button>
         <button
-          onClick={handleEnable}
-          className="h-9 px-5 rounded text-[12px] bg-black text-white"
+          type="button"
+          onClick={handleSave}
+          disabled={saving}
+          className="h-9 px-5 rounded text-[12px] bg-black text-white disabled:opacity-60"
         >
-          Enable
+          {saving ? "Saving..." : isEdit ? "Update" : "Enable"}
         </button>
       </div>
     </div>

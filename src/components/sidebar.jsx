@@ -119,6 +119,7 @@ function SideBar({ isCollapsed, toggleSidebar }) {
     announcement: <Icon icon="lucide:megaphone" width="20" />,
     letter: <Icon icon="mynaui:table" width="20" />,
     email: <Icon icon="ic:outline-email" width="20" />,
+    chat: <Icon icon="lucide:messages-square" width="20" />,
     insurance: <Icon icon="solar:shield-user-outline" width="20" />,
     timesheet: <Icon icon="lucide:calendar-clock" width="20" />,
     reports: <Icon icon="iconoir:reports" width="20" />,
@@ -148,6 +149,7 @@ function SideBar({ isCollapsed, toggleSidebar }) {
         },
         { title: "Letter", path: "/letter", icon: icons.letter },
         { title: "Email", path: "/email", icon: icons.email },
+        { title: "Chat", path: "/chat", icon: icons.chat },
         {
           title: "Insurance",
           path: "/insurance",

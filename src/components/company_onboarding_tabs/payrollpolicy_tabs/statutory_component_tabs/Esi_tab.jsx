@@ -1,18 +1,54 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Icon } from "@iconify/react";
+import UpsertESI from "./UpsertESI"; // adjust path if needed
 
-const EsiTab = ({ esiData = {}, onDisable, onEdit }) => {
+/**
+ * Props:
+ * - esiData:   current ESI config from API
+ * - onDisable: disable handler
+ * - onUpdated: (optional) called after a successful update, use it to refetch data.
+ *              If not passed, the page reloads.
+ */
+const EsiTab = ({ esiData: esiDataProp = {}, onDisable, onUpdated }) => {
+  const [isEditing, setIsEditing] = useState(false);
+
+  // Keep a local copy so the view updates right after saving (no page reload)
+  const [esiData, setEsiData] = useState(esiDataProp);
+
+  // Stay in sync if the parent sends fresh data
+  useEffect(() => {
+    setEsiData(esiDataProp);
+  }, [esiDataProp]);
+
   // Fallback values for numeric fields
   const employeeContribution = esiData.employee_contribution ?? 0;
   const employerContribution = esiData.employer_contribution ?? 0;
 
+  // Edit mode: same form as create, pre-filled with existing data
+  if (isEditing) {
+    return (
+      <div className="bg-white rounded-lg border border-gray-200 p-6 font-[Poppins]">
+        <UpsertESI
+          initialData={esiData}
+          onCancel={() => setIsEditing(false)}
+          onSuccess={(saved) => {
+            // show the updated values immediately, no reload needed
+            setEsiData((prev) => ({ ...prev, ...saved }));
+            setIsEditing(false);
+            if (onUpdated) onUpdated();
+          }}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-6 font-[Poppins] text-[13px] text-gray-700">
-      
-      <h2 className="text-[14px] font-medium mb-4">Employee's State Insurance</h2>
+      <h2 className="text-[14px] font-medium mb-4">
+        Employee's State Insurance
+      </h2>
 
       <div className="space-y-3">
-
         {/* ESI Number */}
         <div className="flex gap-16">
           <span className="font-medium min-w-[150px]">ESI Number</span>
@@ -22,19 +58,29 @@ const EsiTab = ({ esiData = {}, onDisable, onEdit }) => {
         {/* Deduction Cycle */}
         <div className="flex gap-16">
           <span className="font-medium min-w-[150px]">Deduction Cycle</span>
-          <span className="text-gray-600">{esiData.deduction_cycle || "--"}</span>
+          <span className="text-gray-600">
+            {esiData.deduction_cycle || "--"}
+          </span>
         </div>
 
         {/* Employee Contribution */}
         <div className="flex gap-16">
-          <span className="font-medium min-w-[150px]">Employee Contribution</span>
-          <span className="text-gray-600">{employeeContribution}% of Gross Pay</span>
+          <span className="font-medium min-w-[150px]">
+            Employee Contribution
+          </span>
+          <span className="text-gray-600">
+            {employeeContribution}% of Gross Pay
+          </span>
         </div>
 
         {/* Employer Contribution */}
         <div className="flex gap-16">
-          <span className="font-medium min-w-[150px]">Employer Contribution</span>
-          <span className="text-gray-600">{employerContribution}% of Gross Pay</span>
+          <span className="font-medium min-w-[150px]">
+            Employer Contribution
+          </span>
+          <span className="text-gray-600">
+            {employerContribution}% of Gross Pay
+          </span>
         </div>
 
         {/* Other Details */}
@@ -47,32 +93,28 @@ const EsiTab = ({ esiData = {}, onDisable, onEdit }) => {
                 : "--")}
           </span>
         </div>
-
       </div>
 
       {/* Action Buttons */}
       <div className="flex gap-3 mt-8">
-        {onEdit && (
-          <button
-            onClick={onEdit}
-            className="flex items-center gap-2 text-xs text-black px-4 py-1.5 border border-gray-300 rounded-md hover:bg-gray-100 transition font-medium"
-          >
-            <Icon icon="basil:edit-outline" className="w-4 h-4" /> 
-            Edit ESI
-          </button>
-        )}
+        <button
+          onClick={() => setIsEditing(true)}
+          className="flex items-center gap-2 text-xs text-black px-4 py-1.5 border border-gray-300 rounded-md hover:bg-gray-100 transition font-medium"
+        >
+          <Icon icon="basil:edit-outline" className="w-4 h-4" />
+          Edit ESI
+        </button>
 
         {onDisable && (
           <button
             onClick={onDisable}
             className="flex items-center gap-2 text-xs px-4 py-1.5 border border-red-300 text-red-600 rounded-md hover:bg-red-50 transition font-medium"
           >
-            <Icon icon="proicons:delete" className="w-4 h-4" /> 
+            <Icon icon="proicons:delete" className="w-4 h-4" />
             Disable ESI
           </button>
         )}
       </div>
-
     </div>
   );
 };

@@ -1,15 +1,16 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { HiChevronLeft } from "react-icons/hi";
 import mainImage from "../assets/img/rebs_login.png";
 import { useNavigate } from "react-router-dom";
 import { requestPasswordResetEmail } from "../service/authservice";
-import toast, { Toaster } from "react-hot-toast";
+import toast from "react-hot-toast";
 
 export default function ForgotPasswordUI() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [currentSlide, setCurrentSlide] = useState(0);
   const [loading, setLoading] = useState(false);
+  const submittingRef = useRef(false);
 
   const slides = [
     {
@@ -48,36 +49,36 @@ export default function ForgotPasswordUI() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (loading) return;
+    if (submittingRef.current) return;
 
+    submittingRef.current = true;
     setLoading(true);
     try {
       // payload: { email: "user@example.com" }
       const response = await requestPasswordResetEmail({ email });
 
       if (response.status_code === 200 || response.success) {
-        toast.success("OTP sent successfully!");
+        toast.success(response.message, { id: "forgot-password-toast" });
         // ✅ Navigate to OTP page, passing the email in state for the next step
         setTimeout(() => {
           navigate("/otp", { state: { email } });
         }, 1000);
       } else {
-        toast.error(
-          response.message || "Failed to send OTP. Please check your email.",
-        );
+        toast.error(response.message, { id: "forgot-password-toast" });
       }
     } catch (error) {
-      const errorMessage =
-        error.response?.data?.message || "Connection error. Please try again.";
-      toast.error(errorMessage);
+      toast.error(error.response?.data?.message || error.message, {
+        id: "forgot-password-toast",
+      });
     } finally {
       setLoading(false);
+      submittingRef.current = false;
     }
   };
 
   return (
     <div className="w-full h-screen bg-black flex justify-center items-center p-4 font-sans">
-      <Toaster position="top-right" />
+      {/* Toaster removed: the global one in App.jsx is used */}
       <div className="flex h-full w-full rounded-2xl overflow-hidden">
         {/* ---------- Left panel ---------- */}
         <div className="relative w-[55%] overflow-hidden rounded-l-2xl">

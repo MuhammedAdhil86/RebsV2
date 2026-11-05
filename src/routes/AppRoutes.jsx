@@ -34,6 +34,7 @@ import InsuranceDetails from "../page/insurancedetails";
 import Timesheet from "../page/timesheet";
 import EmailTemplates from "../page/email";
 import Kpi from "../page/Kpi";
+import Chat from "../page/chat";
 function AppRoutes() {
   return (
     <Routes>
@@ -70,11 +71,12 @@ function AppRoutes() {
         path="/insurance"
         element={<ProtectedRoute element={manageinsurance} />}
       />
-
+      <Route path="/chat" element={<ProtectedRoute element={Chat} />} />
       <Route
         path="/timesheet"
         element={<ProtectedRoute element={Timesheet} />}
       />
+
       <Route path="/kpi" element={<ProtectedRoute element={Kpi} />} />
       <Route
         path="/insurance-details/:id"

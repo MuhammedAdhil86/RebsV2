@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import toast from "react-hot-toast";
 import axiosInstance from "../../../../service/axiosinstance";
 
@@ -26,26 +26,69 @@ const CustomCheckbox = ({ checked, onChange, label }) => (
   </label>
 );
 
-export default function UpsertEPF() {
-  const [state, setState] = useState({
-    epfNumber: "",
-    deductionCycle: "",
-    employeeContribution: "",
-    employerContribution: "",
-    includeEmployer: true,
-    includeEdu: false,
-    includeAdmin: false,
-    override: false,
-    prorata: false,
-    considerSalary: true,
-  });
+const emptyState = {
+  epfNumber: "",
+  deductionCycle: "",
+  employeeContribution: "",
+  employerContribution: "",
+  includeEmployer: true,
+  includeEdu: false,
+  includeAdmin: false,
+  override: false,
+  prorata: false,
+  considerSalary: true,
+};
 
-  const handleEnable = async () => {
+const toStr = (v) => (v === undefined || v === null ? "" : String(v));
+
+// Map API data (snake_case) -> form state
+const fromApi = (d) => ({
+  epfNumber: d?.epf_number ?? "",
+  deductionCycle: d?.deduction_cycle ?? "",
+  employeeContribution: toStr(d?.employee_contribution_rate),
+  employerContribution: toStr(d?.employer_contribution_rate),
+  includeEmployer:
+    d?.include_employer_pf_in_structure ??
+    d?.contribution_preferences?.employer_pf_contribution ??
+    true,
+  includeEdu:
+    d?.include_edli_in_structure ??
+    d?.contribution_preferences?.edli_contribution ??
+    false,
+  includeAdmin:
+    d?.include_admin_in_structure ??
+    d?.contribution_preferences?.admin_charges ??
+    false,
+  override: d?.allow_employee_override ?? false,
+  prorata: d?.pro_rate_restricted_wage ?? false,
+  considerSalary: d?.consider_applicable_salary ?? true,
+});
+
+/**
+ * Used for BOTH create and update.
+ * - initialData: existing EPF data (when editing). Leave empty for create.
+ * - onCancel:    called when Cancel is clicked
+ * - onSuccess:   called after a successful save (payload.epf, response data)
+ */
+export default function UpsertEPF({ initialData, onCancel, onSuccess }) {
+  const isEdit = !!initialData?.epf_number;
+
+  const [state, setState] = useState(
+    initialData ? fromApi(initialData) : emptyState,
+  );
+  const [saving, setSaving] = useState(false);
+
+  // Re-fill the form whenever the existing data changes
+  useEffect(() => {
+    if (initialData) setState(fromApi(initialData));
+  }, [initialData]);
+
+  const handleSave = async () => {
     if (
       !state.epfNumber ||
       !state.deductionCycle ||
-      !state.employeeContribution ||
-      !state.employerContribution
+      state.employeeContribution === "" ||
+      state.employerContribution === ""
     ) {
       toast.error("Please fill all required fields");
       return;
@@ -59,48 +102,51 @@ export default function UpsertEPF() {
       return;
     }
 
-    const payload = {
-      epf: {
-        enabled: true,
-        epf_number: state.epfNumber.trim(),
-        deduction_cycle: state.deductionCycle,
-        employee_contribution_rate: employeeRate,
-        employer_contribution_rate: employerRate,
-        splitup_data: {
-          basic_percentage: 40,
-          da_percentage: 20,
-        },
-        include_employer_pf_in_structure: state.includeEmployer,
-        include_edli_in_structure: state.includeEdu,
-        include_admin_in_structure: state.includeAdmin,
-        contribution_preferences: {
-          employer_pf_contribution: state.includeEmployer,
-          edli_contribution: state.includeEdu,
-          admin_charges: state.includeAdmin,
-        },
-        allow_employee_override: state.override,
-        pro_rate_restricted_wage: state.prorata,
-        consider_applicable_salary: state.considerSalary,
-        applicable_salary_threshold: 15000,
-        eligible_for_abry_scheme: false,
+    const epf = {
+      enabled: true,
+      epf_number: state.epfNumber.trim(),
+      deduction_cycle: state.deductionCycle,
+      employee_contribution_rate: employeeRate,
+      employer_contribution_rate: employerRate,
+      // keep existing values when editing, defaults when creating
+      splitup_data: initialData?.splitup_data ?? {
+        basic_percentage: 40,
+        da_percentage: 20,
       },
+      include_employer_pf_in_structure: state.includeEmployer,
+      include_edli_in_structure: state.includeEdu,
+      include_admin_in_structure: state.includeAdmin,
+      contribution_preferences: {
+        employer_pf_contribution: state.includeEmployer,
+        edli_contribution: state.includeEdu,
+        admin_charges: state.includeAdmin,
+      },
+      allow_employee_override: state.override,
+      pro_rate_restricted_wage: state.prorata,
+      consider_applicable_salary: state.considerSalary,
+      applicable_salary_threshold:
+        initialData?.applicable_salary_threshold ?? 15000,
+      eligible_for_abry_scheme: initialData?.eligible_for_abry_scheme ?? false,
     };
 
     try {
-      const res = await axiosInstance.put(
-        "api/payroll/statutory/epf/upsert",
-        payload
-      );
+      setSaving(true);
+      const res = await axiosInstance.put("api/payroll/statutory/epf/upsert", {
+        epf,
+      });
 
       toast.success(
-        res.data?.message || "EPF configuration saved successfully!"
+        res.data?.message ||
+          (isEdit
+            ? "EPF configuration updated successfully!"
+            : "EPF configuration saved successfully!"),
       );
 
-      // 🔄 Refresh current tab AFTER success
-      setTimeout(() => {
-        window.location.reload();
-      }, 800);
-
+      if (onSuccess) {
+        onSuccess(epf, res.data);
+      } else {
+        setTimeout(() => window.location.reload(), 800);
+      }
     } catch (err) {
       console.error(err);
       if (err.response) {
@@ -108,6 +154,8 @@ export default function UpsertEPF() {
       } else {
         toast.error("Network error while saving EPF configuration");
       }
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -126,7 +174,7 @@ export default function UpsertEPF() {
 
       <div className="grid grid-cols-3 gap-6 mb-8">
         <div>
-          <p className="text-[12px] text-gray-500 mb-1">EPF Name</p>
+          <p className="text-[12px] text-gray-500 mb-1">EPF Number</p>
           <input
             value={state.epfNumber}
             onChange={(e) =>
@@ -163,10 +211,7 @@ export default function UpsertEPF() {
             type="number"
             value={state.employeeContribution}
             onChange={(e) =>
-              setState((s) => ({
-                ...s,
-                employeeContribution: e.target.value,
-              }))
+              setState((s) => ({ ...s, employeeContribution: e.target.value }))
             }
             placeholder="12% of Actual PF Wage"
             className={inputClass}
@@ -184,10 +229,7 @@ export default function UpsertEPF() {
             type="number"
             value={state.employerContribution}
             onChange={(e) =>
-              setState((s) => ({
-                ...s,
-                employerContribution: e.target.value,
-              }))
+              setState((s) => ({ ...s, employerContribution: e.target.value }))
             }
             placeholder="12% of Actual PF Wage"
             className={`${inputClass} w-[75%] mb-6`}
@@ -197,10 +239,7 @@ export default function UpsertEPF() {
             <CustomCheckbox
               checked={state.includeEmployer}
               onChange={() =>
-                setState((s) => ({
-                  ...s,
-                  includeEmployer: !s.includeEmployer,
-                }))
+                setState((s) => ({ ...s, includeEmployer: !s.includeEmployer }))
               }
               label="Include employer's contribution in employee's salary structure."
             />
@@ -252,14 +291,21 @@ export default function UpsertEPF() {
       </div>
 
       <div className="flex justify-end gap-3 border-t pt-4 mt-8">
-        <button className="h-9 px-5 border border-gray-300 rounded text-[12px]">
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={saving}
+          className="h-9 px-5 border border-gray-300 rounded text-[12px]"
+        >
           Cancel
         </button>
         <button
-          onClick={handleEnable}
-          className="h-9 px-5 rounded text-[12px] bg-black text-white"
+          type="button"
+          onClick={handleSave}
+          disabled={saving}
+          className="h-9 px-5 rounded text-[12px] bg-black text-white disabled:opacity-60"
         >
-          Enable
+          {saving ? "Saving..." : isEdit ? "Update" : "Enable"}
         </button>
       </div>
     </div>
