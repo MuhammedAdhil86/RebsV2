@@ -31,13 +31,10 @@ function nextReactions(list = [], emoji) {
 
 const PRESENCE_POLL = 30000;
 
-// websocket event types that mean "this conversation was deleted"
-// (template: confirm the exact name with your backend)
-const DELETE_EVENTS = new Set([
-  "conversation_deleted",
-  "chat_deleted",
-  "chat_delete",
-]);
+// WebSocket event type meaning "this conversation was deleted".
+// NOT VERIFIED against the backend: set this to the exact `type` it sends.
+// The payload is expected as evt.data.conversation_id, like chat_message.
+const CONVERSATION_DELETED = "conversation_deleted";
 
 function useConversations(currentUser) {
   const [convos, setConvos] = useState([]);
@@ -47,6 +44,8 @@ function useConversations(currentUser) {
   const [peopleLoading, setPeopleLoading] = useState(false);
   const [onlineIds, setOnlineIds] = useState(() => new Set());
   const [online, setOnline] = useState(false);
+  // true when the open chat was removed by someone else (drives the empty state)
+  const [unavailable, setUnavailable] = useState(false);
 
   // refs so the socket handler never reads stale state
   const activeIdRef = useRef(null);
@@ -55,6 +54,7 @@ function useConversations(currentUser) {
   const hasConnectedRef = useRef(false);
   const countedRef = useRef(new Set()); // message ids already counted as unread
   const deletingRef = useRef(new Set()); // conversations I am deleting right now
+  const deletedRef = useRef(new Set()); // tombstones: deleted ids must never come back
   useEffect(() => {
     activeIdRef.current = activeId;
   }, [activeId]);
@@ -70,10 +70,20 @@ function useConversations(currentUser) {
   const patch = (id, fn) =>
     setConvos((prev) => prev.map((c) => (c.id === id ? fn(c) : c)));
 
-  // Remove a conversation from the list; close it if it is open
-  const dropConvo = (id) => {
+  // Drop tombstoned conversations from a server list
+  const alive = (list) => list.filter((c) => !deletedRef.current.has(c.id));
+
+  // Remove a conversation everywhere: list, active chat and message state.
+  // Idempotent, so duplicate events or responses change nothing.
+  // external = removed by someone else (shows the "no longer available" state).
+  const dropConvo = (id, external = false) => {
+    deletedRef.current.add(id);
     setConvos((prev) => prev.filter((c) => c.id !== id));
-    if (activeIdRef.current === id) setActiveId(null);
+    if (activeIdRef.current === id) {
+      activeIdRef.current = null; // stop in-flight work targeting it right away
+      setActiveId(null);
+      setUnavailable(external);
+    }
   };
 
   // Fetch teammates and rebuild the people list + the set of online uuids
@@ -85,6 +95,44 @@ function useConversations(currentUser) {
       setOnlineIds(new Set(list.filter((p) => p.online).map((p) => p.uuid)));
     } catch (err) {
       console.warn("[chat] fetchTeammates failed", err);
+    }
+  };
+
+  // After a reconnect: catch up on anything missed while offline, including
+  // conversations deleted in the meantime (they are absent from the fresh list)
+  const syncAfterReconnect = async () => {
+    refreshPeople();
+    try {
+      const list = await chatService.fetchConversations();
+      const fresh = alive(list);
+      const freshIds = new Set(fresh.map((c) => c.id));
+
+      const gone = convosRef.current.filter((c) => !freshIds.has(c.id));
+      gone.forEach((c) => deletedRef.current.add(c.id));
+      const activeGone = gone.some((c) => c.id === activeIdRef.current);
+
+      setConvos((prev) => mergeConvos(fresh, prev));
+      if (activeGone) {
+        activeIdRef.current = null;
+        setActiveId(null);
+        setUnavailable(true);
+        toast.info("This conversation was deleted");
+        return;
+      }
+
+      const id = activeIdRef.current;
+      if (id) {
+        try {
+          const messages = await chatService.fetchMessages(id);
+          if (!deletedRef.current.has(id))
+            patch(id, (c) => ({ ...c, messages }));
+        } catch (err) {
+          const st = err?.response?.status;
+          if (st === 404 || st === 410) dropConvo(id, true);
+        }
+      }
+    } catch (err) {
+      console.warn("[chat] reconnect sync failed", err);
     }
   };
 
@@ -138,21 +186,19 @@ function useConversations(currentUser) {
         return;
       }
 
-      // someone deleted this conversation: remove it instantly for everyone
-      if (DELETE_EVENTS.has(evt.type)) {
+      // a conversation was deleted: remove it instantly (handled only once)
+      if (evt.type === CONVERSATION_DELETED) {
+        if (deletedRef.current.has(convoId)) return; // duplicate event
         const existed = convosRef.current.some((c) => c.id === convoId);
-        const wasOpen = activeIdRef.current === convoId;
-        dropConvo(convoId);
-        // no extra toast for the person who deleted it (they get their own)
-        if (existed && !deletingRef.current.has(convoId)) {
-          toast.info(
-            wasOpen
-              ? "This conversation was deleted"
-              : "A conversation was deleted",
-          );
-        }
+        const mine = deletingRef.current.has(convoId); // my own delete echo
+        dropConvo(convoId, !mine);
+        if (existed && !mine) toast.info("This conversation was deleted");
         return;
       }
+
+      // late messages / notifications for a deleted conversation are ignored,
+      // so they can never bring it back (e.g. via the "unknown DM" reload)
+      if (deletedRef.current.has(convoId)) return;
 
       const me = String(userRef.current?.uuid ?? "");
       const known = convosRef.current.find((c) => c.id === convoId);
@@ -165,7 +211,7 @@ function useConversations(currentUser) {
           .fetchConversations()
           .then((list) =>
             setConvos((prev) =>
-              mergeConvos(list, prev).map((c) =>
+              mergeConvos(alive(list), prev).map((c) =>
                 bump && c.id === convoId ? { ...c, unread: c.unread + 1 } : c,
               ),
             ),
@@ -239,20 +285,7 @@ function useConversations(currentUser) {
         return;
       }
 
-      refreshPeople();
-
-      chatService
-        .fetchConversations()
-        .then((list) => setConvos((prev) => mergeConvos(list, prev)))
-        .catch(() => {});
-
-      const id = activeIdRef.current;
-      if (id) {
-        chatService
-          .fetchMessages(id)
-          .then((messages) => patch(id, (c) => ({ ...c, messages })))
-          .catch(() => {});
-      }
+      syncAfterReconnect();
     });
 
     return () => {
@@ -266,16 +299,19 @@ function useConversations(currentUser) {
     patch(id, (c) => ({ ...c, loading: true }));
     try {
       const messages = await chatService.fetchMessages(id);
+      if (deletedRef.current.has(id)) return; // deleted while loading
       patch(id, (c) => ({ ...c, messages, loaded: true, loading: false }));
     } catch (err) {
       // conversation no longer exists (deleted by someone else)
-      if (err?.response?.status === 404) return dropConvo(id);
+      const st = err?.response?.status;
+      if (st === 404 || st === 410) return dropConvo(id, true);
       patch(id, (c) => ({ ...c, loading: false }));
     }
   };
 
   const select = async (id) => {
     setActiveId(id);
+    setUnavailable(false);
     const target = convosRef.current.find((c) => c.id === id);
 
     if (target?.unread > 0) {
@@ -288,6 +324,7 @@ function useConversations(currentUser) {
   const clearActive = () => setActiveId(null);
 
   const sendMessage = async (id, text) => {
+    if (deletedRef.current.has(id)) return; // conversation no longer exists
     const tempId = `tmp-${Date.now()}`;
     const temp = {
       id: tempId,
@@ -325,8 +362,9 @@ function useConversations(currentUser) {
         err?.response?.status,
         err?.response?.data || err,
       );
-      if (err?.response?.status === 404) {
-        dropConvo(id);
+      const st = err?.response?.status;
+      if (st === 404 || st === 410) {
+        dropConvo(id, true);
         toast.info("This conversation was deleted");
         return;
       }
@@ -402,6 +440,8 @@ function useConversations(currentUser) {
           (c) => c.kind === "dm" && c.peer?.uuid === person.uuid,
         );
         if (found) {
+          deletedRef.current.delete(found.id);
+          setUnavailable(false);
           setActiveId(found.id);
           loadMessages(found.id);
         }
@@ -409,6 +449,8 @@ function useConversations(currentUser) {
       }
 
       const id = String(rawId);
+      deletedRef.current.delete(id);
+      setUnavailable(false);
       setConvos((prev) =>
         prev.some((c) => c.id === id)
           ? prev
@@ -452,6 +494,7 @@ function useConversations(currentUser) {
     sendMessage,
     toggleReaction,
     deleteConversation,
+    unavailable,
   };
 }
 
@@ -525,6 +568,7 @@ export default function ChatView({ currentUser }) {
     sendMessage,
     toggleReaction,
     deleteConversation,
+    unavailable,
   } = useConversations(currentUser);
   const left = useAppSidebarWidth();
 
@@ -559,7 +603,9 @@ export default function ChatView({ currentUser }) {
             className="hidden h-full items-center justify-center text-[15px] md:flex"
             style={{ color: COLORS.sub }}
           >
-            Select a conversation to start chatting
+            {unavailable
+              ? "This conversation is no longer available."
+              : "Select a conversation to start chatting"}
           </div>
         ) : (
           <Conversation
