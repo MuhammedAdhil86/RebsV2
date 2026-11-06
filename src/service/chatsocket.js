@@ -1,86 +1,149 @@
 // src/service/chatSocket.js
+//
+// One shared WebSocket for the whole app.
+// App.jsx starts it when a token exists and stops it on logout.
+// Chat (or anything else) just subscribes to events and status.
+//
+// .env:
+// VITE_WS_URL=wss://rebs-hr-cwhyx.ondigitalocean.app/ws
+// (or VITE_WS_URL=/ws to go through the Vite proxy in dev)
 
-// Dev:  VITE_WS_URL=/ws  (goes through the Vite proxy)
-// Prod: VITE_WS_URL=wss://rebs-hr-cwhyx.ondigitalocean.app/ws
 const base = import.meta.env.VITE_WS_URL || "/ws";
 const WS_URL = base.startsWith("/")
   ? `${window.location.origin.replace(/^http/, "ws")}${base}`
   : base;
 
-const MAX_DELAY = 15000; // cap reconnect delay at 15s
-const PING_EVERY = 25000; // keep the connection alive through proxies
+const MAX_DELAY = 15000;
+const PING_EVERY = 25000;
 
-export function connectChatSocket({ onEvent, onStatus }) {
-  let ws = null;
-  let retry = 0;
-  let closed = false;
-  let reconnectTimer = null;
-  let pingTimer = null;
+// hides the middle of the token so it never shows fully in the console
+const mask = (t = "") =>
+  t.length > 12 ? `${t.slice(0, 6)}…${t.slice(-4)}` : t;
 
-  const stopPing = () => clearInterval(pingTimer);
+console.log(
+  "[WS] VITE_WS_URL =",
+  import.meta.env.VITE_WS_URL,
+  "→ using",
+  WS_URL,
+);
 
-  const open = () => {
-    // read the token fresh on every (re)connect
-    const token = localStorage.getItem("authToken");
-    if (!token) return; // logged out: don't connect
+const eventListeners = new Set();
+const statusListeners = new Set();
 
-    ws = new WebSocket(`${WS_URL}?token=${encodeURIComponent(token)}`);
+let ws = null;
+let online = false;
+let started = false;
+let retry = 0;
+let reconnectTimer = null;
+let pingTimer = null;
 
-    ws.onopen = () => {
-      retry = 0;
-      onStatus?.(true);
+const setOnline = (v) => {
+  online = v;
+  statusListeners.forEach((fn) => fn(v));
+};
 
-      stopPing();
-      pingTimer = setInterval(() => {
-        if (ws?.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: "ping" }));
-        }
-      }, PING_EVERY);
-    };
+const stopPing = () => clearInterval(pingTimer);
 
-    ws.onmessage = (e) => {
-      try {
-        const data = JSON.parse(e.data);
-        if (data?.type === "pong") return; // ignore keep-alive replies
-        console.log("[WS] event:", data); // remove once handleEvent is final
-        onEvent?.(data);
-      } catch (err) {
-        console.warn("[WS] non-JSON frame:", e.data);
+function open() {
+  if (!started) return;
+
+  const token = localStorage.getItem("authToken");
+  if (!token) {
+    console.warn("[WS] no authToken in localStorage, not connecting");
+    return;
+  }
+
+  console.log(
+    `[WS] connecting → ${WS_URL}?token=${mask(token)} (attempt ${retry + 1})`,
+  );
+
+  const sock = new WebSocket(`${WS_URL}?token=${encodeURIComponent(token)}`);
+  ws = sock;
+
+  sock.onopen = () => {
+    if (ws !== sock) return;
+    console.log("%c[WS] ✅ CONNECTED", "color:green;font-weight:bold");
+    retry = 0;
+    setOnline(true);
+
+    stopPing();
+    pingTimer = setInterval(() => {
+      if (sock.readyState === WebSocket.OPEN) {
+        sock.send(JSON.stringify({ type: "ping" }));
       }
-    };
-
-    ws.onerror = () => {
-      ws?.close();
-    };
-
-    ws.onclose = (e) => {
-      stopPing();
-      onStatus?.(false);
-      if (closed) return;
-
-      // 1008 = policy violation (usually a rejected token): stop retrying
-      if (e.code === 1008) return;
-
-      const delay = Math.min(1000 * 2 ** retry++, MAX_DELAY);
-      reconnectTimer = setTimeout(open, delay);
-    };
+    }, PING_EVERY);
   };
 
-  open();
+  sock.onmessage = (e) => {
+    if (ws !== sock) return;
+    try {
+      const data = JSON.parse(e.data);
+      if (["ping", "pong", "connected"].includes(data?.type)) return;
+      console.log("[WS] event:", data);
+      eventListeners.forEach((fn) => {
+        try {
+          fn(data);
+        } catch (err) {
+          console.error("[WS] listener error:", err);
+        }
+      });
+    } catch {
+      console.warn("[WS] non-JSON frame");
+    }
+  };
 
-  return {
-    send: (obj) => {
-      if (ws?.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify(obj));
-        return true;
-      }
-      return false;
-    },
-    close: () => {
-      closed = true;
-      clearTimeout(reconnectTimer);
-      stopPing();
-      ws?.close();
-    },
+  sock.onerror = () => {
+    console.error(
+      "[WS] ❌ error: open devtools > Network > WS and read the status code",
+    );
+  };
+
+  sock.onclose = (e) => {
+    if (ws !== sock) return; // an old socket, ignore
+    console.log(`[WS] closed code=${e.code} reason="${e.reason}"`);
+    stopPing();
+    setOnline(false);
+
+    if (!started) return;
+    if (e.code === 1008) {
+      console.warn("[WS] rejected (bad token), not retrying");
+      return;
+    }
+
+    const delay = Math.min(1000 * 2 ** retry++, MAX_DELAY);
+    console.log(`[WS] reconnecting in ${delay / 1000}s`);
+    reconnectTimer = setTimeout(open, delay);
   };
 }
+
+// Safe to call many times
+export function startChatSocket() {
+  if (started) return;
+  if (!localStorage.getItem("authToken")) return;
+  started = true;
+  retry = 0;
+  open();
+}
+
+export function stopChatSocket() {
+  started = false;
+  clearTimeout(reconnectTimer);
+  stopPing();
+  const s = ws;
+  ws = null;
+  s?.close();
+  setOnline(false);
+}
+
+export function subscribeEvents(fn) {
+  eventListeners.add(fn);
+  return () => eventListeners.delete(fn);
+}
+
+export function subscribeStatus(fn) {
+  statusListeners.add(fn);
+  fn(online); // report the current state immediately
+  return () => statusListeners.delete(fn);
+}
+
+export const isChatSocketOnline = () => online;

@@ -12,12 +12,19 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/api_v1/, ""),
       },
 
-      // WebSocket proxy (chat)
       "/ws": {
         target: "https://rebs-hr-cwhyx.ondigitalocean.app",
         changeOrigin: true,
         secure: true,
-        ws: true, // required, enables the WebSocket upgrade
+        ws: true,
+        configure: (proxy) => {
+          proxy.on("proxyReqWs", (proxyReq) => {
+            proxyReq.setHeader(
+              "Origin",
+              "https://rebs-hr-cwhyx.ondigitalocean.app",
+            );
+          });
+        },
       },
 
       "/cf_tunnel": {

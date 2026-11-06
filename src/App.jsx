@@ -1,9 +1,41 @@
-import React from "react";
+import React, { useEffect } from "react";
 import AppRoutes from "./routes/AppRoutes";
 import { Toaster } from "react-hot-toast";
 import GlobalLoader from "./ui/globalloaer";
+import { startChatSocket, stopChatSocket } from "./service/chatSocket";
+
+// Connects the shared WebSocket as soon as a token exists,
+// and disconnects when the token is removed (logout).
+function useChatSocketAuth() {
+  useEffect(() => {
+    let running = false;
+
+    const sync = () => {
+      const hasToken = !!localStorage.getItem("authToken");
+      if (hasToken && !running) {
+        running = true;
+        startChatSocket(); // token found, connect
+      } else if (!hasToken && running) {
+        running = false;
+        stopChatSocket(); // logged out, disconnect
+      }
+    };
+
+    sync(); // on app open
+    const timer = setInterval(sync, 1000); // catches login/logout in this tab
+    window.addEventListener("storage", sync); // catches other tabs
+
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("storage", sync);
+      stopChatSocket();
+    };
+  }, []);
+}
 
 function App() {
+  useChatSocketAuth();
+
   return (
     <>
       {/* Global Loader */}
