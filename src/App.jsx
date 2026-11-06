@@ -2,7 +2,7 @@ import React, { useEffect } from "react";
 import AppRoutes from "./routes/AppRoutes";
 import { Toaster } from "react-hot-toast";
 import GlobalLoader from "./ui/globalloaer";
-import { startChatSocket, stopChatSocket } from "./service/chatsocket";
+import { subscribeEvents, subscribeStatus } from "../../service/chatSocket";
 
 // Connects the shared WebSocket as soon as a token exists,
 // and disconnects when the token is removed (logout).
