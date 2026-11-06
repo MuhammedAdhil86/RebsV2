@@ -561,3 +561,4 @@ export const createChatTeam = "/employee/chat/team/create"; // guess
 export const createChatChannel = "/employee/chat/channel/create"; // guess
 export const startChatDm = "/employee/chat/direct"; // confirmed
 export const uploadChatFile = "/employee/chat/file/upload"; // guess
+export const deleteChatConversation = (id) => `/employee/chat/${id}`;

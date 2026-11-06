@@ -10,6 +10,7 @@ import {
   createChatChannel,
   startChatDm,
   uploadChatFile,
+  deleteChatConversation,
   getActiveUsersLightUrl,
 } from "../api/api";
 
@@ -231,7 +232,7 @@ const chatService = {
   },
 
   // GET /staff/get-active-users-light
-  // Returns: [{ uuid, name, image, department, designation }]
+  // Returns: [{ uuid, name, image, department, designation, online }]
   fetchTeammates: async () => {
     try {
       const response = await axiosInstance.get(getActiveUsersLightUrl);
@@ -270,6 +271,24 @@ const chatService = {
     } catch (error) {
       console.error(
         `Error starting direct chat with ${employeeUuid}:`,
+        error.response?.data || error.message,
+      );
+      throw error;
+    }
+  },
+
+  // DELETE /employee/chat/{conversation_id}
+  // Deletes the whole conversation along with its attachments. No body.
+  deleteConversation: async (conversationId) => {
+    try {
+      const response = await axiosInstance.delete(
+        deleteChatConversation(conversationId),
+      );
+      console.log(`Conversation #${conversationId} deleted:`, response.data);
+      return response.data;
+    } catch (error) {
+      console.error(
+        `Error deleting conversation #${conversationId}:`,
         error.response?.data || error.message,
       );
       throw error;
