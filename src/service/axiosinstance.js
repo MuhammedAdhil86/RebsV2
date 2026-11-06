@@ -1,27 +1,17 @@
 import axios from "axios";
 
-// Dev: Vite proxy (/api_v1 -> backend, prefix removed).
-// Live: there is no proxy, so call the backend directly.
-const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/+$/, "");
-const baseURL = import.meta.env.DEV ? "/api_v1" : API_BASE;
-
-if (!import.meta.env.DEV && !API_BASE) {
-  console.warn("[axios] VITE_API_BASE_URL is missing in this build");
-}
-
 const axiosInstance = axios.create({
-  baseURL,
+  // Using the proxy prefix from vite.config.js
+  baseURL: "/api_v1",
   headers: { "Content-Type": "application/json" },
   timeout: 15000,
 });
-
-// Routes where the backend returns a token that should replace the stored one
-const TOKEN_ROUTES = ["login", "refresh"];
 
 // -------------------- Request Interceptor --------------------
 axiosInstance.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem("authToken");
+    // Automatically inject Bearer token if it exists
     if (token) {
       config.headers["Authorization"] = `Bearer ${token}`;
     }
@@ -33,10 +23,9 @@ axiosInstance.interceptors.request.use(
 // -------------------- Response Interceptor --------------------
 axiosInstance.interceptors.response.use(
   (response) => {
-    // Only overwrite the stored token on login/refresh responses
-    const url = response.config?.url || "";
+    // Optional: Auto-update token if backend sends a refreshed one
     const newToken = response.data?.token;
-    if (newToken && TOKEN_ROUTES.some((r) => url.includes(r))) {
+    if (newToken) {
       localStorage.setItem("authToken", newToken);
     }
     return response;
@@ -44,7 +33,11 @@ axiosInstance.interceptors.response.use(
   (error) => {
     const requestUrl = error.config?.url || "";
 
+    // 401 Unauthorized Handling
     if (error.response?.status === 401) {
+      /* FIXED: Removed baseURL2 reference. 
+         Logic: If we get a 401, clear storage and redirect to login.
+      */
       console.error(
         "Unauthorized request. Redirecting to login...",
         requestUrl,
@@ -62,17 +55,11 @@ axiosInstance.interceptors.response.use(
 );
 
 // =============================================================
-// 🧪 Independent Testing Instance (Cloudflare Tunnel)
+// 🧪 Independent Testing Instance (Cloudflare Tunnel via Vite Proxy)
 // =============================================================
-// Dev uses the /cf_tunnel proxy. Live has no proxy, so set
-// VITE_TESTING_BASE_URL in .env.production, or this instance won't work live.
-const TESTING_BASE = (import.meta.env.VITE_TESTING_BASE_URL || "").replace(
-  /\/+$/,
-  "",
-);
-
 export const testingInstance = axios.create({
-  baseURL: import.meta.env.DEV ? "/cf_tunnel" : TESTING_BASE,
+  // Uses /cf_tunnel proxy to prevent browser CORS preflight blocks
+  baseURL: "/cf_tunnel",
   headers: {
     "Content-Type": "application/json",
     Accept: "application/json",
@@ -82,6 +69,7 @@ export const testingInstance = axios.create({
   timeout: 15000,
 });
 
+// Attach Bearer token support
 testingInstance.interceptors.request.use(
   (config) => {
     const token =
@@ -94,6 +82,7 @@ testingInstance.interceptors.request.use(
   (error) => Promise.reject(error),
 );
 
+// Return response or normalized backend error
 testingInstance.interceptors.response.use(
   (response) => response,
   (error) => {
