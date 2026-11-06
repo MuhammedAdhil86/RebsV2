@@ -7,6 +7,8 @@ import React, {
 } from "react";
 import { createPortal } from "react-dom";
 import announceService from "../service/announceService";
+import { getActiveUsersLight } from "../service/employeeService"; // adjust path/file name if different
+import { subscribeEvents, subscribeStatus } from "../ws/useChatSocket";
 import {
   Calendar,
   Bell,
@@ -21,6 +23,7 @@ import {
   CheckCheck,
   Check,
   X,
+  MessageCircle,
 } from "lucide-react";
 
 /* ----------------------------- helpers ----------------------------- */
@@ -71,7 +74,42 @@ const TABS = [
   { key: "leave", label: "Leave" },
   { key: "shift_swap", label: "Shifts" },
   { key: "activity", label: "Activity" },
+  { key: "chat_text", label: "Messages" },
 ];
+
+// uuid -> name map, loaded once from the teammates API and reused
+let peopleMapPromise = null;
+const nameOf = async (uuid) => {
+  if (!peopleMapPromise) {
+    peopleMapPromise = getActiveUsersLight()
+      .then(
+        (list) =>
+          new Map(
+            (Array.isArray(list) ? list : []).map((p) => [
+              String(p.uuid),
+              p.name || "",
+            ]),
+          ),
+      )
+      .catch(() => {
+        peopleMapPromise = null; // try again next time
+        return new Map();
+      });
+  }
+  const map = await peopleMapPromise;
+  return map.get(String(uuid)) || "";
+};
+
+// uuid of the logged-in user, read from the JWT ("Uuid" claim)
+const getMyUuid = () => {
+  try {
+    const token = localStorage.getItem("authToken");
+    const payload = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+    return String(JSON.parse(atob(payload)).Uuid ?? "");
+  } catch {
+    return "";
+  }
+};
 
 const tabOf = (type) =>
   type === "announcement_like" || type === "announcement_comment"
@@ -106,6 +144,12 @@ const CURTAIN_MS = 300;
 // A row counts as "seen" once ~60% of it has been on screen this long.
 const SEEN_DELAY_MS = 800;
 
+// WebSocket is the first source. GET is only used for the first load,
+// the refresh button, and as a fallback while the socket is down.
+// Confirm the real event name(s) your backend sends for notifications.
+const NOTIFY_TYPES = new Set(["notification", "new_notification"]);
+const FALLBACK_POLL_MS = 30000;
+
 const Notification = ({ onClose }) => {
   const [notifications, setNotifications] = useState([]);
   // Server-side unread total (from GET /employee/notification/count)
@@ -121,6 +165,8 @@ const Notification = ({ onClose }) => {
   const [newIds, setNewIds] = useState(() => new Set());
   // Ids already sent to the server, so each one is only sent once.
   const requestedRef = useRef(new Set());
+  // Ids already inserted from the socket, so duplicates are ignored.
+  const pushedRef = useRef(new Set());
 
   /* Curtain animation: mount closed, then drop down on the next frame.
      Closing slides it back up first, then tells the parent to unmount. */
@@ -207,6 +253,10 @@ const Notification = ({ onClose }) => {
     setUnreadTotal((c) => Math.max(0, c - 1));
     setActionError(null);
 
+    // Rows built from a socket event have no server id yet: local only.
+    // The next GET returns the real row with the right read state.
+    if (String(id).startsWith("ws-")) return;
+
     try {
       await announceService.markNotificationRead(id);
     } catch (err) {
@@ -236,6 +286,107 @@ const Notification = ({ onClose }) => {
       setMarkingAll(false);
     }
   }, []);
+
+  /* A notification pushed over the socket: insert it straight into the list.
+     If the payload isn't a full notification, fall back to one GET. */
+  const pushNotification = useCallback(
+    (payload) => {
+      if (!payload || payload.id == null || !payload.type) {
+        load(true);
+        return;
+      }
+
+      const key = String(payload.id);
+      if (pushedRef.current.has(key)) return;
+      pushedRef.current.add(key);
+
+      setNotifications((prev) =>
+        prev.some((n) => String(n.id) === key)
+          ? prev
+          : [{ is_read: false, ...payload }, ...prev],
+      );
+
+      if (!payload.is_read) {
+        // keep it under "New notifications" and bump the badge
+        setNewIds((prev) => new Set(prev).add(payload.id));
+        setUnreadTotal((c) => c + 1);
+      }
+    },
+    [load],
+  );
+
+  /* Socket first, GET second:
+     - socket connected: new items arrive as events, no polling
+     - socket down: poll every 30s, then one catch-up GET on reconnect */
+  useEffect(() => {
+    let poll = null;
+    let needSync = false;
+
+    const stopPoll = () => {
+      clearInterval(poll);
+      poll = null;
+    };
+
+    const offEvents = subscribeEvents(async (evt) => {
+      // chat message notification: { conversation_id, message_id,
+      // sender_id, sender_name, preview } -> build a row straight away
+      if (evt.type === "chat_text") {
+        const d = evt.data ?? {};
+        if (d.message_id == null) return;
+        if (String(d.sender_id) === getMyUuid()) return; // my own message
+
+        const key = `msg-${d.message_id}`;
+        if (pushedRef.current.has(key)) return;
+        pushedRef.current.add(key);
+
+        // the socket often sends sender_name "": look the person up by uuid
+        const senderName = d.sender_name || (await nameOf(d.sender_id));
+
+        const row = {
+          id: `ws-${d.message_id}`,
+          type: "chat_text",
+          action: "",
+          created_at: evt.created_at || new Date().toISOString(),
+          is_read: false,
+          data: { ...d, sender_name: senderName },
+        };
+        setNotifications((prev) =>
+          prev.some((n) => String(n.data?.message_id) === String(d.message_id))
+            ? prev
+            : [row, ...prev],
+        );
+        setNewIds((prev) => new Set(prev).add(row.id));
+        setUnreadTotal((c) => c + 1);
+        return;
+      }
+
+      if (!NOTIFY_TYPES.has(evt.type)) return;
+      pushNotification(evt.data);
+    });
+
+    const offStatus = subscribeStatus((isOnline) => {
+      if (isOnline) {
+        stopPoll();
+        if (needSync) {
+          needSync = false;
+          load(true);
+        }
+      } else {
+        needSync = true;
+        if (!poll) {
+          poll = setInterval(() => {
+            if (document.visibilityState === "visible") load(true);
+          }, FALLBACK_POLL_MS);
+        }
+      }
+    });
+
+    return () => {
+      offEvents();
+      offStatus();
+      stopPoll();
+    };
+  }, [load, pushNotification]);
 
   const visible = useMemo(
     () =>
@@ -731,6 +882,34 @@ const NotificationCard = ({ item, onRead }) => {
               }`}
             >
               {isLike ? data.description : `"${data.description}"`}
+            </p>
+          ) : null,
+        }}
+      </Row>
+    );
+  }
+
+  if (type === "chat_text") {
+    return (
+      <Row
+        icon={<MessageCircle className="w-4 h-4" />}
+        time={time}
+        createdAt={created_at}
+        unread={unread}
+        onMarkRead={markRead}
+      >
+        {{
+          head: (
+            <p className="text-xs text-black leading-snug">
+              <span className="font-semibold text-black">
+                {data.sender_name || "Someone"}
+              </span>{" "}
+              sent you a message.
+            </p>
+          ),
+          body: data.preview ? (
+            <p className="text-[11px] text-gray-500 mt-1 line-clamp-2">
+              {data.preview}
             </p>
           ) : null,
         }}

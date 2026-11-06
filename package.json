@@ -49,6 +49,7 @@
     "react-quill-new": "^3.8.3",
     "react-router-dom": "^7.9.3",
     "react-time-picker": "^8.0.2",
+    "react-toastify": "^11.2.0",
     "recharts": "^3.5.1",
     "sweetalert2": "^11.26.24",
     "tinymce": "^8.10.1",
