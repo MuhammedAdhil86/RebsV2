@@ -1,154 +1,169 @@
-// src/service/chatSocket.js
-//
-// One shared WebSocket for the whole app.
-// App.jsx starts it when a token exists and stops it on logout.
-// Chat (or anything else) just subscribes to events and status.
-//
-// .env:
-// VITE_WS_URL=wss://rebs-hr-cwhyx.ondigitalocean.app/ws
-// (or VITE_WS_URL=/ws to go through the Vite proxy in dev)
+import { useEffect, useState, useCallback, useRef } from "react";
 
-// Backend WebSocket. Used on the live site when VITE_WS_URL isn't set.
-const LIVE_WS = "wss://rebs-hr-cwhyx.ondigitalocean.app/ws";
+const useWebSocket = () => {
+  const [messages, setMessages] = useState([]);
+  const [connectionStatus, setConnectionStatus] = useState("Connecting...");
+  const [leave, setLeave] = useState([]);
+  const [applyLeave, setApplyLeave] = useState([]);
+  const [log, setLog] = useState([]);
 
-// dev  -> "/ws" (Vite proxy)   live -> the DigitalOcean URL above
-const base =
-  import.meta.env.VITE_WS_URL || (import.meta.env.DEV ? "/ws" : LIVE_WS);
-const WS_URL = base.startsWith("/")
-  ? `${window.location.origin.replace(/^http/, "ws")}${base}`
-  : base;
+  const socketRef = useRef(null);
+  const reconnectTimeoutRef = useRef(null);
+  const reconnectDelay = 3000;
+  const shouldReconnect = useRef(true); // control reconnection
 
-const MAX_DELAY = 15000;
-const PING_EVERY = 25000;
+  // Core WebSocket connection
+  const connect = useCallback(() => {
+    const token = localStorage.getItem("authToken");
 
-// hides the middle of the token so it never shows fully in the console
-const mask = (t = "") =>
-  t.length > 12 ? `${t.slice(0, 6)}…${t.slice(-4)}` : t;
-
-console.log(
-  "[WS] VITE_WS_URL =",
-  import.meta.env.VITE_WS_URL,
-  "→ using",
-  WS_URL,
-);
-
-const eventListeners = new Set();
-const statusListeners = new Set();
-
-let ws = null;
-let online = false;
-let started = false;
-let retry = 0;
-let reconnectTimer = null;
-let pingTimer = null;
-
-const setOnline = (v) => {
-  online = v;
-  statusListeners.forEach((fn) => fn(v));
-};
-
-const stopPing = () => clearInterval(pingTimer);
-
-function open() {
-  if (!started) return;
-
-  const token = localStorage.getItem("authToken");
-  if (!token) {
-    console.warn("[WS] no authToken in localStorage, not connecting");
-    return;
-  }
-
-  console.log(
-    `[WS] connecting → ${WS_URL}?token=${mask(token)} (attempt ${retry + 1})`,
-  );
-
-  const sock = new WebSocket(`${WS_URL}?token=${encodeURIComponent(token)}`);
-  ws = sock;
-
-  sock.onopen = () => {
-    if (ws !== sock) return;
-    console.log("%c[WS] ✅ CONNECTED", "color:green;font-weight:bold");
-    retry = 0;
-    setOnline(true);
-
-    stopPing();
-    pingTimer = setInterval(() => {
-      if (sock.readyState === WebSocket.OPEN) {
-        sock.send(JSON.stringify({ type: "ping" }));
-      }
-    }, PING_EVERY);
-  };
-
-  sock.onmessage = (e) => {
-    if (ws !== sock) return;
-    try {
-      const data = JSON.parse(e.data);
-      if (["ping", "pong", "connected"].includes(data?.type)) return;
-      console.log("[WS] event:", data);
-      eventListeners.forEach((fn) => {
-        try {
-          fn(data);
-        } catch (err) {
-          console.error("[WS] listener error:", err);
-        }
-      });
-    } catch {
-      console.warn("[WS] non-JSON frame");
-    }
-  };
-
-  sock.onerror = () => {
-    console.error(
-      "[WS] ❌ error: open devtools > Network > WS and read the status code",
-    );
-  };
-
-  sock.onclose = (e) => {
-    if (ws !== sock) return; // an old socket, ignore
-    console.log(`[WS] closed code=${e.code} reason="${e.reason}"`);
-    stopPing();
-    setOnline(false);
-
-    if (!started) return;
-    if (e.code === 1008) {
-      console.warn("[WS] rejected (bad token), not retrying");
+    if (!token) {
+      setConnectionStatus("Error: No token available");
+      console.error(
+        "WebSocket connection failed: No token found in localStorage",
+      );
       return;
     }
 
-    const delay = Math.min(1000 * 2 ** retry++, MAX_DELAY);
-    console.log(`[WS] reconnecting in ${delay / 1000}s`);
-    reconnectTimer = setTimeout(open, delay);
+    if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+
+    const wsUrl = `wss://rebs-hr-cwhyx.ondigitalocean.app/ws?token=${encodeURIComponent(token)}`;
+
+    try {
+      // Close existing socket if present
+      if (socketRef.current) socketRef.current.close();
+
+      const socket = new WebSocket(wsUrl);
+      socketRef.current = socket;
+
+      socket.onopen = () => {
+        console.log("WebSocket connection opened");
+        setConnectionStatus("Connected");
+        // Optional: Send greeting to server
+        socket.send(JSON.stringify({ message: "Hello, server!" }));
+      };
+
+      socket.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          console.log("Message from server:", data);
+
+          // Stop reconnect if unauthorized
+          if (
+            data.status === 401 ||
+            data.type === "unauthorized" ||
+            data.status === null
+          ) {
+            console.error(
+              "Unauthorized access: Stopping reconnection attempts.",
+            );
+            shouldReconnect.current = false;
+            socket.close();
+            setConnectionStatus("Unauthorized: Connection closed.");
+            return;
+          }
+
+          setMessages((prev) => [...prev, data]);
+
+          switch (data.type) {
+            case "leave":
+              setLeave((prev) => [...prev, data]);
+              break;
+            case "apply_leave":
+              setApplyLeave((prev) => [...prev, data]);
+              break;
+            case "log":
+              setLog((prev) => [...prev, data]);
+              break;
+            default:
+              console.log("Unknown message type:", data.type);
+          }
+        } catch (err) {
+          console.error("Error parsing WebSocket message:", err);
+        }
+      };
+
+      socket.onclose = (event) => {
+        console.warn("WebSocket closed:", event.reason || event.code);
+        if (shouldReconnect.current) {
+          setConnectionStatus("Reconnecting...");
+          reconnectTimeoutRef.current = setTimeout(() => {
+            console.log("Attempting to reconnect WebSocket...");
+            connect();
+          }, reconnectDelay);
+        } else {
+          setConnectionStatus(
+            "Reconnection stopped due to unauthorized access.",
+          );
+        }
+      };
+
+      socket.onerror = (error) => {
+        console.error("WebSocket error:", error);
+        setConnectionStatus("Error occurred - Will attempt reconnect...");
+      };
+    } catch (err) {
+      console.error("Error creating WebSocket connection:", err);
+      setConnectionStatus("Connection failed - Will attempt reconnect...");
+      reconnectTimeoutRef.current = setTimeout(() => connect(), reconnectDelay);
+    }
+  }, []);
+
+  // Initial connection
+  useEffect(() => {
+    connect();
+
+    return () => {
+      if (socketRef.current) socketRef.current.close();
+      if (reconnectTimeoutRef.current)
+        clearTimeout(reconnectTimeoutRef.current);
+    };
+  }, [connect]);
+
+  // React to token changes in localStorage
+  useEffect(() => {
+    const handleStorageChange = (e) => {
+      if (e.key === "authToken") {
+        shouldReconnect.current = true; // Reset flag for new token
+        connect();
+      }
+    };
+    window.addEventListener("storage", handleStorageChange);
+    return () => window.removeEventListener("storage", handleStorageChange);
+  }, [connect]);
+
+  // Ping server every 30s to keep connection alive
+  useEffect(() => {
+    const pingInterval = setInterval(() => {
+      if (socketRef.current?.readyState === WebSocket.OPEN) {
+        try {
+          socketRef.current.send(JSON.stringify({ type: "ping" }));
+        } catch (err) {
+          console.error("Error sending ping:", err);
+          connect();
+        }
+      }
+    }, 30000);
+
+    return () => clearInterval(pingInterval);
+  }, [connect]);
+
+  // Send custom message
+  const sendMessage = useCallback((message) => {
+    if (socketRef.current?.readyState === WebSocket.OPEN) {
+      socketRef.current.send(JSON.stringify(message));
+    } else {
+      console.warn("Cannot send message: WebSocket is not connected");
+    }
+  }, []);
+
+  return {
+    connectionStatus,
+    messages,
+    leave,
+    applyLeave,
+    log,
+    sendMessage,
   };
-}
+};
 
-// Safe to call many times
-export function startChatSocket() {
-  if (started) return;
-  if (!localStorage.getItem("authToken")) return;
-  started = true;
-  retry = 0;
-  open();
-}
-
-export function stopChatSocket() {
-  started = false;
-  clearTimeout(reconnectTimer);
-  stopPing();
-  const s = ws;
-  ws = null;
-  s?.close();
-  setOnline(false);
-}
-
-export function subscribeEvents(fn) {
-  eventListeners.add(fn);
-  return () => eventListeners.delete(fn);
-}
-
-export function subscribeStatus(fn) {
-  statusListeners.add(fn);
-  fn(online); // report the current state immediately
-  return () => statusListeners.delete(fn);
-}
-
-export const isChatSocketOnline = () => online;
+export default useWebSocket;

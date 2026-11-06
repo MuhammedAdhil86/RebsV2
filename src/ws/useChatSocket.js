@@ -2,13 +2,19 @@
 //
 // One shared WebSocket for the whole app.
 // App.jsx starts it when a token exists and stops it on logout.
-// Chat just subscribes to events and status.
+// Chat (and other screens) just subscribe to events and status.
 //
-// .env:
-// VITE_WS_URL=wss://rebs-hr-cwhyx.ondigitalocean.app/ws
-// (or VITE_WS_URL=/ws to go through the Vite proxy in dev)
+// .env.development:  VITE_WS_URL=/ws   (goes through the Vite proxy)
+// Live build:        defaults to the DigitalOcean backend below
+//                    (or set VITE_WS_URL in your host's env variables)
 
-const base = import.meta.env.VITE_WS_URL || "/ws";
+// Backend WebSocket. Used on the live site when VITE_WS_URL isn't set.
+const LIVE_WS = "wss://rebs-hr-cwhyx.ondigitalocean.app/ws";
+
+// dev  -> "/ws" (Vite proxy)   live -> the DigitalOcean URL above
+const base =
+  import.meta.env.VITE_WS_URL || (import.meta.env.DEV ? "/ws" : LIVE_WS);
+
 const WS_URL = base.startsWith("/")
   ? `${window.location.origin.replace(/^http/, "ws")}${base}`
   : base;
@@ -62,6 +68,7 @@ function open() {
     try {
       const data = JSON.parse(e.data);
       if (["ping", "pong", "connected"].includes(data?.type)) return;
+      if (import.meta.env.DEV) console.log("[WS] event:", data);
       eventListeners.forEach((fn) => {
         try {
           fn(data);
@@ -143,3 +150,12 @@ export function subscribeStatus(fn) {
 }
 
 export const isChatSocketOnline = () => online;
+
+// Send a JSON frame through the shared socket. Returns true if sent.
+export function sendChatSocket(obj) {
+  if (ws?.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify(obj));
+    return true;
+  }
+  return false;
+}
