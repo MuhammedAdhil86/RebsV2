@@ -79,22 +79,20 @@ const initials = (name = "") =>
     .join("")
     .toUpperCase();
 
-export function UserAvatar({ user, size = 36 }) {
+// online: true / false draws a status dot. Leave it undefined for no dot.
+// ring: colour of the border around the dot (match the background behind it).
+export function UserAvatar({ user, size = 36, online, ring = "#fff" }) {
   const u = user ?? { name: "?" };
   const box = { width: size, height: size };
 
-  if (u.image) {
-    return (
-      <img
-        src={u.image.replace(/ /g, "%20")}
-        alt={u.name}
-        style={box}
-        className="shrink-0 rounded-[6px] object-cover"
-      />
-    );
-  }
-
-  return (
+  const avatar = u.image ? (
+    <img
+      src={u.image.replace(/ /g, "%20")}
+      alt={u.name}
+      style={box}
+      className="shrink-0 rounded-[6px] object-cover"
+    />
+  ) : (
     <div
       style={{
         ...box,
@@ -105,6 +103,29 @@ export function UserAvatar({ user, size = 36 }) {
     >
       {initials(u.name)}
     </div>
+  );
+
+  if (online === undefined) return avatar;
+
+  const dot = Math.max(8, Math.round(size * 0.32));
+
+  return (
+    <span className="relative inline-block shrink-0" style={box}>
+      {avatar}
+      <span
+        title={online ? "Active" : "Away"}
+        className="absolute rounded-full border-solid"
+        style={{
+          width: dot,
+          height: dot,
+          right: -Math.round(dot / 4),
+          bottom: -Math.round(dot / 4),
+          borderWidth: size < 24 ? 1.5 : 2,
+          borderColor: ring,
+          background: online ? COLORS.online : COLORS.offline,
+        }}
+      />
+    </span>
   );
 }
 
@@ -181,7 +202,7 @@ function Row({ active, unread, onClick, children }) {
   );
 }
 
-function PeoplePicker({ people, loading, onPick, onClose }) {
+function PeoplePicker({ people, loading, onlineIds, onPick, onClose }) {
   const [q, setQ] = useState("");
   const s = q.trim().toLowerCase();
   const list = people.filter((p) => !s || p.name.toLowerCase().includes(s));
@@ -249,7 +270,11 @@ function PeoplePicker({ people, loading, onPick, onClose }) {
               onClick={() => onPick(p)}
               className="flex w-full items-center gap-3 px-4 py-2 text-left hover:bg-[#F2F4F3]"
             >
-              <UserAvatar user={p} size={34} />
+              <UserAvatar
+                user={p}
+                size={34}
+                online={onlineIds.has(String(p.uuid))}
+              />
               <div className="min-w-0">
                 <div
                   className="truncate text-[15px] font-medium"
@@ -289,11 +314,14 @@ function AddRow({ label, onClick }) {
   );
 }
 
+const NO_ONE = new Set();
+
 export default function ChatSidebar({
   convos,
   activeId,
   loading,
   online = false,
+  onlineIds = NO_ONE,
   currentUser,
   onSelect,
   people,
@@ -393,7 +421,17 @@ export default function ChatSidebar({
           onToggle={() => toggle("dms")}
           addLabel="New message"
         >
-          {dms.map((c) => renderRow(c, <UserAvatar user={c.peer} size={18} />))}
+          {dms.map((c) =>
+            renderRow(
+              c,
+              <UserAvatar
+                user={c.peer}
+                size={18}
+                online={onlineIds.has(String(c.peer?.uuid))}
+                ring={COLORS.side}
+              />,
+            ),
+          )}
           <AddRow label="Add teammates" onClick={openPicker} />
         </Section>
       </div>
@@ -419,6 +457,7 @@ export default function ChatSidebar({
         <PeoplePicker
           people={people}
           loading={peopleLoading}
+          onlineIds={onlineIds}
           onClose={() => setPickerOpen(false)}
           onPick={(person) => {
             setPickerOpen(false);

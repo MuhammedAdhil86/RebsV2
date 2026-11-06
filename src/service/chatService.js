@@ -240,11 +240,12 @@ const chatService = {
       return (Array.isArray(list) ? list : [])
         .filter((u) => u.uuid)
         .map((u) => ({
-          uuid: String(u.uuid), // employee uuid, not "id"
+          uuid: String(u.uuid),
           name: u.name || "",
           image: u.image || "",
           department: u.department_name || "",
           designation: u.designation_name || "",
+          online: Boolean(u.is_online),
         }))
         .sort((a, b) => a.name.localeCompare(b.name));
     } catch (error) {

@@ -31,12 +31,15 @@ function nextReactions(list = [], emoji) {
   );
 }
 
+const PRESENCE_POLL = 30000;
+
 function useConversations(currentUser) {
   const [convos, setConvos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeId, setActiveId] = useState(null);
   const [people, setPeople] = useState([]);
   const [peopleLoading, setPeopleLoading] = useState(false);
+  const [onlineIds, setOnlineIds] = useState(() => new Set());
   const [online, setOnline] = useState(false);
 
   // refs so the socket handler never reads stale state
@@ -60,6 +63,18 @@ function useConversations(currentUser) {
   const patch = (id, fn) =>
     setConvos((prev) => prev.map((c) => (c.id === id ? fn(c) : c)));
 
+  // Fetch teammates and rebuild the people list + the set of online uuids
+  const refreshPeople = async () => {
+    try {
+      const list = await chatService.fetchTeammates();
+      const me = String(userRef.current?.uuid ?? "");
+      setPeople(list.filter((p) => p.uuid !== me)); // hide yourself
+      setOnlineIds(new Set(list.filter((p) => p.online).map((p) => p.uuid)));
+    } catch (err) {
+      console.warn("[chat] fetchTeammates failed", err);
+    }
+  };
+
   // ---------- initial load ----------
   useEffect(() => {
     let cancelled = false;
@@ -78,9 +93,31 @@ function useConversations(currentUser) {
     };
   }, []);
 
+  // ---------- online status: load now, then refresh every 30s ----------
+  useEffect(() => {
+    refreshPeople();
+    const t = setInterval(() => {
+      if (document.visibilityState === "visible") refreshPeople();
+    }, PRESENCE_POLL);
+    return () => clearInterval(t);
+  }, []);
+
   // ---------- realtime (shared socket, started in App.jsx) ----------
   useEffect(() => {
     const handleEvent = (evt) => {
+      // presence update (template: confirm the event name with your backend)
+      if (evt.type === "presence") {
+        const id = String(evt.data?.uuid ?? "");
+        if (!id) return;
+        setOnlineIds((prev) => {
+          const next = new Set(prev);
+          if (evt.data?.is_online) next.add(id);
+          else next.delete(id);
+          return next;
+        });
+        return;
+      }
+
       const d = evt.data ?? {};
       const convoId = String(d.conversation_id ?? "");
       if (!convoId) {
@@ -172,6 +209,9 @@ function useConversations(currentUser) {
         hasConnectedRef.current = true;
         return;
       }
+
+      refreshPeople();
+
       chatService
         .fetchConversations()
         .then((list) => setConvos((prev) => mergeConvos(list, prev)))
@@ -280,18 +320,12 @@ function useConversations(currentUser) {
     }
   };
 
+  // Called when the "New message" picker opens
   const loadPeople = async () => {
     if (peopleLoading) return;
     setPeopleLoading(true);
-    try {
-      const list = await chatService.fetchTeammates();
-      const me = String(userRef.current?.uuid ?? "");
-      setPeople(list.filter((p) => p.uuid !== me)); // hide yourself
-    } catch (err) {
-      console.warn("[chat] fetchTeammates failed", err);
-    } finally {
-      setPeopleLoading(false);
-    }
+    await refreshPeople();
+    setPeopleLoading(false);
   };
 
   const startDirect = async (person) => {
@@ -352,6 +386,7 @@ function useConversations(currentUser) {
     activeId,
     loading,
     online,
+    onlineIds,
     people,
     peopleLoading,
     loadPeople,
@@ -567,10 +602,11 @@ function Message({ message, showHeader, onReact }) {
   );
 }
 
-function Header({ convo, onBack }) {
+function Header({ convo, onBack, onlineIds }) {
   const isDm = convo.kind === "dm";
   const title = titleOf(convo);
   const members = convo.members || [];
+  const peerOnline = isDm && onlineIds.has(String(convo.peer?.uuid));
 
   return (
     <>
@@ -590,12 +626,15 @@ function Header({ convo, onBack }) {
 
           {isDm ? (
             <>
-              <UserAvatar user={convo.peer} size={26} />
+              <UserAvatar user={convo.peer} size={26} online={peerOnline} />
               <span
                 className="truncate text-[17px] font-medium"
                 style={{ color: COLORS.text }}
               >
                 {title}
+              </span>
+              <span className="text-[12px]" style={{ color: COLORS.sub }}>
+                {peerOnline ? "Active" : "Away"}
               </span>
             </>
           ) : (
@@ -860,7 +899,7 @@ function Composer({ resetKey, placeholder, onSend }) {
   );
 }
 
-function Conversation({ convo, onBack, onSend, onReact }) {
+function Conversation({ convo, onBack, onSend, onReact, onlineIds }) {
   const title = titleOf(convo);
   const placeholder =
     convo.kind === "dm"
@@ -869,7 +908,7 @@ function Conversation({ convo, onBack, onSend, onReact }) {
 
   return (
     <div className="flex h-full flex-col bg-white">
-      <Header convo={convo} onBack={onBack} />
+      <Header convo={convo} onBack={onBack} onlineIds={onlineIds} />
       <MessageList convo={convo} onReact={onReact} />
       <Composer
         resetKey={convo.id}
@@ -887,6 +926,7 @@ export default function ChatView({ currentUser }) {
     activeId,
     loading,
     online,
+    onlineIds,
     people,
     peopleLoading,
     loadPeople,
@@ -911,6 +951,7 @@ export default function ChatView({ currentUser }) {
           activeId={activeId}
           loading={loading}
           online={online}
+          onlineIds={onlineIds}
           currentUser={currentUser}
           onSelect={select}
           people={people}
@@ -937,6 +978,7 @@ export default function ChatView({ currentUser }) {
             onBack={clearActive}
             onSend={sendMessage}
             onReact={toggleReaction}
+            onlineIds={onlineIds}
           />
         )}
       </section>
