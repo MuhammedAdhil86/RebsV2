@@ -231,6 +231,7 @@ function useConversations(currentUser) {
 
     try {
       const saved = await chatService.sendMessage(id, { text });
+      console.log("[chat] send response:", saved);
       if (saved) {
         // API returns sender_name "", so keep our own name and avatar
         const full = saved.sender?.name
@@ -247,7 +248,12 @@ function useConversations(currentUser) {
           };
         });
       }
-    } catch {
+    } catch (err) {
+      console.error(
+        "[chat] send failed",
+        err?.response?.status,
+        err?.response?.data || err,
+      );
       patch(id, (c) => ({
         ...c,
         messages: c.messages.filter((m) => m.id !== tempId),
