@@ -4,13 +4,11 @@ import {
   getChatMessages,
   sendChatMessage,
   sendChatAttachment,
-  reactChatMessage,
-  markChatRead,
   getChatMembers,
   createChatDepartment,
   createChatChannel,
   startChatDm,
-  uploadChatFile,
+  deleteChatMessages,
   deleteChatConversation,
   getActiveUsersLightUrl,
 } from "../api/api";
@@ -362,6 +360,23 @@ const chatService = {
     } catch (error) {
       console.error(
         "Error uploading chat file:",
+        error.response?.data || error.message,
+      );
+      throw error;
+    }
+  },
+  // DELETE /employee/chat/{conversation_id}/messages
+  // body: { message_ids: [12, 13] }
+  deleteMessages: async (conversationId, messageIds) => {
+    try {
+      const response = await axiosInstance.delete(
+        deleteChatMessages(conversationId),
+        { data: { message_ids: messageIds.map(Number) } },
+      );
+      return response.data;
+    } catch (error) {
+      console.error(
+        `Error deleting messages in conversation #${conversationId}:`,
         error.response?.data || error.message,
       );
       throw error;

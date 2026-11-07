@@ -553,13 +553,11 @@ export const getKpiEmployeeDashboard = (userId) =>
 export const getChatConversations = "/employee/chat/conversations"; // confirm: must return "Conversations retrieved"
 export const getChatMessages = (id) => `/employee/chat/${id}/messages`; // GET: same path as send, guess
 export const sendChatMessage = (id) => `/employee/chat/${id}/messages`; // confirmed from your docs
-export const markChatRead = (id) => `/employee/chat/${id}/read`; // guess
-export const reactChatMessage = (messageId) =>
-  `/employee/chat/messages/${messageId}/react`; // guess
+
 export const getChatMembers = (id) => `/employee/chat/${id}/members`; // guess
 export const createChatDepartment = "/employee/chat/department";
 export const createChatChannel = "/employee/chat/group";
 export const startChatDm = "/employee/chat/direct"; // confirmed
-export const uploadChatFile = "/employee/chat/file/upload"; // guess
 export const deleteChatConversation = (id) => `/employee/chat/${id}`;
 export const sendChatAttachment = (id) => `/employee/chat/${id}/attachments`; //
+export const deleteChatMessages = (id) => `/employee/chat/${id}/messages`;

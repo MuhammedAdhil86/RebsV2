@@ -108,6 +108,8 @@ export default function ChatTool({
   onSend,
   onSendFiles,
   onSendVoice,
+  replyTo,
+  onCancelReply,
 }) {
   const [text, setText] = useState("");
   const [files, setFiles] = useState([]); // { id, file, url }
@@ -308,6 +310,15 @@ export default function ChatTool({
     if (recorderRef.current?.state === "recording") stopRecording(false);
   }, [resetKey]);
 
+  // replying: focus the box, Escape cancels
+  useEffect(() => {
+    if (!replyTo) return;
+    textareaRef.current?.focus();
+    const onKey = (e) => e.key === "Escape" && onCancelReply?.();
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [replyTo]);
+
   // textarea grows with its content (up to 160px)
   useEffect(() => {
     const el = textareaRef.current;
@@ -368,6 +379,37 @@ export default function ChatTool({
             style={{ borderColor: COLORS.link, color: COLORS.link }}
           >
             Drop files to attach
+          </div>
+        )}
+
+        {replyTo && !recording && (
+          <div
+            className="mx-3 mt-3 flex items-center gap-2 rounded-lg border-l-[3px] px-3 py-1.5"
+            style={{ borderColor: COLORS.link, background: COLORS.mist }}
+          >
+            <div className="min-w-0 flex-1">
+              <div
+                className="text-[12.5px] font-medium"
+                style={{ color: COLORS.link }}
+              >
+                Replying to {replyTo.sender?.name || "message"}
+              </div>
+              <div
+                className="truncate text-[13px]"
+                style={{ color: COLORS.sub }}
+              >
+                {replyTo.text || replyTo.file?.name || "Attachment"}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={onCancelReply}
+              aria-label="Cancel reply"
+              className="rounded-full p-1 hover:bg-black/10"
+              style={{ color: COLORS.sub }}
+            >
+              <FiX size={15} />
+            </button>
           </div>
         )}
 

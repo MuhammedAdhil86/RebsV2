@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { COLORS, Icon, UserAvatar, iconOf, titleOf } from "./chat_sidebar";
+import { COLORS, Icon, UserAvatar, iconOf, titleOf } from "./chat_shared";
 import { FiBell, FiBellOff, FiMoreVertical, FiTrash2 } from "react-icons/fi";
 import { toast } from "react-toastify";
 import { useNotificationPermission } from "../../Hooks/useNotifications";

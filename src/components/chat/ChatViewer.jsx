@@ -1,7 +1,11 @@
-import React, { useEffect, useRef } from "react";
-import { COLORS, Icon, UserAvatar, titleOf } from "./chat_sidebar";
+import React, { useEffect, useRef, useState } from "react";
+import { FiCornerUpLeft, FiSmile, FiTrash2 } from "react-icons/fi";
+import DeleteConfirmationModal from "../../ui/deletemodal";
+import { COLORS, Icon, UserAvatar, titleOf } from "./chat_shared";
+import MessageFile from "./MessageFile";
 
-export const prefixOf = (c) => (c.kind === "team" ? "" : c.private ? "🔒 " : "#");
+export const prefixOf = (c) =>
+  c.kind === "team" ? "" : c.private ? "🔒 " : "#";
 
 export const nounOf = (c) => (c.kind === "team" ? "team" : "channel");
 
@@ -39,17 +43,43 @@ export function withDayDividers(messages = []) {
   return out;
 }
 
-function Message({ message, showHeader, onReact }) {
-  const user = message.sender ?? { name: "Unknown" };
-  const { file, reactions, replies } = message;
+const QUICK_REACTIONS = ["👍", "❤️", "😂", "🎉", "🙏", "👀"];
 
-  const FileTag = file?.url ? "a" : "div";
-  const fileProps = file?.url
-    ? { href: file.url, target: "_blank", rel: "noreferrer" }
-    : {};
+function Message({
+  message,
+  showHeader,
+  onReact,
+  onReply,
+  onDelete,
+  canDelete,
+}) {
+  const user = message.sender ?? { name: "Unknown" };
+  const { file, reactions, replies, replyTo } = message;
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const pickerRef = useRef(null);
+
+  // close the quick-reaction picker on outside click / Escape
+  useEffect(() => {
+    if (!pickerOpen) return;
+    const onDown = (e) => {
+      if (pickerRef.current && !pickerRef.current.contains(e.target))
+        setPickerOpen(false);
+    };
+    const onKey = (e) => e.key === "Escape" && setPickerOpen(false);
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [pickerOpen]);
+
+  const pending = String(message.id).startsWith("tmp-");
 
   return (
-    <div className="group relative flex gap-2.5 px-5 py-[3px] hover:bg-[#F2F4F3]">
+    <div
+      className={`group relative flex gap-2.5 px-5 py-[3px] hover:bg-[#F2F4F3] ${pickerOpen ? "bg-[#F2F4F3]" : ""}`}
+    >
       <div className="w-9 shrink-0 pt-0.5">
         {showHeader ? (
           <UserAvatar user={user} />
@@ -78,38 +108,30 @@ function Message({ message, showHeader, onReact }) {
           </div>
         )}
 
-        <div
-          className="whitespace-pre-wrap break-words text-[15px] leading-[22px]"
-          style={{ color: COLORS.text }}
-        >
-          {message.text}
-        </div>
-
-        {file && (
-          <FileTag
-            {...fileProps}
-            className="mt-1.5 flex w-fit items-center gap-3 rounded-lg border px-3 py-2"
-            style={{ borderColor: COLORS.line }}
+        {replyTo && (
+          <div
+            className="mb-1 max-w-full truncate border-l-[3px] pl-2 text-[13px]"
+            style={{ borderColor: COLORS.link, color: COLORS.sub }}
           >
-            <span
-              className="flex h-9 w-9 items-center justify-center rounded-md bg-[#fbe8ea]"
-              style={{ color: COLORS.link }}
-            >
-              <Icon name="file" size={20} />
+            <span className="font-medium">
+              {replyTo.senderName || "Message"}
             </span>
-            <div>
-              <div
-                className="text-[14px] font-medium"
-                style={{ color: COLORS.link }}
-              >
-                {file.name}
-              </div>
-              <div className="text-[12px]" style={{ color: COLORS.sub }}>
-                {file.size}
-              </div>
-            </div>
-          </FileTag>
+            {": "}
+            {replyTo.text || "Attachment"}
+          </div>
         )}
+
+        {message.text && (
+          <div
+            className="whitespace-pre-wrap break-words text-[15px] leading-[22px]"
+            style={{ color: COLORS.text }}
+          >
+            {message.text}
+          </div>
+        )}
+
+        {/* image / voice note / video / document */}
+        {file && <MessageFile file={file} />}
 
         {reactions?.length > 0 && (
           <div className="mt-1 flex flex-wrap gap-1">
@@ -152,27 +174,63 @@ function Message({ message, showHeader, onReact }) {
         )}
       </div>
 
-      <div
-        className="absolute -top-3.5 right-5 hidden items-center rounded-lg border bg-white px-0.5 py-0.5 shadow-sm group-hover:flex"
-        style={{ borderColor: COLORS.line, color: COLORS.sub }}
-      >
-        <button
-          onClick={() => onReact("👍")}
-          title="React"
-          className="rounded p-1.5 hover:bg-[#F2F4F3]"
+      {!pending && (
+        <div
+          className={`absolute -top-3.5 right-5 items-center rounded-lg border bg-white px-0.5 py-0.5 shadow-sm group-hover:flex ${
+            pickerOpen ? "flex" : "hidden"
+          }`}
+          style={{ borderColor: COLORS.line, color: COLORS.sub }}
         >
-          <Icon name="smile" size={17} />
-        </button>
-        <button
-          title="Reply in thread"
-          className="rounded p-1.5 hover:bg-[#F2F4F3]"
-        >
-          <Icon name="reply" size={17} />
-        </button>
-        <button title="More" className="rounded p-1.5 hover:bg-[#F2F4F3]">
-          <Icon name="more" size={17} />
-        </button>
-      </div>
+          <div className="relative" ref={pickerRef}>
+            <button
+              onClick={() => setPickerOpen((o) => !o)}
+              title="React"
+              aria-label="Add reaction"
+              className="rounded p-1.5 hover:bg-[#F2F4F3]"
+            >
+              <FiSmile size={17} />
+            </button>
+            {pickerOpen && (
+              <div
+                className="absolute bottom-full right-0 z-20 mb-1 flex gap-0.5 rounded-xl border bg-white p-1.5 shadow-[0_8px_24px_rgba(0,0,0,0.14)]"
+                style={{ borderColor: COLORS.line }}
+              >
+                {QUICK_REACTIONS.map((e) => (
+                  <button
+                    key={e}
+                    onClick={() => {
+                      setPickerOpen(false);
+                      onReact(e);
+                    }}
+                    className="flex h-8 w-8 items-center justify-center rounded-md text-[19px] hover:bg-[#F2F4F3]"
+                  >
+                    {e}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <button
+            onClick={() => onReply(message)}
+            title="Reply"
+            aria-label="Reply"
+            className="rounded p-1.5 hover:bg-[#F2F4F3]"
+          >
+            <FiCornerUpLeft size={17} />
+          </button>
+          {canDelete && (
+            <button
+              onClick={() => onDelete(message)}
+              title="Delete message"
+              aria-label="Delete message"
+              className="rounded p-1.5 hover:bg-[#fbe8ea]"
+              style={{ color: COLORS.link }}
+            >
+              <FiTrash2 size={17} />
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -237,8 +295,24 @@ function DayDivider({ label }) {
   );
 }
 
-export default function ChatViewer({ convo, onReact }) {
+export default function ChatViewer({
+  convo,
+  currentUserId,
+  onReact,
+  onReply,
+  onDelete,
+}) {
   const endRef = useRef(null);
+  const [toDelete, setToDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const confirmDelete = async () => {
+    if (!toDelete || deleting) return;
+    setDeleting(true);
+    await onDelete(convo.id, toDelete.id);
+    setDeleting(false);
+    setToDelete(null);
+  };
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "auto" });
@@ -267,11 +341,24 @@ export default function ChatViewer({ convo, onReact }) {
             message={m}
             showHeader={showHeader}
             onReact={(emoji) => onReact(convo.id, m.id, emoji)}
+            onReply={onReply}
+            onDelete={setToDelete}
+            canDelete={
+              !!currentUserId &&
+              String(m.sender?.uuid) === String(currentUserId)
+            }
           />
         );
       })}
 
       <div ref={endRef} />
+
+      <DeleteConfirmationModal
+        isOpen={!!toDelete}
+        onClose={() => !deleting && setToDelete(null)}
+        onConfirm={confirmDelete}
+        itemName="this message"
+      />
     </div>
   );
 }
