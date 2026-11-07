@@ -6,6 +6,12 @@ import { subscribeEvents, subscribeStatus } from "../../ws/useChatSocket";
 import ChatViewHead from "./ChatViewHead";
 import ChatViewer, { prefixOf } from "./ChatViewer";
 import ChatTool from "./ChatTool";
+import {
+  describeState,
+  isAppActive,
+  showChatNotification,
+  useChatNotificationLifecycle,
+} from "../../Hooks/useNotifications";
 
 // After a refetch, keep messages we already loaded (the list API has none)
 const mergeConvos = (fresh, old) =>
@@ -35,6 +41,15 @@ const PRESENCE_POLL = 30000;
 // NOT VERIFIED against the backend: set this to the exact `type` it sends.
 // The payload is expected as evt.data.conversation_id, like chat_message.
 const CONVERSATION_DELETED = "conversation_deleted";
+
+// Delete detection. Exact match first; the fallback also accepts any
+// conversation/chat event whose type says delete/remove (but not a single
+// message being deleted). Remove the fallback once the real type is known.
+const isConversationDeleted = (type = "") =>
+  type === CONVERSATION_DELETED ||
+  (/(conversation|chat|channel|dm)/i.test(type) &&
+    /(delet|remov)/i.test(type) &&
+    !/message/i.test(type));
 
 function useConversations(currentUser) {
   const [convos, setConvos] = useState([]);
@@ -66,6 +81,41 @@ function useConversations(currentUser) {
   }, [currentUser]);
 
   const active = convos.find((c) => c.id === activeId) || null;
+
+  useChatNotificationLifecycle();
+  const selectRef = useRef(null); // lets a notification click open its chat
+
+  // Native notification for an incoming message. Only when the user is NOT
+  // looking at the app (other tab / minimized / window unfocused); while the
+  // app is active your existing toasts handle it. Never for my own messages.
+  const notifyIncoming = ({
+    convo,
+    convoId,
+    id,
+    senderName,
+    text,
+    hasFile,
+  }) => {
+    console.log("[notify] incoming message", {
+      convoId,
+      id,
+      ...describeState(),
+    });
+    if (isAppActive()) return;
+    const who = senderName || "";
+    let title;
+    if (!convo) title = who || "New message";
+    else if (convo.kind === "dm") title = who || titleOf(convo);
+    else title = `${who || "Someone"} in ${prefixOf(convo)}${titleOf(convo)}`;
+
+    showChatNotification({
+      id,
+      convoId,
+      title,
+      body: text || (hasFile ? "Sent an attachment" : ""),
+      onOpen: (cid) => selectRef.current?.(cid),
+    });
+  };
 
   const patch = (id, fn) =>
     setConvos((prev) => prev.map((c) => (c.id === id ? fn(c) : c)));
@@ -166,6 +216,9 @@ function useConversations(currentUser) {
   // ---------- realtime (shared socket, started in App.jsx) ----------
   useEffect(() => {
     const handleEvent = (evt) => {
+      // DEBUG: shows every socket event this client receives
+      console.log("[WS evt]", evt?.type, evt);
+
       // presence update (template: confirm the event name with your backend)
       if (evt.type === "presence") {
         const id = String(evt.data?.uuid ?? "");
@@ -180,19 +233,32 @@ function useConversations(currentUser) {
       }
 
       const d = evt.data ?? {};
-      const convoId = String(d.conversation_id ?? "");
-      if (!convoId) {
-        console.warn("[WS] no conversation_id in", evt);
+
+      // a conversation was deleted: remove it instantly (handled only once)
+      if (isConversationDeleted(evt.type)) {
+        const delId = String(
+          d.conversation_id ??
+            d.conversationId ??
+            d.chat_id ??
+            d.conversation?.id ??
+            d.id ??
+            "",
+        );
+        if (!delId) {
+          console.warn("[WS] delete event has no conversation id", evt);
+          return;
+        }
+        if (deletedRef.current.has(delId)) return; // duplicate event
+        const existed = convosRef.current.some((c) => c.id === delId);
+        const mine = deletingRef.current.has(delId); // my own delete echo
+        dropConvo(delId, !mine);
+        if (existed && !mine) toast.info("This conversation was deleted");
         return;
       }
 
-      // a conversation was deleted: remove it instantly (handled only once)
-      if (evt.type === CONVERSATION_DELETED) {
-        if (deletedRef.current.has(convoId)) return; // duplicate event
-        const existed = convosRef.current.some((c) => c.id === convoId);
-        const mine = deletingRef.current.has(convoId); // my own delete echo
-        dropConvo(convoId, !mine);
-        if (existed && !mine) toast.info("This conversation was deleted");
+      const convoId = String(d.conversation_id ?? "");
+      if (!convoId) {
+        console.warn("[WS] no conversation_id in", evt);
         return;
       }
 
@@ -207,6 +273,17 @@ function useConversations(currentUser) {
       if (!known) {
         const fromMe = d.sender_id != null && String(d.sender_id) === me;
         const bump = evt.type === "chat_text" && !fromMe;
+        if (
+          !fromMe &&
+          (evt.type === "chat_text" || evt.type === "chat_message")
+        ) {
+          notifyIncoming({
+            convoId,
+            id: d.message_id ?? d.id,
+            senderName: d.sender_name,
+            text: d.text ?? d.message ?? d.content ?? "",
+          });
+        }
         chatService
           .fetchConversations()
           .then((list) =>
@@ -233,6 +310,17 @@ function useConversations(currentUser) {
           const person = known.members.find((m) => m.uuid === msg.sender?.uuid);
           if (person) msg.sender = person;
           else if (mine) msg.sender = userRef.current;
+        }
+
+        if (!mine) {
+          notifyIncoming({
+            convo: known,
+            convoId,
+            id: msg.id,
+            senderName: msg.sender?.name,
+            text: msg.text,
+            hasFile: !!msg.file,
+          });
         }
 
         patch(convoId, (c) => {
@@ -264,6 +352,20 @@ function useConversations(currentUser) {
             countedRef.current.delete(countedRef.current.values().next().value);
           }
         }
+
+        const sender = known.members.find(
+          (m) => String(m.uuid) === String(d.sender_id),
+        );
+        notifyIncoming({
+          convo: known,
+          convoId,
+          id: d.message_id ?? d.id,
+          senderName:
+            sender?.name ??
+            d.sender_name ??
+            (known.kind === "dm" ? known.peer?.name : ""),
+          text: d.text ?? d.message ?? d.content ?? "",
+        });
 
         if (isOpen) {
           chatService.markRead(convoId).catch(() => {});
@@ -320,6 +422,8 @@ function useConversations(currentUser) {
     }
     if (target && !target.loaded) await loadMessages(id);
   };
+
+  selectRef.current = select;
 
   const clearActive = () => setActiveId(null);
 

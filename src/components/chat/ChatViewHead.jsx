@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import { COLORS, Icon, UserAvatar, iconOf, titleOf } from "./chat_sidebar";
-import { FiMoreVertical, FiTrash2 } from "react-icons/fi";
+import { FiBell, FiBellOff, FiMoreVertical, FiTrash2 } from "react-icons/fi";
+import { toast } from "react-toastify";
+import { useNotificationPermission } from "../../Hooks/useNotifications";
 import DeleteConfirmationModal from "../../ui/deletemodal";
 
 export default function ChatViewHead({ convo, onBack, onlineIds, onDelete }) {
@@ -8,6 +10,7 @@ export default function ChatViewHead({ convo, onBack, onlineIds, onDelete }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const menuRef = useRef(null);
+  const [permission, requestPermission] = useNotificationPermission();
 
   const isDm = convo.kind === "dm";
   const title = titleOf(convo);
@@ -110,6 +113,36 @@ export default function ChatViewHead({ convo, onBack, onlineIds, onDelete }) {
             </>
           )}
 
+          {/* desktop notifications: permission is asked only on this click */}
+          {permission === "default" && (
+            <button
+              onClick={async () => {
+                const result = await requestPermission();
+                if (result === "granted")
+                  toast.success("Desktop notifications enabled");
+                else if (result === "denied")
+                  toast.info(
+                    "Notifications are blocked in your browser settings",
+                  );
+              }}
+              title="Enable desktop notifications"
+              aria-label="Enable desktop notifications"
+              className="flex h-8 w-8 items-center justify-center rounded-full transition-colors hover:bg-[#F2F4F3]"
+              style={{ color: COLORS.sub }}
+            >
+              <FiBell size={18} />
+            </button>
+          )}
+          {permission === "denied" && (
+            <span
+              title="Notifications are blocked in your browser settings"
+              className="flex h-8 w-8 items-center justify-center"
+              style={{ color: COLORS.offline }}
+            >
+              <FiBellOff size={18} />
+            </span>
+          )}
+
           {/* vertical three-dot menu */}
           <div className="relative" ref={menuRef}>
             <button
@@ -142,7 +175,7 @@ export default function ChatViewHead({ convo, onBack, onlineIds, onDelete }) {
                   style={{ color: COLORS.link }}
                 >
                   <FiTrash2 size={16} />
-                  Delete
+                  Delete conversation
                 </button>
               </div>
             )}
