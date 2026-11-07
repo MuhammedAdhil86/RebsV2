@@ -557,8 +557,9 @@ export const markChatRead = (id) => `/employee/chat/${id}/read`; // guess
 export const reactChatMessage = (messageId) =>
   `/employee/chat/messages/${messageId}/react`; // guess
 export const getChatMembers = (id) => `/employee/chat/${id}/members`; // guess
-export const createChatTeam = "/employee/chat/team/create"; // guess
-export const createChatChannel = "/employee/chat/channel/create"; // guess
+export const createChatDepartment = "/employee/chat/department";
+export const createChatChannel = "/employee/chat/group";
 export const startChatDm = "/employee/chat/direct"; // confirmed
 export const uploadChatFile = "/employee/chat/file/upload"; // guess
 export const deleteChatConversation = (id) => `/employee/chat/${id}`;
+export const sendChatAttachment = (id) => `/employee/chat/${id}/attachments`; //

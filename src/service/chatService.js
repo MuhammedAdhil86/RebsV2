@@ -3,10 +3,11 @@ import {
   getChatConversations,
   getChatMessages,
   sendChatMessage,
+  sendChatAttachment,
   reactChatMessage,
   markChatRead,
   getChatMembers,
-  createChatTeam,
+  createChatDepartment,
   createChatChannel,
   startChatDm,
   uploadChatFile,
@@ -64,6 +65,28 @@ const toConversation = (c) => {
   };
 };
 
+// Attachment API shape: attachments: [{ id, file_name, url, mime_type, file_size }]
+// Falls back to the older single `file` shape.
+const toFile = (m) => {
+  const a = Array.isArray(m.attachments) ? m.attachments[0] : null;
+  if (a) {
+    return {
+      name: a.file_name,
+      size: a.file_size,
+      url: a.url,
+      mime: a.mime_type,
+    };
+  }
+  return m.file
+    ? {
+        name: m.file.name,
+        size: m.file.size,
+        url: m.file.url,
+        mime: m.file.mime,
+      }
+    : null;
+};
+
 const toMessage = (m) => ({
   id: String(m.id),
   sender: toPerson(
@@ -75,9 +98,7 @@ const toMessage = (m) => ({
   ),
   text: m.text ?? m.message ?? m.content ?? "",
   createdAt: m.created_at ?? m.createdAt ?? null,
-  file: m.file
-    ? { name: m.file.name, size: m.file.size, url: m.file.url }
-    : null,
+  file: toFile(m),
   reactions: (m.reactions ?? []).map((r) => ({
     e: r.emoji ?? r.e,
     n: Number(r.count ?? r.n ?? 0),
@@ -148,6 +169,33 @@ const chatService = {
     }
   },
 
+  sendAttachment: async (conversationId, file, caption = "") => {
+    try {
+      const body = new FormData();
+      body.append("file", file);
+      if (caption) body.append("caption", caption);
+
+      // axiosInstance defaults to application/json, so multipart must be set
+      // here. Axios adds the boundary itself for a FormData body.
+      const response = await axiosInstance.post(
+        sendChatAttachment(conversationId),
+        body,
+        {
+          silent: true,
+          headers: { "Content-Type": "multipart/form-data" },
+        },
+      );
+
+      const saved = response.data?.data;
+      return saved?.id != null ? toMessage(saved) : null;
+    } catch (error) {
+      console.error(
+        `Error sending attachment to conversation #${conversationId}:`,
+        error.response?.data || error.message,
+      );
+      throw error;
+    }
+  },
   // POST a reaction (same emoji again removes it)
   toggleReaction: async (messageId, emoji) => {
     try {
@@ -201,12 +249,14 @@ const chatService = {
     }
   },
 
-  // POST create team
-  createTeam: async (teamData) => {
+  createTeam: async ({ name, departmentId }) => {
     try {
-      const response = await axiosInstance.post(createChatTeam, teamData);
-      console.log("Team created:", response.data);
+      const response = await axiosInstance.post(createChatDepartment, {
+        name: name.trim(),
+        department_id: Number(departmentId), // API expects an integer
+      });
       return response.data?.data ?? response.data;
+      // -> { id: 8, type: "group", name: "NEW PROJECT", created_by: "100555" }
     } catch (error) {
       console.error(
         "Error creating team:",
@@ -216,12 +266,14 @@ const chatService = {
     }
   },
 
-  // POST create channel
-  createChannel: async (channelData) => {
+  createChannel: async ({ name, employeeUuids }) => {
     try {
-      const response = await axiosInstance.post(createChatChannel, channelData);
-      console.log("Channel created:", response.data);
+      const response = await axiosInstance.post(createChatChannel, {
+        name: name.trim(),
+        employee_uuids: employeeUuids.map(String), // API expects strings
+      });
       return response.data?.data ?? response.data;
+      // -> { id: 7, type: "group", name: "REBS", created_by: "100555" }
     } catch (error) {
       console.error(
         "Error creating channel:",
@@ -295,7 +347,8 @@ const chatService = {
     }
   },
 
-  // POST upload a file (multipart/form-data)
+  // OLD generic upload. No longer used for chat sending; remove it together
+  // with `uploadChatFile` in api.js once nothing else calls it.
   uploadFile: async (file) => {
     try {
       const body = new FormData();

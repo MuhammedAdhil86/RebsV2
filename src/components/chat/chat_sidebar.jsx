@@ -135,7 +135,7 @@ export const titleOf = (c) =>
 export const iconOf = (c) =>
   c.kind === "team" ? "users" : c.private ? "lock" : "hash";
 
-function Section({ label, open, onToggle, addLabel, children }) {
+function Section({ label, open, onToggle, addLabel, onAdd, children }) {
   return (
     <div
       className="flex min-h-0 flex-col"
@@ -155,6 +155,7 @@ function Section({ label, open, onToggle, addLabel, children }) {
           {label}
         </button>
         <button
+          onClick={onAdd}
           className="rounded p-0.5 opacity-0 transition hover:bg-white/10 hover:text-white group-hover:opacity-100"
           style={{ color: COLORS.sideText }}
           aria-label={addLabel}
@@ -299,6 +300,254 @@ function PeoplePicker({ people, loading, onlineIds, onPick, onClose }) {
   );
 }
 
+// Create a channel: name + pick people (same people list as direct messages)
+function ChannelPicker({ people, loading, onlineIds, onCreate, onClose }) {
+  const [name, setName] = useState("");
+  const [q, setQ] = useState("");
+  const [picked, setPicked] = useState(() => new Set());
+  const [saving, setSaving] = useState(false);
+
+  const s = q.trim().toLowerCase();
+  const list = people.filter((p) => !s || p.name.toLowerCase().includes(s));
+  const canCreate = name.trim().length > 0 && picked.size > 0 && !saving;
+
+  const toggle = (uuid) =>
+    setPicked((prev) => {
+      const next = new Set(prev);
+      if (next.has(uuid)) next.delete(uuid);
+      else next.add(uuid);
+      return next;
+    });
+
+  const submit = async () => {
+    if (!canCreate) return;
+    setSaving(true);
+    const ok = await onCreate({
+      name: name.trim(),
+      employeeUuids: [...picked],
+    });
+    setSaving(false);
+    if (ok) onClose();
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="flex max-h-[80vh] w-full max-w-[440px] flex-col overflow-hidden rounded-lg bg-white shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div
+          className="flex items-center justify-between border-b px-4 py-3"
+          style={{ borderColor: COLORS.line }}
+        >
+          <div
+            className="text-[17px] font-medium"
+            style={{ color: COLORS.text }}
+          >
+            Create channel
+          </div>
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className="rounded p-1 hover:bg-[#F2F4F3]"
+            style={{ color: COLORS.sub }}
+          >
+            <Icon name="close" size={18} />
+          </button>
+        </div>
+
+        <div className="space-y-2 px-4 py-3">
+          <input
+            autoFocus
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Channel name"
+            maxLength={80}
+            className="h-9 w-full rounded-md border px-3 text-[14px] outline-none focus:border-[#1d1d1f]"
+            style={{ borderColor: "#b9bdbb", color: COLORS.text }}
+          />
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search people to add"
+            className="h-9 w-full rounded-md border px-3 text-[14px] outline-none focus:border-[#1d1d1f]"
+            style={{ borderColor: "#b9bdbb", color: COLORS.text }}
+          />
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto pb-2">
+          {loading && (
+            <div
+              className="px-4 py-3 text-[14px]"
+              style={{ color: COLORS.sub }}
+            >
+              Loading people…
+            </div>
+          )}
+          {!loading && list.length === 0 && (
+            <div
+              className="px-4 py-3 text-[14px]"
+              style={{ color: COLORS.sub }}
+            >
+              No one found.
+            </div>
+          )}
+          {list.map((p) => {
+            const on = picked.has(String(p.uuid));
+            return (
+              <button
+                key={p.uuid}
+                onClick={() => toggle(String(p.uuid))}
+                className="flex w-full items-center gap-3 px-4 py-2 text-left hover:bg-[#F2F4F3]"
+              >
+                <span
+                  className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded border text-[12px] text-white"
+                  style={{
+                    borderColor: on ? COLORS.active : "#b9bdbb",
+                    background: on ? COLORS.active : "#fff",
+                  }}
+                >
+                  {on ? "✓" : ""}
+                </span>
+                <UserAvatar
+                  user={p}
+                  size={30}
+                  online={onlineIds.has(String(p.uuid))}
+                />
+                <div className="min-w-0">
+                  <div
+                    className="truncate text-[15px] font-medium"
+                    style={{ color: COLORS.text }}
+                  >
+                    {p.name}
+                  </div>
+                  {(p.designation || p.department) && (
+                    <div
+                      className="truncate text-[12.5px]"
+                      style={{ color: COLORS.sub }}
+                    >
+                      {[p.designation, p.department]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </div>
+                  )}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        <div
+          className="flex items-center justify-between border-t px-4 py-3"
+          style={{ borderColor: COLORS.line }}
+        >
+          <span className="text-[13px]" style={{ color: COLORS.sub }}>
+            {picked.size} selected
+          </span>
+          <button
+            onClick={submit}
+            disabled={!canCreate}
+            className="h-9 rounded-md px-4 text-[14px] font-medium text-white disabled:opacity-50"
+            style={{ background: COLORS.active }}
+          >
+            {saving ? "Creating…" : "Create"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Create a team: name + choose a department (everyone in it is added)
+function TeamPicker({ departments, onCreate, onClose }) {
+  const [name, setName] = useState("");
+  const [deptId, setDeptId] = useState("");
+  const [saving, setSaving] = useState(false);
+  const canCreate = name.trim().length > 0 && deptId !== "" && !saving;
+
+  const submit = async () => {
+    if (!canCreate) return;
+    setSaving(true);
+    const ok = await onCreate({ name: name.trim(), departmentId: deptId });
+    setSaving(false);
+    if (ok) onClose();
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="flex w-full max-w-[420px] flex-col overflow-hidden rounded-lg bg-white shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div
+          className="flex items-center justify-between border-b px-4 py-3"
+          style={{ borderColor: COLORS.line }}
+        >
+          <div
+            className="text-[17px] font-medium"
+            style={{ color: COLORS.text }}
+          >
+            Create team
+          </div>
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className="rounded p-1 hover:bg-[#F2F4F3]"
+            style={{ color: COLORS.sub }}
+          >
+            <Icon name="close" size={18} />
+          </button>
+        </div>
+
+        <div className="space-y-2 px-4 py-3">
+          <input
+            autoFocus
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Team name"
+            maxLength={80}
+            className="h-9 w-full rounded-md border px-3 text-[14px] outline-none focus:border-[#1d1d1f]"
+            style={{ borderColor: "#b9bdbb", color: COLORS.text }}
+          />
+          <select
+            value={deptId}
+            onChange={(e) => setDeptId(e.target.value)}
+            className="h-9 w-full rounded-md border bg-white px-2 text-[14px] outline-none focus:border-[#1d1d1f]"
+            style={{ borderColor: "#b9bdbb", color: COLORS.text }}
+          >
+            <option value="">Select department</option>
+            {departments.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div
+          className="flex justify-end border-t px-4 py-3"
+          style={{ borderColor: COLORS.line }}
+        >
+          <button
+            onClick={submit}
+            disabled={!canCreate}
+            className="h-9 rounded-md px-4 text-[14px] font-medium text-white disabled:opacity-50"
+            style={{ background: COLORS.active }}
+          >
+            {saving ? "Creating…" : "Create"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AddRow({ label, onClick }) {
   return (
     <button
@@ -328,14 +577,28 @@ export default function ChatSidebar({
   peopleLoading,
   onLoadPeople,
   onStartDm,
+  onCreateChannel,
+  departments = [],
+  onLoadDepartments,
+  onCreateTeam,
 }) {
   const [query, setQuery] = useState("");
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [channelOpen, setChannelOpen] = useState(false);
+  const [teamOpen, setTeamOpen] = useState(false);
   const [open, setOpen] = useState({ teams: true, channels: true, dms: true });
 
   const openPicker = () => {
     onLoadPeople();
     setPickerOpen(true);
+  };
+  const openChannelPicker = () => {
+    onLoadPeople();
+    setChannelOpen(true);
+  };
+  const openTeamPicker = () => {
+    onLoadDepartments?.();
+    setTeamOpen(true);
   };
   const toggle = (key) => setOpen((o) => ({ ...o, [key]: !o[key] }));
 
@@ -400,9 +663,10 @@ export default function ChatSidebar({
           open={open.teams}
           onToggle={() => toggle("teams")}
           addLabel="Add team"
+          onAdd={openTeamPicker}
         >
           {teams.map((c) => renderRow(c, renderIcon(c)))}
-          <AddRow label="Create team" />
+          <AddRow label="Create team" onClick={openTeamPicker} />
         </Section>
 
         <Section
@@ -410,9 +674,10 @@ export default function ChatSidebar({
           open={open.channels}
           onToggle={() => toggle("channels")}
           addLabel="Add channel"
+          onAdd={openChannelPicker}
         >
           {channels.map((c) => renderRow(c, renderIcon(c)))}
-          <AddRow label="Add channels" />
+          <AddRow label="Add channels" onClick={openChannelPicker} />
         </Section>
 
         <Section
@@ -420,6 +685,7 @@ export default function ChatSidebar({
           open={open.dms}
           onToggle={() => toggle("dms")}
           addLabel="New message"
+          onAdd={openPicker}
         >
           {dms.map((c) =>
             renderRow(
@@ -463,6 +729,24 @@ export default function ChatSidebar({
             setPickerOpen(false);
             onStartDm(person);
           }}
+        />
+      )}
+
+      {channelOpen && (
+        <ChannelPicker
+          people={people}
+          loading={peopleLoading}
+          onlineIds={onlineIds}
+          onClose={() => setChannelOpen(false)}
+          onCreate={onCreateChannel}
+        />
+      )}
+
+      {teamOpen && (
+        <TeamPicker
+          departments={departments}
+          onClose={() => setTeamOpen(false)}
+          onCreate={onCreateTeam}
         />
       )}
 

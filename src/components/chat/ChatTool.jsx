@@ -15,6 +15,9 @@ const MAX_FILES = 10;
 const MAX_FILE_MB = 10;
 const MAX_VOICE_SEC = 300; // auto-stop after 5 minutes
 
+// Voice quality: Opus, mono, 192 kbps (about 7 MB for 5 minutes)
+const VOICE_BITRATE = 192000;
+
 const EMOJIS = [
   "😀",
   "😂",
@@ -57,12 +60,19 @@ const formatSize = (bytes = 0) => {
 const formatTime = (s) =>
   `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
+// Prefer MP4/AAC (.m4a): the backend accepts it as audio. A WebM voice note
+// is sniffed as video/webm and rejected with 415. Opus/WebM is the fallback
+// for browsers that cannot record MP4.
 const pickMime = () => {
   if (typeof MediaRecorder === "undefined") return "";
   return (
-    ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg"].find(
-      (t) => MediaRecorder.isTypeSupported?.(t),
-    ) || ""
+    [
+      "audio/mp4;codecs=mp4a.40.2",
+      "audio/mp4",
+      "audio/webm;codecs=opus",
+      "audio/ogg;codecs=opus",
+      "audio/webm",
+    ].find((t) => MediaRecorder.isTypeSupported?.(t)) || ""
   );
 };
 
@@ -188,14 +198,22 @@ export default function ChatTool({
       return;
     }
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          channelCount: 1, // mono is enough for voice
+          sampleRate: 48000, // Opus native rate
+          echoCancellation: true,
+          noiseSuppression: false, // set true if users work in noisy offices
+          autoGainControl: false,
+        },
+      });
       streamRef.current = stream;
 
       const mime = pickMime();
-      const rec = new MediaRecorder(
-        stream,
-        mime ? { mimeType: mime } : undefined,
-      );
+      const rec = new MediaRecorder(stream, {
+        ...(mime && { mimeType: mime }),
+        audioBitsPerSecond: VOICE_BITRATE,
+      });
       chunksRef.current = [];
       discardRef.current = false;
 
@@ -218,8 +236,9 @@ export default function ChatTool({
           : type.includes("ogg")
             ? "ogg"
             : "webm";
+        // strip ";codecs=opus" so the backend sees a plain mime type
         const file = new File([blob], `voice-note-${Date.now()}.${ext}`, {
-          type,
+          type: type.split(";")[0],
         });
 
         const send = sendVoiceRef.current;
@@ -228,7 +247,7 @@ export default function ChatTool({
       };
 
       recorderRef.current = rec;
-      rec.start();
+      rec.start(250); // flush a chunk every 250 ms
       startedAtRef.current = Date.now();
       setSeconds(0);
       setRecording(true);

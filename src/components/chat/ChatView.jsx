@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import ChatSidebar, { COLORS, titleOf } from "./chat_sidebar";
 import { toast } from "react-toastify";
 import chatService, { toMessage } from "../../service/chatService";
+import { getDepartmentData } from "../../service/companyService";
 import { subscribeEvents, subscribeStatus } from "../../ws/useChatSocket";
 import ChatViewHead from "./ChatViewHead";
 import ChatViewer, { prefixOf } from "./ChatViewer";
@@ -57,6 +58,7 @@ function useConversations(currentUser) {
   const [activeId, setActiveId] = useState(null);
   const [people, setPeople] = useState([]);
   const [peopleLoading, setPeopleLoading] = useState(false);
+  const [departments, setDepartments] = useState([]);
   const [onlineIds, setOnlineIds] = useState(() => new Set());
   const [online, setOnline] = useState(false);
   // true when the open chat was removed by someone else (drives the empty state)
@@ -326,10 +328,16 @@ function useConversations(currentUser) {
         patch(convoId, (c) => {
           if (c.messages.some((m) => m.id === msg.id)) return c;
 
-          // replace our own temporary message
+          // replace our own temporary message (text AND file name must match,
+          // so a caption-less attachment never replaces the wrong temp)
           const messages = c.messages.filter(
             (m) =>
-              !(String(m.id).startsWith("tmp-") && mine && m.text === msg.text),
+              !(
+                String(m.id).startsWith("tmp-") &&
+                mine &&
+                m.text === msg.text &&
+                (m.file?.name ?? null) === (msg.file?.name ?? null)
+              ),
           );
 
           return { ...c, messages: c.loaded ? [...messages, msg] : messages };
@@ -479,6 +487,80 @@ function useConversations(currentUser) {
     }
   };
 
+  // Send one or more files. The API accepts one file per request, so the
+  // caption goes with the first file only.
+  const sendFiles = async (id, files, text = "") => {
+    if (deletedRef.current.has(id)) return;
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const caption = i === 0 ? text : "";
+      const tempId = `tmp-${Date.now()}-${i}`;
+      const previewUrl = URL.createObjectURL(file);
+
+      const temp = {
+        id: tempId,
+        sender: currentUser,
+        text: caption,
+        createdAt: new Date().toISOString(),
+        file: {
+          name: file.name,
+          size: file.size,
+          url: previewUrl,
+          mime: file.type,
+          uploading: true,
+        },
+        reactions: [],
+        replies: 0,
+      };
+      patch(id, (c) => ({ ...c, messages: [...c.messages, temp] }));
+
+      try {
+        const saved = await chatService.sendAttachment(id, file, caption);
+        if (saved) {
+          const full = saved.sender?.name
+            ? saved
+            : { ...saved, sender: currentUser };
+          patch(id, (c) => {
+            // the socket echo may have already added the saved message
+            const hasSaved = c.messages.some((m) => m.id === full.id);
+            return {
+              ...c,
+              messages: hasSaved
+                ? c.messages.filter((m) => m.id !== tempId)
+                : c.messages.map((m) => (m.id === tempId ? full : m)),
+            };
+          });
+        }
+      } catch (err) {
+        console.error(
+          "[chat] send attachment failed",
+          err?.response?.status,
+          err?.response?.data || err,
+        );
+        const st = err?.response?.status;
+        if (st === 404 || st === 410) {
+          dropConvo(id, true);
+          toast.info("This conversation was deleted");
+          return;
+        }
+        patch(id, (c) => ({
+          ...c,
+          messages: c.messages.filter((m) => m.id !== tempId),
+        }));
+        toast.error(
+          err?.response?.data?.message || `Couldn't send ${file.name}`,
+        );
+      } finally {
+        URL.revokeObjectURL(previewUrl);
+      }
+    }
+  };
+
+  // Voice note = just a file. The endpoint has no duration field, so
+  // `duration` is unused for now.
+  const sendVoice = (id, file /*, duration */) => sendFiles(id, [file], "");
+
   const toggleReaction = async (convoId, messageId, emoji) => {
     const apply = () =>
       patch(convoId, (c) => ({
@@ -582,6 +664,69 @@ function useConversations(currentUser) {
     }
   };
 
+  // Reload the list (the create responses have no members) and open the new chat
+  const openCreated = async (res) => {
+    const rawId = res?.id ?? res?.conversation_id;
+
+    const list = await chatService.fetchConversations();
+    setConvos((prev) => mergeConvos(alive(list), prev));
+
+    if (rawId != null) {
+      const id = String(rawId);
+      deletedRef.current.delete(id);
+      setUnavailable(false);
+      setActiveId(id);
+      loadMessages(id);
+    }
+  };
+
+  // Create a channel from selected people
+  const createChannel = async ({ name, employeeUuids }) => {
+    try {
+      const res = await chatService.createChannel({ name, employeeUuids });
+      await openCreated(res);
+      toast.success("Channel created");
+      return true;
+    } catch (err) {
+      console.error("[chat] create channel failed", err);
+      toast.error(
+        err?.response?.data?.message || "Couldn't create the channel",
+      );
+      return false;
+    }
+  };
+
+  // Departments for the "Create team" picker (normalised to { id, name })
+  const loadDepartments = async () => {
+    try {
+      const list = await getDepartmentData();
+      setDepartments(
+        (Array.isArray(list) ? list : [])
+          .map((d) => ({
+            id: d.id ?? d.department_id,
+            name: d.name ?? d.department_name ?? d.title ?? "",
+          }))
+          .filter((d) => d.id != null && d.name),
+      );
+    } catch (err) {
+      console.warn("[chat] load departments failed", err);
+    }
+  };
+
+  // Create a team (whole department)
+  const createTeam = async ({ name, departmentId }) => {
+    try {
+      const res = await chatService.createTeam({ name, departmentId });
+      await openCreated(res);
+      toast.success("Team created");
+      return true;
+    } catch (err) {
+      console.error("[chat] create team failed", err);
+      toast.error(err?.response?.data?.message || "Couldn't create the team");
+      return false;
+    }
+  };
+
   return {
     convos,
     active,
@@ -592,10 +737,16 @@ function useConversations(currentUser) {
     people,
     peopleLoading,
     loadPeople,
+    departments,
+    loadDepartments,
     startDirect,
+    createChannel,
+    createTeam,
     select,
     clearActive,
     sendMessage,
+    sendFiles,
+    sendVoice,
     toggleReaction,
     deleteConversation,
     unavailable,
@@ -630,7 +781,16 @@ function useAppSidebarWidth() {
   return width;
 }
 
-function Conversation({ convo, onBack, onSend, onReact, onlineIds, onDelete }) {
+function Conversation({
+  convo,
+  onBack,
+  onSend,
+  onSendFiles,
+  onSendVoice,
+  onReact,
+  onlineIds,
+  onDelete,
+}) {
   const title = titleOf(convo);
   const placeholder =
     convo.kind === "dm"
@@ -670,10 +830,16 @@ export default function ChatView({ currentUser }) {
     people,
     peopleLoading,
     loadPeople,
+    departments,
+    loadDepartments,
     startDirect,
+    createChannel,
+    createTeam,
     select,
     clearActive,
     sendMessage,
+    sendFiles,
+    sendVoice,
     toggleReaction,
     deleteConversation,
     unavailable,
@@ -700,6 +866,10 @@ export default function ChatView({ currentUser }) {
           peopleLoading={peopleLoading}
           onLoadPeople={loadPeople}
           onStartDm={startDirect}
+          onCreateChannel={createChannel}
+          departments={departments}
+          onLoadDepartments={loadDepartments}
+          onCreateTeam={createTeam}
         />
       </aside>
 
@@ -721,6 +891,8 @@ export default function ChatView({ currentUser }) {
             convo={active}
             onBack={clearActive}
             onSend={sendMessage}
+            onSendFiles={sendFiles}
+            onSendVoice={sendVoice}
             onReact={toggleReaction}
             onlineIds={onlineIds}
             onDelete={deleteConversation}

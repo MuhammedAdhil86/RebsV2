@@ -14,12 +14,10 @@ import {
 import announceService from "../src/service/announceService";
 import { getActiveUsersLight } from "../src/service/employeeService";
 import {
-  describeState,
   isAppActive,
   requestOpenConversation,
   showChatNotification,
   useChatNotificationLifecycle,
-  whyNotNative,
 } from "./Hooks/useNotifications";
 
 // Connects the shared WebSocket as soon as a token exists,
@@ -59,12 +57,6 @@ const NOTIFY_TYPES = new Set(["notification", "new_notification"]);
 const FALLBACK_POLL_MS = 30000;
 // Don't toast chat messages while the user is already inside chat.
 const CHAT_PATH = "/chat";
-
-// TEMPORARY: shows an on-screen note explaining what happened with each
-// system notification. Set to false once it works.
-const NOTIFY_DEBUG = true;
-const debugToast = (msg) =>
-  NOTIFY_DEBUG && toast.warn(`[notify debug] ${msg}`, { autoClose: false });
 
 // uuid of the logged-in user, read from the JWT ("Uuid" claim)
 const getMyUuid = () => {
@@ -182,7 +174,7 @@ const showToast = (key, { title, body }) => {
    Chat messages (chat_text):
    - app visible + focused  -> React Toastify (not while inside /chat)
    - tab hidden / minimized / window unfocused -> system notification
-     (if permission is granted; otherwise the old toast behaviour)       */
+     (if permission is granted; otherwise the in-app toast fallback)      */
 function useLiveNotificationToasts(navigateRef) {
   useEffect(() => {
     const seen = new Set();
@@ -254,11 +246,6 @@ function useLiveNotificationToasts(navigateRef) {
 
         inChat = window.location.pathname.startsWith(CHAT_PATH);
         background = !isAppActive();
-        console.log("[notify] chat_text", {
-          message_id: d.message_id,
-          inChat,
-          ...describeState(),
-        });
 
         // reading the chat right now: no toast, no system notification
         if (inChat && !background) return;
@@ -284,16 +271,9 @@ function useLiveNotificationToasts(navigateRef) {
             requestOpenConversation(convoId);
           },
         });
-        if (shown) {
-          debugToast(
-            "system notification was sent to the OS. If you did not see it, check Windows/macOS notification settings (Do Not Disturb / Focus Assist) and that Chrome is allowed there.",
-          );
-          return; // system notification replaces the toast
-        }
-        debugToast(
-          `no system notification: ${whyNotNative() || "the browser refused to show it"}`,
-        );
-        if (inChat) return; // old behaviour: no toast inside chat
+
+        if (shown) return; // system notification replaces the toast
+        if (inChat) return; // no toast inside chat
       }
 
       showToast(key, textOf(n));
