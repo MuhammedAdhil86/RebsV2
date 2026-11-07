@@ -650,6 +650,10 @@ function Conversation({ convo, onBack, onSend, onReact, onlineIds, onDelete }) {
         resetKey={convo.id}
         placeholder={placeholder}
         onSend={(text) => onSend(convo.id, text)}
+        onSendFiles={(files, text) => onSendFiles(convo.id, files, text)} // File[] + caption
+        onSendVoice={({ file, duration }) =>
+          onSendVoice(convo.id, file, duration)
+        } // File + seconds
       />
     </div>
   );

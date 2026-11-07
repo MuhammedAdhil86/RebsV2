@@ -6,10 +6,12 @@
 //   app visible + focused  -> nothing here (your React Toastify stays in charge)
 //   other tab / minimized  -> native OS notification (if permission granted)
 //   no permission / unsupported -> returns false, existing behaviour is kept
-
 import { useCallback, useEffect, useState } from "react";
+// Vite/webpack give an image import as a DEFAULT export (the final URL),
+// not a named one, so this must be `import logo from`, not `{ logo }`.
+import logo from "../assets/img/rebslogo.png";
 
-console.log("[notify] chatNotifications v3 loaded");
+console.log("[notify] chatNotifications v4 loaded");
 
 // Snapshot of everything that decides whether a notification can show
 export const describeState = () => ({
@@ -34,8 +36,9 @@ export const whyNotNative = () => {
   return "";
 };
 
-// App logo shown in the notification. Adjust to a real file in /public.
-const NOTIFICATION_ICON = "/favicon.ico";
+// App logo shown in the system notification. It is the imported image URL
+// (PNG, transparent background, ideally at least 192x192).
+const NOTIFICATION_ICON = logo;
 const PREVIEW_MAX = 120;
 const MAX_TRACKED = 300;
 
