@@ -1,4 +1,5 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import AppRoutes from "./routes/AppRoutes";
 import { Toaster } from "react-hot-toast";
 import { ToastContainer, toast } from "react-toastify";
@@ -12,6 +13,14 @@ import {
 } from "../src/ws/useChatSocket";
 import announceService from "../src/service/announceService";
 import { getActiveUsersLight } from "../src/service/employeeService";
+import {
+  describeState,
+  isAppActive,
+  requestOpenConversation,
+  showChatNotification,
+  useChatNotificationLifecycle,
+  whyNotNative,
+} from "./Hooks/useNotifications";
 
 // Connects the shared WebSocket as soon as a token exists,
 // and disconnects when the token is removed (logout).
@@ -50,6 +59,12 @@ const NOTIFY_TYPES = new Set(["notification", "new_notification"]);
 const FALLBACK_POLL_MS = 30000;
 // Don't toast chat messages while the user is already inside chat.
 const CHAT_PATH = "/chat";
+
+// TEMPORARY: shows an on-screen note explaining what happened with each
+// system notification. Set to false once it works.
+const NOTIFY_DEBUG = true;
+const debugToast = (msg) =>
+  NOTIFY_DEBUG && toast.warn(`[notify debug] ${msg}`, { autoClose: false });
 
 // uuid of the logged-in user, read from the JWT ("Uuid" claim)
 const getMyUuid = () => {
@@ -162,8 +177,13 @@ const showToast = (key, { title, body }) => {
 /* Socket first, GET second:
    - socket connected: every event becomes a toast straight away
    - socket down: poll the list every 30s and toast unread items not seen yet
-   - socket back: one catch-up GET */
-function useLiveNotificationToasts() {
+   - socket back: one catch-up GET
+
+   Chat messages (chat_text):
+   - app visible + focused  -> React Toastify (not while inside /chat)
+   - tab hidden / minimized / window unfocused -> system notification
+     (if permission is granted; otherwise the old toast behaviour)       */
+function useLiveNotificationToasts(navigateRef) {
   useEffect(() => {
     const seen = new Set();
     let poll = null;
@@ -224,11 +244,24 @@ function useLiveNotificationToasts() {
         ? { type: "chat_text", data: evt.data ?? {} }
         : { ...(evt.data ?? {}), data: evt.data?.data ?? {} };
 
+      let inChat = false;
+      let background = false;
+
       if (isChat) {
         const d = n.data;
         if (d.message_id == null) return;
         if (String(d.sender_id) === getMyUuid()) return; // my own message
-        if (window.location.pathname.startsWith(CHAT_PATH)) return;
+
+        inChat = window.location.pathname.startsWith(CHAT_PATH);
+        background = !isAppActive();
+        console.log("[notify] chat_text", {
+          message_id: d.message_id,
+          inChat,
+          ...describeState(),
+        });
+
+        // reading the chat right now: no toast, no system notification
+        if (inChat && !background) return;
       }
 
       const key = keyOf(n);
@@ -237,6 +270,32 @@ function useLiveNotificationToasts() {
       if (isChat && !n.data.sender_name) {
         n.data = { ...n.data, sender_name: await nameOf(n.data.sender_id) };
       }
+
+      // not looking at the app: try a system notification first
+      if (isChat && background) {
+        const d = n.data;
+        const shown = showChatNotification({
+          id: d.message_id,
+          convoId: d.conversation_id,
+          title: d.sender_name || "New message",
+          body: d.preview || "",
+          onOpen: (convoId) => {
+            navigateRef.current?.(CHAT_PATH);
+            requestOpenConversation(convoId);
+          },
+        });
+        if (shown) {
+          debugToast(
+            "system notification was sent to the OS. If you did not see it, check Windows/macOS notification settings (Do Not Disturb / Focus Assist) and that Chrome is allowed there.",
+          );
+          return; // system notification replaces the toast
+        }
+        debugToast(
+          `no system notification: ${whyNotNative() || "the browser refused to show it"}`,
+        );
+        if (inChat) return; // old behaviour: no toast inside chat
+      }
+
       showToast(key, textOf(n));
     });
 
@@ -269,8 +328,13 @@ function useLiveNotificationToasts() {
 }
 
 function App() {
+  const navigate = useNavigate();
+  const navigateRef = useRef(navigate);
+  navigateRef.current = navigate; // always the latest, no stale closure
+
   useChatSocketAuth();
-  useLiveNotificationToasts();
+  useLiveNotificationToasts(navigateRef);
+  useChatNotificationLifecycle(); // closes leftover system notifications on return
 
   return (
     <>

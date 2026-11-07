@@ -9,7 +9,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-console.log("[notify] chatNotifications v2 loaded");
+console.log("[notify] chatNotifications v3 loaded");
 
 // Snapshot of everything that decides whether a notification can show
 export const describeState = () => ({
@@ -19,6 +19,20 @@ export const describeState = () => ({
   hasFocus: document.hasFocus(),
   appActive: isAppActive(),
 });
+
+// Plain-words reason why a system notification can't be shown right now
+export const whyNotNative = () => {
+  if (!notificationsSupported())
+    return "this browser has no Notification support";
+  if (!window.isSecureContext)
+    return "page is not secure (use localhost or https)";
+  if (Notification.permission === "default")
+    return "permission not given yet: click the bell in the chat header";
+  if (Notification.permission === "denied")
+    return "permission is blocked in Chrome site settings for this address";
+  if (isAppActive()) return "app is visible and focused";
+  return "";
+};
 
 // App logo shown in the notification. Adjust to a real file in /public.
 const NOTIFICATION_ICON = "/favicon.ico";
@@ -197,4 +211,30 @@ export function useChatNotificationLifecycle() {
       closeAllNotifications();
     };
   }, []);
+}
+
+// ---------- "open this conversation" (used when a notification is clicked) ----------
+// App.jsx navigates to the chat page and calls requestOpenConversation(id).
+// ChatView picks it up whether it was already mounted or mounts right after.
+let pendingOpen = null;
+const openListeners = new Set();
+
+export function requestOpenConversation(id) {
+  pendingOpen = String(id);
+  if (openListeners.size) {
+    const target = pendingOpen;
+    pendingOpen = null;
+    openListeners.forEach((fn) => fn(target));
+  }
+}
+
+export function takePendingOpen() {
+  const id = pendingOpen;
+  pendingOpen = null;
+  return id;
+}
+
+export function subscribeOpenRequests(fn) {
+  openListeners.add(fn);
+  return () => openListeners.delete(fn);
 }
