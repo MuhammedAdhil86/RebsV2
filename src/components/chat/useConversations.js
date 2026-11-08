@@ -40,9 +40,14 @@ const PRESENCE_POLL = 30000;
 const CONVERSATION_DELETED = "chat_conversation_deleted";
 const CONVERSATION_RENAMED = "chat_conversation_renamed";
 const MESSAGE_EDITED = "message_edited";
-// NOT in the backend's list yet: ask for a "message_deleted" event with
-// data { conversation_id, message_ids: [..] } so other people see deletes live.
-const MESSAGE_DELETED = "message_deleted";
+// A group ("group" -> channel) or department chat ("team" -> team) was created:
+// { type: "conversation_created",
+//   data: { conversation_id, type, name, created_by, participant_ids: [..] } }
+const CONVERSATION_CREATED = "conversation_created";
+// Sent to BOTH the sender and the receiver when a message is deleted:
+// { type: "chat_message_deleted",
+//   data: { conversation_id, message_ids: [..], deleted_by } }
+const MESSAGE_DELETED = "chat_message_deleted";
 
 const isConversationDeleted = (type = "") => type === CONVERSATION_DELETED;
 
@@ -75,6 +80,10 @@ export default function useConversations(currentUser) {
   useEffect(() => {
     userRef.current = currentUser;
   }, [currentUser]);
+  const peopleRef = useRef([]); // teammates, for names in "conversation_created"
+  useEffect(() => {
+    peopleRef.current = people;
+  }, [people]);
 
   const active = convos.find((c) => c.id === activeId) || null;
 
@@ -130,6 +139,51 @@ export default function useConversations(currentUser) {
       setActiveId(null);
       setUnavailable(external);
     }
+  };
+
+  // Build a conversation from a "conversation_created" event.
+  // The event only has participant uuids, so names come from the people list;
+  // the background refetch in the handler fills in anything missing.
+  const buildCreatedConvo = (d) => {
+    const me = String(userRef.current?.uuid ?? "");
+    const type = String(d.type ?? "").toLowerCase();
+    const kind =
+      type === "direct" || type === "dm"
+        ? "dm"
+        : type === "team"
+          ? "team"
+          : "channel"; // "group" -> channel
+
+    const members = (d.participant_ids ?? []).map((raw) => {
+      const uuid = String(raw);
+      if (uuid === me) return userRef.current ?? { uuid, name: "", image: "" };
+      return (
+        peopleRef.current.find((p) => p.uuid === uuid) ?? {
+          uuid,
+          name: "",
+          image: "",
+        }
+      );
+    });
+
+    const peer =
+      kind === "dm"
+        ? (members.find((m) => m.uuid !== me) ?? members[0])
+        : undefined;
+
+    return {
+      id: String(d.conversation_id),
+      kind,
+      name: kind === "dm" ? (peer?.name ?? "") : (d.name ?? ""),
+      topic: "",
+      private: false,
+      members,
+      peer,
+      unread: 0,
+      messages: [],
+      loaded: false,
+      loading: false,
+    };
   };
 
   // Fetch teammates and rebuild the people list + the set of online uuids
@@ -265,6 +319,53 @@ export default function useConversations(currentUser) {
       const me = String(userRef.current?.uuid ?? "");
       const known = convosRef.current.find((c) => c.id === convoId);
 
+      // a new group / team was created: show it instantly
+      if (evt.type === CONVERSATION_CREATED) {
+        if (known) return; // already in the list (e.g. I created it)
+
+        // only show it if I am one of the participants
+        const ids = (d.participant_ids ?? []).map(String);
+        if (ids.length && !ids.includes(me)) return;
+
+        setConvos((prev) =>
+          prev.some((c) => c.id === convoId)
+            ? prev
+            : [...prev, buildCreatedConvo(d)],
+        );
+
+        // background sync: real member names and avatars from the server
+        chatService
+          .fetchConversations()
+          .then((list) => setConvos((prev) => mergeConvos(alive(list), prev)))
+          .catch(() => {});
+        return;
+      }
+
+      // someone deleted messages: remove them from the UI instantly.
+      // Both sender and receiver get this event. The sender already removed
+      // the message optimistically, so for them the filter finds nothing.
+      // Handled BEFORE the "unknown conversation" reload below, so a delete
+      // event never triggers a list refetch.
+      if (evt.type === MESSAGE_DELETED) {
+        const ids = (
+          d.message_ids ?? [d.message_id ?? d.id].filter((x) => x != null)
+        ).map(String);
+        if (!ids.length) return;
+        if (!known) return; // nothing loaded for it, fetched fresh on open
+        patch(convoId, (c) => ({
+          ...c,
+          messages: (c.messages || [])
+            .filter((m) => !ids.includes(String(m.id)))
+            // messages that quoted a deleted one keep working
+            .map((m) =>
+              m.replyTo && ids.includes(String(m.replyTo.id))
+                ? { ...m, replyTo: { ...m.replyTo, text: "Message deleted" } }
+                : m,
+            ),
+        }));
+        return;
+      }
+
       // conversation not in the list yet (new DM): reload the list
       if (!known) {
         const fromMe = d.sender_id != null && String(d.sender_id) === me;
@@ -301,7 +402,7 @@ export default function useConversations(currentUser) {
         patch(convoId, (c) => ({
           ...c,
           messages: c.messages.map((m) =>
-            m.id === mid ? { ...m, text, edited: true } : m,
+            String(m.id) === mid ? { ...m, text, edited: true } : m,
           ),
         }));
         return;
@@ -314,19 +415,6 @@ export default function useConversations(currentUser) {
         return;
       }
 
-      // someone deleted messages (needs the backend event, see MESSAGE_DELETED)
-      if (evt.type === MESSAGE_DELETED) {
-        const ids = (
-          d.message_ids ?? [d.message_id ?? d.id].filter((x) => x != null)
-        ).map(String);
-        if (!ids.length) return;
-        patch(convoId, (c) => ({
-          ...c,
-          messages: c.messages.filter((m) => !ids.includes(m.id)),
-        }));
-        return;
-      }
-
       const isOpen = activeIdRef.current === convoId;
 
       // chat_message: the actual message for the conversation screen
@@ -334,6 +422,18 @@ export default function useConversations(currentUser) {
         const msg = toMessage(d);
         if (!msg.createdAt) msg.createdAt = evt.created_at;
         const mine = msg.sender?.uuid === me;
+
+        // the event may carry only reply_to_id: take the quote from loaded messages
+        if (msg.replyTo && !msg.replyTo.text) {
+          const src = known.messages.find((m) => m.id === msg.replyTo.id);
+          if (src) {
+            msg.replyTo = {
+              ...msg.replyTo,
+              text: src.text || (src.file ? "Attachment" : ""),
+              senderName: src.sender?.name ?? "",
+            };
+          }
+        }
 
         // API sends sender_name "": take the person from the participants
         if (!msg.sender?.name) {
@@ -492,16 +592,25 @@ export default function useConversations(currentUser) {
       console.log("[chat] send response:", saved);
       if (saved) {
         // API returns sender_name "", so keep our own name and avatar
-        const full = saved.sender?.name
+        const base = saved.sender?.name
           ? saved
           : { ...saved, sender: currentUser };
+        // the API response has no reply info, so keep the quote from the temp
+        const full = { ...base, replyTo: base.replyTo ?? temp.replyTo };
         patch(id, (c) => {
           // the socket echo may have already added the saved message
           const hasSaved = c.messages.some((m) => m.id === full.id);
           return {
             ...c,
             messages: hasSaved
-              ? c.messages.filter((m) => m.id !== tempId)
+              ? c.messages
+                  .filter((m) => m.id !== tempId)
+                  // the echo came first: give it the quote too
+                  .map((m) =>
+                    m.id === full.id && !m.replyTo
+                      ? { ...m, replyTo: full.replyTo }
+                      : m,
+                  )
               : c.messages.map((m) => (m.id === tempId ? full : m)),
           };
         });
@@ -619,6 +728,7 @@ export default function useConversations(currentUser) {
   };
 
   // Delete one message: remove it right away, put it back if the server fails.
+  // Other people (and my other tabs) get the "chat_message_deleted" socket event.
   const deleteMessage = async (convoId, messageId) => {
     const convo = convosRef.current.find((c) => c.id === convoId);
     const removed = convo?.messages.find((m) => m.id === messageId);

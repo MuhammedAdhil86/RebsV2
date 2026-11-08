@@ -47,10 +47,14 @@ export default function Conversation({
           onSend(convo.id, text, replyTo);
           setReplyTo(null);
         }}
-        onSendFiles={(files, text) => onSendFiles(convo.id, files, text)} // File[] + caption
-        onSendVoice={({ file, duration }) =>
-          onSendVoice(convo.id, file, duration)
-        } // File + seconds
+        onSendFiles={(files, text) => {
+          onSendFiles(convo.id, files, text); // File[] + caption
+          setReplyTo(null); // attachments can't carry a reply
+        }}
+        onSendVoice={({ file, duration }) => {
+          onSendVoice(convo.id, file, duration); // File + seconds
+          setReplyTo(null);
+        }}
       />
     </div>
   );

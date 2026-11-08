@@ -382,7 +382,8 @@ export default function ChatTool({
           </div>
         )}
 
-        {replyTo && !recording && (
+        {/* reply bar: hidden while files are attached (attachments can't be replies) */}
+        {replyTo && !recording && !hasFiles && (
           <div
             className="mx-3 mt-3 flex items-center gap-2 rounded-lg border-l-[3px] px-3 py-1.5"
             style={{ borderColor: COLORS.link, background: COLORS.mist }}

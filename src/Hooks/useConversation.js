@@ -18,6 +18,15 @@ const mergeConvos = (fresh, old) =>
       : f;
   });
 
+// NEW: remove messages from a conversation (ids compared as strings)
+const withoutMessages = (c, messageIds) => {
+  const ids = new Set(messageIds.map(String));
+  return {
+    ...c,
+    messages: (c.messages ?? []).filter((m) => !ids.has(String(m.id))),
+  };
+};
+
 function nextReactions(list = [], emoji) {
   const existing = list.find((r) => r.e === emoji);
   if (!existing) return [...list, { e: emoji, n: 1, mine: true }];
@@ -122,6 +131,17 @@ function useConversations(currentUser) {
         });
 
         if (isOpen && !mine) chatService.markRead(convoId).catch(() => {});
+      }
+
+      // NEW: message deleted by someone (frame from your Network tab):
+      // { type:"chat_message_deleted",
+      //   data:{ conversation_id:31, message_ids:[210], deleted_by:"100535" } }
+      if (evt.type === "chat_message_deleted") {
+        const d = evt.data ?? evt;
+        const ids = d.message_ids ?? (d.message_id ? [d.message_id] : []);
+        if (d.conversation_id == null || ids.length === 0) return;
+
+        patch(String(d.conversation_id), (c) => withoutMessages(c, ids));
       }
 
       // ASSUMED: { type:"reaction", conversation_id, message_id,
@@ -232,6 +252,25 @@ function useConversations(currentUser) {
     }
   };
 
+  // NEW: delete my own message. Disappears instantly, rolls back on failure.
+  const deleteMessage = async (convoId, messageId) => {
+    const convo = convosRef.current.find((c) => c.id === convoId);
+    const snapshot = convo?.messages ?? [];
+
+    // remove immediately
+    patch(convoId, (c) => withoutMessages(c, [messageId]));
+
+    // unsent optimistic message: nothing to delete on the server
+    if (String(messageId).startsWith("tmp-")) return;
+
+    try {
+      await chatService.deleteMessage(messageId); // CHECK: your API method name
+    } catch {
+      // put the messages back if the server refused
+      patch(convoId, (c) => ({ ...c, messages: snapshot }));
+    }
+  };
+
   const toggleReaction = async (convoId, messageId, emoji) => {
     const apply = () =>
       patch(convoId, (c) => ({
@@ -327,6 +366,7 @@ function useConversations(currentUser) {
     select,
     clearActive,
     sendMessage,
+    deleteMessage, // NEW
     toggleReaction,
   };
 }
