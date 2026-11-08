@@ -85,6 +85,19 @@ const toFile = (m) => {
     : null;
 };
 
+// The API sends only `reply_to_id`. The quote text and sender name are
+// filled in by ChatViewer from the loaded messages.
+const toReplyTo = (m) => {
+  const raw = m.reply_to ?? null;
+  const id = raw?.id ?? m.reply_to_id ?? null;
+  if (id == null) return null;
+  return {
+    id: String(id),
+    text: raw?.content ?? raw?.text ?? "",
+    senderName: raw?.sender_name ?? raw?.sender?.name ?? "",
+  };
+};
+
 const toMessage = (m) => ({
   id: String(m.id),
   sender: toPerson(
@@ -103,6 +116,7 @@ const toMessage = (m) => ({
     mine: Boolean(r.mine ?? r.reacted_by_me),
   })),
   replies: Number(m.reply_count ?? m.replies ?? 0),
+  replyTo: toReplyTo(m),
 });
 
 const chatService = {
@@ -150,9 +164,16 @@ const chatService = {
   // body: { content, reply_to_id }  (reply_to_id = null for a free message)
   sendMessage: async (conversationId, { text, replyToId = null }) => {
     try {
+      // message ids are strings in the UI, but the API wants an integer.
+      // Temp ids like "tmp-123" are not numeric, so they become null.
+      const replyId = replyToId == null ? NaN : Number(replyToId);
+
       const response = await axiosInstance.post(
         sendChatMessage(conversationId),
-        { content: text, reply_to_id: replyToId },
+        {
+          content: text,
+          reply_to_id: Number.isInteger(replyId) ? replyId : null,
+        },
         { silent: true },
       );
 

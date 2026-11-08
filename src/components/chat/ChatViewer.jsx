@@ -1,13 +1,17 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { FiCornerUpLeft, FiSmile, FiTrash2 } from "react-icons/fi";
 import DeleteConfirmationModal from "../../ui/deletemodal";
-import { COLORS, Icon, UserAvatar, titleOf } from "./chat_shared";
+import { COLORS, UserAvatar, titleOf } from "./chat_shared";
 import MessageFile from "./MessageFile";
 
 export const prefixOf = (c) =>
   c.kind === "team" ? "" : c.private ? "🔒 " : "#";
 
 export const nounOf = (c) => (c.kind === "team" ? "team" : "channel");
+
+// true  = my messages on the LEFT, received messages on the RIGHT
+// false = the usual layout (mine on the right)
+const MINE_ON_LEFT = true;
 
 const startOfDay = (d) =>
   new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
@@ -45,8 +49,42 @@ export function withDayDividers(messages = []) {
 
 const QUICK_REACTIONS = ["👍", "❤️", "😂", "🎉", "🙏", "👀"];
 
+// Quote card shown inside a reply bubble. Click it to jump to the original.
+function ReplyQuote({ quote, onJump }) {
+  return (
+    <button
+      type="button"
+      onClick={() => quote.found && onJump(quote.id)}
+      disabled={!quote.found}
+      className="mb-1.5 flex w-full min-w-[160px] max-w-[420px] items-stretch overflow-hidden rounded-lg text-left transition hover:brightness-95 disabled:cursor-default"
+      style={{ background: "rgba(255,255,255,0.75)" }}
+    >
+      <span className="w-[3px] shrink-0" style={{ background: COLORS.link }} />
+      <span className="min-w-0 px-2.5 py-1.5">
+        <span
+          className="flex items-center gap-1 text-[12.5px] font-medium"
+          style={{ color: COLORS.link }}
+        >
+          <FiCornerUpLeft size={12} />
+          {quote.senderName}
+        </span>
+        <span
+          className={`block truncate text-[13px] ${quote.found ? "" : "italic"}`}
+          style={{ color: COLORS.sub }}
+        >
+          {quote.text}
+        </span>
+      </span>
+    </button>
+  );
+}
+
 function Message({
   message,
+  mine,
+  quote,
+  onJump,
+  flash,
   showHeader,
   onReact,
   onReply,
@@ -54,9 +92,12 @@ function Message({
   canDelete,
 }) {
   const user = message.sender ?? { name: "Unknown" };
-  const { file, reactions, replies, replyTo } = message;
+  const { file, reactions, replies } = message;
   const [pickerOpen, setPickerOpen] = useState(false);
   const pickerRef = useRef(null);
+
+  // which side this message sits on
+  const alignLeft = mine === MINE_ON_LEFT;
 
   // close the quick-reaction picker on outside click / Escape
   useEffect(() => {
@@ -78,159 +119,171 @@ function Message({
 
   return (
     <div
-      className={`group relative flex gap-2.5 px-5 py-[3px] hover:bg-[#F2F4F3] ${pickerOpen ? "bg-[#F2F4F3]" : ""}`}
+      data-mid={message.id}
+      className={`group flex gap-2.5 px-5 ${showHeader ? "pt-3" : "pt-[3px]"} ${
+        alignLeft ? "" : "flex-row-reverse"
+      }`}
     >
-      <div className="w-9 shrink-0 pt-0.5">
-        {showHeader ? (
-          <UserAvatar user={user} />
-        ) : (
-          <span
-            className="hidden pt-1 text-right text-[11px] group-hover:block"
-            style={{ color: COLORS.sub }}
-          >
-            {message.time.replace(/ (AM|PM)/i, "")}
-          </span>
-        )}
+      {/* avatar column (empty spacer for follow-up messages) */}
+      <div className="w-9 shrink-0">
+        {showHeader && <UserAvatar user={user} />}
       </div>
 
-      <div className="min-w-0 flex-1">
+      <div
+        className={`flex min-w-0 max-w-[75%] flex-col ${
+          alignLeft ? "items-start" : "items-end"
+        }`}
+      >
         {showHeader && (
-          <div className="flex items-baseline gap-2">
-            <span
-              className="text-[15px] font-medium hover:underline"
-              style={{ color: COLORS.text }}
-            >
-              {user.name}
-            </span>
-            <span className="text-[12px]" style={{ color: COLORS.sub }}>
-              {message.time}
-            </span>
-          </div>
-        )}
-
-        {replyTo && (
-          <div
-            className="mb-1 max-w-full truncate border-l-[3px] pl-2 text-[13px]"
-            style={{ borderColor: COLORS.link, color: COLORS.sub }}
-          >
-            <span className="font-medium">
-              {replyTo.senderName || "Message"}
-            </span>
-            {": "}
-            {replyTo.text || "Attachment"}
-          </div>
-        )}
-
-        {message.text && (
-          <div
-            className="whitespace-pre-wrap break-words text-[15px] leading-[22px]"
+          <span
+            className="mb-0.5 px-1 text-[13px] font-medium"
             style={{ color: COLORS.text }}
           >
-            {message.text}
-          </div>
+            {user.name}
+          </span>
         )}
 
-        {/* image / voice note / video / document */}
-        {file && <MessageFile file={file} />}
-
-        {reactions?.length > 0 && (
-          <div className="mt-1 flex flex-wrap gap-1">
-            {reactions.map((r) => (
-              <button
-                key={r.e}
-                onClick={() => onReact(r.e)}
-                className="flex items-center gap-1 rounded-full border px-2 py-[1px] text-[13px]"
-                style={
-                  r.mine
-                    ? {
-                        background: COLORS.tint,
-                        borderColor: COLORS.link,
-                        color: COLORS.link,
-                      }
-                    : {
-                        background: COLORS.mist,
-                        borderColor: "transparent",
-                        color: COLORS.sub,
-                      }
-                }
-              >
-                <span>{r.e}</span>
-                <span className="font-medium">{r.n}</span>
-              </button>
-            ))}
-          </div>
-        )}
-
-        {replies > 0 && (
-          <button
-            className="mt-1 flex items-center gap-2 text-[13px] hover:underline"
-            style={{ color: COLORS.link }}
+        <div className="relative max-w-full">
+          {/* the bubble */}
+          <div
+            className={`min-w-[64px] max-w-full rounded-2xl px-3.5 py-2 shadow-sm transition-all duration-300 ${
+              alignLeft ? "rounded-tl-md" : "rounded-tr-md"
+            } ${pending ? "opacity-70" : ""} ${
+              flash ? "ring-2 ring-[#d13843]" : ""
+            }`}
+            style={{
+              background: mine ? COLORS.tint : "#fff",
+              border: `1px solid ${mine ? "#f5cdd1" : COLORS.line}`,
+            }}
           >
-            <span className="font-medium">
-              {replies} {replies === 1 ? "reply" : "replies"}
-            </span>
-            <span style={{ color: COLORS.sub }}>View thread</span>
-          </button>
-        )}
-      </div>
+            {quote && <ReplyQuote quote={quote} onJump={onJump} />}
 
-      {!pending && (
-        <div
-          className={`absolute -top-3.5 right-5 items-center rounded-lg border bg-white px-0.5 py-0.5 shadow-sm group-hover:flex ${
-            pickerOpen ? "flex" : "hidden"
-          }`}
-          style={{ borderColor: COLORS.line, color: COLORS.sub }}
-        >
-          <div className="relative" ref={pickerRef}>
-            <button
-              onClick={() => setPickerOpen((o) => !o)}
-              title="React"
-              aria-label="Add reaction"
-              className="rounded p-1.5 hover:bg-[#F2F4F3]"
-            >
-              <FiSmile size={17} />
-            </button>
-            {pickerOpen && (
+            {message.text && (
               <div
-                className="absolute bottom-full right-0 z-20 mb-1 flex gap-0.5 rounded-xl border bg-white p-1.5 shadow-[0_8px_24px_rgba(0,0,0,0.14)]"
-                style={{ borderColor: COLORS.line }}
+                className="whitespace-pre-wrap break-words text-[15px] leading-[22px]"
+                style={{ color: COLORS.text }}
               >
-                {QUICK_REACTIONS.map((e) => (
-                  <button
-                    key={e}
-                    onClick={() => {
-                      setPickerOpen(false);
-                      onReact(e);
-                    }}
-                    className="flex h-8 w-8 items-center justify-center rounded-md text-[19px] hover:bg-[#F2F4F3]"
-                  >
-                    {e}
-                  </button>
-                ))}
+                {message.text}
               </div>
             )}
+
+            {/* image / voice note / video / document */}
+            {file && <MessageFile file={file} />}
+
+            <div
+              className="mt-0.5 text-right text-[11px] leading-none"
+              style={{ color: COLORS.sub }}
+            >
+              {message.time}
+            </div>
           </div>
-          <button
-            onClick={() => onReply(message)}
-            title="Reply"
-            aria-label="Reply"
-            className="rounded p-1.5 hover:bg-[#F2F4F3]"
-          >
-            <FiCornerUpLeft size={17} />
-          </button>
-          {canDelete && (
+
+          {reactions?.length > 0 && (
+            <div
+              className={`mt-1 flex flex-wrap gap-1 ${
+                alignLeft ? "justify-start" : "justify-end"
+              }`}
+            >
+              {reactions.map((r) => (
+                <button
+                  key={r.e}
+                  onClick={() => onReact(r.e)}
+                  className="flex items-center gap-1 rounded-full border px-2 py-[1px] text-[13px]"
+                  style={
+                    r.mine
+                      ? {
+                          background: COLORS.tint,
+                          borderColor: COLORS.link,
+                          color: COLORS.link,
+                        }
+                      : {
+                          background: COLORS.mist,
+                          borderColor: "transparent",
+                          color: COLORS.sub,
+                        }
+                  }
+                >
+                  <span>{r.e}</span>
+                  <span className="font-medium">{r.n}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {replies > 0 && (
             <button
-              onClick={() => onDelete(message)}
-              title="Delete message"
-              aria-label="Delete message"
-              className="rounded p-1.5 hover:bg-[#fbe8ea]"
+              className="mt-1 flex items-center gap-2 text-[13px] hover:underline"
               style={{ color: COLORS.link }}
             >
-              <FiTrash2 size={17} />
+              <span className="font-medium">
+                {replies} {replies === 1 ? "reply" : "replies"}
+              </span>
+              <span style={{ color: COLORS.sub }}>View thread</span>
             </button>
           )}
+
+          {/* hover actions, on the outer edge of the bubble */}
+          {!pending && (
+            <div
+              className={`absolute -top-4 items-center rounded-lg border bg-white px-0.5 py-0.5 shadow-sm group-hover:flex ${
+                alignLeft ? "right-0" : "left-0"
+              } ${pickerOpen ? "flex" : "hidden"}`}
+              style={{ borderColor: COLORS.line, color: COLORS.sub }}
+            >
+              <div className="relative" ref={pickerRef}>
+                <button
+                  onClick={() => setPickerOpen((o) => !o)}
+                  title="React"
+                  aria-label="Add reaction"
+                  className="rounded p-1.5 hover:bg-[#F2F4F3]"
+                >
+                  <FiSmile size={17} />
+                </button>
+                {pickerOpen && (
+                  <div
+                    className={`absolute bottom-full z-20 mb-1 flex gap-0.5 rounded-xl border bg-white p-1.5 shadow-[0_8px_24px_rgba(0,0,0,0.14)] ${
+                      alignLeft ? "right-0" : "left-0"
+                    }`}
+                    style={{ borderColor: COLORS.line }}
+                  >
+                    {QUICK_REACTIONS.map((e) => (
+                      <button
+                        key={e}
+                        onClick={() => {
+                          setPickerOpen(false);
+                          onReact(e);
+                        }}
+                        className="flex h-8 w-8 items-center justify-center rounded-md text-[19px] hover:bg-[#F2F4F3]"
+                      >
+                        {e}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={() => onReply(message)}
+                title="Reply"
+                aria-label="Reply"
+                className="rounded p-1.5 hover:bg-[#F2F4F3]"
+              >
+                <FiCornerUpLeft size={17} />
+              </button>
+              {canDelete && (
+                <button
+                  onClick={() => onDelete(message)}
+                  title="Delete message"
+                  aria-label="Delete message"
+                  className="rounded p-1.5 hover:bg-[#fbe8ea]"
+                  style={{ color: COLORS.link }}
+                >
+                  <FiTrash2 size={17} />
+                </button>
+              )}
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -303,8 +356,11 @@ export default function ChatViewer({
   onDelete,
 }) {
   const endRef = useRef(null);
+  const scrollRef = useRef(null);
+  const flashTimer = useRef(null);
   const [toDelete, setToDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [flashId, setFlashId] = useState(null);
 
   const confirmDelete = async () => {
     if (!toDelete || deleting) return;
@@ -318,8 +374,58 @@ export default function ChatViewer({
     endRef.current?.scrollIntoView({ behavior: "auto" });
   }, [convo.id, convo.messages.length]);
 
+  useEffect(() => () => clearTimeout(flashTimer.current), []);
+
+  const byId = useMemo(
+    () => new Map(convo.messages.map((m) => [String(m.id), m])),
+    [convo.messages],
+  );
+
+  // Build the quote from the original message when it is loaded
+  const resolveQuote = (replyTo) => {
+    if (!replyTo) return null;
+    const src = byId.get(String(replyTo.id));
+
+    if (!src) {
+      return {
+        id: replyTo.id,
+        found: false,
+        senderName: replyTo.senderName || "Message",
+        text: replyTo.text || "Original message isn't available",
+      };
+    }
+
+    const uuid = String(src.sender?.uuid ?? "");
+    const senderName =
+      uuid && uuid === String(currentUserId)
+        ? "You"
+        : convo.members.find((m) => m.uuid === uuid)?.name ||
+          src.sender?.name ||
+          "Message";
+
+    return {
+      id: String(src.id),
+      found: true,
+      senderName,
+      text: src.text || (src.file ? `📎 ${src.file.name || "Attachment"}` : ""),
+    };
+  };
+
+  const jumpTo = (id) => {
+    const el = scrollRef.current?.querySelector(`[data-mid="${id}"]`);
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    setFlashId(String(id));
+    clearTimeout(flashTimer.current);
+    flashTimer.current = setTimeout(() => setFlashId(null), 1600);
+  };
+
   return (
-    <div className="chat-main min-h-0 flex-1 overflow-y-auto pb-2 pt-3">
+    <div
+      ref={scrollRef}
+      className="chat-main min-h-0 flex-1 overflow-y-auto pb-2 pt-3"
+      style={{ background: "#FAFBFA" }}
+    >
       <Intro convo={convo} />
 
       {convo.loading && (
@@ -334,19 +440,22 @@ export default function ChatViewer({
         const prev = items[i - 1];
         const showHeader =
           !prev || prev.day || prev.sender?.uuid !== m.sender?.uuid;
+        const mine =
+          !!currentUserId && String(m.sender?.uuid) === String(currentUserId);
 
         return (
           <Message
             key={m.id}
             message={m}
+            mine={mine}
+            quote={resolveQuote(m.replyTo)}
+            onJump={jumpTo}
+            flash={flashId === String(m.id)}
             showHeader={showHeader}
             onReact={(emoji) => onReact(convo.id, m.id, emoji)}
             onReply={onReply}
             onDelete={setToDelete}
-            canDelete={
-              !!currentUserId &&
-              String(m.sender?.uuid) === String(currentUserId)
-            }
+            canDelete={mine}
           />
         );
       })}
