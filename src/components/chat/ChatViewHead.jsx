@@ -1,11 +1,23 @@
 import React, { useEffect, useRef, useState } from "react";
 import { COLORS, Icon, UserAvatar, iconOf, titleOf } from "./chat_shared";
-import { FiBell, FiBellOff, FiMoreVertical, FiTrash2 } from "react-icons/fi";
+import {
+  FiBell,
+  FiBellOff,
+  FiInfo,
+  FiMoreVertical,
+  FiTrash2,
+} from "react-icons/fi";
 import { toast } from "react-toastify";
 import { useNotificationPermission } from "../../Hooks/useNotifications";
 import DeleteConfirmationModal from "../../ui/deletemodal";
 
-export default function ChatViewHead({ convo, onBack, onlineIds, onDelete }) {
+export default function ChatViewHead({
+  convo,
+  onBack,
+  onlineIds,
+  onDelete,
+  onInfo,
+}) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -105,12 +117,26 @@ export default function ChatViewHead({ convo, onBack, onlineIds, onDelete }) {
                 ))}
               </div>
               <button
+                onClick={onInfo}
                 className="flex items-center gap-1.5 rounded-md border px-2 py-1 text-[13px] hover:bg-[#F2F4F3]"
                 style={{ borderColor: COLORS.line, color: COLORS.sub }}
               >
                 <Icon name="users" size={14} /> {members.length}
               </button>
             </>
+          )}
+
+          {/* details panel: pinned, media, members */}
+          {onInfo && (
+            <button
+              onClick={onInfo}
+              title="Details"
+              aria-label="Details"
+              className="flex h-8 w-8 items-center justify-center rounded-full transition-colors hover:bg-[#F2F4F3]"
+              style={{ color: COLORS.sub }}
+            >
+              <FiInfo size={18} />
+            </button>
           )}
 
           {/* desktop notifications: permission is asked only on this click */}

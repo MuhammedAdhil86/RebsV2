@@ -2,7 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "react-toastify";
 import { titleOf } from "./chat_sidebar";
 import { prefixOf } from "./ChatViewer";
-import chatService, { toMessage } from "../../service/chatService";
+import chatService, {
+  toMessage,
+  toReactions, // NEW
+  toPin, // NEW
+  toPerson, // NEW
+} from "../../service/chatService";
 import { getDepartmentData } from "../../service/companyService";
 import { subscribeEvents, subscribeStatus } from "../../ws/useChatSocket";
 import {
@@ -49,6 +54,15 @@ const CONVERSATION_CREATED = "conversation_created";
 //   data: { conversation_id, message_ids: [..], deleted_by } }
 const MESSAGE_DELETED = "chat_message_deleted";
 
+// ---- NEW events ----
+const MESSAGES_DELIVERED = "messages_delivered";
+const MESSAGES_READ = "messages_read";
+const CHAT_REACTION = "chat_reaction";
+const PARTICIPANTS_ADDED = "chat_participants_added";
+const PARTICIPANTS_REMOVED = "chat_participants_removed";
+const MESSAGE_PINNED = "message_pinned";
+const MESSAGE_UNPINNED = "message_unpinned";
+
 const isConversationDeleted = (type = "") => type === CONVERSATION_DELETED;
 
 export default function useConversations(currentUser) {
@@ -71,6 +85,9 @@ export default function useConversations(currentUser) {
   const countedRef = useRef(new Set()); // message ids already counted as unread
   const deletingRef = useRef(new Set()); // conversations I am deleting right now
   const deletedRef = useRef(new Set()); // tombstones: deleted ids must never come back
+  // NEW: highest message id already reported per conversation (no duplicate calls)
+  const deliveredUpToRef = useRef({});
+  const readUpToRef = useRef({});
   useEffect(() => {
     activeIdRef.current = activeId;
   }, [activeId]);
@@ -138,6 +155,50 @@ export default function useConversations(currentUser) {
       activeIdRef.current = null; // stop in-flight work targeting it right away
       setActiveId(null);
       setUnavailable(external);
+    }
+  };
+
+  // NEW: tell the server what I have received / read.
+  // Takes the newest INCOMING message with a numeric id, then:
+  //   - markDelivered if it is higher than what was already reported
+  //   - markReadUpTo only if this chat is open and the tab is visible
+  // `list` = messages to look at (defaults to the loaded ones).
+  // opts.open = treat the chat as open (activeIdRef updates one render late
+  // when called right after select()).
+  const reportReceipts = (convoId, list, opts = {}) => {
+    if (!convoId || deletedRef.current.has(convoId)) return;
+    const me = String(userRef.current?.uuid ?? "");
+    const messages =
+      list ?? convosRef.current.find((c) => c.id === convoId)?.messages ?? [];
+
+    let newest = null;
+    for (const m of messages) {
+      if (String(m.sender?.uuid ?? "") === me) continue; // only incoming
+      const n = Number(m.id);
+      if (!Number.isFinite(n) || String(m.id).startsWith("tmp-")) continue;
+      if (newest === null || n > newest) newest = n;
+    }
+    if (newest === null) return;
+
+    if (newest > (deliveredUpToRef.current[convoId] ?? 0)) {
+      const prev = deliveredUpToRef.current[convoId] ?? 0;
+      deliveredUpToRef.current[convoId] = newest;
+      chatService.markDelivered(convoId, newest).catch(() => {
+        deliveredUpToRef.current[convoId] = prev; // roll back, retry later
+      });
+    }
+
+    const isOpen = opts.open || activeIdRef.current === convoId;
+    if (
+      isOpen &&
+      document.visibilityState === "visible" &&
+      newest > (readUpToRef.current[convoId] ?? 0)
+    ) {
+      const prev = readUpToRef.current[convoId] ?? 0;
+      readUpToRef.current[convoId] = newest;
+      chatService.markReadUpTo(convoId, newest).catch(() => {
+        readUpToRef.current[convoId] = prev; // roll back, retry later
+      });
     }
   };
 
@@ -226,6 +287,8 @@ export default function useConversations(currentUser) {
           const messages = await chatService.fetchMessages(id);
           if (!deletedRef.current.has(id))
             patch(id, (c) => ({ ...c, messages }));
+          // NEW: report what arrived while I was offline
+          if (!deletedRef.current.has(id)) reportReceipts(id, messages);
         } catch (err) {
           const st = err?.response?.status;
           if (st === 404 || st === 410) dropConvo(id, true);
@@ -261,6 +324,21 @@ export default function useConversations(currentUser) {
       if (document.visibilityState === "visible") refreshPeople();
     }, PRESENCE_POLL);
     return () => clearInterval(t);
+  }, []);
+
+  // ---------- NEW: tab becomes visible / focused again -> report read ----------
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      const id = activeIdRef.current;
+      if (id) reportReceipts(id);
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
   }, []);
 
   // ---------- realtime (shared socket, started in App.jsx) ----------
@@ -366,6 +444,161 @@ export default function useConversations(currentUser) {
         return;
       }
 
+      // =================== NEW EVENTS (6) ===================
+      // They sit BEFORE the "unknown conversation" block, so they never
+      // trigger a list refetch. All of them are safe to receive twice.
+
+      // someone received / read my messages
+      if (evt.type === MESSAGES_DELIVERED || evt.type === MESSAGES_READ) {
+        const who = String(d.employee_id ?? "");
+        if (!who || who === me) return; // ignore my own events
+        if (!known) return;
+        const upTo = Number(d.up_to_message_id);
+        if (!Number.isFinite(upTo)) return;
+
+        const isRead = evt.type === MESSAGES_READ;
+        const at =
+          (isRead ? d.read_at : d.delivered_at) ?? evt.created_at ?? null;
+        const person = known.members.find((m) => m.uuid === who) ?? {
+          uuid: who,
+          name: "",
+          image: "",
+        };
+        const others = known.members.filter((m) => m.uuid !== me);
+        const everyone = (list) =>
+          others.length > 0 &&
+          others.every((o) => list.some((r) => r.uuid === o.uuid));
+        const addReceipt = (list = []) =>
+          list.some((r) => r.uuid === who)
+            ? list
+            : [
+                ...list,
+                { uuid: who, name: person.name, image: person.image, at },
+              ];
+
+        patch(convoId, (c) => ({
+          ...c,
+          messages: c.messages.map((m) => {
+            if (String(m.sender?.uuid ?? "") !== me) return m; // only MY messages
+            const n = Number(m.id);
+            if (!Number.isFinite(n) || n > upTo) return m;
+            const deliveredTo = addReceipt(m.deliveredTo); // read implies delivered
+            const readBy = isRead ? addReceipt(m.readBy) : (m.readBy ?? []);
+            return {
+              ...m,
+              deliveredTo,
+              readBy,
+              deliveredToAll: everyone(deliveredTo),
+              allRead: everyone(readBy),
+            };
+          }),
+        }));
+        return;
+      }
+
+      // reactions changed: use the FULL array from the event
+      if (evt.type === CHAT_REACTION) {
+        const mid = String(d.message_id ?? "");
+        if (!mid || !known) return;
+        // "mine" is worked out from users[] for THIS client
+        const reactions = toReactions(d.reactions);
+        patch(convoId, (c) => ({
+          ...c,
+          messages: c.messages.map((m) =>
+            String(m.id) === mid ? { ...m, reactions } : m,
+          ),
+        }));
+        return;
+      }
+
+      // people were added to a conversation
+      if (evt.type === PARTICIPANTS_ADDED) {
+        const added = (d.added ?? []).map(toPerson).filter((p) => p.uuid);
+        if (!added.length) return;
+
+        if (!known) {
+          // I was added to a chat I don't have yet: load the list once
+          if (added.some((p) => p.uuid === me)) {
+            chatService
+              .fetchConversations()
+              .then((list) =>
+                setConvos((prev) => mergeConvos(alive(list), prev)),
+              )
+              .catch(() => {});
+          }
+          return;
+        }
+
+        patch(convoId, (c) => {
+          const have = new Set((c.members || []).map((m) => m.uuid));
+          const fresh = added.filter((p) => !have.has(p.uuid)); // no duplicates
+          return fresh.length
+            ? { ...c, members: [...(c.members || []), ...fresh] }
+            : c;
+        });
+        return;
+      }
+
+      // people were removed from a conversation:
+      // { conversation_id, removed_ids: [..], removed_by }
+      if (evt.type === PARTICIPANTS_REMOVED) {
+        if (!known) return;
+        const removed = (d.removed_ids ?? []).map(String);
+        if (!removed.length) return;
+
+        if (removed.includes(me)) {
+          // I was removed: the chat disappears at once, like a deleted chat.
+          // No tombstone, so it can come back if I am added again.
+          setConvos((prev) => prev.filter((c) => c.id !== convoId));
+          if (activeIdRef.current === convoId) {
+            activeIdRef.current = null;
+            setActiveId(null);
+            setUnavailable(true);
+          }
+          toast.info(`You were removed from ${titleOf(known)}`);
+          return;
+        }
+
+        // someone else was removed: take them out of the member list
+        patch(convoId, (c) => ({
+          ...c,
+          members: (c.members || []).filter(
+            (m) => !removed.includes(String(m.uuid)),
+          ),
+        }));
+        return;
+      }
+
+      // a message was pinned
+      if (evt.type === MESSAGE_PINNED) {
+        const mid = String(d.message_id ?? "");
+        if (!mid || !known) return;
+        const pin = toPin(d.pin);
+        patch(convoId, (c) => ({
+          ...c,
+          pinTick: (c.pinTick ?? 0) + 1, // makes the pins list reload
+          messages: c.messages.map((m) =>
+            String(m.id) === mid ? { ...m, pinned: true, pin } : m,
+          ),
+        }));
+        return;
+      }
+
+      // a message was unpinned
+      if (evt.type === MESSAGE_UNPINNED) {
+        const mid = String(d.message_id ?? "");
+        if (!mid || !known) return;
+        patch(convoId, (c) => ({
+          ...c,
+          pinTick: (c.pinTick ?? 0) + 1,
+          messages: c.messages.map((m) =>
+            String(m.id) === mid ? { ...m, pinned: false, pin: null } : m,
+          ),
+        }));
+        return;
+      }
+      // =================== END NEW EVENTS ===================
+
       // conversation not in the list yet (new DM): reload the list
       if (!known) {
         const fromMe = d.sender_id != null && String(d.sender_id) === me;
@@ -442,6 +675,15 @@ export default function useConversations(currentUser) {
           else if (mine) msg.sender = userRef.current;
         }
 
+        // the socket message has no avatar: take it from members / people / me
+        if (!msg.sender?.image) {
+          const img =
+            known.members.find((m) => m.uuid === msg.sender?.uuid)?.image ||
+            peopleRef.current.find((p) => p.uuid === msg.sender?.uuid)?.image ||
+            (mine ? userRef.current?.image : "");
+          if (img) msg.sender = { ...msg.sender, image: img };
+        }
+
         if (!mine) {
           notifyIncoming({
             convo: known,
@@ -472,6 +714,8 @@ export default function useConversations(currentUser) {
         });
 
         if (isOpen && !mine) chatService.markRead(convoId).catch(() => {});
+        // NEW: delivered (always) + read (only if open and visible)
+        if (!mine) reportReceipts(convoId, [msg]);
         return;
       }
 
@@ -502,6 +746,13 @@ export default function useConversations(currentUser) {
             (known.kind === "dm" ? known.peer?.name : ""),
           text: d.text ?? d.message ?? d.content ?? "",
         });
+
+        // NEW: delivered (always) + read (only if open and visible)
+        if (key != null) {
+          reportReceipts(convoId, [
+            { id: String(key), sender: { uuid: String(d.sender_id ?? "") } },
+          ]);
+        }
 
         if (isOpen) {
           chatService.markRead(convoId).catch(() => {});
@@ -539,6 +790,7 @@ export default function useConversations(currentUser) {
       const messages = await chatService.fetchMessages(id);
       if (deletedRef.current.has(id)) return; // deleted while loading
       patch(id, (c) => ({ ...c, messages, loaded: true, loading: false }));
+      reportReceipts(id, messages); // NEW
     } catch (err) {
       // conversation no longer exists (deleted by someone else)
       const st = err?.response?.status;
@@ -556,6 +808,8 @@ export default function useConversations(currentUser) {
       patch(id, (c) => ({ ...c, unread: 0 }));
       chatService.markRead(id).catch(() => {});
     }
+    // NEW: already loaded -> report now (not loaded -> loadMessages reports)
+    if (target?.loaded) reportReceipts(id, target.messages, { open: true });
     if (target && !target.loaded) await loadMessages(id);
   };
 
@@ -596,7 +850,13 @@ export default function useConversations(currentUser) {
           ? saved
           : { ...saved, sender: currentUser };
         // the API response has no reply info, so keep the quote from the temp
-        const full = { ...base, replyTo: base.replyTo ?? temp.replyTo };
+        const full = {
+          ...base,
+          sender: base.sender?.image
+            ? base.sender
+            : { ...base.sender, image: currentUser?.image ?? "" },
+          replyTo: base.replyTo ?? temp.replyTo,
+        };
         patch(id, (c) => {
           // the socket echo may have already added the saved message
           const hasSaved = c.messages.some((m) => m.id === full.id);
@@ -665,9 +925,15 @@ export default function useConversations(currentUser) {
       try {
         const saved = await chatService.sendAttachment(id, file, caption);
         if (saved) {
-          const full = saved.sender?.name
+          const base = saved.sender?.name
             ? saved
             : { ...saved, sender: currentUser };
+          const full = base.sender?.image
+            ? base
+            : {
+                ...base,
+                sender: { ...base.sender, image: currentUser?.image ?? "" },
+              };
           patch(id, (c) => {
             // the socket echo may have already added the saved message
             const hasSaved = c.messages.some((m) => m.id === full.id);
@@ -777,6 +1043,132 @@ export default function useConversations(currentUser) {
       return false;
     } finally {
       deletingRef.current.delete(id);
+    }
+  };
+
+  // ---------- NEW actions ----------
+
+  // Add or remove MY reaction (same emoji again removes it).
+  // Optimistic, then replaced by the full list from the server.
+  const reactToMessage = async (convoId, messageId, emoji) => {
+    if (!/^\d+$/.test(String(messageId))) return false; // temp message
+    const convo = convosRef.current.find((c) => c.id === convoId);
+    const msg = convo?.messages.find((m) => m.id === messageId);
+    if (!msg) return false;
+
+    const before = msg.reactions || [];
+    const hadMine = before.some((r) => r.e === emoji && r.mine);
+    const setReactions = (reactions) =>
+      patch(convoId, (c) => ({
+        ...c,
+        messages: c.messages.map((m) =>
+          m.id === messageId ? { ...m, reactions } : m,
+        ),
+      }));
+
+    setReactions(nextReactions(before, emoji));
+    try {
+      const res = hadMine
+        ? await chatService.removeReaction(convoId, messageId, emoji)
+        : await chatService.addReaction(convoId, messageId, emoji);
+      setReactions(res.reactions);
+      return true;
+    } catch (err) {
+      console.error("[chat] reaction failed", err);
+      setReactions(before); // put the old reactions back
+      toast.error(err?.response?.data?.message || "Couldn't update reaction");
+      return false;
+    }
+  };
+
+  const pinMessage = async (convoId, messageId) => {
+    if (!/^\d+$/.test(String(messageId))) return false; // temp message
+    try {
+      const res = await chatService.pinMessage(convoId, messageId);
+      patch(convoId, (c) => ({
+        ...c,
+        pinTick: (c.pinTick ?? 0) + 1,
+        messages: c.messages.map((m) =>
+          m.id === messageId
+            ? { ...m, pinned: res.pinned !== false, pin: res.pin ?? m.pin }
+            : m,
+        ),
+      }));
+      return true;
+    } catch (err) {
+      console.error("[chat] pin failed", err);
+      toast.error(err?.response?.data?.message || "Couldn't pin the message");
+      return false;
+    }
+  };
+
+  const unpinMessage = async (convoId, messageId) => {
+    if (!/^\d+$/.test(String(messageId))) return false; // temp message
+    try {
+      await chatService.unpinMessage(convoId, messageId);
+      patch(convoId, (c) => ({
+        ...c,
+        pinTick: (c.pinTick ?? 0) + 1,
+        messages: c.messages.map((m) =>
+          m.id === messageId ? { ...m, pinned: false, pin: null } : m,
+        ),
+      }));
+      return true;
+    } catch (err) {
+      console.error("[chat] unpin failed", err);
+      toast.error(err?.response?.data?.message || "Couldn't unpin the message");
+      return false;
+    }
+  };
+
+  // employeeIds = array of uuid STRINGS. The response is the full member list.
+  const addParticipants = async (convoId, employeeIds) => {
+    if (!employeeIds?.length) return false;
+    try {
+      const list = await chatService.addParticipants(convoId, employeeIds);
+      if (list.length) {
+        const seen = new Set();
+        const members = list.filter(
+          (p) => p.uuid && !seen.has(p.uuid) && seen.add(p.uuid),
+        );
+        patch(convoId, (c) => ({ ...c, members }));
+      }
+      toast.success("People added");
+      return true;
+    } catch (err) {
+      console.error("[chat] add participants failed", err);
+      toast.error(err?.response?.data?.message || "Couldn't add people");
+      return false;
+    }
+  };
+
+  // NEW: remove people from a channel / team. employeeIds = uuid STRINGS.
+  // If I remove myself, or the server deletes the chat, it leaves my list.
+  const removeParticipants = async (convoId, employeeIds) => {
+    if (!employeeIds?.length) return false;
+    const me = String(userRef.current?.uuid ?? "");
+    try {
+      const res = await chatService.removeParticipants(convoId, employeeIds);
+      const gone = new Set(employeeIds.map(String));
+      if (res.conversationDeleted || gone.has(me)) {
+        dropConvo(convoId);
+        toast.success(
+          res.conversationDeleted
+            ? "Conversation deleted"
+            : "You left the chat",
+        );
+        return true;
+      }
+      patch(convoId, (c) => ({
+        ...c,
+        members: (c.members || []).filter((m) => !gone.has(String(m.uuid))),
+      }));
+      toast.success("Removed from the chat");
+      return true;
+    } catch (err) {
+      console.error("[chat] remove participants failed", err);
+      toast.error(err?.response?.data?.message || "Couldn't remove the person");
+      return false;
     }
   };
 
@@ -931,5 +1323,11 @@ export default function useConversations(currentUser) {
     deleteMessage,
     deleteConversation,
     unavailable,
+    // NEW
+    reactToMessage,
+    pinMessage,
+    unpinMessage,
+    addParticipants,
+    removeParticipants,
   };
 }

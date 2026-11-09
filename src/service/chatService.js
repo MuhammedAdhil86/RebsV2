@@ -11,7 +11,32 @@ import {
   deleteChatMessages,
   deleteChatConversation,
   getActiveUsersLightUrl,
+  // ---- new chat endpoints (add these to api.js) ----
+  markChatDelivered,
+  markChatReadUpTo,
+  getChatMediaCounts,
+  getChatMedia,
+  addChatReaction,
+  removeChatReaction,
+  addChatParticipants,
+  removeChatParticipants,
+  pinChatMessage,
+  unpinChatMessage,
+  getChatPins,
 } from "../api/api";
+
+// Public base for files. Attachment "url" values are storage paths like
+// "REBS/100524_chat_document.pdf", so the base is put in front of them.
+const MEDIA_BASE_URL = "https://rebs.blr1.digitaloceanspaces.com/";
+
+const fullUrl = (path) => {
+  if (!path) return "";
+  if (/^(https?:|blob:|data:)/i.test(path)) return path; // already complete
+  return `${MEDIA_BASE_URL}${String(path).replace(/^\/+/, "")}`.replace(
+    / /g,
+    "%20",
+  );
+};
 
 // Reads the logged-in user's uuid from the JWT ("Uuid" claim)
 const getMyUuid = () => {
@@ -71,7 +96,7 @@ const toFile = (m) => {
     return {
       name: a.file_name,
       size: a.file_size,
-      url: a.url,
+      url: fullUrl(a.url),
       mime: a.mime_type,
     };
   }
@@ -79,7 +104,7 @@ const toFile = (m) => {
     ? {
         name: m.file.name,
         size: m.file.size,
-        url: m.file.url,
+        url: fullUrl(m.file.url),
         mime: m.file.mime,
       }
     : null;
@@ -98,6 +123,46 @@ const toReplyTo = (m) => {
   };
 };
 
+// Reactions: [{ emoji, count, reacted_by_me, users: [{ employee_id, name }] }]
+// "mine" is worked out from users[] for THIS client. reacted_by_me inside a
+// WebSocket event is relative to the sender, so it is only a fallback.
+const toReactions = (list = []) => {
+  const me = getMyUuid();
+  return (Array.isArray(list) ? list : []).map((r) => {
+    const users = (r.users ?? []).map((u) => ({
+      uuid: String(u.employee_id ?? u.uuid ?? ""),
+      name: u.name ?? "",
+    }));
+    return {
+      e: r.emoji ?? r.e,
+      n: Number(r.count ?? r.n ?? users.length ?? 0),
+      mine: users.length
+        ? users.some((u) => u.uuid === me)
+        : Boolean(r.mine ?? r.reacted_by_me),
+      users,
+    };
+  });
+};
+
+// Pin: { pinned_by, pinned_by_name, pinned_at }
+const toPin = (p) =>
+  p
+    ? {
+        pinnedBy: String(p.pinned_by ?? ""),
+        pinnedByName: p.pinned_by_name ?? "",
+        pinnedAt: p.pinned_at ?? null,
+      }
+    : null;
+
+// delivered_to / read_by: [{ employee_id, name, image_url, at }]
+const toReaders = (list = []) =>
+  (Array.isArray(list) ? list : []).map((r) => ({
+    uuid: String(r.employee_id ?? r.uuid ?? ""),
+    name: r.name ?? "",
+    image: r.image_url ?? r.image ?? "",
+    at: r.at ?? null,
+  }));
+
 const toMessage = (m) => ({
   id: String(m.id),
   sender: toPerson(
@@ -110,14 +175,38 @@ const toMessage = (m) => ({
   text: m.text ?? m.message ?? m.content ?? "",
   createdAt: m.created_at ?? m.createdAt ?? null,
   file: toFile(m),
-  reactions: (m.reactions ?? []).map((r) => ({
-    e: r.emoji ?? r.e,
-    n: Number(r.count ?? r.n ?? 0),
-    mine: Boolean(r.mine ?? r.reacted_by_me),
-  })),
+  reactions: toReactions(m.reactions),
   replies: Number(m.reply_count ?? m.replies ?? 0),
   replyTo: toReplyTo(m),
+  // read info
+  deliveredTo: toReaders(m.delivered_to),
+  readBy: toReaders(m.read_by),
+  deliveredToAll: Boolean(m.delivered_to_all),
+  allRead: Boolean(m.all_read),
+  // pin info
+  pinned: Boolean(m.pinned ?? m.is_pinned ?? m.pin),
+  pin: toPin(m.pin),
 });
+
+// Shared media item (API 4)
+const toMediaItem = (m) => ({
+  id: String(m.attachment_id),
+  messageId: String(m.message_id),
+  senderId: String(m.sender_id ?? ""),
+  senderName: m.sender_name || "",
+  name: m.file_name || "file",
+  url: fullUrl(m.url),
+  path: m.url || "",
+  mime: m.mime_type || "",
+  type: m.media_type || "document",
+  size: m.file_size ?? 0,
+  sizeLabel: m.file_size_mb || "",
+  createdAt: m.created_at || null,
+});
+
+// ids: only the conversation id and message id are sent as integers
+const num = (v) => Number(v);
+const isNum = (v) => v !== null && v !== "" && Number.isFinite(Number(v));
 
 const chatService = {
   // GET conversations list
@@ -216,6 +305,7 @@ const chatService = {
     }
   },
   // POST a reaction (same emoji again removes it)
+  // OLD: unused now, use addReaction / removeReaction below.
   toggleReaction: async (messageId, emoji) => {
     try {
       const response = await axiosInstance.post(
@@ -403,9 +493,251 @@ const chatService = {
       throw error;
     }
   },
+
+  // =====================================================================
+  // NEW CHAT APIs (10). All responses are { status_code, message, data }.
+  // =====================================================================
+
+  // 1. POST /employee/chat/{cid}/delivered   body: { up_to_message_id }
+  markDelivered: async (conversationId, upToMessageId) => {
+    if (!isNum(upToMessageId)) return { updated: 0 };
+    try {
+      const response = await axiosInstance.post(
+        markChatDelivered(num(conversationId)),
+        { up_to_message_id: num(upToMessageId) },
+        { silent: true },
+      );
+      return { updated: response.data?.data?.updated ?? 0 };
+    } catch (error) {
+      console.error(
+        `Error marking delivered in conversation #${conversationId}:`,
+        error.response?.data || error.message,
+      );
+      throw error;
+    }
+  },
+
+  // 2. POST /employee/chat/{cid}/read   body: { up_to_message_id }
+  markReadUpTo: async (conversationId, upToMessageId) => {
+    if (!isNum(upToMessageId)) return { updated: 0 };
+    try {
+      const response = await axiosInstance.post(
+        markChatReadUpTo(num(conversationId)),
+        { up_to_message_id: num(upToMessageId) },
+        { silent: true },
+      );
+      return { updated: response.data?.data?.updated ?? 0 };
+    } catch (error) {
+      console.error(
+        `Error marking read in conversation #${conversationId}:`,
+        error.response?.data || error.message,
+      );
+      throw error;
+    }
+  },
+
+  // 3. GET /employee/chat/{cid}/media/counts
+  fetchMediaCounts: async (conversationId) => {
+    try {
+      const response = await axiosInstance.get(
+        getChatMediaCounts(num(conversationId)),
+      );
+      const d = response.data?.data ?? {};
+      return {
+        image: d.image ?? 0,
+        video: d.video ?? 0,
+        audio: d.audio ?? 0,
+        document: d.document ?? 0,
+        total: d.total ?? 0,
+      };
+    } catch (error) {
+      console.error(
+        `Error fetching media counts of conversation #${conversationId}:`,
+        error.response?.data || error.message,
+      );
+      throw error;
+    }
+  },
+
+  // 4. GET /employee/chat/{cid}/media
+  // No pagination params are documented, so none are sent.
+  fetchMedia: async (conversationId) => {
+    try {
+      const response = await axiosInstance.get(
+        getChatMedia(num(conversationId)),
+      );
+      const d = response.data?.data ?? {};
+      return {
+        items: (d.items ?? []).map(toMediaItem),
+        hasMore: Boolean(d.has_more),
+      };
+    } catch (error) {
+      console.error(
+        `Error fetching media of conversation #${conversationId}:`,
+        error.response?.data || error.message,
+      );
+      throw error;
+    }
+  },
+
+  // 5. PUT /employee/chat/{cid}/messages/{mid}/reactions   body: { emoji }
+  addReaction: async (conversationId, messageId, emoji) => {
+    try {
+      const response = await axiosInstance.put(
+        addChatReaction(num(conversationId), num(messageId)),
+        { emoji },
+        { silent: true },
+      );
+      const d = response.data?.data ?? {};
+      return {
+        messageId: String(d.message_id ?? messageId),
+        reactions: toReactions(d.reactions),
+      };
+    } catch (error) {
+      console.error(
+        `Error adding reaction to message #${messageId}:`,
+        error.response?.data || error.message,
+      );
+      throw error;
+    }
+  },
+
+  // 6. DELETE /employee/chat/{cid}/messages/{mid}/reactions?emoji=...
+  // The emoji is URL-encoded inside removeChatReaction (api.js).
+  removeReaction: async (conversationId, messageId, emoji) => {
+    try {
+      const response = await axiosInstance.delete(
+        removeChatReaction(num(conversationId), num(messageId), emoji),
+        { silent: true },
+      );
+      const d = response.data?.data ?? {};
+      return {
+        messageId: String(d.message_id ?? messageId),
+        reactions: toReactions(d.reactions),
+      };
+    } catch (error) {
+      console.error(
+        `Error removing reaction from message #${messageId}:`,
+        error.response?.data || error.message,
+      );
+      throw error;
+    }
+  },
+
+  // 7. POST /employee/chat/{cid}/add-participants   body: { employee_ids: [strings] }
+  // The response is the FULL participant list of the conversation.
+  addParticipants: async (conversationId, employeeIds) => {
+    try {
+      const response = await axiosInstance.post(
+        addChatParticipants(num(conversationId)),
+        { employee_ids: employeeIds.map(String) }, // never Number()
+        { silent: true },
+      );
+      const list = response.data?.data ?? [];
+      return Array.isArray(list) ? list.map(toPerson) : [];
+    } catch (error) {
+      console.error(
+        `Error adding participants to conversation #${conversationId}:`,
+        error.response?.data || error.message,
+      );
+      throw error;
+    }
+  },
+
+  // DELETE /employee/chat/{cid}/participants   body: { employee_ids: [strings] }
+  // Response: { removed, conversation_deleted, messages_deleted, attachments_deleted }
+  removeParticipants: async (conversationId, employeeIds) => {
+    try {
+      const response = await axiosInstance.delete(
+        removeChatParticipants(num(conversationId)),
+        { data: { employee_ids: employeeIds.map(String) }, silent: true },
+      );
+      const d = response.data?.data ?? {};
+      return {
+        removed: d.removed ?? 0,
+        conversationDeleted: Boolean(d.conversation_deleted),
+        messagesDeleted: d.messages_deleted ?? 0,
+        attachmentsDeleted: d.attachments_deleted ?? 0,
+      };
+    } catch (error) {
+      console.error(
+        `Error removing participants from conversation #${conversationId}:`,
+        error.response?.data || error.message,
+      );
+      throw error;
+    }
+  },
+
+  // 8. PUT /employee/chat/{cid}/messages/{mid}/pin   (no body)
+  pinMessage: async (conversationId, messageId) => {
+    try {
+      const response = await axiosInstance.put(
+        pinChatMessage(num(conversationId), num(messageId)),
+        null,
+        { silent: true },
+      );
+      const d = response.data?.data ?? {};
+      return { pinned: Boolean(d.pinned), pin: toPin(d.pin) };
+    } catch (error) {
+      console.error(
+        `Error pinning message #${messageId}:`,
+        error.response?.data || error.message,
+      );
+      throw error;
+    }
+  },
+
+  // 9. DELETE /chat/{cid}/messages/{mid}/unpin   (no body)
+  // NOTE: documented WITHOUT /employee. Kept as documented, needs backend
+  // confirmation. If it returns 404, add /employee in api.js.
+  unpinMessage: async (conversationId, messageId) => {
+    try {
+      const response = await axiosInstance.delete(
+        unpinChatMessage(num(conversationId), num(messageId)),
+        { silent: true },
+      );
+      const d = response.data?.data ?? {};
+      return { pinned: Boolean(d.pinned) };
+    } catch (error) {
+      console.error(
+        `Error unpinning message #${messageId}:`,
+        error.response?.data || error.message,
+      );
+      throw error;
+    }
+  },
+
+  // 10. GET /employee/chat/{cid}/pins
+  fetchPins: async (conversationId) => {
+    try {
+      const response = await axiosInstance.get(
+        getChatPins(num(conversationId)),
+      );
+      const list = response.data?.data ?? [];
+      return (Array.isArray(list) ? list : []).map((p) => ({
+        id: String(p.message_id),
+        senderId: String(p.sender_id ?? ""),
+        senderName: p.sender_name || "",
+        type: p.message_type || "text",
+        content: p.content ?? "",
+        createdAt: p.created_at || null,
+        pin: toPin(p.pin),
+      }));
+    } catch (error) {
+      console.error(
+        `Error fetching pins of conversation #${conversationId}:`,
+        error.response?.data || error.message,
+      );
+      throw error;
+    }
+  },
 };
 
 chatService.toMessage = toMessage;
+chatService.toReactions = toReactions;
+chatService.toPin = toPin;
+chatService.toReaders = toReaders;
+chatService.toPerson = toPerson;
 
-export { toMessage };
+export { toMessage, toReactions, toPin, toReaders, toPerson };
 export default chatService;

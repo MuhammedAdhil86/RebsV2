@@ -562,3 +562,21 @@ export const startChatDm = "/employee/chat/direct"; // confirmed
 export const deleteChatConversation = (id) => `/employee/chat/${id}`;
 export const sendChatAttachment = (id) => `/employee/chat/${id}/attachments`; //
 export const deleteChatMessages = (id) => `/employee/chat/${id}/messages`;
+
+export const markChatDelivered = (id) => `/employee/chat/${id}/delivered`;
+export const markChatReadUpTo = (id) => `/employee/chat/${id}/read`;
+export const getChatMediaCounts = (id) => `/employee/chat/${id}/media/counts`;
+export const getChatMedia = (id) => `/employee/chat/${id}/media`;
+export const addChatReaction = (id, mid) =>
+  `/employee/chat/${id}/messages/${mid}/reactions`;
+export const removeChatReaction = (id, mid, emoji) =>
+  `/employee/chat/${id}/messages/${mid}/reactions?emoji=${encodeURIComponent(emoji)}`;
+export const addChatParticipants = (id) =>
+  `/employee/chat/${id}/add-participants`;
+export const pinChatMessage = (id, mid) =>
+  `/employee/chat/${id}/messages/${mid}/pin`;
+export const unpinChatMessage = (id, mid) =>
+  `/employee/chat/${id}/messages/${mid}/unpin`;
+export const getChatPins = (id) => `/employee/chat/${id}/pins`;
+export const removeChatParticipants = (id) =>
+  `/employee/chat/${id}/participants`;

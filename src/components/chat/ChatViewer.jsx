@@ -1,5 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { FiCornerUpLeft, FiSmile, FiTrash2 } from "react-icons/fi";
+import {
+  FiCornerUpLeft,
+  FiSmile,
+  FiTrash2,
+  FiMapPin, // NEW
+} from "react-icons/fi";
 import DeleteConfirmationModal from "../../ui/deletemodal";
 import { COLORS, UserAvatar, titleOf } from "./chat_shared";
 import MessageFile from "./MessageFile";
@@ -47,7 +52,33 @@ export function withDayDividers(messages = []) {
   return out;
 }
 
-const QUICK_REACTIONS = ["👍", "❤️", "😂", "🎉", "🙏", "👀"];
+// same emoji list as the message box (ChatTool)
+const QUICK_REACTIONS = [
+  "😀",
+  "😂",
+  "😍",
+  "🥰",
+  "😎",
+  "🤔",
+  "😅",
+  "😭",
+  "🙏",
+  "👍",
+  "👎",
+  "👏",
+  "🙌",
+  "🔥",
+  "🎉",
+  "❤️",
+  "✅",
+  "❌",
+  "⭐",
+  "💯",
+  "👀",
+  "🤝",
+  "💪",
+  "😴",
+];
 
 // Quote card shown inside a reply bubble. Click it to jump to the original.
 function ReplyQuote({ quote, onJump }) {
@@ -107,6 +138,23 @@ function Ticks({ message }) {
   );
 }
 
+// NEW: "who reacted" text for the chip tooltip
+const reactorsTitle = (r) => {
+  const names = (r.users ?? []).map((u) => u.name).filter(Boolean);
+  if (!names.length) return undefined;
+  return `${r.e}  ${names.join(", ")}`;
+};
+
+// NEW: "Pinned by NAME · date"
+const pinnedLine = (pin) => {
+  if (!pin) return "Pinned";
+  const who = pin.pinnedByName ? ` by ${pin.pinnedByName}` : "";
+  const when = pin.pinnedAt
+    ? ` · ${dayLabel(pin.pinnedAt)}, ${timeLabel(pin.pinnedAt)}`
+    : "";
+  return `Pinned${who}${when}`;
+};
+
 function Message({
   message,
   mine,
@@ -118,6 +166,8 @@ function Message({
   onReply,
   onDelete,
   canDelete,
+  onPin, // NEW
+  onUnpin, // NEW
 }) {
   const user = message.sender ?? { name: "Unknown" };
   const { file, reactions, replies } = message;
@@ -184,6 +234,17 @@ function Message({
               border: `1px solid ${mine ? "#f5cdd1" : COLORS.line}`,
             }}
           >
+            {/* NEW: pinned line */}
+            {message.pinned && (
+              <div
+                className="mb-1 flex items-center gap-1 text-[11.5px] font-medium"
+                style={{ color: COLORS.link }}
+              >
+                <FiMapPin size={11} />
+                <span className="truncate">{pinnedLine(message.pin)}</span>
+              </div>
+            )}
+
             {quote && <ReplyQuote quote={quote} onJump={onJump} />}
 
             {message.text && (
@@ -240,6 +301,7 @@ function Message({
                 <button
                   key={r.e}
                   onClick={() => onReact(r.e)}
+                  title={reactorsTitle(r)} // NEW
                   className="flex items-center gap-1 rounded-full border px-2 py-[1px] text-[13px]"
                   style={
                     r.mine
@@ -293,23 +355,25 @@ function Message({
                 </button>
                 {pickerOpen && (
                   <div
-                    className={`absolute bottom-full z-20 mb-1 flex gap-0.5 rounded-xl border bg-white p-1.5 shadow-[0_8px_24px_rgba(0,0,0,0.14)] ${
+                    className={`absolute bottom-full z-20 mb-1 w-[264px] rounded-xl border bg-white p-2 shadow-[0_8px_24px_rgba(0,0,0,0.14)] ${
                       alignLeft ? "right-0" : "left-0"
                     }`}
                     style={{ borderColor: COLORS.line }}
                   >
-                    {QUICK_REACTIONS.map((e) => (
-                      <button
-                        key={e}
-                        onClick={() => {
-                          setPickerOpen(false);
-                          onReact(e);
-                        }}
-                        className="flex h-8 w-8 items-center justify-center rounded-md text-[19px] hover:bg-[#F2F4F3]"
-                      >
-                        {e}
-                      </button>
-                    ))}
+                    <div className="grid grid-cols-8 gap-0.5">
+                      {QUICK_REACTIONS.map((e) => (
+                        <button
+                          key={e}
+                          onClick={() => {
+                            setPickerOpen(false);
+                            onReact(e);
+                          }}
+                          className="flex h-8 w-8 items-center justify-center rounded-md text-[19px] hover:bg-[#F2F4F3]"
+                        >
+                          {e}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
@@ -321,6 +385,20 @@ function Message({
               >
                 <FiCornerUpLeft size={17} />
               </button>
+              {/* NEW: pin / unpin */}
+              {(message.pinned ? onUnpin : onPin) && (
+                <button
+                  onClick={() =>
+                    message.pinned ? onUnpin(message) : onPin(message)
+                  }
+                  title={message.pinned ? "Unpin message" : "Pin message"}
+                  aria-label={message.pinned ? "Unpin message" : "Pin message"}
+                  className="rounded p-1.5 hover:bg-[#F2F4F3]"
+                  style={message.pinned ? { color: COLORS.link } : undefined}
+                >
+                  <FiMapPin size={17} />
+                </button>
+              )}
               {canDelete && (
                 <button
                   onClick={() => onDelete(message)}
@@ -406,6 +484,8 @@ export default function ChatViewer({
   onReact,
   onReply,
   onDelete,
+  onPin, // NEW: (convoId, messageId) => void
+  onUnpin, // NEW: (convoId, messageId) => void
 }) {
   const endRef = useRef(null);
   const scrollRef = useRef(null);
@@ -508,6 +588,8 @@ export default function ChatViewer({
             onReply={onReply}
             onDelete={setToDelete}
             canDelete={mine}
+            onPin={onPin ? () => onPin(convo.id, m.id) : undefined}
+            onUnpin={onUnpin ? () => onUnpin(convo.id, m.id) : undefined}
           />
         );
       })}

@@ -25,10 +25,15 @@ export default function ChatView({ currentUser }) {
     sendMessage,
     sendFiles,
     sendVoice,
-    toggleReaction,
     deleteMessage,
     deleteConversation,
     unavailable,
+    // NEW
+    reactToMessage,
+    pinMessage,
+    unpinMessage,
+    addParticipants,
+    removeParticipants,
   } = useConversations(currentUser);
   const left = useAppSidebarWidth();
 
@@ -79,7 +84,14 @@ export default function ChatView({ currentUser }) {
             onSend={sendMessage}
             onSendFiles={sendFiles}
             onSendVoice={sendVoice}
-            onReact={toggleReaction}
+            onReact={reactToMessage}
+            onPin={pinMessage}
+            onUnpin={unpinMessage}
+            onAddParticipants={addParticipants}
+            onRemoveParticipants={removeParticipants}
+            people={people}
+            peopleLoading={peopleLoading}
+            onLoadPeople={loadPeople}
             onlineIds={onlineIds}
             onDelete={deleteConversation}
             onDeleteMessage={deleteMessage}
