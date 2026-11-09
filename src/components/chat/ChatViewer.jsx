@@ -79,6 +79,34 @@ function ReplyQuote({ quote, onJump }) {
   );
 }
 
+// WhatsApp-style ticks for my messages:
+// one grey tick = sent, two grey = delivered, two blue = read
+function Ticks({ message }) {
+  const read = message.allRead || message.readBy?.length > 0;
+  const delivered =
+    message.deliveredToAll || message.deliveredTo?.length > 0 || read;
+  const color = read ? "#1d9bf0" : COLORS.offline;
+  const title = read ? "Read" : delivered ? "Delivered" : "Sent";
+
+  return (
+    <svg
+      width="16"
+      height="11"
+      viewBox="0 0 16 11"
+      fill="none"
+      stroke={color}
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-label={title}
+    >
+      <title>{title}</title>
+      <path d="M1 5.5 4.5 9 11 1.5" />
+      {delivered && <path d="M6.5 8.5 7.5 9.5 14.5 1.5" />}
+    </svg>
+  );
+}
+
 function Message({
   message,
   mine,
@@ -171,12 +199,36 @@ function Message({
             {file && <MessageFile file={file} />}
 
             <div
-              className="mt-0.5 text-right text-[11px] leading-none"
+              className="mt-0.5 flex items-center justify-end gap-1 text-[11px] leading-none"
               style={{ color: COLORS.sub }}
             >
-              {message.time}
+              <span>{message.time}</span>
+              {mine && !pending && <Ticks message={message} />}
             </div>
           </div>
+
+          {/* who has read my message */}
+          {mine && message.readBy?.length > 0 && (
+            <div
+              className={`mt-1 flex items-center gap-1 ${
+                alignLeft ? "justify-start" : "justify-end"
+              }`}
+            >
+              <span className="text-[11px]" style={{ color: COLORS.sub }}>
+                Seen by
+              </span>
+              {message.readBy.slice(0, 3).map((p) => (
+                <span key={p.uuid} title={p.name}>
+                  <UserAvatar user={p} size={16} />
+                </span>
+              ))}
+              {message.readBy.length > 3 && (
+                <span className="text-[11px]" style={{ color: COLORS.sub }}>
+                  +{message.readBy.length - 3}
+                </span>
+              )}
+            </div>
+          )}
 
           {reactions?.length > 0 && (
             <div

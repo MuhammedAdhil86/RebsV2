@@ -1,5 +1,23 @@
 import axios from "axios";
 
+/**
+ * File uploads (FormData): the instances below default to
+ * "Content-Type: application/json". If that header is left on a FormData
+ * request, axios converts the form to JSON (files become `{}`) and the backend
+ * rejects it. Removing the header lets the browser set
+ * "multipart/form-data; boundary=..." itself.
+ */
+const stripJsonContentTypeForFormData = (config) => {
+  if (typeof FormData !== "undefined" && config.data instanceof FormData) {
+    if (typeof config.headers?.delete === "function") {
+      config.headers.delete("Content-Type"); // axios >= 1.x AxiosHeaders
+    } else if (config.headers) {
+      delete config.headers["Content-Type"]; // older axios
+    }
+  }
+  return config;
+};
+
 const axiosInstance = axios.create({
   // Using the proxy prefix from vite.config.js
   baseURL: "/api_v1",
@@ -15,7 +33,9 @@ axiosInstance.interceptors.request.use(
     if (token) {
       config.headers["Authorization"] = `Bearer ${token}`;
     }
-    return config;
+
+    // Make file uploads (FormData) work
+    return stripJsonContentTypeForFormData(config);
   },
   (error) => Promise.reject(error),
 );
@@ -35,9 +55,7 @@ axiosInstance.interceptors.response.use(
 
     // 401 Unauthorized Handling
     if (error.response?.status === 401) {
-      /* FIXED: Removed baseURL2 reference. 
-         Logic: If we get a 401, clear storage and redirect to login.
-      */
+      /* Logic: If we get a 401, clear storage and redirect to login. */
       console.error(
         "Unauthorized request. Redirecting to login...",
         requestUrl,
@@ -77,7 +95,9 @@ testingInstance.interceptors.request.use(
     if (token) {
       config.headers["Authorization"] = `Bearer ${token.trim()}`;
     }
-    return config;
+
+    // Make file uploads (FormData) work
+    return stripJsonContentTypeForFormData(config);
   },
   (error) => Promise.reject(error),
 );

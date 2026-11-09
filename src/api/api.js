@@ -411,7 +411,8 @@ export const getDefulatEmailTemplate = "/admin/defaults";
 
 export const postCloneEmailTemplate = "/admin/clone-default";
 export const postAllocatePayarollTemplate = "/api/payroll/template-allocations";
-
+export const postPopulateTdsOpeningBalance =
+  "/api/payroll/tds/opening-balance/populate";
 export const postGenerateLetter = "/letter/generate";
 export const postSendLetter = "/letter/send";
 export const postCreateLetterPdfTemplate = "/letter/template/create";

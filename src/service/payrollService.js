@@ -14,6 +14,7 @@ import {
   getPayrollDataAnalyticsList,
   getptslabs,
   getTDS,
+  postPopulateTdsOpeningBalance,
   getFinancialYears,
   getTaxRegimes,
   putUpsertPT,
@@ -42,17 +43,22 @@ import {
   postDisableLwf,
   putUpsertLwf,
   getLwfStateRules,
-  postCreateSalaryComponent
+  postCreateSalaryComponent,
 } from "../api/api";
 
 const payrollService = {
   // ---------------- POLICY LOOKUPS ----------------
   getPolicyLookupData: async (filterType, value = "lookup") => {
     try {
-      const res = await axiosInstance.get(`${getpolicyLookup}?${filterType}=${value}`);
+      const res = await axiosInstance.get(
+        `${getpolicyLookup}?${filterType}=${value}`,
+      );
       return res.data || [];
     } catch (err) {
-      console.error(`Error in getPolicyLookupData (${filterType}):`, err.response || err);
+      console.error(
+        `Error in getPolicyLookupData (${filterType}):`,
+        err.response || err,
+      );
       throw err;
     }
   },
@@ -167,8 +173,8 @@ const payrollService = {
       throw err;
     }
   },
-// Add this new method to fetch the active financial year
-getActiveFinancialYear: async () => {
+  // Add this new method to fetch the active financial year
+  getActiveFinancialYear: async () => {
     try {
       const res = await axiosInstance.get(getFinancialYears);
       // Based on your response: { "ok": true, "data": { ... } }
@@ -179,25 +185,24 @@ getActiveFinancialYear: async () => {
     }
   },
 
-
   // Update getTDS to accept the financialYearId
-getTDS: async (financialYearId) => {
-  try {
-    // If no ID is provided, this will throw an error to prevent the 400
-    if (!financialYearId) {
-       throw new Error("financial_year_id is required");
+  getTDS: async (financialYearId) => {
+    try {
+      // If no ID is provided, this will throw an error to prevent the 400
+      if (!financialYearId) {
+        throw new Error("financial_year_id is required");
+      }
+
+      // This constructs the URL correctly: /api/payroll/tds/tds-settings?financial_year_id=1
+      const url = `${getTDS}?financial_year_id=${financialYearId}`;
+      const res = await axiosInstance.get(url);
+      return res.data?.data || {};
+    } catch (err) {
+      console.error("Error in getTDS:", err.response || err);
+      throw err;
     }
-    
-    // This constructs the URL correctly: /api/payroll/tds/tds-settings?financial_year_id=1
-    const url = `${getTDS}?financial_year_id=${financialYearId}`;
-    const res = await axiosInstance.get(url);
-    return res.data?.data || {};
-  } catch (err) {
-    console.error("Error in getTDS:", err.response || err);
-    throw err;
-  }
-},
-getTaxRegimes: async () => {
+  },
+  getTaxRegimes: async () => {
     try {
       const res = await axiosInstance.get(getTaxRegimes);
       return res.data?.data || res.data || [];
@@ -212,21 +217,31 @@ getTaxRegimes: async () => {
   
      */
   getLWFRulesByState: async (stateName) => {
-    if (!stateName) throw new Error("State name is required to fetch LWF rules.");
+    if (!stateName)
+      throw new Error("State name is required to fetch LWF rules.");
 
     try {
       const sanitizedState = encodeURIComponent(stateName.trim().toLowerCase());
-      const res = await axiosInstance.get(`${getLwfRulesByState}?state=${sanitizedState}`);
+      const res = await axiosInstance.get(
+        `${getLwfRulesByState}?state=${sanitizedState}`,
+      );
 
       // ✅ FIX: Check if data is an array, and extract the first object element directly
-      if (res.data?.data && Array.isArray(res.data.data) && res.data.data.length > 0) {
+      if (
+        res.data?.data &&
+        Array.isArray(res.data.data) &&
+        res.data.data.length > 0
+      ) {
         return res.data.data[0];
       }
 
       // Fallback in case the backend payload structure changes to an object in the future
       return res.data?.data || res.data || null;
     } catch (err) {
-      console.error(`Error in getLWFRulesByState for ${stateName}:`, err.response || err);
+      console.error(
+        `Error in getLWFRulesByState for ${stateName}:`,
+        err.response || err,
+      );
       throw err;
     }
   },
@@ -269,11 +284,11 @@ getTaxRegimes: async () => {
       throw err;
     }
   },
-// ---------------- TAX DEDUCTED AT SOURCE (TDS) ----------------
-upsertTDS: async (payload) => {
+  // ---------------- TAX DEDUCTED AT SOURCE (TDS) ----------------
+  upsertTDS: async (payload) => {
     try {
-      const res = await axiosInstance.put(putUpsertTDS, payload); 
-      
+      const res = await axiosInstance.put(putUpsertTDS, payload);
+
       // ✅ CRITICAL FIX: If the API returns 200 OK but "ok" is false, force an error!
       if (res.data && res.data.ok === false) {
         throw {
@@ -281,7 +296,7 @@ upsertTDS: async (payload) => {
           message: res.data?.message || "Failed to update TDS settings",
           backendError: res.data?.error || null, // Captures "invalid or non-default tax regime selected"
           errors: res.data?.errors || null,
-          status: 200
+          status: 200,
         };
       }
 
@@ -289,12 +304,15 @@ upsertTDS: async (payload) => {
       return {
         success: true,
         message: res.data?.message || "TDS Settings updated successfully",
-        data: res.data?.data || res.data
+        data: res.data?.data || res.data,
       };
     } catch (err) {
       // This handles standard non-200 errors (400, 404, 500, etc.)
-      console.error("Error inside upsertTDS execution row:", err.response || err);
-      
+      console.error(
+        "Error inside upsertTDS execution row:",
+        err.response || err,
+      );
+
       // If our manual throw from above triggered this, pass it straight through
       if (err.success === false) throw err;
 
@@ -302,17 +320,19 @@ upsertTDS: async (payload) => {
       throw {
         success: false,
         message: serverError?.message || "Failed to update TDS settings",
-        backendError: serverError?.error || null, 
+        backendError: serverError?.error || null,
         errors: serverError?.errors || null,
-        status: err.response?.status
+        status: err.response?.status,
       };
     }
   },
-getDeclarationList: async (queryParams = {}) => {
+  getDeclarationList: async (queryParams = {}) => {
     try {
-      // If you need to pass filters like status or fiscal year, 
+      // If you need to pass filters like status or fiscal year,
       // you can append them as query parameters
-      const res = await axiosInstance.get(getDeclarationList, { params: queryParams });
+      const res = await axiosInstance.get(getDeclarationList, {
+        params: queryParams,
+      });
       console.log("Declaration List Data:", res.data);
       return res.data;
     } catch (err) {
@@ -320,16 +340,19 @@ getDeclarationList: async (queryParams = {}) => {
       throw err;
     }
   },
-approveOrRejectDeclaration: async (payload) => {
-  try {
-    // Remove the extra { declaration: ... } wrapper here
-    const res = await axiosInstance.put(approveOrRejectDeclaration, payload);
-    return res.data;
-  } catch (err) {
-    console.error("Error in approveOrRejectDeclaration:", err.response || err);
-    throw err;
-  }
-},
+  approveOrRejectDeclaration: async (payload) => {
+    try {
+      // Remove the extra { declaration: ... } wrapper here
+      const res = await axiosInstance.put(approveOrRejectDeclaration, payload);
+      return res.data;
+    } catch (err) {
+      console.error(
+        "Error in approveOrRejectDeclaration:",
+        err.response || err,
+      );
+      throw err;
+    }
+  },
   getTdsDeductionSections: async () => {
     try {
       const res = await axiosInstance.get(getTdsDeductionSections);
@@ -338,7 +361,7 @@ approveOrRejectDeclaration: async (payload) => {
       console.error("Error in getTdsDeductionSections:", err.response || err);
       throw err;
     }
-},
+  },
   getLWFStateRules: async () => {
     try {
       const res = await axiosInstance.get(getLwfStateRules);
@@ -350,17 +373,23 @@ approveOrRejectDeclaration: async (payload) => {
     }
   },
   getActivePTSlabs: async (stateName) => {
-    if (!stateName) throw new Error("State name parameter is required for lookup.");
+    if (!stateName)
+      throw new Error("State name parameter is required for lookup.");
 
     try {
       // Normalizes naming spaces and converts characters to lowercase automatically
       const sanitizedState = encodeURIComponent(stateName.trim().toLowerCase());
-      const res = await axiosInstance.get(`${getptslabs}?state=${sanitizedState}`);
+      const res = await axiosInstance.get(
+        `${getptslabs}?state=${sanitizedState}`,
+      );
 
       // Flexible unpacking structure to safely forward either nested array payloads or fallbacks
       return res.data?.data || res.data || [];
     } catch (err) {
-      console.error(`Error in getActivePTSlabs request pipeline for ${stateName}:`, err.response || err);
+      console.error(
+        `Error in getActivePTSlabs request pipeline for ${stateName}:`,
+        err.response || err,
+      );
       throw err;
     }
   },
@@ -424,7 +453,7 @@ approveOrRejectDeclaration: async (payload) => {
   cloneLeavePolicy: async (ids) => {
     try {
       const res = await axiosInstance.post(postCloneLeavePolicy, {
-        leave_policy_ids: ids
+        leave_policy_ids: ids,
       });
       return res.data;
     } catch (err) {
@@ -441,7 +470,7 @@ approveOrRejectDeclaration: async (payload) => {
       return {
         ok: response.status === 200 || response.status === 204,
         message: response.data?.message || "Updated Successfully",
-        data: response.data
+        data: response.data,
       };
     } catch (error) {
       console.error("API Error in updateSalaryComponent:", error);
@@ -462,15 +491,21 @@ approveOrRejectDeclaration: async (payload) => {
         data: data?.data || data,
       };
     } catch (err) {
-      const errorMessage = err.response?.data?.message || "Failed to update salary template.";
-      console.error(`[PayrollService] Update Error for ID ${id}:`, err.response || err);
+      const errorMessage =
+        err.response?.data?.message || "Failed to update salary template.";
+      console.error(
+        `[PayrollService] Update Error for ID ${id}:`,
+        err.response || err,
+      );
       throw new Error(errorMessage);
     }
   },
 
   deleteComponent: async (id) => {
     try {
-      const response = await axiosInstance.delete(`${deletePayrollComponent}/${id}`);
+      const response = await axiosInstance.delete(
+        `${deletePayrollComponent}/${id}`,
+      );
       return response.data;
     } catch (error) {
       console.error(`Error deleting component ${id}:`, error);
@@ -480,7 +515,9 @@ approveOrRejectDeclaration: async (payload) => {
 
   deleteTemplate: async (id) => {
     try {
-      const response = await axiosInstance.delete(`${deletePayrollTemplate}/${id}`);
+      const response = await axiosInstance.delete(
+        `${deletePayrollTemplate}/${id}`,
+      );
       return response.data;
     } catch (error) {
       console.error(`Error deleting template ${id}:`, error);
@@ -490,7 +527,9 @@ approveOrRejectDeclaration: async (payload) => {
 
   deleteAllocation: async (id) => {
     try {
-      const response = await axiosInstance.delete(`${deleteTemplateAllocation}/${id}`);
+      const response = await axiosInstance.delete(
+        `${deleteTemplateAllocation}/${id}`,
+      );
       return response.data;
     } catch (error) {
       console.error(`Error deleting allocation ${id}:`, error);
@@ -500,9 +539,10 @@ approveOrRejectDeclaration: async (payload) => {
 
   deleteLeavePolicy: async (id) => {
     try {
-      const url = typeof deleteLeavePolicyUrl === 'function'
-        ? deleteLeavePolicyUrl(id)
-        : `${deleteLeavePolicyUrl}/${id}`;
+      const url =
+        typeof deleteLeavePolicyUrl === "function"
+          ? deleteLeavePolicyUrl(id)
+          : `${deleteLeavePolicyUrl}/${id}`;
 
       const res = await axiosInstance.delete(url);
       console.log(`Delete Leave Policy ${id} Response:`, res.data);
@@ -532,7 +572,10 @@ approveOrRejectDeclaration: async (payload) => {
     try {
       const res = await axiosInstance.patch(updateReimbursementStatus, payload);
       if (process.env.NODE_ENV === "development") {
-        console.groupCollapsed("%c 📝 Reimbursement: Status Update", "color: #10b981; font-weight: bold;");
+        console.groupCollapsed(
+          "%c 📝 Reimbursement: Status Update",
+          "color: #10b981; font-weight: bold;",
+        );
         console.log("Payload:", payload);
         console.log("Response:", res.data);
         console.groupEnd();
@@ -551,19 +594,26 @@ approveOrRejectDeclaration: async (payload) => {
       const res = await axiosInstance.post(postLeaveBulkAllocation, payload);
       return res.data;
     } catch (err) {
-      console.error("LOG ERROR: bulkAllocateLeave failed:", err.response || err);
+      console.error(
+        "LOG ERROR: bulkAllocateLeave failed:",
+        err.response || err,
+      );
       throw err;
     }
   },
 
   bulkAllocatePayroll: async (payload) => {
     try {
-      const { data } = await axiosInstance.post(postBulkAllocatePayroll, payload);
+      const { data } = await axiosInstance.post(
+        postBulkAllocatePayroll,
+        payload,
+      );
       return data;
     } catch (err) {
       const errorData = err.response?.data;
       const customError = new Error();
-      customError.message = errorData?.message || errorData?.error || "Allocation failed";
+      customError.message =
+        errorData?.message || errorData?.error || "Allocation failed";
       customError.details = errorData?.errors || null;
       customError.status = err.response?.status;
       throw customError;
@@ -573,7 +623,9 @@ approveOrRejectDeclaration: async (payload) => {
   getPayrollAnalyticsRuns: async (month, year, status) => {
     try {
       const url = getPayrollDataAnalyticsList(month, year, status);
-      console.log(`🚀 Fetching Payroll Analytics for: ${month}/${year} (Status: ${status})`);
+      console.log(
+        `🚀 Fetching Payroll Analytics for: ${month}/${year} (Status: ${status})`,
+      );
       const res = await axiosInstance.get(url);
       return res.data;
     } catch (err) {
@@ -590,9 +642,52 @@ approveOrRejectDeclaration: async (payload) => {
       }
       return res.data;
     } catch (err) {
-      console.error("❌ Error in updatePayrollAnalyticsRuns:", err.response || err);
-      const errorMsg = err.response?.data?.message || "Failed to update payroll analytics";
+      console.error(
+        "❌ Error in updatePayrollAnalyticsRuns:",
+        err.response || err,
+      );
+      const errorMsg =
+        err.response?.data?.message || "Failed to update payroll analytics";
       throw new Error(errorMsg);
+    }
+  },
+  populateTdsOpeningBalance: async (financialYearId, file) => {
+    if (!financialYearId) throw new Error("financial_year_id is required");
+    if (!file) throw new Error("A CSV file is required");
+
+    try {
+      const formData = new FormData();
+      formData.append("financial_year_id", String(financialYearId));
+      formData.append("file", file, file.name);
+
+      const res = await axiosInstance.post(
+        postPopulateTdsOpeningBalance,
+        formData,
+        {
+          headers: { "Content-Type": "multipart/form-data" },
+        },
+      );
+
+      if (res.data?.ok === false || res.data?.success === false) {
+        const e = new Error(
+          res.data?.message || "Failed to populate TDS opening balances",
+        );
+        e.details = res.data?.errors || null;
+        throw e;
+      }
+      return res.data;
+    } catch (err) {
+      if (err.details !== undefined) throw err;
+      console.error("Error in populateTdsOpeningBalance:", err.response || err);
+      const errorData = err.response?.data;
+      const customError = new Error(
+        errorData?.message ||
+          errorData?.error ||
+          "Failed to upload TDS opening balances",
+      );
+      customError.details = errorData?.errors || null;
+      customError.status = err.response?.status;
+      throw customError;
     }
   },
 };
