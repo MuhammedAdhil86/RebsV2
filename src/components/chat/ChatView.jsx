@@ -34,6 +34,7 @@ export default function ChatView({ currentUser }) {
     unpinMessage,
     addParticipants,
     removeParticipants,
+    editMessage,
   } = useConversations(currentUser);
   const left = useAppSidebarWidth();
 
@@ -89,6 +90,7 @@ export default function ChatView({ currentUser }) {
             onUnpin={unpinMessage}
             onAddParticipants={addParticipants}
             onRemoveParticipants={removeParticipants}
+            onEdit={editMessage}
             people={people}
             peopleLoading={peopleLoading}
             onLoadPeople={loadPeople}

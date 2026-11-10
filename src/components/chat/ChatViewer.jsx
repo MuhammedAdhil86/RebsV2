@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   FiCornerUpLeft,
   FiSmile,
   FiTrash2,
-  FiMapPin, // NEW
+  FiEdit2, // NEW
 } from "react-icons/fi";
 import DeleteConfirmationModal from "../../ui/deletemodal";
 import { COLORS, UserAvatar, titleOf } from "./chat_shared";
@@ -52,6 +53,10 @@ export function withDayDividers(messages = []) {
   return out;
 }
 
+// reaction picker size (used to keep it inside the screen)
+const PICKER_W = 264;
+const PICKER_H = 124;
+
 // same emoji list as the message box (ChatTool)
 const QUICK_REACTIONS = [
   "😀",
@@ -79,6 +84,32 @@ const QUICK_REACTIONS = [
   "💪",
   "😴",
 ];
+
+// Real push-pin icon (outline, or filled when the message is pinned)
+export function PinIcon({ size = 16, filled = false, className = "", style }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill={filled ? "currentColor" : "none"}
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      style={style}
+      aria-hidden="true"
+    >
+      <path d="M12 17v5" />
+      <path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z" />
+    </svg>
+  );
+}
+
+// look of the round-corner buttons in the hover toolbar
+const TOOL_BTN =
+  "flex h-8 w-8 items-center justify-center rounded-lg transition hover:bg-[#F2F4F3] hover:text-[#1d1d1f] active:scale-95";
 
 // Quote card shown inside a reply bubble. Click it to jump to the original.
 function ReplyQuote({ quote, onJump }) {
@@ -168,11 +199,89 @@ function Message({
   canDelete,
   onPin, // NEW
   onUnpin, // NEW
+  onEdit, // NEW
+  canEdit, // NEW
 }) {
   const user = message.sender ?? { name: "Unknown" };
   const { file, reactions, replies } = message;
   const [pickerOpen, setPickerOpen] = useState(false);
   const pickerRef = useRef(null);
+  const pickerBtnRef = useRef(null);
+  const popRef = useRef(null);
+  const [pickerPos, setPickerPos] = useState({ top: 0, left: 0 });
+
+  // open the picker at the button, but fixed on screen: it is never cut off
+  // by the chat list or the sidebar, and it stays above everything
+  const togglePicker = () => {
+    if (pickerOpen) return setPickerOpen(false);
+    const r = pickerBtnRef.current?.getBoundingClientRect();
+    if (r) {
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      let left = alignLeft ? r.right - PICKER_W : r.left;
+      left = Math.max(8, Math.min(left, vw - PICKER_W - 8));
+      let top = r.top - PICKER_H - 6; // above the button
+      if (top < 8) top = Math.min(r.bottom + 6, vh - PICKER_H - 8); // else below
+      setPickerPos({ top, left });
+    }
+    setPickerOpen(true);
+  };
+
+  // hover toolbar: drawn fixed on screen (like the emoji picker), so it is
+  // never hidden behind the chat list or the sidebar
+  const [hover, setHover] = useState(false);
+  const [barPos, setBarPos] = useState({ top: 0 });
+  const bubbleRef = useRef(null);
+  const hideTimer = useRef(null);
+  useEffect(() => () => clearTimeout(hideTimer.current), []);
+
+  const showBar = () => {
+    clearTimeout(hideTimer.current);
+    const r = bubbleRef.current?.getBoundingClientRect();
+    if (r) {
+      const top = Math.max(8, r.top - 22);
+      setBarPos(
+        alignLeft
+          ? { top, right: Math.max(8, window.innerWidth - r.right) }
+          : { top, left: Math.max(8, r.left) },
+      );
+    }
+    setHover(true);
+  };
+  const hideBar = () => {
+    clearTimeout(hideTimer.current);
+    hideTimer.current = setTimeout(() => setHover(false), 120);
+  };
+
+  // the toolbar is fixed, so hide it when the page scrolls / resizes
+  useEffect(() => {
+    if (!hover) return;
+    const hide = () => setHover(false);
+    window.addEventListener("scroll", hide, true);
+    window.addEventListener("resize", hide);
+    return () => {
+      window.removeEventListener("scroll", hide, true);
+      window.removeEventListener("resize", hide);
+    };
+  }, [hover]);
+  const [editing, setEditing] = useState(false); // NEW
+  const [draft, setDraft] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const startEdit = () => {
+    setDraft(message.text || "");
+    setEditing(true);
+  };
+  const cancelEdit = () => setEditing(false);
+  const saveEdit = async () => {
+    const next = draft.trim();
+    if (!next || saving) return;
+    if (next === (message.text || "").trim()) return setEditing(false);
+    setSaving(true);
+    const ok = await onEdit(next);
+    setSaving(false);
+    if (ok) setEditing(false);
+  };
 
   // which side this message sits on
   const alignLeft = mine === MINE_ON_LEFT;
@@ -181,7 +290,11 @@ function Message({
   useEffect(() => {
     if (!pickerOpen) return;
     const onDown = (e) => {
-      if (pickerRef.current && !pickerRef.current.contains(e.target))
+      if (
+        pickerRef.current &&
+        !pickerRef.current.contains(e.target) &&
+        !(popRef.current && popRef.current.contains(e.target))
+      )
         setPickerOpen(false);
     };
     const onKey = (e) => e.key === "Escape" && setPickerOpen(false);
@@ -193,7 +306,20 @@ function Message({
     };
   }, [pickerOpen]);
 
+  // the picker is fixed on screen, so close it when the page scrolls / resizes
+  useEffect(() => {
+    if (!pickerOpen) return;
+    const close = () => setPickerOpen(false);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
+  }, [pickerOpen]);
+
   const pending = String(message.id).startsWith("tmp-");
+  const barVisible = !pending && !editing && (hover || pickerOpen);
 
   return (
     <div
@@ -221,7 +347,12 @@ function Message({
           </span>
         )}
 
-        <div className="relative max-w-full">
+        <div
+          ref={bubbleRef}
+          className="relative max-w-full"
+          onMouseEnter={showBar}
+          onMouseLeave={hideBar}
+        >
           {/* the bubble */}
           <div
             className={`min-w-[64px] max-w-full rounded-2xl px-3.5 py-2 shadow-sm transition-all duration-300 ${
@@ -240,20 +371,57 @@ function Message({
                 className="mb-1 flex items-center gap-1 text-[11.5px] font-medium"
                 style={{ color: COLORS.link }}
               >
-                <FiMapPin size={11} />
+                <PinIcon size={12} filled />
                 <span className="truncate">{pinnedLine(message.pin)}</span>
               </div>
             )}
 
             {quote && <ReplyQuote quote={quote} onJump={onJump} />}
 
-            {message.text && (
-              <div
-                className="whitespace-pre-wrap break-words text-[15px] leading-[22px]"
-                style={{ color: COLORS.text }}
-              >
-                {message.text}
+            {editing ? (
+              <div className="min-w-[220px]">
+                <textarea
+                  autoFocus
+                  rows={2}
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      saveEdit();
+                    }
+                    if (e.key === "Escape") cancelEdit();
+                  }}
+                  className="w-full resize-none rounded-md border bg-white px-2 py-1 text-[15px] leading-[22px] outline-none"
+                  style={{ borderColor: COLORS.line, color: COLORS.text }}
+                />
+                <div className="mt-1 flex justify-end gap-3 text-[13px]">
+                  <button
+                    onClick={cancelEdit}
+                    disabled={saving}
+                    style={{ color: COLORS.sub }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={saveEdit}
+                    disabled={saving || !draft.trim()}
+                    className="font-medium disabled:opacity-50"
+                    style={{ color: COLORS.link }}
+                  >
+                    {saving ? "Saving…" : "Save"}
+                  </button>
+                </div>
               </div>
+            ) : (
+              message.text && (
+                <div
+                  className="whitespace-pre-wrap break-words text-[15px] leading-[22px]"
+                  style={{ color: COLORS.text }}
+                >
+                  {message.text}
+                </div>
+              )
             )}
 
             {/* image / voice note / video / document */}
@@ -263,6 +431,7 @@ function Message({
               className="mt-0.5 flex items-center justify-end gap-1 text-[11px] leading-none"
               style={{ color: COLORS.sub }}
             >
+              {message.edited && <span className="italic">edited</span>}
               <span>{message.time}</span>
               {mine && !pending && <Ticks message={message} />}
             </div>
@@ -336,82 +505,109 @@ function Message({
             </button>
           )}
 
-          {/* hover actions, on the outer edge of the bubble */}
-          {!pending && (
-            <div
-              className={`absolute -top-4 items-center rounded-lg border bg-white px-0.5 py-0.5 shadow-sm group-hover:flex ${
-                alignLeft ? "right-0" : "left-0"
-              } ${pickerOpen ? "flex" : "hidden"}`}
-              style={{ borderColor: COLORS.line, color: COLORS.sub }}
-            >
-              <div className="relative" ref={pickerRef}>
-                <button
-                  onClick={() => setPickerOpen((o) => !o)}
-                  title="React"
-                  aria-label="Add reaction"
-                  className="rounded p-1.5 hover:bg-[#F2F4F3]"
-                >
-                  <FiSmile size={17} />
-                </button>
-                {pickerOpen && (
-                  <div
-                    className={`absolute bottom-full z-20 mb-1 w-[264px] rounded-xl border bg-white p-2 shadow-[0_8px_24px_rgba(0,0,0,0.14)] ${
-                      alignLeft ? "right-0" : "left-0"
-                    }`}
-                    style={{ borderColor: COLORS.line }}
-                  >
-                    <div className="grid grid-cols-8 gap-0.5">
-                      {QUICK_REACTIONS.map((e) => (
-                        <button
-                          key={e}
-                          onClick={() => {
-                            setPickerOpen(false);
-                            onReact(e);
-                          }}
-                          className="flex h-8 w-8 items-center justify-center rounded-md text-[19px] hover:bg-[#F2F4F3]"
-                        >
-                          {e}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-              <button
-                onClick={() => onReply(message)}
-                title="Reply"
-                aria-label="Reply"
-                className="rounded p-1.5 hover:bg-[#F2F4F3]"
+          {/* hover actions: fixed on screen, above everything */}
+          {barVisible &&
+            createPortal(
+              <div
+                className="fixed z-[9998] flex items-center gap-0.5 rounded-xl border bg-white px-1 py-1 shadow-[0_4px_14px_rgba(0,0,0,0.12)]"
+                style={{
+                  ...barPos,
+                  borderColor: COLORS.line,
+                  color: COLORS.sub,
+                }}
               >
-                <FiCornerUpLeft size={17} />
-              </button>
-              {/* NEW: pin / unpin */}
-              {(message.pinned ? onUnpin : onPin) && (
+                <div className="relative" ref={pickerRef}>
+                  <button
+                    ref={pickerBtnRef}
+                    onClick={togglePicker}
+                    title="React"
+                    aria-label="Add reaction"
+                    className={TOOL_BTN}
+                  >
+                    <FiSmile size={18} />
+                  </button>
+                  {pickerOpen &&
+                    createPortal(
+                      <div
+                        ref={popRef}
+                        className="fixed z-[9999] w-[264px] rounded-xl border bg-white p-2 shadow-[0_8px_24px_rgba(0,0,0,0.14)]"
+                        style={{
+                          top: pickerPos.top,
+                          left: pickerPos.left,
+                          borderColor: COLORS.line,
+                        }}
+                      >
+                        <div className="grid grid-cols-8 gap-0.5">
+                          {QUICK_REACTIONS.map((e) => (
+                            <button
+                              key={e}
+                              onClick={() => {
+                                setPickerOpen(false);
+                                onReact(e);
+                              }}
+                              className="flex h-8 w-8 items-center justify-center rounded-md text-[19px] hover:bg-[#F2F4F3]"
+                            >
+                              {e}
+                            </button>
+                          ))}
+                        </div>
+                      </div>,
+                      document.body,
+                    )}
+                </div>
                 <button
-                  onClick={() =>
-                    message.pinned ? onUnpin(message) : onPin(message)
-                  }
-                  title={message.pinned ? "Unpin message" : "Pin message"}
-                  aria-label={message.pinned ? "Unpin message" : "Pin message"}
-                  className="rounded p-1.5 hover:bg-[#F2F4F3]"
-                  style={message.pinned ? { color: COLORS.link } : undefined}
+                  onClick={() => onReply(message)}
+                  title="Reply"
+                  aria-label="Reply"
+                  className={TOOL_BTN}
                 >
-                  <FiMapPin size={17} />
+                  <FiCornerUpLeft size={18} />
                 </button>
-              )}
-              {canDelete && (
-                <button
-                  onClick={() => onDelete(message)}
-                  title="Delete message"
-                  aria-label="Delete message"
-                  className="rounded p-1.5 hover:bg-[#fbe8ea]"
-                  style={{ color: COLORS.link }}
-                >
-                  <FiTrash2 size={17} />
-                </button>
-              )}
-            </div>
-          )}
+                {/* NEW: edit my message */}
+                {canEdit && onEdit && !editing && (
+                  <button
+                    onClick={startEdit}
+                    title="Edit message"
+                    aria-label="Edit message"
+                    className={TOOL_BTN}
+                  >
+                    <FiEdit2 size={17} />
+                  </button>
+                )}
+                {/* NEW: pin / unpin */}
+                {(message.pinned ? onUnpin : onPin) && (
+                  <button
+                    onClick={() =>
+                      message.pinned ? onUnpin(message) : onPin(message)
+                    }
+                    title={message.pinned ? "Unpin message" : "Pin message"}
+                    aria-label={
+                      message.pinned ? "Unpin message" : "Pin message"
+                    }
+                    className={TOOL_BTN}
+                    style={
+                      message.pinned
+                        ? { color: COLORS.link, background: COLORS.tint }
+                        : undefined
+                    }
+                  >
+                    <PinIcon size={18} filled={message.pinned} />
+                  </button>
+                )}
+                {canDelete && (
+                  <button
+                    onClick={() => onDelete(message)}
+                    title="Delete message"
+                    aria-label="Delete message"
+                    className="rounded p-1.5 hover:bg-[#fbe8ea]"
+                    style={{ color: COLORS.link }}
+                  >
+                    <FiTrash2 size={17} />
+                  </button>
+                )}
+              </div>,
+              document.body,
+            )}
         </div>
       </div>
     </div>
@@ -486,6 +682,7 @@ export default function ChatViewer({
   onDelete,
   onPin, // NEW: (convoId, messageId) => void
   onUnpin, // NEW: (convoId, messageId) => void
+  onEdit, // NEW: (convoId, messageId, text) => Promise<boolean>
 }) {
   const endRef = useRef(null);
   const scrollRef = useRef(null);
@@ -590,6 +787,14 @@ export default function ChatViewer({
             canDelete={mine}
             onPin={onPin ? () => onPin(convo.id, m.id) : undefined}
             onUnpin={onUnpin ? () => onUnpin(convo.id, m.id) : undefined}
+            onEdit={onEdit ? (text) => onEdit(convo.id, m.id, text) : undefined}
+            canEdit={
+              mine &&
+              !m.file &&
+              !!m.text &&
+              (!m.editableUntil ||
+                Date.now() < new Date(m.editableUntil).getTime())
+            }
           />
         );
       })}

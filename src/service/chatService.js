@@ -11,6 +11,7 @@ import {
   deleteChatMessages,
   deleteChatConversation,
   getActiveUsersLightUrl,
+  editChatMessage,
   // ---- new chat endpoints (add these to api.js) ----
   markChatDelivered,
   markChatReadUpTo,
@@ -726,6 +727,29 @@ const chatService = {
     } catch (error) {
       console.error(
         `Error fetching pins of conversation #${conversationId}:`,
+        error.response?.data || error.message,
+      );
+      throw error;
+    }
+  },
+  // PATCH /employee/chat/{cid}/messages/{mid}   body: { content }
+  // 400 = inappropriate language, 403 = edit time limit has passed
+  editMessage: async (conversationId, messageId, content) => {
+    try {
+      const response = await axiosInstance.patch(
+        editChatMessage(Number(conversationId), Number(messageId)),
+        { content },
+        { silent: true },
+      );
+      const d = response.data?.data ?? {};
+      return {
+        id: String(d.id ?? messageId),
+        text: d.content ?? content,
+        editedAt: d.edited_at ?? null,
+      };
+    } catch (error) {
+      console.error(
+        `Error editing message #${messageId}:`,
         error.response?.data || error.message,
       );
       throw error;

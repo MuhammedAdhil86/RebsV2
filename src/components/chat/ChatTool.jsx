@@ -359,8 +359,8 @@ export default function ChatTool({
   return (
     <div className="shrink-0 px-5 pb-4 pt-1">
       <div
-        className="relative rounded-2xl border bg-white shadow-sm transition focus-within:border-[#d13843] focus-within:shadow-md focus-within:ring-4 focus-within:ring-[#fbe8ea]"
-        style={{ borderColor: COLORS.line }}
+        className="relative rounded-xl border bg-white shadow-sm transition focus-within:bg-[#fffafa] focus-within:shadow-[0_4px_16px_rgba(209,56,67,0.18)] focus-within:ring-4 focus-within:ring-[#fbe8ea]"
+        style={{ borderColor: COLORS.link }}
         onDragOver={(e) => {
           if (recording) return;
           e.preventDefault();
@@ -562,10 +562,18 @@ export default function ChatTool({
                   onClick={() => fileInputRef.current?.click()}
                   aria-label="Attach files"
                   title="Attach files"
-                  className="hover:bg-[#F2F4F3]"
+                  className="relative hover:bg-[#F2F4F3]"
                   style={{ color: COLORS.sub }}
                 >
                   <FiPaperclip size={19} />
+                  {hasFiles && (
+                    <span
+                      className="absolute right-0 top-0 flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 text-[10px] font-medium text-white"
+                      style={{ background: COLORS.active }}
+                    >
+                      {files.length}
+                    </span>
+                  )}
                 </RoundButton>
                 <RoundButton
                   onClick={() => setEmojiOpen((o) => !o)}
@@ -579,7 +587,7 @@ export default function ChatTool({
 
                 {emojiOpen && (
                   <div
-                    className="absolute bottom-full left-0 z-30 mb-2 w-[264px] rounded-xl border bg-white p-2 shadow-[0_8px_24px_rgba(0,0,0,0.14)]"
+                    className="absolute bottom-full left-0 z-50 mb-2 w-[264px] rounded-xl border bg-white p-2 shadow-[0_8px_24px_rgba(0,0,0,0.14)]"
                     style={{ borderColor: COLORS.line }}
                   >
                     <div className="grid grid-cols-8 gap-0.5">

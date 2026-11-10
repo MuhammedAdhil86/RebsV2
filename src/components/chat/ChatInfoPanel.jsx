@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import {
   FiX,
-  FiMapPin,
   FiImage,
   FiFilm,
   FiMusic,
@@ -12,7 +11,7 @@ import {
 } from "react-icons/fi";
 import chatService from "../../service/chatService";
 import { COLORS, UserAvatar } from "./chat_shared";
-import { dayLabel, timeLabel } from "./ChatViewer";
+import { dayLabel, timeLabel, PinIcon } from "./ChatViewer";
 
 const when = (iso) => {
   if (!iso) return "";
@@ -109,7 +108,7 @@ function PinsTab({ convo, onGoTo, onUnpin }) {
                 className="mt-1 flex items-center gap-1 text-[12px]"
                 style={{ color: COLORS.link }}
               >
-                <FiMapPin size={11} />
+                <PinIcon size={12} filled />
                 Pinned by {p.pin.pinnedByName} · {when(p.pin.pinnedAt)}
               </div>
             )}

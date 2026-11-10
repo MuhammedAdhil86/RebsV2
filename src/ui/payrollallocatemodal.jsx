@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useRef, useEffect } from "react";
 import {
   X,
   Search,
@@ -6,7 +6,24 @@ import {
   CheckCircle2,
   Users,
   ChevronRight,
+  ChevronLeft,
+  Check,
 } from "lucide-react";
+import CustomSelect from "../ui/customselect";
+
+const getInitials = (name = "") =>
+  name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((n) => n[0]?.toUpperCase())
+    .join("") || "?";
+
+const FILTER_MODE_OPTIONS = [
+  { value: "employee", label: "Manual Selection (Show All)" },
+  { value: "department", label: "Filter by Department" },
+  { value: "branch", label: "Filter by Branch" },
+];
 
 const AllocatePayrollModal = ({
   isOpen,
@@ -28,6 +45,8 @@ const AllocatePayrollModal = ({
   setFormData,
   onSubmit,
 }) => {
+  const selectAllRef = useRef(null);
+
   // Hooks must run on every render, so this stays ABOVE the early return
   const filteredStaff = useMemo(() => {
     return staffList.filter((s) =>
@@ -35,10 +54,64 @@ const AllocatePayrollModal = ({
     );
   }, [staffList, searchQuery]);
 
+  const filteredIds = useMemo(
+    () => filteredStaff.map((s) => s.uuid || s.user_id),
+    [filteredStaff],
+  );
+
+  const selectedInViewCount = filteredIds.filter((id) =>
+    selectedStaff.includes(id),
+  ).length;
+  const allSelected =
+    filteredIds.length > 0 && selectedInViewCount === filteredIds.length;
+  const someSelected = selectedInViewCount > 0 && !allSelected;
+
+  // Indeterminate state for the "select all" checkbox
+  useEffect(() => {
+    if (selectAllRef.current) selectAllRef.current.indeterminate = someSelected;
+  }, [someSelected, isOpen, step]);
+
   if (!isOpen) return null;
 
   const isFormValid =
     formData.template_id && formData.from_date && formData.to_date;
+
+  const toggleStaff = (id) =>
+    setSelectedStaff((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+
+  const toggleAll = (checked) => {
+    if (checked) {
+      // add everything visible, keep selections made under other filters
+      setSelectedStaff((prev) =>
+        Array.from(new Set([...prev, ...filteredIds])),
+      );
+    } else {
+      setSelectedStaff((prev) =>
+        prev.filter((id) => !filteredIds.includes(id)),
+      );
+    }
+  };
+
+  const filterOptions =
+    filterType === "department"
+      ? filters?.departments || []
+      : filters?.branches || [];
+
+  const filterSelectOptions = [
+    { value: "", label: "-- Choose Option --" },
+    ...filterOptions.map((item) => ({ value: item.id, label: item.name })),
+  ];
+
+  const templateOptions = [
+    { value: "", label: "Select a template..." },
+    ...templates.map((t) => ({ value: t.id, label: t.name })),
+  ];
+
+  const selectedTemplate = templates.find(
+    (t) => String(t.id) === String(formData.template_id),
+  );
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm font-poppins font-normal text-[12px] p-4">
@@ -54,12 +127,19 @@ const AllocatePayrollModal = ({
                 Bulk Payroll Allocation
               </h2>
               <div className="flex items-center gap-2 mt-1">
-                <span
-                  className={`px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wider ${step === 1 ? "bg-zinc-100 text-zinc-600" : "bg-black text-white"}`}
-                >
-                  Step {step} of 2
-                </span>
+                {/* step indicator */}
+                <div className="flex items-center gap-1">
+                  {[1, 2].map((n) => (
+                    <span
+                      key={n}
+                      className={`h-1.5 rounded-full transition-all ${
+                        n === step ? "w-6 bg-black" : "w-1.5 bg-zinc-300"
+                      }`}
+                    />
+                  ))}
+                </div>
                 <span className="text-zinc-400 text-[10px] font-normal">
+                  Step {step} of 2 ·{" "}
                   {step === 1 ? "Select Employees" : "Configure Terms"}
                 </span>
               </div>
@@ -83,17 +163,13 @@ const AllocatePayrollModal = ({
                     <label className="text-[10px] text-zinc-500 uppercase tracking-widest ml-1 font-normal">
                       Selection Mode
                     </label>
-                    <select
-                      className="w-full p-3 bg-white rounded-xl border border-zinc-200 outline-none focus:border-black transition-all cursor-pointer font-normal"
+                    <CustomSelect
+                      fullWidth
+                      className="bg-white py-3 rounded-xl border-zinc-200"
                       value={filterType}
-                      onChange={(e) => handleFilterSelect(e.target.value, "")}
-                    >
-                      <option value="employee">
-                        Manual Selection (Show All)
-                      </option>
-                      <option value="department">Filter by Department</option>
-                      <option value="branch">Filter by Branch</option>
-                    </select>
+                      options={FILTER_MODE_OPTIONS}
+                      onChange={(val) => handleFilterSelect(val, "")}
+                    />
                   </div>
 
                   {filterType !== "employee" && (
@@ -101,27 +177,17 @@ const AllocatePayrollModal = ({
                       <label className="text-[10px] text-zinc-500 uppercase tracking-widest ml-1 font-normal">
                         Select {filterType}
                       </label>
-                      <select
-                        className="w-full p-3 bg-white rounded-xl border border-black outline-none text-black font-normal"
+                      <CustomSelect
+                        fullWidth
+                        className="bg-white py-3 border-black text-black"
                         value={
                           filterType === "department"
                             ? activeFilters.dept
                             : activeFilters.branch
                         }
-                        onChange={(e) =>
-                          handleFilterSelect(filterType, e.target.value)
-                        }
-                      >
-                        <option value="">-- Choose Option --</option>
-                        {(filterType === "department"
-                          ? filters.departments
-                          : filters.branches
-                        ).map((item) => (
-                          <option key={item.id} value={item.id}>
-                            {item.name}
-                          </option>
-                        ))}
-                      </select>
+                        options={filterSelectOptions}
+                        onChange={(val) => handleFilterSelect(filterType, val)}
+                      />
                     </div>
                   )}
                 </div>
@@ -134,10 +200,19 @@ const AllocatePayrollModal = ({
                   <input
                     type="text"
                     placeholder="Search staff by name or ID..."
-                    className="w-full pl-12 pr-4 py-3 bg-white border border-zinc-200 rounded-xl outline-none focus:border-black transition-all font-normal"
+                    className="w-full pl-12 pr-10 py-3 bg-white border border-zinc-200 rounded-xl outline-none focus:border-black transition-all font-normal"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                   />
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setSearchQuery("")}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full text-zinc-400 hover:text-black hover:bg-zinc-100"
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -147,22 +222,22 @@ const AllocatePayrollModal = ({
                     <tr>
                       <th className="p-5 w-12">
                         <input
+                          ref={selectAllRef}
                           type="checkbox"
                           className="accent-black w-4 h-4 rounded cursor-pointer"
-                          onChange={(e) =>
-                            setSelectedStaff(
-                              e.target.checked
-                                ? filteredStaff.map((s) => s.uuid || s.user_id)
-                                : [],
-                            )
-                          }
-                          checked={
-                            selectedStaff.length === filteredStaff.length &&
-                            filteredStaff.length > 0
-                          }
+                          onChange={(e) => toggleAll(e.target.checked)}
+                          checked={allSelected}
+                          title="Select all"
                         />
                       </th>
-                      <th className="p-5 font-normal">Staff Details</th>
+                      <th className="p-5 font-normal">
+                        Staff Details
+                        {filteredIds.length > 0 && (
+                          <span className="ml-2 normal-case tracking-normal text-zinc-400">
+                            ({selectedInViewCount}/{filteredIds.length})
+                          </span>
+                        )}
+                      </th>
                       <th className="p-5 text-right pr-10 font-normal">
                         Department
                       </th>
@@ -194,39 +269,61 @@ const AllocatePayrollModal = ({
                         return (
                           <tr
                             key={id}
-                            onClick={() =>
-                              setSelectedStaff((prev) =>
-                                isSelected
-                                  ? prev.filter((x) => x !== id)
-                                  : [...prev, id],
-                              )
-                            }
-                            className={`hover:bg-zinc-50 transition-colors cursor-pointer ${isSelected ? "bg-zinc-100" : ""}`}
+                            onClick={() => toggleStaff(id)}
+                            className={`transition-colors cursor-pointer select-none ${
+                              isSelected
+                                ? "bg-zinc-100 hover:bg-zinc-100"
+                                : "hover:bg-zinc-50"
+                            }`}
                           >
                             <td
-                              className="p-5"
+                              className={`p-5 border-l-2 ${
+                                isSelected
+                                  ? "border-black"
+                                  : "border-transparent"
+                              }`}
                               onClick={(e) => e.stopPropagation()}
                             >
                               <input
                                 type="checkbox"
-                                className="accent-black w-4 h-4 rounded"
+                                className="accent-black w-4 h-4 rounded cursor-pointer"
                                 checked={isSelected}
-                                readOnly
+                                onChange={() => toggleStaff(id)}
                               />
                             </td>
                             <td className="p-5">
-                              <div className="text-black text-[13px] font-normal">
-                                {staff.full_name}
-                              </div>
-                              <div className="text-[11px] text-zinc-400 font-normal">
-                                ID:{" "}
-                                {staff.employee_id || String(id).slice(0, 8)}
+                              <div className="flex items-center gap-3">
+                                <div
+                                  className={`h-9 w-9 rounded-full flex items-center justify-center text-[11px] shrink-0 transition-colors ${
+                                    isSelected
+                                      ? "bg-black text-white"
+                                      : "bg-zinc-100 text-zinc-600"
+                                  }`}
+                                >
+                                  {isSelected ? (
+                                    <Check size={14} />
+                                  ) : (
+                                    getInitials(staff.full_name)
+                                  )}
+                                </div>
+                                <div>
+                                  <div className="text-black text-[13px] font-normal">
+                                    {staff.full_name}
+                                  </div>
+                                  <div className="text-[11px] text-zinc-400 font-normal">
+                                    ID:{" "}
+                                    {staff.employee_id ||
+                                      String(id).slice(0, 8)}
+                                  </div>
+                                </div>
                               </div>
                             </td>
-                            <td className="p-5 text-right pr-10 text-zinc-500 font-normal">
-                              {staff.department_name ||
-                                staff.department ||
-                                "N/A"}
+                            <td className="p-5 text-right pr-10">
+                              <span className="inline-block px-2.5 py-1 rounded-full bg-zinc-100 text-zinc-500 text-[11px]">
+                                {staff.department_name ||
+                                  staff.department ||
+                                  "N/A"}
+                              </span>
                             </td>
                           </tr>
                         );
@@ -237,7 +334,7 @@ const AllocatePayrollModal = ({
               </div>
             </div>
           ) : (
-            <div className="p-12 space-y-10 flex-1 flex flex-col justify-center bg-white animate-in slide-in-from-right-4">
+            <div className="p-12 space-y-10 flex-1 h-full flex flex-col justify-center bg-white animate-in slide-in-from-right-4">
               <div className="bg-black p-8 rounded-3xl flex items-center gap-6 text-white shadow-2xl shadow-zinc-200">
                 <div className="h-16 w-16 bg-white/10 rounded-2xl flex items-center justify-center">
                   <CheckCircle2 className="text-white" size={36} />
@@ -257,20 +354,20 @@ const AllocatePayrollModal = ({
                   <label className="block text-zinc-400 uppercase text-[10px] tracking-widest ml-1 font-normal">
                     Salary Template
                   </label>
-                  <select
-                    className="w-full p-4 bg-zinc-50 border border-zinc-200 rounded-2xl outline-none focus:border-black transition-all text-black font-normal"
+                  <CustomSelect
+                    fullWidth
+                    className="bg-zinc-50 py-4 rounded-2xl border-zinc-200 text-black text-[12px]"
                     value={formData.template_id}
-                    onChange={(e) =>
-                      setFormData({ ...formData, template_id: e.target.value })
+                    options={templateOptions}
+                    onChange={(val) =>
+                      setFormData({ ...formData, template_id: val })
                     }
-                  >
-                    <option value="">Select a template...</option>
-                    {templates.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.name}
-                      </option>
-                    ))}
-                  </select>
+                  />
+                  {selectedTemplate && (
+                    <p className="ml-1 text-[11px] text-zinc-400">
+                      Using: {selectedTemplate.name}
+                    </p>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-2 gap-6">
@@ -320,15 +417,33 @@ const AllocatePayrollModal = ({
             <span className="text-black uppercase tracking-widest text-[11px] font-normal">
               {selectedStaff.length} SELECTED
             </span>
+            {step === 1 && selectedStaff.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setSelectedStaff([])}
+                className="text-[11px] text-zinc-400 hover:text-black underline underline-offset-2 transition-colors"
+              >
+                Clear
+              </button>
+            )}
           </div>
 
           <div className="flex gap-4">
-            <button
-              onClick={onClose}
-              className="px-6 py-3 text-zinc-500 hover:text-black transition-colors font-normal"
-            >
-              Cancel
-            </button>
+            {step === 2 ? (
+              <button
+                onClick={() => setStep(1)}
+                className="px-6 py-3 text-zinc-500 hover:text-black transition-colors flex items-center gap-1 font-normal"
+              >
+                <ChevronLeft size={16} /> Back
+              </button>
+            ) : (
+              <button
+                onClick={onClose}
+                className="px-6 py-3 text-zinc-500 hover:text-black transition-colors font-normal"
+              >
+                Cancel
+              </button>
+            )}
             {step === 1 ? (
               <button
                 disabled={selectedStaff.length === 0}

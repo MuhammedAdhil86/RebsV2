@@ -14,6 +14,7 @@ export default function Conversation({
   onReact,
   onPin,
   onUnpin,
+  onEdit,
   onAddParticipants,
   onRemoveParticipants,
   people,
@@ -62,6 +63,7 @@ export default function Conversation({
           onDelete={onDeleteMessage}
           onPin={onPin}
           onUnpin={onUnpin}
+          onEdit={onEdit}
         />
         <ChatTool
           resetKey={convo.id}

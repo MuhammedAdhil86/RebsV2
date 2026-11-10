@@ -887,6 +887,10 @@ export default function useConversations(currentUser) {
         toast.info("This conversation was deleted");
         return;
       }
+      // e.g. 400 "message contains inappropriate language": show only that
+      if (st === 400 && err?.response?.data?.message) {
+        toast.error(err.response.data.message);
+      }
       patch(id, (c) => ({
         ...c,
         messages: c.messages.filter((m) => m.id !== tempId),
@@ -1142,6 +1146,31 @@ export default function useConversations(currentUser) {
     }
   };
 
+  // NEW: edit my message. Returns true when it worked.
+  // The server rejects it after the time limit (403) or for bad words (400);
+  // its message is shown as the error.
+  const editMessage = async (convoId, messageId, text) => {
+    const content = (text ?? "").trim();
+    if (!content) return false;
+    if (!/^\d+$/.test(String(messageId))) return false; // temp message
+    try {
+      const res = await chatService.editMessage(convoId, messageId, content);
+      patch(convoId, (c) => ({
+        ...c,
+        messages: c.messages.map((m) =>
+          m.id === messageId
+            ? { ...m, text: res.text, edited: true, editedAt: res.editedAt }
+            : m,
+        ),
+      }));
+      return true;
+    } catch (err) {
+      console.error("[chat] edit failed", err);
+      toast.error(err?.response?.data?.message || "Couldn't edit the message");
+      return false;
+    }
+  };
+
   // NEW: remove people from a channel / team. employeeIds = uuid STRINGS.
   // If I remove myself, or the server deletes the chat, it leaves my list.
   const removeParticipants = async (convoId, employeeIds) => {
@@ -1329,5 +1358,6 @@ export default function useConversations(currentUser) {
     unpinMessage,
     addParticipants,
     removeParticipants,
+    editMessage,
   };
 }

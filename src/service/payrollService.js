@@ -14,6 +14,7 @@ import {
   getPayrollDataAnalyticsList,
   getptslabs,
   getTDS,
+  getTdsOpeningBalance,
   postPopulateTdsOpeningBalance,
   getFinancialYears,
   getTaxRegimes,
@@ -688,6 +689,52 @@ const payrollService = {
       customError.details = errorData?.errors || null;
       customError.status = err.response?.status;
       throw customError;
+    }
+  },
+  getTdsOpeningBalance: async (financialYearId) => {
+    if (!financialYearId) throw new Error("financial_year_id is required");
+
+    try {
+      // The endpoint returns CSV text, not JSON, so keep the raw string.
+      const res = await axiosInstance.get(getTdsOpeningBalance, {
+        params: { financial_year_id: financialYearId },
+        responseType: "text",
+        transformResponse: [(data) => data],
+      });
+
+      const text = typeof res.data === "string" ? res.data : "";
+
+      // A JSON body here means an error wrapped in a 200 response.
+      if (text.trim().startsWith("{")) {
+        try {
+          const json = JSON.parse(text);
+          if (json?.ok === false || json?.success === false) {
+            throw new Error(
+              json?.message || "Failed to load TDS opening balances",
+            );
+          }
+        } catch (parseErr) {
+          if (parseErr instanceof SyntaxError) return text;
+          throw parseErr;
+        }
+        return "";
+      }
+      return text;
+    } catch (err) {
+      if (err.response?.status === 404) return ""; // nothing imported yet
+      if (!err.response) throw err; // our own error from above
+      console.error("Error in getTdsOpeningBalance:", err.response || err);
+
+      let serverMessage;
+      const raw = err.response?.data;
+      if (typeof raw === "string") {
+        try {
+          serverMessage = JSON.parse(raw)?.message;
+        } catch {
+          /* not JSON */
+        }
+      }
+      throw new Error(serverMessage || "Failed to load TDS opening balances");
     }
   },
 };

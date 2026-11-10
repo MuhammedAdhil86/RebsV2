@@ -21,6 +21,7 @@ import InfoTooltip from "../../../../ui/infotooltip";
 const TAN_REGEX = /^[A-Z]{4}[0-9]{5}[A-Z]$/;
 const DESCRIPTION_MAX = 250;
 
+const SAVED_PAGE_SIZE = 10;
 const MAX_FILE_BYTES = 5 * 1024 * 1024; // 5 MB
 const REQUIRED_HEADERS = ["user_id", "tds_deducted"];
 const TEMPLATE_CSV =
@@ -133,6 +134,24 @@ const parseCsv = (text) => {
   row.push(cell);
   if (row.some((c) => c.trim() !== "")) rows.push(row);
   return rows;
+};
+
+/* Parse the CSV text returned by GET /opening-balance into records. */
+const parseSavedCsv = (text) => {
+  const trimmed = (text || "").trim();
+  if (!trimmed) return [];
+  const rows = parseCsv(trimmed);
+  if (rows.length < 2) return [];
+  const headers = rows[0].map((h) => h.trim().toLowerCase());
+  const iUser = headers.indexOf("user_id");
+  const iAmount = headers.indexOf("tds_deducted");
+  const iNote = headers.indexOf("note");
+  if (iUser < 0 || iAmount < 0) return [];
+  return rows.slice(1).map((r) => ({
+    userId: (r[iUser] || "").trim(),
+    amount: Number((r[iAmount] || "").trim()) || 0,
+    note: iNote >= 0 ? (r[iNote] || "").trim() : "",
+  }));
 };
 
 const analyseCsv = (text) => {
@@ -296,6 +315,65 @@ const OpeningBalanceView = ({ financialYearId, financialYearName, onBack }) => {
   const [result, setResult] = useState(null);
   const inputRef = useRef(null);
 
+  // Saved balances (GET) + tab state
+  const [tab, setTab] = useState("saved"); // "saved" | "upload"
+  const [saved, setSaved] = useState({ records: [], raw: "" });
+  const [savedLoading, setSavedLoading] = useState(true);
+  const [savedError, setSavedError] = useState("");
+  const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1);
+
+  const loadSaved = useCallback(async () => {
+    setSavedLoading(true);
+    setSavedError("");
+    try {
+      const text = await payrollService.getTdsOpeningBalance(financialYearId);
+      setSaved({ records: parseSavedCsv(text), raw: text || "" });
+    } catch (err) {
+      setSavedError(err?.message || "Could not load opening balances.");
+    } finally {
+      setSavedLoading(false);
+    }
+  }, [financialYearId]);
+
+  useEffect(() => {
+    loadSaved();
+  }, [loadSaved]);
+
+  const filteredSaved = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return saved.records;
+    return saved.records.filter(
+      (r) =>
+        r.userId.toLowerCase().includes(q) || r.note.toLowerCase().includes(q),
+    );
+  }, [saved.records, query]);
+
+  const savedTotal = useMemo(
+    () => saved.records.reduce((sum, r) => sum + r.amount, 0),
+    [saved.records],
+  );
+  const pageCount = Math.max(
+    1,
+    Math.ceil(filteredSaved.length / SAVED_PAGE_SIZE),
+  );
+  const currentPage = Math.min(page, pageCount);
+  const pageRows = filteredSaved.slice(
+    (currentPage - 1) * SAVED_PAGE_SIZE,
+    currentPage * SAVED_PAGE_SIZE,
+  );
+
+  const downloadSaved = () => {
+    const url = URL.createObjectURL(
+      new Blob([saved.raw], { type: "text/csv" }),
+    );
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `tds_opening_balance_${financialYearName || financialYearId}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const handleFile = useCallback(async (selected) => {
     setFileError("");
     setAnalysis(null);
@@ -365,6 +443,7 @@ const OpeningBalanceView = ({ financialYearId, financialYearName, onBack }) => {
       toast.success(
         `Opening balances saved for ${count} employee${count === 1 ? "" : "s"}.`,
       );
+      loadSaved();
     } catch (err) {
       toast.error(err?.message || "Upload failed. Fix the file and try again.");
     } finally {
@@ -398,123 +477,115 @@ const OpeningBalanceView = ({ financialYearId, financialYearName, onBack }) => {
         </button>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="space-y-5 lg:col-span-2">
-          {/* Format hint + template */}
-          <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-gray-600">
-            <p>
-              CSV columns:{" "}
-              <code className="rounded bg-gray-100 px-1">user_id</code>,{" "}
-              <code className="rounded bg-gray-100 px-1">tds_deducted</code>,{" "}
-              <code className="rounded bg-gray-100 px-1">note</code> (optional)
-            </p>
-            <button
-              type="button"
-              onClick={downloadTemplate}
-              className="font-medium text-black underline underline-offset-2"
-            >
-              Download template
-            </button>
-          </div>
+      {/* Tabs */}
+      <div className="mb-6 flex gap-6 border-b border-gray-200" role="tablist">
+        {[
+          {
+            key: "saved",
+            label: `Saved balances${saved.records.length ? ` (${saved.records.length})` : ""}`,
+          },
+          { key: "upload", label: "Upload CSV" },
+        ].map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            role="tab"
+            aria-selected={tab === t.key}
+            onClick={() => setTab(t.key)}
+            disabled={uploading}
+            className={`-mb-px border-b-2 pb-2 text-sm font-medium transition-colors disabled:opacity-50 ${
+              tab === t.key
+                ? "border-black text-black"
+                : "border-transparent text-gray-500 hover:text-black"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
 
-          {/* Drop zone / selected file */}
-          {!file ? (
-            <div
-              onDragOver={(e) => {
-                e.preventDefault();
-                setDragging(true);
-              }}
-              onDragLeave={() => setDragging(false)}
-              onDrop={(e) => {
-                e.preventDefault();
-                setDragging(false);
-                handleFile(e.dataTransfer.files?.[0]);
-              }}
-              className={`rounded-lg border-2 border-dashed p-8 text-center transition-colors ${
-                dragging ? "border-black bg-gray-50" : "border-gray-300"
-              }`}
-            >
-              <p className="text-sm text-gray-700">Drag a CSV file here, or</p>
-              <button
-                type="button"
-                onClick={() => inputRef.current?.click()}
-                className="mt-2 rounded-md border border-black px-4 py-1.5 text-sm font-medium hover:bg-gray-50"
-              >
-                Choose file
-              </button>
-              <p className="mt-2 text-[11px] text-gray-500">
-                .csv only, up to 5 MB
-              </p>
-              {fileError && (
-                <p role="alert" className="mt-3 text-xs text-red-600">
-                  {fileError}
-                </p>
-              )}
+      {/* Saved balances */}
+      {tab === "saved" && (
+        <div>
+          {savedLoading ? (
+            <div className="space-y-3" aria-busy="true">
+              {[...Array(5)].map((_, i) => (
+                <Skeleton key={i} className="h-8 w-full" />
+              ))}
             </div>
-          ) : (
-            <div className="flex items-center justify-between rounded-md border border-gray-200 px-4 py-3">
-              <div className="min-w-0">
-                <p className="truncate text-sm font-medium">{file.name}</p>
-                <p className="text-[11px] text-gray-500">
-                  {(file.size / 1024).toFixed(1)} KB
-                </p>
-              </div>
-              {!uploading && !result && (
-                <button
-                  type="button"
-                  onClick={clearFile}
-                  className="text-xs font-medium text-gray-600 hover:text-black"
-                >
-                  Replace
-                </button>
-              )}
-            </div>
-          )}
-          <input
-            ref={inputRef}
-            type="file"
-            accept=".csv,text/csv"
-            className="hidden"
-            onChange={(e) => handleFile(e.target.files?.[0])}
-          />
-
-          {/* Validation errors */}
-          {analysis && analysis.errors.length > 0 && (
+          ) : savedError ? (
             <div
               role="alert"
-              className="rounded-md border border-red-200 bg-red-50 p-3 text-xs text-red-800"
+              className="rounded-md border border-red-200 bg-red-50 p-4 text-xs text-red-800"
             >
-              <p className="mb-1 font-medium">
-                Fix {analysis.errors.length} issue
-                {analysis.errors.length === 1 ? "" : "s"} before uploading
-              </p>
-              <ul className="list-disc space-y-0.5 pl-5">
-                {analysis.errors.slice(0, 8).map((e, i) => (
-                  <li key={i}>{e}</li>
-                ))}
-              </ul>
-              {analysis.errors.length > 8 && (
-                <p className="mt-1">…and {analysis.errors.length - 8} more.</p>
-              )}
+              <p className="font-medium">{savedError}</p>
+              <button
+                onClick={loadSaved}
+                className="mt-2 font-medium underline underline-offset-2"
+              >
+                Try again
+              </button>
             </div>
-          )}
-
-          {/* Preview */}
-          {analysis && analysis.errors.length === 0 && (
-            <div>
-              <div className="mb-2 flex flex-wrap gap-x-6 gap-y-1 text-xs text-gray-700">
-                <span>
-                  <strong>{analysis.records.length}</strong> employee
-                  {analysis.records.length === 1 ? "" : "s"}
-                </span>
-                <span>
-                  Total TDS: <strong>{formatINR(total)}</strong>
-                </span>
+          ) : saved.records.length === 0 ? (
+            <div className="rounded-md border border-dashed border-gray-300 bg-gray-50 p-8 text-center">
+              <p className="text-sm font-medium text-gray-900">
+                No opening balances yet
+              </p>
+              <p className="mt-1 text-xs text-gray-500">
+                Nothing has been imported for {financialYearName || "this year"}
+                .
+              </p>
+              <button
+                onClick={() => setTab("upload")}
+                className="mt-4 rounded-md bg-black px-5 py-1.5 text-sm font-medium text-white"
+              >
+                Upload CSV
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-gray-700">
+                  <span>
+                    <strong>{saved.records.length}</strong> employee
+                    {saved.records.length === 1 ? "" : "s"}
+                  </span>
+                  <span>
+                    Total TDS: <strong>{formatINR(savedTotal)}</strong>
+                  </span>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    type="search"
+                    value={query}
+                    onChange={(e) => {
+                      setQuery(e.target.value);
+                      setPage(1);
+                    }}
+                    placeholder="Search user ID or note"
+                    aria-label="Search saved opening balances"
+                    className="w-56 rounded-md border border-gray-300 px-3 py-1.5 text-xs outline-none focus:border-black focus:ring-1 focus:ring-black"
+                  />
+                  <button
+                    onClick={loadSaved}
+                    className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium hover:bg-gray-50"
+                  >
+                    Refresh
+                  </button>
+                  <button
+                    onClick={downloadSaved}
+                    className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium hover:bg-gray-50"
+                  >
+                    Download CSV
+                  </button>
+                </div>
               </div>
+
               <div className="overflow-x-auto rounded-md border border-gray-200">
                 <table className="w-full text-left text-xs">
                   <thead className="bg-gray-50 text-gray-500">
                     <tr>
+                      <th className="w-12 px-3 py-2 font-medium">#</th>
                       <th className="px-3 py-2 font-medium">User ID</th>
                       <th className="px-3 py-2 text-right font-medium">
                         TDS deducted
@@ -523,85 +594,293 @@ const OpeningBalanceView = ({ financialYearId, financialYearName, onBack }) => {
                     </tr>
                   </thead>
                   <tbody>
-                    {analysis.records.slice(0, 5).map((r) => (
-                      <tr key={r.userId} className="border-t border-gray-100">
-                        <td className="px-3 py-2 font-mono">{r.userId}</td>
-                        <td className="px-3 py-2 text-right">
-                          {formatINR(r.amount)}
-                        </td>
-                        <td className="px-3 py-2 text-gray-600">
-                          {r.note || "--"}
+                    {pageRows.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan={4}
+                          className="px-3 py-6 text-center text-gray-500"
+                        >
+                          No records match “{query}”.
                         </td>
                       </tr>
-                    ))}
+                    ) : (
+                      pageRows.map((r, i) => (
+                        <tr
+                          key={`${r.userId}-${i}`}
+                          className="border-t border-gray-100"
+                        >
+                          <td className="px-3 py-2 text-gray-400">
+                            {(currentPage - 1) * SAVED_PAGE_SIZE + i + 1}
+                          </td>
+                          <td className="px-3 py-2 font-mono">{r.userId}</td>
+                          <td className="px-3 py-2 text-right">
+                            {formatINR(r.amount)}
+                          </td>
+                          <td className="px-3 py-2 text-gray-600">
+                            {r.note || "--"}
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
-              {analysis.records.length > 5 && (
-                <p className="mt-1 text-[11px] text-gray-500">
-                  Showing the first 5 of {analysis.records.length} rows.
-                </p>
+
+              {pageCount > 1 && (
+                <div className="flex items-center justify-between text-xs text-gray-600">
+                  <span>
+                    Page {currentPage} of {pageCount} · {filteredSaved.length}{" "}
+                    record
+                    {filteredSaved.length === 1 ? "" : "s"}
+                  </span>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setPage(Math.max(1, currentPage - 1))}
+                      disabled={currentPage === 1}
+                      className="rounded-md border border-gray-300 px-3 py-1 font-medium hover:bg-gray-50 disabled:opacity-40"
+                    >
+                      Previous
+                    </button>
+                    <button
+                      onClick={() =>
+                        setPage(Math.min(pageCount, currentPage + 1))
+                      }
+                      disabled={currentPage === pageCount}
+                      className="rounded-md border border-gray-300 px-3 py-1 font-medium hover:bg-gray-50 disabled:opacity-40"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
               )}
             </div>
           )}
+        </div>
+      )}
 
-          {/* Success */}
-          {result && (
-            <div className="rounded-md border border-green-200 bg-green-50 p-3 text-xs text-green-800">
-              {result.message || "TDS opening balances populated successfully"}{" "}
-              — {result.count} record
-              {result.count === 1 ? "" : "s"} imported.
-            </div>
-          )}
-
-          {/* Actions */}
-          <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={handleUpload}
-              disabled={!canUpload}
-              className="rounded-md bg-black px-5 py-1.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              {uploading ? "Uploading…" : "Upload opening balance"}
-            </button>
-            {result && (
+      {/* Upload */}
+      {tab === "upload" && (
+        <div className="grid gap-6 lg:grid-cols-3">
+          <div className="space-y-5 lg:col-span-2">
+            {/* Format hint + template */}
+            <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-gray-600">
+              <p>
+                CSV columns:{" "}
+                <code className="rounded bg-gray-100 px-1">user_id</code>,{" "}
+                <code className="rounded bg-gray-100 px-1">tds_deducted</code>,{" "}
+                <code className="rounded bg-gray-100 px-1">note</code>{" "}
+                (optional)
+              </p>
               <button
                 type="button"
-                onClick={onBack}
-                className="rounded-md border border-black px-5 py-1.5 text-sm font-medium hover:bg-gray-50"
+                onClick={downloadTemplate}
+                className="font-medium text-black underline underline-offset-2"
               >
-                Done
+                Download template
               </button>
-            )}
-          </div>
-        </div>
+            </div>
 
-        <aside className="lg:col-span-1">
-          <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-            <p className="mb-1 font-medium">Important things to remember</p>
-            <ul className="list-disc space-y-1 pl-5">
-              <li>
-                Import only verified TDS amounts supported by previous payroll
-                records, Form 16, payslips or other relevant documents.
-              </li>
-              <li>
-                Upload amounts deducted during the{" "}
-                <strong>current financial year only</strong>, not the employee's
-                lifetime TDS or previous financial years' deductions.
-              </li>
-              <li>
-                Do not upload amounts already processed through REBS Payroll.
-                Existing processed TDS records will prevent the import.
-              </li>
-              <li>
-                Opening balance import is intended for migration and
-                carry-forward of externally processed TDS, not for routinely
-                updating monthly TDS deductions.
-              </li>
-            </ul>
+            {/* Drop zone / selected file */}
+            {!file ? (
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragging(true);
+                }}
+                onDragLeave={() => setDragging(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragging(false);
+                  handleFile(e.dataTransfer.files?.[0]);
+                }}
+                className={`rounded-lg border-2 border-dashed p-8 text-center transition-colors ${
+                  dragging ? "border-black bg-gray-50" : "border-gray-300"
+                }`}
+              >
+                <p className="text-sm text-gray-700">
+                  Drag a CSV file here, or
+                </p>
+                <button
+                  type="button"
+                  onClick={() => inputRef.current?.click()}
+                  className="mt-2 rounded-md border border-black px-4 py-1.5 text-sm font-medium hover:bg-gray-50"
+                >
+                  Choose file
+                </button>
+                <p className="mt-2 text-[11px] text-gray-500">
+                  .csv only, up to 5 MB
+                </p>
+                {fileError && (
+                  <p role="alert" className="mt-3 text-xs text-red-600">
+                    {fileError}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="flex items-center justify-between rounded-md border border-gray-200 px-4 py-3">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium">{file.name}</p>
+                  <p className="text-[11px] text-gray-500">
+                    {(file.size / 1024).toFixed(1)} KB
+                  </p>
+                </div>
+                {!uploading && !result && (
+                  <button
+                    type="button"
+                    onClick={clearFile}
+                    className="text-xs font-medium text-gray-600 hover:text-black"
+                  >
+                    Replace
+                  </button>
+                )}
+              </div>
+            )}
+            <input
+              ref={inputRef}
+              type="file"
+              accept=".csv,text/csv"
+              className="hidden"
+              onChange={(e) => handleFile(e.target.files?.[0])}
+            />
+
+            {/* Validation errors */}
+            {analysis && analysis.errors.length > 0 && (
+              <div
+                role="alert"
+                className="rounded-md border border-red-200 bg-red-50 p-3 text-xs text-red-800"
+              >
+                <p className="mb-1 font-medium">
+                  Fix {analysis.errors.length} issue
+                  {analysis.errors.length === 1 ? "" : "s"} before uploading
+                </p>
+                <ul className="list-disc space-y-0.5 pl-5">
+                  {analysis.errors.slice(0, 8).map((e, i) => (
+                    <li key={i}>{e}</li>
+                  ))}
+                </ul>
+                {analysis.errors.length > 8 && (
+                  <p className="mt-1">
+                    …and {analysis.errors.length - 8} more.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Preview */}
+            {analysis && analysis.errors.length === 0 && (
+              <div>
+                <div className="mb-2 flex flex-wrap gap-x-6 gap-y-1 text-xs text-gray-700">
+                  <span>
+                    <strong>{analysis.records.length}</strong> employee
+                    {analysis.records.length === 1 ? "" : "s"}
+                  </span>
+                  <span>
+                    Total TDS: <strong>{formatINR(total)}</strong>
+                  </span>
+                </div>
+                <div className="overflow-x-auto rounded-md border border-gray-200">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-gray-50 text-gray-500">
+                      <tr>
+                        <th className="px-3 py-2 font-medium">User ID</th>
+                        <th className="px-3 py-2 text-right font-medium">
+                          TDS deducted
+                        </th>
+                        <th className="px-3 py-2 font-medium">Note</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {analysis.records.slice(0, 5).map((r) => (
+                        <tr key={r.userId} className="border-t border-gray-100">
+                          <td className="px-3 py-2 font-mono">{r.userId}</td>
+                          <td className="px-3 py-2 text-right">
+                            {formatINR(r.amount)}
+                          </td>
+                          <td className="px-3 py-2 text-gray-600">
+                            {r.note || "--"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {analysis.records.length > 5 && (
+                  <p className="mt-1 text-[11px] text-gray-500">
+                    Showing the first 5 of {analysis.records.length} rows.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Success */}
+            {result && (
+              <div className="rounded-md border border-green-200 bg-green-50 p-3 text-xs text-green-800">
+                {result.message ||
+                  "TDS opening balances populated successfully"}{" "}
+                — {result.count} record
+                {result.count === 1 ? "" : "s"} imported.
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={handleUpload}
+                disabled={!canUpload}
+                className="rounded-md bg-black px-5 py-1.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {uploading ? "Uploading…" : "Upload opening balance"}
+              </button>
+              {result && (
+                <button
+                  type="button"
+                  onClick={() => setTab("saved")}
+                  className="rounded-md border border-black px-5 py-1.5 text-sm font-medium hover:bg-gray-50"
+                >
+                  View saved balances
+                </button>
+              )}
+              {result && (
+                <button
+                  type="button"
+                  onClick={onBack}
+                  className="rounded-md border border-black px-5 py-1.5 text-sm font-medium hover:bg-gray-50"
+                >
+                  Done
+                </button>
+              )}
+            </div>
           </div>
-        </aside>
-      </div>
+
+          <aside className="lg:col-span-1">
+            <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+              <p className="mb-1 font-medium">Important things to remember</p>
+              <ul className="list-disc space-y-1 pl-5">
+                <li>
+                  Import only verified TDS amounts supported by previous payroll
+                  records, Form 16, payslips or other relevant documents.
+                </li>
+                <li>
+                  Upload amounts deducted during the{" "}
+                  <strong>current financial year only</strong>, not the
+                  employee's lifetime TDS or previous financial years'
+                  deductions.
+                </li>
+                <li>
+                  Do not upload amounts already processed through REBS Payroll.
+                  Existing processed TDS records will prevent the import.
+                </li>
+                <li>
+                  Opening balance import is intended for migration and
+                  carry-forward of externally processed TDS, not for routinely
+                  updating monthly TDS deductions.
+                </li>
+              </ul>
+            </div>
+          </aside>
+        </div>
+      )}
     </div>
   );
 };

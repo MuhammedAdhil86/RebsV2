@@ -413,6 +413,7 @@ export const postCloneEmailTemplate = "/admin/clone-default";
 export const postAllocatePayarollTemplate = "/api/payroll/template-allocations";
 export const postPopulateTdsOpeningBalance =
   "/api/payroll/tds/opening-balance/populate";
+export const getTdsOpeningBalance = "/api/payroll/tds/opening-balance";
 export const postGenerateLetter = "/letter/generate";
 export const postSendLetter = "/letter/send";
 export const postCreateLetterPdfTemplate = "/letter/template/create";
@@ -580,3 +581,5 @@ export const unpinChatMessage = (id, mid) =>
 export const getChatPins = (id) => `/employee/chat/${id}/pins`;
 export const removeChatParticipants = (id) =>
   `/employee/chat/${id}/participants`;
+export const editChatMessage = (id, mid) =>
+  `/employee/chat/${id}/messages/${mid}`;
