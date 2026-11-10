@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { X, ChevronDown } from "lucide-react";
 import { Icon } from "@iconify/react";
-import toast from "react-hot-toast";
+import { toast } from "react-toastify";
 import axiosInstance from "../service/axiosinstance";
 
 const RegularizationApprovalModal = ({
@@ -30,6 +30,12 @@ const RegularizationApprovalModal = ({
   const usedCount = policy ? policy.used : 0;
   const limitCount = policy ? policy.regularisation_limit : 0;
   const policyType = policy ? policy.regularisation_type : "";
+
+  // Already approved -> only Reject is offered; already rejected -> only Approve.
+  // Pending (or anything else) shows both.
+  const currentStatus = String(data.status || "").toLowerCase();
+  const showApprove = currentStatus !== "approved";
+  const showReject = currentStatus !== "rejected";
 
   const handleAction = async (status) => {
     if (loading) return;
@@ -81,7 +87,7 @@ const RegularizationApprovalModal = ({
               </p>
             </div>
           </div>
-          <button onClick={onClose}>
+          <button type="button" onClick={onClose}>
             <X size={20} />
           </button>
         </div>
@@ -223,21 +229,27 @@ const RegularizationApprovalModal = ({
             </div>
 
             <div className="flex gap-3">
-              <button
-                disabled={loading}
-                onClick={() => handleAction("rejected")}
-                className="px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-2xl disabled:opacity-60 transition-colors"
-              >
-                Reject
-              </button>
+              {showReject && (
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={() => handleAction("rejected")}
+                  className="px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-2xl disabled:opacity-60 transition-colors"
+                >
+                  Reject
+                </button>
+              )}
 
-              <button
-                disabled={loading}
-                onClick={() => handleAction("approved")}
-                className="px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-2xl disabled:opacity-60 transition-colors"
-              >
-                Approve
-              </button>
+              {showApprove && (
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={() => handleAction("approved")}
+                  className="px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-2xl disabled:opacity-60 transition-colors"
+                >
+                  Approve
+                </button>
+              )}
             </div>
           </div>
         </div>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { X, Paperclip, Loader2, FileText, Search, User } from "lucide-react";
-import toast from "react-hot-toast"; // uses the global <Toaster /> from App.jsx
+import { toast } from "react-toastify"; // uses the global <ToastContainer /> from App.jsx
 import GlowButton from "../helpers/glowbutton";
 
 import { getActiveUsersLight } from "../../service/employeeService";
@@ -205,7 +205,7 @@ const AnnouncementModal = ({ isOpen, onClose }) => {
               type="text"
               value={formData.title}
               onChange={(e) =>
-                setFormData({ ...formData, title: e.target.value })
+                setFormData((prev) => ({ ...prev, title: e.target.value }))
               }
               placeholder="Enter title..."
               className="w-full border p-3 rounded-2xl"
@@ -222,7 +222,7 @@ const AnnouncementModal = ({ isOpen, onClose }) => {
               rows="3"
               value={formData.content}
               onChange={(e) =>
-                setFormData({ ...formData, content: e.target.value })
+                setFormData((prev) => ({ ...prev, content: e.target.value }))
               }
               placeholder="Write your announcement..."
               className="w-full border p-3 rounded-2xl"
@@ -289,10 +289,10 @@ const AnnouncementModal = ({ isOpen, onClose }) => {
             <select
               value={formData.selectedDepartmentId}
               onChange={(e) =>
-                setFormData({
-                  ...formData,
+                setFormData((prev) => ({
+                  ...prev,
                   selectedDepartmentId: e.target.value,
-                })
+                }))
               }
               className="w-full border p-3 rounded-2xl"
               required

@@ -1,9 +1,9 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import toast from "react-hot-toast";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import toast, { Toaster } from "react-hot-toast";
 
 // Components
-import UniversalTable from "../../ui/universal_table";
 import DeviceApprovalModal from "../../ui/devicestatusmodal";
 
 // Services
@@ -14,6 +14,14 @@ const statusColors = {
   Approved: "bg-green-100 text-green-600",
   Rejected: "bg-red-100 text-red-600",
 };
+
+/* ================= TOAST HELPER (all backend messages go through here) ================= */
+const getErrorMessage = (err, fallback) =>
+  err?.response?.data?.message ||
+  err?.response?.data?.error ||
+  (typeof err?.response?.data?.data === "string" && err.response.data.data) ||
+  err?.message ||
+  fallback;
 
 /* ================= HELPERS ================= */
 // "2026-10-20T09:00:00Z" -> "20/10/2026" (UTC, so the date never shifts)
@@ -28,21 +36,82 @@ const formatDate = (raw) => {
 const capitalize = (s) =>
   s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : "Pending";
 
-// One cell style for every text column: centered, truncated, full text on hover
-const TextCell = ({
-  value,
-  maxW = "max-w-[140px]",
-  className = "text-gray-500",
-}) => (
-  <span title={value} className={`truncate block ${maxW} mx-auto ${className}`}>
-    {value}
-  </span>
-);
+/* ================= SHARED ALIGNMENT (used by BOTH <th> and <td>) ================= */
+const textAlign = {
+  left: "text-left",
+  center: "text-center",
+  right: "text-right",
+};
+const flexAlign = {
+  left: "justify-start",
+  center: "justify-center",
+  right: "justify-end",
+};
+// One single cell class so header and content can never differ
+const cellBase = "px-4 py-3 align-middle";
+
+const ROWS_PER_PAGE = 10;
+
+/* ================= COLUMNS: first = left, all others = center ================= */
+const columns = [
+  { key: "name", label: "Employee", align: "left", width: "20%" },
+  { key: "designation", label: "Designation", align: "center", width: "16%" },
+  { key: "oldDevice", label: "Current Device", align: "center", width: "18%" },
+  {
+    key: "newDevice",
+    label: "Requested Device",
+    align: "center",
+    width: "18%",
+  },
+  { key: "date", label: "Detected Date", align: "center", width: "14%" },
+  { key: "status", label: "Status", align: "center", width: "14%" },
+];
+
+const renderCell = (col, row) => {
+  if (col.key === "name") {
+    return (
+      <div className="flex items-center justify-start">
+        <span
+          title={row.name}
+          className="truncate block max-w-[150px] font-medium text-gray-700"
+        >
+          {row.name}
+        </span>
+      </div>
+    );
+  }
+
+  if (col.key === "status") {
+    return (
+      <div className={`flex items-center ${flexAlign[col.align]}`}>
+        <span
+          className={`px-3 py-1 rounded-full text-[10px] font-semibold uppercase tracking-wider inline-block ${
+            statusColors[row.status] || "bg-yellow-100 text-yellow-700"
+          }`}
+        >
+          {row.status}
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`flex items-center ${flexAlign[col.align]}`}>
+      <span
+        title={row[col.key]}
+        className="truncate block max-w-[150px] text-gray-500"
+      >
+        {row[col.key]}
+      </span>
+    </div>
+  );
+};
 
 /* ================= MAIN COMPONENT ================= */
 export default function DeviceRequestTab() {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(1);
 
   // Modal states
   const [selectedRequest, setSelectedRequest] = useState(null);
@@ -80,13 +149,7 @@ export default function DeviceRequestTab() {
 
       setData(transformed);
     } catch (err) {
-      // Prefer the backend's own message over the generic axios 500 text
-      toast.error(
-        err.response?.data?.message ||
-          err.response?.data?.error ||
-          err.message ||
-          "Failed to load device requests",
-      );
+      toast.error(getErrorMessage(err, "Failed to load device requests"));
     } finally {
       setLoading(false);
     }
@@ -116,80 +179,112 @@ export default function DeviceRequestTab() {
     );
   };
 
-  /* ================= UNIVERSAL TABLE COLUMNS ================= */
-  const columns = [
-    {
-      key: "name",
-      label: "Employee",
-      width: 180,
-      render: (val) => (
-        <TextCell
-          value={val}
-          maxW="max-w-[150px]"
-          className="font-medium text-gray-700"
-        />
+  /* ================= PAGINATION ================= */
+  const totalPages = Math.max(1, Math.ceil(data.length / ROWS_PER_PAGE));
+  const currentPage = Math.min(page, totalPages);
+  const pagedData = useMemo(
+    () =>
+      data.slice(
+        (currentPage - 1) * ROWS_PER_PAGE,
+        currentPage * ROWS_PER_PAGE,
       ),
-    },
-    {
-      key: "designation",
-      label: "Designation",
-      width: 160,
-      render: (val) => <TextCell value={val} maxW="max-w-[140px]" />,
-    },
-    {
-      key: "oldDevice",
-      label: "Current Device",
-      width: 170,
-      render: (val) => <TextCell value={val} maxW="max-w-[150px]" />,
-    },
-    {
-      key: "newDevice",
-      label: "Requested Device",
-      width: 170,
-      render: (val) => <TextCell value={val} maxW="max-w-[150px]" />,
-    },
-    {
-      key: "date",
-      label: "Detected Date",
-      width: 130,
-      render: (val) => <TextCell value={val} maxW="max-w-[110px]" />,
-    },
-    {
-      key: "status",
-      label: "Status",
-      width: 120,
-      render: (val) => (
-        <span
-          className={`px-3 py-1 rounded-full text-[10px] font-semibold uppercase tracking-wider mx-auto inline-block ${
-            statusColors[val] || "bg-yellow-100 text-yellow-700"
-          }`}
-        >
-          {val}
-        </span>
-      ),
-    },
-  ];
-
-  if (loading)
-    return (
-      <div className="p-20 text-center text-gray-400">Loading Board...</div>
-    );
+    [data, currentPage],
+  );
 
   return (
     <div className="bg-[#f9fafb] rounded-xl p-4 border border-gray-100 shadow-sm w-full">
+      <Toaster position="top-right" />
+
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-sm font-semibold text-gray-800">
           Device Change Requests
         </h3>
       </div>
 
-      {/* Same shared table component as the Regularization tab */}
-      <UniversalTable
-        columns={columns}
-        data={data}
-        rowsPerPage={10}
-        rowClickHandler={handleOpenModal}
-      />
+      {loading ? (
+        <div className="flex flex-col items-center justify-center py-20 text-gray-400 text-[12px]">
+          <div className="w-6 h-6 border-2 border-gray-200 border-t-black rounded-full animate-spin mb-2" />
+          <span>Loading device requests...</span>
+        </div>
+      ) : (
+        <>
+          <div className="w-full overflow-x-auto border border-gray-100 rounded-xl bg-white">
+            <table className="w-full table-fixed border-collapse min-w-[900px] font-['Poppins']">
+              <colgroup>
+                {columns.map((col) => (
+                  <col key={col.key} style={{ width: col.width }} />
+                ))}
+              </colgroup>
+              <thead className="bg-[#f9f9f9]">
+                <tr>
+                  {columns.map((col) => (
+                    <th
+                      key={col.key}
+                      className={`${cellBase} ${textAlign[col.align]} text-[12px] font-semibold text-gray-600`}
+                    >
+                      {col.label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {pagedData.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={columns.length}
+                      className="py-12 text-center text-[12px] text-gray-400"
+                    >
+                      No device requests found
+                    </td>
+                  </tr>
+                ) : (
+                  pagedData.map((row) => (
+                    <tr
+                      key={row.id}
+                      onClick={() => handleOpenModal(row)}
+                      className="border-t border-gray-100 hover:bg-gray-50 cursor-pointer"
+                    >
+                      {columns.map((col) => (
+                        <td
+                          key={col.key}
+                          className={`${cellBase} ${textAlign[col.align]} text-[12px] text-gray-800`}
+                        >
+                          {renderCell(col, row)}
+                        </td>
+                      ))}
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* PAGINATION */}
+          {data.length > ROWS_PER_PAGE && (
+            <div className="flex items-center justify-between mt-4 text-[12px] text-gray-500">
+              <span>
+                Page {currentPage} of {totalPages}
+              </span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="p-1.5 border border-gray-200 rounded-lg disabled:opacity-40"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+                <button
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className="p-1.5 border border-gray-200 rounded-lg disabled:opacity-40"
+                >
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
 
       {/* THE MODAL */}
       {isModalOpen &&

@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Search, MoreVertical, Pencil, Eye, Plus } from "lucide-react";
-import toast from "react-hot-toast";
+import { toast } from "react-toastify";
 
 import UniversalTable from "../../ui/universal_table";
 import { fetchRegularizationRequests } from "../../service/employeeService";
@@ -175,7 +175,6 @@ function RegularizationTable() {
       console.error("Fetch error:", err);
       toast.error("Failed to load regularization requests");
     } finally {
-      // FIXED: Turn off loading state properly here
       setLoading(false);
     }
   };

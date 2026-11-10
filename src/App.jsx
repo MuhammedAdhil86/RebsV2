@@ -1,7 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import AppRoutes from "./routes/AppRoutes";
-import { Toaster } from "react-hot-toast";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import GlobalLoader from "./ui/globalloaer";
@@ -343,31 +342,6 @@ function App() {
         closeOnClick
         theme="light"
         style={{ zIndex: 2147483647, top: "24px", right: "24px" }}
-      />
-
-      {/* Old react-hot-toast: keep until every toast call in the project is
-          moved to react-toastify, then delete this block and its import. */}
-      <Toaster
-        position="top-right"
-        reverseOrder={false}
-        gutter={8}
-        containerStyle={{
-          position: "fixed",
-          zIndex: 2147483647,
-          top: "24px",
-          right: "24px",
-        }}
-        toastOptions={{
-          duration: 4000,
-          style: {
-            borderRadius: "12px",
-            background: "#FFFFFF",
-            color: "#000000",
-            fontSize: "14px",
-            padding: "12px 20px",
-            boxShadow: "0 20px 40px rgba(0,0,0,0.2)",
-          },
-        }}
       />
     </>
   );

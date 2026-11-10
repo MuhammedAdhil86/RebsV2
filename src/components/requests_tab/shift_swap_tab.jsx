@@ -5,17 +5,86 @@ import React, {
   useCallback,
   useRef,
 } from "react";
-import { Search, X } from "lucide-react";
+import { Search, X, ChevronLeft, ChevronRight } from "lucide-react";
 import { Icon } from "@iconify/react";
-import toast from "react-hot-toast";
+import { toast } from "react-toastify";
 
 // Adjust these paths to match your project structure.
 import shiftSwapService from "../../service/policiesService";
 import { getDepartmentData } from "../../service/companyService";
-import UniversalTable from "../../ui/universal_table";
 import CustomSelect from "../../ui/customselect";
 
 const STATUS_FILTERS = ["All", "Pending", "Approved", "Rejected"];
+
+/* ================= TOAST HELPERS (backend message + data in one toast) ================= */
+
+// Turns the "data" field into readable text (string stays, object is stringified)
+const detailToText = (detail) => {
+  if (detail === null || detail === undefined || detail === "") return "";
+  if (typeof detail === "string") return detail;
+  if (typeof detail === "object") {
+    if (typeof detail.message === "string") return detail.message;
+    try {
+      return JSON.stringify(detail);
+    } catch {
+      return "";
+    }
+  }
+  return String(detail);
+};
+
+// Pulls { message, detail } from an error. Works for axios errors
+// (err.response.data) and for services that throw the response body itself.
+const getErrorParts = (err, fallback) => {
+  const body = err?.response?.data ?? err;
+  const message =
+    (typeof body?.message === "string" && body.message) ||
+    (typeof body?.error === "string" && body.error) ||
+    (typeof err?.message === "string" && err.message) ||
+    fallback;
+  let detail = detailToText(body?.data);
+  if (detail === message) detail = ""; // don't show the same text twice
+  return { message, detail };
+};
+
+// Pulls { message, detail } from a success response (plain or axios-style)
+const getSuccessParts = (res, fallback) => {
+  const body = res?.data?.message !== undefined ? res.data : res;
+  const message =
+    (typeof body?.message === "string" && body.message) || fallback;
+  let detail = typeof body?.data === "string" ? body.data : "";
+  if (detail === message) detail = "";
+  return { message, detail };
+};
+
+// Toast body: message on top, data underneath
+const ToastBody = ({ message, detail }) => (
+  <div>
+    <div style={{ fontWeight: 600, fontSize: 13 }}>{message}</div>
+    {detail && (
+      <div style={{ fontSize: 12, opacity: 0.8, marginTop: 2 }}>{detail}</div>
+    )}
+  </div>
+);
+
+// New error toast
+const showErrorToast = (err, fallback, options = {}) => {
+  const { message, detail } = getErrorParts(err, fallback);
+  toast.error(<ToastBody message={message} detail={detail} />, options);
+};
+
+// Turns a loading toast into a success / error toast (react-toastify way)
+const finishToast = (id, type, { message, detail }) => {
+  toast.update(id, {
+    render: <ToastBody message={message} detail={detail} />,
+    type,
+    isLoading: false,
+    autoClose: 5000,
+    closeOnClick: true,
+    closeButton: true,
+    draggable: true,
+  });
+};
 
 const getStatusColor = (status) => {
   if (!status) return "bg-gray-100 text-gray-600";
@@ -48,10 +117,77 @@ const formatDateTime = (value) => {
   })}`;
 };
 
-// Employee name only (ids are intentionally not shown).
-const PersonCell = ({ name }) => (
-  <span className="block whitespace-nowrap">{name || "-"}</span>
-);
+/* ================= SHARED ALIGNMENT (used by BOTH <th> and <td>) ================= */
+const textAlign = {
+  left: "text-left",
+  center: "text-center",
+  right: "text-right",
+};
+const flexAlign = {
+  left: "justify-start",
+  center: "justify-center",
+  right: "justify-end",
+};
+// One single cell class so header and content can never differ
+const cellBase = "px-4 py-3 align-middle";
+
+const ROWS_PER_PAGE = 10;
+
+/* ================= COLUMNS: first = left, all others = center, Status = last ================= */
+const columns = [
+  {
+    key: "requester_employee_name",
+    label: "Requested By",
+    align: "left",
+    width: "15%",
+  },
+  {
+    key: "target_employee_name",
+    label: "Swap With",
+    align: "center",
+    width: "15%",
+  },
+  { key: "swap_date", label: "Swap Date", align: "center", width: "10%" },
+  { key: "requested_at", label: "Requested At", align: "center", width: "14%" },
+  {
+    key: "responded_by_name",
+    label: "Responded By",
+    align: "center",
+    width: "18%",
+  },
+  { key: "responded_at", label: "Responded At", align: "center", width: "18%" },
+  { key: "status", label: "Status", align: "center", width: "10%" },
+];
+
+const renderCell = (col, row) => {
+  const val = row[col.key];
+
+  if (col.key === "status") {
+    const status = val ?? "";
+    return (
+      <div className={`flex items-center ${flexAlign[col.align]}`}>
+        <span
+          title={status}
+          className={`px-3 py-1 rounded-full text-[11px] font-normal whitespace-nowrap inline-block text-center capitalize ${getStatusColor(status)}`}
+        >
+          {status || "-"}
+        </span>
+      </div>
+    );
+  }
+
+  let text;
+  if (col.key === "swap_date") text = formatDate(val);
+  else if (col.key === "requested_at" || col.key === "responded_at")
+    text = formatDateTime(val);
+  else text = val || (col.key === "responded_by_name" ? "—" : "-");
+
+  return (
+    <div className={`flex items-center ${flexAlign[col.align]}`}>
+      <span className="whitespace-nowrap">{text}</span>
+    </div>
+  );
+};
 
 /* ---------- STATUS UPDATE MODAL ---------- */
 const SwapStatusModal = ({
@@ -87,7 +223,9 @@ const SwapStatusModal = ({
 
   const handleReject = () => {
     if (!reason.trim()) {
-      toast.error("Rejection reason is required");
+      toast.error("Rejection reason is required", {
+        toastId: "swap-reason-required",
+      });
       return;
     }
     onStatusUpdate(requestId, "rejected", reason);
@@ -270,10 +408,10 @@ const SwapStatusModal = ({
 function ShiftSwapTab({ departmentId }) {
   const [swaps, setSwaps] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
 
   const [filterStatus, setFilterStatus] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
+  const [page, setPage] = useState(1);
 
   // Departments (fetched with getDepartmentData) for the filter dropdown
   const [departments, setDepartments] = useState([]);
@@ -293,7 +431,9 @@ function ShiftSwapTab({ departmentId }) {
         setDepartments(Array.isArray(data) ? data : []);
       } catch (err) {
         console.error("Failed to load departments:", err);
-        toast.error(err?.message || err?.error || "Failed to load departments");
+        showErrorToast(err, "Failed to load departments", {
+          toastId: "swap-departments-error",
+        });
       }
     };
     loadDepartments();
@@ -321,7 +461,6 @@ function ShiftSwapTab({ departmentId }) {
   const fetchSwaps = useCallback(async () => {
     const requestId = ++latestRequestRef.current;
     setLoading(true);
-    setError("");
     try {
       const list = await shiftSwapService.fetchCompanyShiftSwaps(
         selectedDepartment || undefined,
@@ -331,11 +470,10 @@ function ShiftSwapTab({ departmentId }) {
     } catch (err) {
       if (requestId !== latestRequestRef.current) return; // stale response
       console.error("Failed to load shift swap requests:", err);
-      const message =
-        err.response?.data?.message || "Failed to load shift swap requests";
       setSwaps([]);
-      setError(message);
-      toast.error(message);
+      showErrorToast(err, "Failed to load shift swap requests", {
+        toastId: "swap-load-error",
+      });
     } finally {
       if (requestId === latestRequestRef.current) setLoading(false);
     }
@@ -345,24 +483,34 @@ function ShiftSwapTab({ departmentId }) {
     fetchSwaps();
   }, [fetchSwaps]);
 
+  // Reset to first page when filtering, searching or changing department
+  useEffect(() => {
+    setPage(1);
+  }, [filterStatus, searchQuery, selectedDepartment]);
+
   /* ---------- UPDATE STATUS ---------- */
   const handleStatusUpdate = async (requestId, status, rejectionReason) => {
     if (updating) return;
     setUpdating(true);
+    const tid = toast.loading("Updating request...");
     try {
       const res = await shiftSwapService.respondToSwapRequest({
         requestId,
         status,
         rejectionReason,
       });
-      toast.success(res?.message || `Request ${status} successfully`);
+      finishToast(
+        tid,
+        "success",
+        getSuccessParts(res, `Request ${status} successfully`),
+      );
       setSelectedSwap(null);
       fetchSwaps();
     } catch (err) {
       console.error("Failed to respond to swap request:", err);
-      toast.error(
-        err?.response?.data?.message || err?.message || "Status update failed",
-      );
+      // shows: message (e.g. "Failed to reject shift swap request")
+      // and data (e.g. "request already processed") in the same toast
+      finishToast(tid, "error", getErrorParts(err, "Status update failed"));
     } finally {
       setUpdating(false);
     }
@@ -401,83 +549,16 @@ function ShiftSwapTab({ departmentId }) {
     return arr;
   }, [swaps, filterStatus, searchQuery]);
 
-  /* ---------- ROW CLICK -> OPEN MODAL ---------- */
-  // Works through event delegation, so it does not depend on UniversalTable
-  // supporting an onRowClick prop: find the clicked <tr>, read the request id
-  // stored in its first cell, and open the modal for that request.
-  const handleTableClick = (e) => {
-    const rowEl = e.target.closest("tr, [role='row']");
-    if (!rowEl) return;
-    const marker = rowEl.querySelector("[data-swap-id]");
-    if (!marker) return; // header row or empty row
-    const id = marker.getAttribute("data-swap-id");
-    const swap = swaps.find((s) => String(s.id) === String(id));
-    if (swap) setSelectedSwap(swap);
-  };
-
-  const columns = [
-    {
-      key: "requester_employee_name",
-      label: "Requested By",
-      width: 160,
-      // data-swap-id lets the row click handler find which request was clicked
-      render: (val, row) => (
-        <span data-swap-id={row?.id} className="block whitespace-nowrap">
-          {val || "-"}
-        </span>
-      ),
-    },
-    {
-      key: "target_employee_name",
-      label: "Swap With",
-      width: 160,
-      render: (val) => <PersonCell name={val} />,
-    },
-    {
-      key: "swap_date",
-      label: "Swap Date",
-      width: 110,
-      render: (val) => formatDate(val),
-    },
-    {
-      key: "requested_at",
-      label: "Requested At",
-      width: 150,
-      render: (val) => (
-        <span className="whitespace-nowrap">{formatDateTime(val)}</span>
-      ),
-    },
-    {
-      key: "status",
-      label: "Status",
-      width: 110,
-      render: (val) => {
-        const status = val ?? "";
-        return (
-          <span
-            title={status}
-            className={`px-3 py-1 rounded-full text-[11px] font-normal whitespace-nowrap inline-block text-center capitalize ${getStatusColor(status)}`}
-          >
-            {status || "-"}
-          </span>
-        );
-      },
-    },
-    {
-      key: "responded_by_name",
-      label: "Responded By",
-      width: 160,
-      render: (val) => (val ? <PersonCell name={val} /> : "—"),
-    },
-    {
-      key: "responded_at",
-      label: "Responded At",
-      width: 150,
-      render: (val) => (
-        <span className="whitespace-nowrap">{formatDateTime(val)}</span>
-      ),
-    },
-  ];
+  /* ---------- PAGINATION ---------- */
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredSwaps.length / ROWS_PER_PAGE),
+  );
+  const currentPage = Math.min(page, totalPages);
+  const pagedData = filteredSwaps.slice(
+    (currentPage - 1) * ROWS_PER_PAGE,
+    currentPage * ROWS_PER_PAGE,
+  );
 
   return (
     <>
@@ -527,26 +608,88 @@ function ShiftSwapTab({ departmentId }) {
         </div>
 
         {loading ? (
-          <div className="flex justify-center py-12">
-            <div className="w-10 h-10 border-4 border-blue-500 border-dashed rounded-full animate-spin" />
+          <div className="flex flex-col items-center justify-center py-20 text-gray-400 text-[12px]">
+            <div className="w-6 h-6 border-2 border-gray-200 border-t-black rounded-full animate-spin mb-2" />
+            <span>Loading shift swap requests...</span>
           </div>
         ) : (
-          <div
-            onClick={handleTableClick}
-            className="[&_tbody_tr]:cursor-pointer"
-          >
-            <UniversalTable
-              key={selectedDepartment || "all"}
-              columns={columns}
-              data={filteredSwaps}
-              rowsPerPage={10}
-              onRowClick={(row) => setSelectedSwap(row)}
-            />
-          </div>
-        )}
+          <>
+            <div className="w-full overflow-x-auto border border-gray-100 rounded-xl bg-white">
+              <table className="w-full table-fixed border-collapse min-w-[1000px] font-['Poppins']">
+                <colgroup>
+                  {columns.map((col) => (
+                    <col key={col.key} style={{ width: col.width }} />
+                  ))}
+                </colgroup>
+                <thead className="bg-[#f9f9f9]">
+                  <tr>
+                    {columns.map((col) => (
+                      <th
+                        key={col.key}
+                        className={`${cellBase} ${textAlign[col.align]} text-[12px] font-semibold text-gray-600`}
+                      >
+                        {col.label}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {pagedData.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={columns.length}
+                        className="py-12 text-center text-[12px] text-gray-400"
+                      >
+                        No shift swap requests found
+                      </td>
+                    </tr>
+                  ) : (
+                    pagedData.map((row, idx) => (
+                      <tr
+                        key={row.id ?? row.request_id ?? idx}
+                        onClick={() => setSelectedSwap(row)}
+                        className="border-t border-gray-100 hover:bg-gray-50 cursor-pointer"
+                      >
+                        {columns.map((col) => (
+                          <td
+                            key={col.key}
+                            className={`${cellBase} ${textAlign[col.align]} text-[12px] text-gray-800`}
+                          >
+                            {renderCell(col, row)}
+                          </td>
+                        ))}
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
 
-        {error && !loading && (
-          <div className="text-center py-2 text-red-600">Error: {error}</div>
+            {/* PAGINATION */}
+            {filteredSwaps.length > ROWS_PER_PAGE && (
+              <div className="flex items-center justify-between text-[12px] text-gray-500">
+                <span>
+                  Page {currentPage} of {totalPages}
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="p-1.5 border border-gray-200 rounded-lg disabled:opacity-40"
+                  >
+                    <ChevronLeft size={16} />
+                  </button>
+                  <button
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    className="p-1.5 border border-gray-200 rounded-lg disabled:opacity-40"
+                  >
+                    <ChevronRight size={16} />
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
 

@@ -1,16 +1,72 @@
 import React, { useEffect, useState, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
-import toast from "react-hot-toast";
-import { Search, MoreHorizontal, CheckCircle2, XCircle } from "lucide-react";
-
-// Shared Components
-import UniversalTable from "../../ui/universal_table";
+import toast, { Toaster } from "react-hot-toast";
+import {
+  Search,
+  MoreHorizontal,
+  CheckCircle2,
+  XCircle,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 
 // Services
 import {
   fetchWfhRequests,
   updateWfhStatus,
 } from "../../service/employeeService";
+
+/* ================= TOAST HELPERS (all backend messages go through here) ================= */
+const getErrorMessage = (err, fallback) =>
+  err?.response?.data?.message ||
+  (typeof err?.response?.data?.data === "string" && err.response.data.data) ||
+  err?.message ||
+  fallback;
+
+// Success message from the backend response (works for plain or axios-style responses)
+const getSuccessMessage = (res, fallback) =>
+  (typeof res?.message === "string" && res.message) ||
+  (typeof res?.data?.message === "string" && res.data.message) ||
+  fallback;
+
+/* ================= SHARED ALIGNMENT (used by BOTH <th> and <td>) ================= */
+const textAlign = {
+  left: "text-left",
+  center: "text-center",
+  right: "text-right",
+};
+const flexAlign = {
+  left: "justify-start",
+  center: "justify-center",
+  right: "justify-end",
+};
+// One single cell class so header and content can never differ
+const cellBase = "px-4 py-3 align-middle";
+
+const ROWS_PER_PAGE = 10;
+
+const DEFAULT_AVATAR =
+  "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQJFYyBlkZfPY6Jb_BDM0gAW2jdMCFsYWxgeQ&s";
+
+const getStatusColor = (status) => {
+  if (!status) return "bg-gray-100 text-gray-600";
+  const s = status.toString().toLowerCase();
+  if (s.includes("approved")) return "bg-green-100 text-green-600";
+  if (s.includes("pending")) return "bg-orange-100 text-orange-600";
+  if (s.includes("rejected") || s.includes("inactive"))
+    return "bg-red-100 text-red-600";
+  return "bg-gray-100 text-gray-600";
+};
+
+/* ================= COLUMNS: first = left, all others = center ================= */
+const columns = [
+  { key: "name", label: "Name", align: "left", width: "24%" },
+  { key: "fromDate", label: "From Date", align: "center", width: "16%" },
+  { key: "toDate", label: "To Date", align: "center", width: "16%" },
+  { key: "reason", label: "Reason", align: "center", width: "20%" },
+  { key: "status", label: "Status", align: "center", width: "14%" },
+  { key: "action", label: "Action", align: "center", width: "10%" },
+];
 
 // Portal-based floating action menu with horizontal trigger
 function ActionMenuPortal({ row, onUpdate }) {
@@ -129,6 +185,7 @@ export default function WfhTab() {
   const [loading, setLoading] = useState(false);
   const [filterStatus, setFilterStatus] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
+  const [page, setPage] = useState(1);
 
   const formatDate = (dateStr) => {
     if (!dateStr) return "—";
@@ -162,7 +219,7 @@ export default function WfhTab() {
 
       setData(transformed);
     } catch (err) {
-      toast.error("Failed to load WFH requests");
+      toast.error(getErrorMessage(err, "Failed to load WFH requests"));
     } finally {
       setLoading(false);
     }
@@ -172,6 +229,11 @@ export default function WfhTab() {
     fetchData(filterStatus);
   }, [filterStatus]);
 
+  // Reset to first page when filtering or searching
+  useEffect(() => {
+    setPage(1);
+  }, [filterStatus, searchQuery]);
+
   const handleStatusUpdate = async (id, nextStatus) => {
     // Optimistic UI state update
     setData((prev) =>
@@ -180,11 +242,14 @@ export default function WfhTab() {
       ),
     );
 
+    const tid = toast.loading("Updating status...");
     try {
-      await updateWfhStatus(id, nextStatus);
-      toast.success(`Request marked as ${nextStatus}`);
+      const res = await updateWfhStatus(id, nextStatus);
+      toast.success(getSuccessMessage(res, `Request marked as ${nextStatus}`), {
+        id: tid,
+      });
     } catch (err) {
-      toast.error("Failed to update status");
+      toast.error(getErrorMessage(err, "Failed to update status"), { id: tid });
       fetchData(filterStatus, true);
     }
   };
@@ -211,120 +276,76 @@ export default function WfhTab() {
     return arr;
   }, [data, searchQuery]);
 
-  const getStatusColor = (status) => {
-    if (!status) return "bg-gray-100 text-gray-600";
-    const s = status.toString().toLowerCase();
-    if (s.includes("approved")) return "bg-green-100 text-green-600";
-    if (s.includes("pending")) return "bg-orange-100 text-orange-600";
-    if (s.includes("rejected") || s.includes("inactive"))
-      return "bg-red-100 text-red-600";
-    return "bg-gray-100 text-gray-600";
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredData.length / ROWS_PER_PAGE),
+  );
+  const currentPage = Math.min(page, totalPages);
+  const pagedData = filteredData.slice(
+    (currentPage - 1) * ROWS_PER_PAGE,
+    currentPage * ROWS_PER_PAGE,
+  );
+
+  const renderCell = (col, row) => {
+    if (col.key === "name") {
+      const imageSrc =
+        row?.image && row.image.trim() !== "" ? row.image : DEFAULT_AVATAR;
+      return (
+        <div className="flex items-center gap-2.5 justify-start">
+          <img
+            src={imageSrc}
+            alt="avatar"
+            className="w-7 h-7 rounded-full object-cover shrink-0 border border-gray-100"
+          />
+          <span className="whitespace-nowrap">{row.name ?? "-"}</span>
+        </div>
+      );
+    }
+
+    if (col.key === "reason") {
+      const text = (row.reason ?? "-").toString();
+      const displayedReason =
+        text.length > 15 ? text.substring(0, 15) + "..." : text;
+      return (
+        <div className={`flex items-center ${flexAlign[col.align]}`}>
+          <span className="cursor-default text-gray-600" title={text}>
+            {displayedReason}
+          </span>
+        </div>
+      );
+    }
+
+    if (col.key === "status") {
+      const status = row.status ?? "";
+      const displayedStatus =
+        status.length > 10 ? status.substring(0, 10) + "..." : status;
+      return (
+        <div className={`flex items-center ${flexAlign[col.align]}`}>
+          <span
+            title={status}
+            className={`px-3 py-1 rounded-full text-[11px] font-normal whitespace-nowrap inline-block max-w-[100px] text-center ${getStatusColor(status)}`}
+          >
+            {displayedStatus}
+          </span>
+        </div>
+      );
+    }
+
+    if (col.key === "action") {
+      return <ActionMenuPortal row={row} onUpdate={handleStatusUpdate} />;
+    }
+
+    return (
+      <div className={`flex items-center ${flexAlign[col.align]}`}>
+        <span className="whitespace-nowrap">{row[col.key] ?? "—"}</span>
+      </div>
+    );
   };
-
-  const columns = [
-    {
-      key: "name",
-      label: "Name",
-      width: 170,
-      align: "left",
-      headerAlign: "left",
-      render: (val, row) => {
-        const imageSrc =
-          row?.image && row.image.trim() !== ""
-            ? row.image
-            : "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQJFYyBlkZfPY6Jb_BDM0gAW2jdMCFsYWxgeQ&s";
-        return (
-          <div className="flex items-center gap-2.5 w-full text-left">
-            <img
-              src={imageSrc}
-              alt="avatar"
-              className="w-7 h-7 rounded-full object-cover shrink-0 border border-gray-100 shadow-2xs"
-            />
-            <span className="whitespace-nowrap font-normal text-gray-800">
-              {val ?? "-"}
-            </span>
-          </div>
-        );
-      },
-    },
-    {
-      key: "fromDate",
-      label: "From Date",
-      width: 120,
-      align: "center",
-      headerAlign: "center",
-      render: (val) => <div className="text-center w-full">{val ?? "—"}</div>,
-    },
-    {
-      key: "toDate",
-      label: "To Date",
-      width: 120,
-      align: "center",
-      headerAlign: "center",
-      render: (val) => <div className="text-center w-full">{val ?? "—"}</div>,
-    },
-    {
-      key: "reason",
-      label: "Reason",
-      width: 160,
-      align: "center",
-      headerAlign: "center",
-      render: (val) => {
-        const text = (val ?? "-").toString();
-        const displayedReason =
-          text.length > 15 ? text.substring(0, 15) + "..." : text;
-
-        return (
-          <div className="flex justify-center w-full">
-            <span
-              className="truncate block text-center cursor-default text-gray-600"
-              title={text}
-            >
-              {displayedReason}
-            </span>
-          </div>
-        );
-      },
-    },
-    {
-      key: "status",
-      label: "Status",
-      width: 120,
-      align: "center",
-      headerAlign: "center",
-      render: (val) => {
-        const status = val ?? "";
-        const displayedStatus =
-          status.length > 10 ? status.substring(0, 10) + "..." : status;
-
-        return (
-          <div className="flex justify-center w-full">
-            <span
-              title={status}
-              className={`px-3 py-1 rounded-full text-[11px] font-normal whitespace-nowrap inline-block max-w-[100px] text-center ${getStatusColor(
-                status,
-              )}`}
-            >
-              {displayedStatus}
-            </span>
-          </div>
-        );
-      },
-    },
-    {
-      key: "action",
-      label: "Action",
-      width: 80,
-      align: "center",
-      headerAlign: "center",
-      render: (_, row) => (
-        <ActionMenuPortal row={row} onUpdate={handleStatusUpdate} />
-      ),
-    },
-  ];
 
   return (
     <div className="flex-1 grid grid-cols-1 gap-4 px-4 pb-4 bg-[#f9fafb] rounded-xl w-full mx-auto">
+      <Toaster position="top-right" />
+
       {/* Top Header Filter Bar */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <h3 className="text-base font-medium text-gray-800">
@@ -365,15 +386,87 @@ export default function WfhTab() {
 
       {/* Table Content & Spinner */}
       {loading ? (
-        <div className="flex justify-center py-12">
-          <div className="w-10 h-10 border-4 border-blue-500 border-dashed rounded-full animate-spin" />
+        <div className="flex flex-col items-center justify-center py-20 text-gray-400 text-[12px]">
+          <div className="w-6 h-6 border-2 border-gray-200 border-t-black rounded-full animate-spin mb-2" />
+          <span>Loading WFH requests...</span>
         </div>
       ) : (
-        <UniversalTable
-          columns={columns}
-          data={filteredData}
-          rowsPerPage={10}
-        />
+        <>
+          <div className="w-full overflow-x-auto border border-gray-100 rounded-xl bg-white">
+            <table className="w-full table-fixed border-collapse min-w-[800px] font-['Poppins']">
+              <colgroup>
+                {columns.map((col) => (
+                  <col key={col.key} style={{ width: col.width }} />
+                ))}
+              </colgroup>
+              <thead className="bg-[#f9f9f9]">
+                <tr>
+                  {columns.map((col) => (
+                    <th
+                      key={col.key}
+                      className={`${cellBase} ${textAlign[col.align]} text-[12px] font-semibold text-gray-600`}
+                    >
+                      {col.label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {pagedData.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={columns.length}
+                      className="py-12 text-center text-[12px] text-gray-400"
+                    >
+                      No WFH requests found
+                    </td>
+                  </tr>
+                ) : (
+                  pagedData.map((row) => (
+                    <tr
+                      key={row.id}
+                      className="border-t border-gray-100 hover:bg-gray-50"
+                    >
+                      {columns.map((col) => (
+                        <td
+                          key={col.key}
+                          className={`${cellBase} ${textAlign[col.align]} text-[12px] text-gray-800`}
+                        >
+                          {renderCell(col, row)}
+                        </td>
+                      ))}
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* PAGINATION */}
+          {filteredData.length > ROWS_PER_PAGE && (
+            <div className="flex items-center justify-between text-[12px] text-gray-500">
+              <span>
+                Page {currentPage} of {totalPages}
+              </span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="p-1.5 border border-gray-200 rounded-lg disabled:opacity-40"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+                <button
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className="p-1.5 border border-gray-200 rounded-lg disabled:opacity-40"
+                >
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

@@ -43,20 +43,9 @@ const formatExactTime12h = (isoString) => {
   }
 };
 
-// Returns the first usable value; unwraps SQL nullable objects like { Valid, String }
-const pick = (...vals) => {
-  for (const v of vals) {
-    if (v === undefined || v === null || v === "") continue;
-    if (typeof v === "object") {
-      if (v.Valid) {
-        const inner = v.String ?? v.Int64 ?? v.Int32;
-        if (inner !== undefined && inner !== "") return inner;
-      }
-      continue;
-    }
-    return v;
-  }
-  return "N/A";
+const getCleanDocType = (file) => {
+  if (file.document_type?.includes("pdf")) return "PDF";
+  return "IMG";
 };
 
 const ViewClaimModal = ({
@@ -74,17 +63,19 @@ const ViewClaimModal = ({
     }
   }, [open, data]);
 
+  // Close with the Escape key (blocked while submitting)
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e) => {
+      if (e.key === "Escape" && !submitting && onClose) onClose();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open, submitting, onClose]);
+
   if (!open || !data) return null;
 
-  // Uncomment to see the exact keys your row object has:
-  // console.log("CLAIM DATA:", data);
-
   const status = data.status ? data.status.toLowerCase() : "pending";
-
-  const getCleanDocType = (file) => {
-    if (file.document_type?.includes("pdf")) return "PDF";
-    return "IMG";
-  };
 
   // Button Visibility Controls
   const showRemarksInput =
@@ -115,10 +106,14 @@ const ViewClaimModal = ({
     ? data.amountDisplay
     : `₹ ${(data.amount || 0).toLocaleString("en-IN")}`;
 
+  const handleClose = () => {
+    if (!submitting && onClose) onClose();
+  };
+
   return (
     <div
       className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm font-poppins text-[12px]"
-      onClick={onClose}
+      onClick={handleClose}
     >
       <div
         className="bg-white w-[95%] max-w-[820px] rounded-[2rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] border border-white/20"
@@ -142,7 +137,12 @@ const ViewClaimModal = ({
               </p>
             </div>
           </div>
-          <button type="button" onClick={onClose}>
+          <button
+            type="button"
+            onClick={handleClose}
+            aria-label="Close"
+            disabled={submitting}
+          >
             <X size={20} />
           </button>
         </div>
@@ -169,7 +169,7 @@ const ViewClaimModal = ({
               />
             </div>
 
-            {(data.employee_phno || data.employee_phno) && (
+            {data.employee_phno && (
               <div>
                 <label className={labelCls}>Phone</label>
                 <input
@@ -301,7 +301,7 @@ const ViewClaimModal = ({
             <div className="flex gap-3">
               <button
                 type="button"
-                onClick={onClose}
+                onClick={handleClose}
                 disabled={submitting}
                 className="px-6 py-2.5 border border-gray-200 text-gray-600 hover:bg-gray-50 rounded-2xl disabled:opacity-60 transition-colors"
               >
@@ -312,7 +312,9 @@ const ViewClaimModal = ({
                 <button
                   type="button"
                   disabled={submitting}
-                  onClick={() => onStatusUpdate(data.id, "Rejected")}
+                  onClick={() =>
+                    onStatusUpdate(data.id, "Rejected", remarks.trim())
+                  }
                   className="px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-2xl disabled:opacity-60 transition-colors"
                 >
                   {submitting && spinner}
@@ -324,7 +326,9 @@ const ViewClaimModal = ({
                 <button
                   type="button"
                   disabled={submitting}
-                  onClick={() => onStatusUpdate(data.id, "Approved")}
+                  onClick={() =>
+                    onStatusUpdate(data.id, "Approved", remarks.trim())
+                  }
                   className="px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-2xl disabled:opacity-60 transition-colors"
                 >
                   {submitting && spinner}

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { Icon } from "@iconify/react";
-import toast from "react-hot-toast";
+import { toast } from "react-toastify";
 import { fetchUpdateDeviceStatus } from "../service/deviceService";
 
 // Helper function to extract exact API time segments into 12-hour AM/PM format

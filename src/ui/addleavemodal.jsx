@@ -4,7 +4,7 @@ import { Icon } from "@iconify/react";
 import { getAllStaff } from "../service/staffservice";
 import useLeaveStore from "../store/useleaveStore";
 import GlowButton from "../components/helpers/glowbutton";
-import { toast } from "react-hot-toast";
+import { toast } from "react-toastify";
 
 const AdminLeaveModal = ({ isOpen, onClose }) => {
   const {
@@ -89,6 +89,16 @@ const AdminLeaveModal = ({ isOpen, onClose }) => {
         leave_date: prev.leave_date.filter((_, i) => i !== index),
       };
     });
+  };
+
+  // Update one date row without mutating the existing row object
+  const updateDateRow = (index, changes) => {
+    setFormData((prev) => ({
+      ...prev,
+      leave_date: prev.leave_date.map((row, i) =>
+        i === index ? { ...row, ...changes } : row,
+      ),
+    }));
   };
 
   // Open the native date picker for a given row
@@ -176,7 +186,7 @@ const AdminLeaveModal = ({ isOpen, onClose }) => {
               Record staff absence manually
             </p>
           </div>
-          <button onClick={handleClose}>
+          <button type="button" onClick={handleClose}>
             <X size={20} />
           </button>
         </div>
@@ -210,10 +220,10 @@ const AdminLeaveModal = ({ isOpen, onClose }) => {
               value={formData.leave_policy}
               disabled={!formData.employeeUuid || fetchingPolicies}
               onChange={(e) =>
-                setFormData({
-                  ...formData,
+                setFormData((prev) => ({
+                  ...prev,
                   leave_policy: Number(e.target.value),
-                })
+                }))
               }
               className="w-full border p-3 rounded-2xl disabled:bg-gray-50 disabled:text-gray-400"
             >
@@ -265,11 +275,9 @@ const AdminLeaveModal = ({ isOpen, onClose }) => {
                       type="date"
                       value={row.date}
                       onClick={(e) => e.target.showPicker?.()}
-                      onChange={(e) => {
-                        const newDates = [...formData.leave_date];
-                        newDates[index].date = e.target.value;
-                        setFormData({ ...formData, leave_date: newDates });
-                      }}
+                      onChange={(e) =>
+                        updateDateRow(index, { date: e.target.value })
+                      }
                       className="bg-transparent outline-none font-medium cursor-pointer [&::-webkit-calendar-picker-indicator]:hidden"
                     />
                   </div>
@@ -280,14 +288,12 @@ const AdminLeaveModal = ({ isOpen, onClose }) => {
                         type="checkbox"
                         className="accent-black w-4 h-4 rounded"
                         checked={row.half_day}
-                        onChange={(e) => {
-                          const newDates = [...formData.leave_date];
-                          newDates[index].half_day = e.target.checked;
-                          newDates[index].half_day_type = e.target.checked
-                            ? 1
-                            : 0;
-                          setFormData({ ...formData, leave_date: newDates });
-                        }}
+                        onChange={(e) =>
+                          updateDateRow(index, {
+                            half_day: e.target.checked,
+                            half_day_type: e.target.checked ? 1 : 0,
+                          })
+                        }
                       />
                       Half Day
                     </label>
@@ -374,7 +380,7 @@ const AdminLeaveModal = ({ isOpen, onClose }) => {
               rows="3"
               value={formData.reason}
               onChange={(e) =>
-                setFormData({ ...formData, reason: e.target.value })
+                setFormData((prev) => ({ ...prev, reason: e.target.value }))
               }
               placeholder="Personal work..."
               className="w-full border p-3 rounded-2xl"

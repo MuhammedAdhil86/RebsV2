@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { X, Clock, AlertCircle, CheckCircle2 } from "lucide-react";
-import toast from "react-hot-toast";
+import { toast } from "react-toastify";
 
 import { addregularize } from "../service/employeeService";
 

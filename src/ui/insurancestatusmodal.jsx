@@ -7,7 +7,7 @@ import {
   XCircle,
   UserCheck,
 } from "lucide-react";
-import toast from "react-hot-toast";
+import { toast } from "react-toastify";
 import { patchInsuranceClaimDecision } from "../service/insuranceservice";
 
 const formatExactTime12h = (isoString) => {

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { Link, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { Settings } from "lucide-react";
 import { Icon } from "@iconify/react";
+import { toast } from "react-toastify";
 import rebsLogo from "../assets/img/Picture1.png";
 import { useAuthStore } from "../store/authStore"; // Zustand store
 
@@ -205,11 +206,33 @@ function SideBar({ isCollapsed, toggleSidebar }) {
 
   // Logout via API: waits for POST /staff/logout, then clears the session
   // and redirects. The store clears local state even if the API call fails.
+  // A react-toastify toast shows progress and the result.
   const handleLogoutClick = async () => {
     if (isProcessing) return; // prevent double clicks
-    await logout(); // 1. Calls the logout API + purges auth credentials via Zustand
+
+    const tid = toast.loading("Logging out...");
+    let failed = false;
+
+    try {
+      await logout(); // 1. Calls the logout API + purges auth credentials via Zustand
+    } catch (err) {
+      failed = true;
+      console.warn("Logout API failed, session cleared locally:", err);
+    }
+
     localStorage.removeItem(LAST_PATH_KEY); // 2. Forget the saved page
     navigate("/", { replace: true }); // 3. Go to root & drop the previous history entry
+
+    // 4. Turn the loading toast into the final one (stays visible on the login page)
+    toast.update(tid, {
+      render: failed ? "Logged out" : "Logged out successfully",
+      type: failed ? "info" : "success",
+      isLoading: false,
+      autoClose: 3000,
+      closeOnClick: true,
+      closeButton: true,
+      draggable: true,
+    });
   };
 
   return (

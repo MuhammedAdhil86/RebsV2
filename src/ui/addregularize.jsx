@@ -4,7 +4,7 @@ import { Icon } from "@iconify/react";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { format, isValid } from "date-fns";
-import toast from "react-hot-toast";
+import { toast } from "react-toastify";
 
 import axiosInstance from "../service/axiosinstance";
 import { getStaffDetails } from "../service/employeeService";
