@@ -1,19 +1,20 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   FiChevronLeft,
   FiChevronRight,
   FiClock,
   FiCoffee,
   FiPlus,
-  FiX,
-  FiCalendar,
+  FiChevronDown,
+  FiRefreshCw,
   FiAlertCircle,
   FiMoon,
 } from "react-icons/fi";
+import { Icon } from "@iconify/react";
 import { fetchEmployeeShifts } from "../../service/employeeService";
 import { fetchShifts, allocateShift } from "../../service/policiesService";
-import CustomSelect from "../../ui/customselect";
-import toast, { Toaster } from "react-hot-toast";
+import { fetchShiftMappedPolicies } from "../../service/companyService";
+import { toast } from "react-toastify"; // uses the global <ToastContainer /> from App.jsx
 
 // Format a Date as YYYY-MM-DD using LOCAL time (no timezone shift)
 const formatDate = (d) =>
@@ -39,17 +40,435 @@ const getChipColor = (label = "") => {
   return CHIP_COLORS[hash % CHIP_COLORS.length];
 };
 
-// Pull the exact message the backend sent (handles the common response shapes)
+// Pull the exact message the backend sent (handles the common response shapes).
+// If the response has both a message and a detail string in `data`, show both:
+// { message: "Failed to upsert shift allocation", data: "at least one policy_id is required" }
 const getBackendMessage = (error) => {
   const data = error?.response?.data;
   if (typeof data === "string" && data.trim()) return data;
-  return (
+
+  const main =
     data?.message ||
     data?.error ||
     data?.detail ||
     data?.errors?.[0]?.message ||
     error?.message ||
-    ""
+    "";
+  const detail =
+    typeof data?.data === "string" && data.data.trim() ? data.data.trim() : "";
+
+  if (main && detail && !main.includes(detail)) return `${main}: ${detail}`;
+  return main || detail;
+};
+
+// A mapped policy's id (some APIs call it policy_id)
+const policyId = (p) => p?.id ?? p?.policy_id;
+
+/* ================= Sub-components ================= */
+function Modal({
+  title,
+  subtitle,
+  icon,
+  onClose,
+  width = "340px",
+  footer,
+  children,
+}) {
+  return (
+    <div
+      className="fixed inset-0 bg-black/30 flex items-center justify-center z-[9999] p-4"
+      onClick={onClose}
+    >
+      <div
+        style={{ width }}
+        onClick={(e) => e.stopPropagation()}
+        className="bg-white rounded-2xl shadow-2xl max-w-full max-h-[92vh] flex flex-col animate-in fade-in zoom-in duration-200"
+      >
+        {/* Header */}
+        <div className="flex items-start justify-between gap-3 px-6 pt-5 pb-4 border-b border-gray-100">
+          <div className="flex items-start gap-3">
+            {icon && (
+              <span className="p-2 bg-slate-100 rounded-lg">
+                <Icon icon={icon} className="w-5 h-5 text-black" />
+              </span>
+            )}
+            <div>
+              <h3 className="text-[16px] text-gray-900">{title}</h3>
+              {subtitle && (
+                <p className="text-[11px] text-gray-500 mt-0.5">{subtitle}</p>
+              )}
+            </div>
+          </div>
+          <button
+            type="button"
+            aria-label="Close"
+            className="text-gray-400 hover:text-black transition-colors"
+            onClick={onClose}
+          >
+            <Icon icon="material-symbols:close" className="w-6 h-6" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="px-6 py-5 overflow-y-auto">{children}</div>
+
+        {/* Footer */}
+        {footer && (
+          <div className="px-6 py-4 border-t border-gray-100 bg-slate-50/60 rounded-b-2xl">
+            {footer}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DateField({ label, value, onChange, min }) {
+  const inputRef = useRef(null);
+
+  const openPicker = () => {
+    const el = inputRef.current;
+    if (!el) return;
+    try {
+      el.showPicker();
+    } catch {
+      el.focus();
+    }
+  };
+
+  return (
+    <div>
+      <label className="text-[11px] text-gray-500 block mb-1.5">{label}</label>
+      <div className="relative">
+        <input
+          ref={inputRef}
+          type="date"
+          value={value}
+          min={min}
+          onChange={(e) => onChange(e.target.value)}
+          onClick={openPicker}
+          className="w-full bg-slate-50 border border-gray-200 rounded-lg pl-3 pr-9 py-2 text-xs text-gray-700 cursor-pointer focus:bg-white focus:border-gray-900 focus:outline-none transition-all [&::-webkit-calendar-picker-indicator]:hidden"
+        />
+        <button
+          type="button"
+          onClick={openPicker}
+          tabIndex={-1}
+          aria-label={`Open ${label} calendar`}
+          className="absolute right-2.5 top-1/2 -translate-y-1/2"
+        >
+          <Icon icon="solar:calendar-outline" className="w-4 h-4 text-black" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Update Shift modal (opened by the Allocate button)
+// ---------------------------------------------------------------------------
+const UpdateShiftModal = ({
+  shifts,
+  employeeUUID,
+  currentShift,
+  onClose,
+  onAllocated,
+}) => {
+  const [selectedShiftId, setSelectedShiftId] = useState("");
+  const [shiftFrom, setShiftFrom] = useState(formatDate(new Date()));
+  const [shiftTo, setShiftTo] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  // Mapped policies for the chosen shift
+  const [mappedPolicies, setMappedPolicies] = useState([]);
+  const [selectedPolicyIds, setSelectedPolicyIds] = useState([]);
+  const [policiesLoading, setPoliciesLoading] = useState(false);
+  const [policiesError, setPoliciesError] = useState(false);
+  const [policyReloadKey, setPolicyReloadKey] = useState(0);
+
+  // Policy cache: shift_id -> policies, plus in-flight requests
+  const policyCache = useRef({});
+  const policyInflight = useRef({});
+
+  const getPolicies = (shiftId) => {
+    if (policyCache.current[shiftId]) {
+      return Promise.resolve(policyCache.current[shiftId]);
+    }
+    if (!policyInflight.current[shiftId]) {
+      policyInflight.current[shiftId] = fetchShiftMappedPolicies(shiftId)
+        .then((res) => {
+          // Accept an array or { data: [...] }
+          const list = Array.isArray(res)
+            ? res
+            : Array.isArray(res?.data)
+              ? res.data
+              : [];
+          policyCache.current[shiftId] = list;
+          return list;
+        })
+        .finally(() => {
+          delete policyInflight.current[shiftId];
+        });
+    }
+    return policyInflight.current[shiftId];
+  };
+
+  /* ---------- Prefetch every shift's policies when the modal opens ---------- */
+  useEffect(() => {
+    shifts.forEach((s) => {
+      getPolicies(s.id).catch(() => {});
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shifts]);
+
+  /* ---------- Show mapped policies instantly when the shift changes ---------- */
+  useEffect(() => {
+    setPoliciesError(false);
+
+    if (!selectedShiftId) {
+      setMappedPolicies([]);
+      setSelectedPolicyIds([]);
+      return;
+    }
+
+    // Already cached (prefetched or opened before): show with no delay
+    const cached = policyCache.current[selectedShiftId];
+    if (cached) {
+      setMappedPolicies(cached);
+      setSelectedPolicyIds(cached.map(policyId));
+      setPoliciesLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setSelectedPolicyIds([]);
+    setPoliciesLoading(true);
+
+    getPolicies(selectedShiftId)
+      .then((policies) => {
+        if (cancelled) return;
+        setMappedPolicies(policies);
+        setSelectedPolicyIds(policies.map(policyId));
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        console.error("Mapped policies request failed:", err);
+        setMappedPolicies([]);
+        setPoliciesError(true);
+      })
+      .finally(() => {
+        if (!cancelled) setPoliciesLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedShiftId, policyReloadKey]);
+
+  const togglePolicy = (id) => {
+    setSelectedPolicyIds((prev) =>
+      prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id],
+    );
+  };
+
+  const handleAllocate = async () => {
+    if (!selectedShiftId || !shiftFrom) {
+      toast.error("Please select shift and Effective From date.");
+      return;
+    }
+    if (shiftTo && shiftTo < shiftFrom) {
+      toast.error("Effective To cannot be before Effective From.");
+      return;
+    }
+    if (policiesLoading) {
+      toast.error("Policies are still loading. Please wait a moment.");
+      return;
+    }
+    if (policiesError) {
+      toast.error("Could not load policies. Press Retry and try again.");
+      return;
+    }
+    if (selectedPolicyIds.length === 0) {
+      toast.error(
+        mappedPolicies.length > 0
+          ? "Select at least one policy."
+          : "This shift has no policies mapped. Map a policy to it first.",
+      );
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const payload = {
+        shift_id: Number(selectedShiftId),
+        staff_id: employeeUUID,
+        from_date: `${shiftFrom}T00:00:00Z`,
+        to_date: shiftTo ? `${shiftTo}T00:00:00Z` : null,
+        policy_ids: selectedPolicyIds,
+      };
+
+      await allocateShift(payload);
+      toast.success("Shift updated successfully!");
+      onAllocated?.();
+      onClose();
+    } catch (error) {
+      toast.error(getBackendMessage(error) || "Failed to update shift");
+      console.error("Allocation Error Details:", error?.response?.data);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal
+      title="Update Shift"
+      subtitle="Choose the shift and policies, then press Allocate."
+      icon="solar:clock-circle-outline"
+      width="460px"
+      onClose={onClose}
+      footer={
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg text-[12px] font-normal text-gray-600 bg-white hover:bg-gray-50 active:bg-gray-100 transition-all cursor-pointer"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleAllocate}
+            disabled={saving || policiesLoading}
+            className={`flex items-center gap-2 bg-black text-white px-4 py-2 rounded-lg text-[12px] font-normal hover:bg-gray-800 transition-all shadow-sm cursor-pointer ${
+              saving || policiesLoading ? "opacity-50 cursor-not-allowed" : ""
+            }`}
+          >
+            <Icon icon="solar:check-circle-outline" className="w-4 h-4" />
+            {saving ? "Saving..." : "Allocate"}
+          </button>
+        </div>
+      }
+    >
+      <div className="space-y-5">
+        {/* Current shift */}
+        <div className="flex items-center justify-between bg-slate-50 rounded-lg px-3 py-2.5">
+          <span className="text-[11px] text-gray-500">Current shift</span>
+          <span className="text-xs text-gray-900 bg-white border border-gray-200 rounded-full px-2.5 py-0.5">
+            {currentShift || "Not assigned"}
+          </span>
+        </div>
+
+        {/* Shift */}
+        <div>
+          <label className="text-[11px] text-gray-500 block mb-1.5">
+            Select target Shift
+          </label>
+          <div className="relative">
+            <select
+              value={selectedShiftId}
+              onChange={(e) =>
+                setSelectedShiftId(e.target.value ? Number(e.target.value) : "")
+              }
+              className="w-full bg-slate-50 border border-gray-200 rounded-lg pl-3 pr-10 py-2 text-xs appearance-none text-gray-700 focus:bg-white focus:border-gray-900 focus:ring-1 focus:ring-gray-900 focus:outline-none transition-all"
+            >
+              <option value="">Choose Shift Definition</option>
+              {shifts.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.shift_name}
+                </option>
+              ))}
+            </select>
+            <FiChevronDown
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+              size={14}
+            />
+          </div>
+        </div>
+
+        {/* Mapped policies */}
+        {selectedShiftId && (
+          <div>
+            <label className="text-[11px] text-gray-500 mb-1.5 flex items-center gap-1">
+              <Icon icon="solar:shield-check-outline" className="w-3.5 h-3.5" />
+              Apply Policies
+            </label>
+
+            {policiesLoading ? (
+              <div className="flex items-center gap-1.5 text-[11px] text-gray-400">
+                <FiRefreshCw size={11} className="animate-spin" />
+                Loading policies...
+              </div>
+            ) : policiesError ? (
+              <div className="flex items-center gap-2 text-[11px] text-gray-500">
+                Could not load policies
+                <button
+                  type="button"
+                  onClick={() => {
+                    delete policyCache.current[selectedShiftId];
+                    setPolicyReloadKey((k) => k + 1);
+                  }}
+                  className="underline"
+                >
+                  Retry
+                </button>
+              </div>
+            ) : mappedPolicies.length === 0 ? (
+              <span className="text-[11px] text-gray-400 italic">
+                No policies mapped to this shift
+              </span>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {mappedPolicies.map((p) => {
+                  const active = selectedPolicyIds.includes(policyId(p));
+                  return (
+                    <button
+                      key={policyId(p)}
+                      type="button"
+                      onClick={() => togglePolicy(policyId(p))}
+                      aria-pressed={active}
+                      title={p.code}
+                      className={`inline-flex items-center gap-1 px-2 py-1 rounded border text-[10px] transition-colors ${
+                        active
+                          ? "bg-gray-900 text-white border-gray-900"
+                          : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
+                      }`}
+                    >
+                      {active && (
+                        <Icon
+                          icon="material-symbols:check"
+                          className="w-3 h-3"
+                        />
+                      )}
+                      {p.name}
+                      <span
+                        className={active ? "text-gray-300" : "text-gray-400"}
+                      >
+                        ({p.code})
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Dates */}
+        <div className="grid grid-cols-2 gap-3">
+          <DateField
+            label="From Date"
+            value={shiftFrom}
+            onChange={setShiftFrom}
+          />
+          <DateField
+            label="To Date (optional)"
+            value={shiftTo}
+            min={shiftFrom || undefined}
+            onChange={setShiftTo}
+          />
+        </div>
+      </div>
+    </Modal>
   );
 };
 
@@ -68,9 +487,6 @@ const ManageShiftTab = ({ employeeUUID }) => {
 
   // --- Modal & Allocation States ---
   const [showShiftModal, setShowShiftModal] = useState(false);
-  const [selectedShiftId, setSelectedShiftId] = useState("");
-  const [shiftFrom, setShiftFrom] = useState(formatDate(new Date()));
-  const [shiftTo, setShiftTo] = useState("");
 
   const scheduledDays = Object.keys(shifts).length;
   const hasData = scheduledDays > 0;
@@ -128,61 +544,27 @@ const ManageShiftTab = ({ employeeUUID }) => {
   }, [employeeUUID, viewDate]);
 
   // --- Load master shift list for dropdown ---
-  useEffect(() => {
-    const getShiftsList = async () => {
-      try {
-        const data = await fetchShifts();
-        setAvailableShifts(data || []);
-      } catch (error) {
-        toast.error(getBackendMessage(error));
-      }
-    };
-    getShiftsList();
+  const getShiftsList = useCallback(async () => {
+    try {
+      const res = await fetchShifts();
+      // Accept either the array itself or { status_code, message, data: [...] }
+      const list = Array.isArray(res) ? res : res?.data;
+      setAvailableShifts(Array.isArray(list) ? list : []);
+    } catch (error) {
+      toast.error(getBackendMessage(error));
+    }
   }, []);
+
+  useEffect(() => {
+    getShiftsList();
+  }, [getShiftsList]);
 
   // Reload whenever the employee OR the viewed month changes
   useEffect(() => {
     loadShifts();
   }, [loadShifts]);
 
-  // --- Allocation handler ---
-  const handleSaveAllocation = async () => {
-    if (!selectedShiftId || !shiftFrom) {
-      toast.error("Please select shift and Effective From date.");
-      return;
-    }
-
-    try {
-      const toFullISO = (dateStr) => {
-        if (!dateStr) return null;
-        return new Date(dateStr).toISOString();
-      };
-
-      const payload = {
-        shift_id: Number(selectedShiftId),
-        staff_id: employeeUUID,
-        from_date: toFullISO(shiftFrom),
-        to_date: shiftTo ? toFullISO(shiftTo) : null,
-      };
-
-      await allocateShift(payload);
-      toast.success("Shift allocated successfully!");
-      setShowShiftModal(false);
-      setSelectedShiftId("");
-      setShiftTo("");
-      loadShifts(); // Refresh calendar for the viewed month
-    } catch (error) {
-      toast.error(getBackendMessage(error));
-      console.error("Allocation Error Details:", error.response?.data);
-    }
-  };
-
   // --- Calendar helpers ---
-  const shiftOptions = availableShifts.map((s) => ({
-    label: s.shift_name,
-    value: s.id,
-  }));
-
   const prevMonth = () =>
     setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() - 1, 1));
   const nextMonth = () =>
@@ -369,13 +751,11 @@ const ManageShiftTab = ({ employeeUUID }) => {
       className="bg-white border border-gray-100 rounded-2xl shadow-xl font-normal"
       style={{ fontFamily: "'Poppins', sans-serif" }}
     >
-      <Toaster position="top-right" />
-
       {/* --- HEADER --- */}
       <div className="px-6 py-5 border-b border-gray-100 flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <div className="w-11 h-11 rounded-xl bg-black text-white flex items-center justify-center">
-            <FiCalendar size={20} />
+            <Icon icon="solar:calendar-outline" className="w-4 h-4" />
           </div>
           <div>
             <h3 className="text-xl text-gray-900 leading-tight">
@@ -438,7 +818,10 @@ const ManageShiftTab = ({ employeeUUID }) => {
 
       {!loading && !errorMessage && !hasData && (
         <div className="mx-6 mt-5 flex items-center gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
-          <FiCalendar size={18} className="text-gray-400 shrink-0" />
+          <Icon
+            icon="solar:calendar-outline"
+            className="w-4 h-4 text-gray-400 shrink-0"
+          />
           <p className="text-[12px] text-gray-600">
             No data available for{" "}
             {viewDate.toLocaleString("default", {
@@ -472,67 +855,15 @@ const ManageShiftTab = ({ employeeUUID }) => {
         </div>
       </div>
 
-      {/* --- ALLOCATION MODAL --- */}
+      {/* --- UPDATE SHIFT MODAL (Allocate button) --- */}
       {showShiftModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] backdrop-blur-[2px]">
-          <div className="bg-white rounded-2xl shadow-2xl p-6 w-[360px] animate-in fade-in zoom-in duration-200">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-gray-900 text-[16px]">Allocate New Shift</h3>
-              <button
-                onClick={() => setShowShiftModal(false)}
-                className="text-gray-400 hover:text-black transition-colors"
-              >
-                <FiX size={20} />
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="text-[11px] text-gray-400 uppercase tracking-wider block mb-1.5">
-                  Select Shift
-                </label>
-                <CustomSelect
-                  value={selectedShiftId}
-                  options={shiftOptions}
-                  onChange={(val) => setSelectedShiftId(Number(val))}
-                  minWidth={312}
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[11px] text-gray-400 uppercase tracking-wider block mb-1.5">
-                    From Date
-                  </label>
-                  <input
-                    type="date"
-                    value={shiftFrom}
-                    onChange={(e) => setShiftFrom(e.target.value)}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none bg-gray-50 focus:border-black transition-colors"
-                  />
-                </div>
-                <div>
-                  <label className="text-[11px] text-gray-400 uppercase tracking-wider block mb-1.5">
-                    To (Optional)
-                  </label>
-                  <input
-                    type="date"
-                    value={shiftTo}
-                    onChange={(e) => setShiftTo(e.target.value)}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none bg-gray-50 focus:border-black transition-colors"
-                  />
-                </div>
-              </div>
-
-              <button
-                onClick={handleSaveAllocation}
-                className="bg-black text-white w-full py-3 rounded-lg mt-4 text-[11px] uppercase tracking-widest hover:bg-gray-800 transition-all shadow-lg active:scale-95"
-              >
-                Confirm Allocation
-              </button>
-            </div>
-          </div>
-        </div>
+        <UpdateShiftModal
+          shifts={availableShifts}
+          employeeUUID={employeeUUID}
+          currentShift={shifts[todayKey]?.shift_type || ""}
+          onClose={() => setShowShiftModal(false)}
+          onAllocated={loadShifts} // refresh the calendar
+        />
       )}
     </div>
   );

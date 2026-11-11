@@ -1,12 +1,11 @@
 import React, { useState } from "react";
-import { ChevronLeft, Palmtree } from "lucide-react";
+import { ChevronLeft, Palmtree, Loader2 } from "lucide-react";
 import payrollService from "../../../service/payrollService";
-import toast from "react-hot-toast";
+import { toast } from "react-toastify";
 
 import BasicInfoCard from "./leavepolicy/basicinfocard";
 import AccrualPolicyCard from "./leavepolicy/accrualpolicycard";
 import RequestPreferencesCard from "./leavepolicy/requestpreferencecard";
-import ApplicabilityCard from "./leavepolicy/applicabiltycard";
 
 export const globalFont = "font-['Poppins'] font-normal text-[12px]";
 export const labelClass = `${globalFont} text-gray-700 mb-1.5 block`;
@@ -42,6 +41,26 @@ export const RadioRow = ({ label, checked, onClick }) => (
   </div>
 );
 
+/* Toggle switch (used for Company Default) */
+export const Switch = ({ value, onChange, label }) => (
+  <button
+    type="button"
+    role="switch"
+    aria-checked={value}
+    aria-label={label}
+    onClick={() => onChange(!value)}
+    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900 focus-visible:ring-offset-2 ${
+      value ? "bg-black" : "bg-gray-300"
+    }`}
+  >
+    <span
+      className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
+        value ? "translate-x-6" : "translate-x-1"
+      }`}
+    />
+  </button>
+);
+
 /* ---------- Backend error helpers ---------- */
 
 // Finds the backend body ({ status_code, message, data }) from any error shape:
@@ -69,7 +88,6 @@ const showBackendError = (body, fallback) => {
         </div>
       )}
     </div>,
-    { duration: 6000 },
   );
 };
 
@@ -82,6 +100,7 @@ const CreateLeavePolicyTab = ({ onClose }) => {
     leave_type: "Paid",
     color: "#00AEEF",
     description: "",
+    company_default: false,
     accrual_method: "monthly",
     employee_accrues: 0,
     prorate_for_new_joiners: true,
@@ -102,18 +121,24 @@ const CreateLeavePolicyTab = ({ onClose }) => {
     allow_future_leave: false,
     future_leave_limit: null,
     is_active: true,
-    Criteria: { allocate_all: true },
   });
 
   const handleChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleCriteriaChange = (newCriteria) => {
-    setFormData((prev) => ({ ...prev, Criteria: newCriteria }));
-  };
-
   const handleSubmit = async () => {
+    if (loading) return;
+
+    if (!formData.name?.trim()) {
+      toast.error("Please enter a policy name");
+      return;
+    }
+    if (!formData.code?.trim()) {
+      toast.error("Please enter a policy code");
+      return;
+    }
+
     try {
       setLoading(true);
 
@@ -122,6 +147,7 @@ const CreateLeavePolicyTab = ({ onClose }) => {
 
       const requestBody = {
         ...rest,
+        company_default: Boolean(formData.company_default),
         employee_accrues: Number(formData.employee_accrues || 0),
         postpone_accrual_value: Number(formData.postpone_accrual_value || 0),
         carry_forward_limit: Number(formData.carry_forward_limit || 0),
@@ -142,7 +168,6 @@ const CreateLeavePolicyTab = ({ onClose }) => {
       // 2. LOG THE PAYLOAD
       console.log("-----------------------------------------");
       console.log("FINAL PAYLOAD TO SEND:", requestBody);
-      console.log("CRITERIA DETAILS:", requestBody.Criteria);
       console.log("-----------------------------------------");
 
       // 3. Send to API
@@ -174,37 +199,90 @@ const CreateLeavePolicyTab = ({ onClose }) => {
     <div
       className={`w-full bg-[#F9FAFB] rounded-2xl shadow-inner ${globalFont}`}
     >
-      <div className="bg-[#F9FAFB] w-full max-w-6xl rounded-2xl shadow-2xl overflow-hidden flex flex-col ">
+      <div className="bg-[#F9FAFB] w-full max-w-6xl rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+        {/* Header */}
         <div className="flex items-center p-5 bg-white border-b border-gray-200 gap-4">
           <button
+            type="button"
+            aria-label="Back"
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600 transition-colors"
           >
             <ChevronLeft size={20} />
           </button>
-          <div className="flex items-center gap-2">
-            <Palmtree className="text-gray-800" size={20} />
-            <h2 className={`${globalFont} text-gray-800`}>
-              Create a leave policy
-            </h2>
+          <div className="flex items-center gap-3">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gray-900 text-white">
+              <Palmtree size={16} />
+            </span>
+            <div>
+              <h2 className="font-['Poppins'] text-[15px] font-semibold text-gray-900 leading-tight">
+                Create a leave policy
+              </h2>
+              <p className="text-[11px] text-gray-500">
+                Set up how this leave is earned, used and carried over.
+              </p>
+            </div>
           </div>
         </div>
 
-        <div className="p-3 overflow-y-auto grid grid-cols-2 gap-3 custom-scrollbar">
-          <BasicInfoCard formData={formData} handleChange={handleChange} />
-          <AccrualPolicyCard formData={formData} handleChange={handleChange} />
-          <RequestPreferencesCard
-            formData={formData}
-            handleChange={handleChange}
-          />
-          <ApplicabilityCard
-            criteria={formData.Criteria}
-            setCriteria={handleCriteriaChange}
-            onClose={onClose}
-            handleSubmit={handleSubmit}
-            isUpdate={false}
-            loading={loading}
-          />
+        {/* Body */}
+        <div className="p-4 overflow-y-auto custom-scrollbar space-y-4">
+          {/* Company default */}
+          <div
+            className={`${cardClass} flex items-center justify-between gap-4 transition-colors ${
+              formData.company_default ? "border-gray-900" : ""
+            }`}
+          >
+            <div>
+              <p className="font-['Poppins'] text-[13px] font-medium text-gray-900">
+                Company default
+              </p>
+              <p className="text-[11px] text-gray-500 mt-0.5">
+                Use this as the default leave policy for the company.
+              </p>
+            </div>
+            <Switch
+              label="Company default"
+              value={formData.company_default}
+              onChange={(v) => handleChange("company_default", v)}
+            />
+          </div>
+
+          {/* Cards */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+            <BasicInfoCard formData={formData} handleChange={handleChange} />
+            <AccrualPolicyCard
+              formData={formData}
+              handleChange={handleChange}
+            />
+            <div className="lg:col-span-2">
+              <RequestPreferencesCard
+                formData={formData}
+                handleChange={handleChange}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="flex justify-end gap-3 px-5 py-4 bg-white border-t border-gray-200">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={loading}
+            className="px-8 py-2.5 border border-gray-300 rounded-xl text-[12px] font-medium text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={loading}
+            className="flex items-center justify-center gap-2 px-8 py-2.5 bg-black text-white rounded-xl text-[12px] font-medium hover:bg-zinc-800 transition-all shadow-lg disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {loading && <Loader2 size={14} className="animate-spin" />}
+            {loading ? "Creating..." : "Create policy"}
+          </button>
         </div>
       </div>
     </div>

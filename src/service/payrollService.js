@@ -45,6 +45,12 @@ import {
   putUpsertLwf,
   getLwfStateRules,
   postCreateSalaryComponent,
+  getLeaveRequestConfig as getLeaveRequestConfigUrl,
+  putLeaveRequestConfig,
+  deleteLeaveRequestConfig as deleteLeaveRequestConfigUrl,
+  getEmploymentTypeLeaveConfig,
+  putEmploymentTypeLeaveConfig,
+  deleteEmploymentTypeLeaveConfig as deleteEmploymentTypeLeaveConfigUrl,
 } from "../api/api";
 
 const payrollService = {
@@ -735,6 +741,87 @@ const payrollService = {
         }
       }
       throw new Error(serverMessage || "Failed to load TDS opening balances");
+    }
+  },
+  // ---------------- LEAVE CONFIGURATION ----------------
+  getLeaveRequestConfig: async () => {
+    try {
+      const res = await axiosInstance.get(getLeaveRequestConfigUrl);
+      const data = res.data?.data;
+      return Array.isArray(data) ? data[0] || null : data || null;
+    } catch (err) {
+      console.error("Error in getLeaveRequestConfig:", err.response || err);
+      throw err;
+    }
+  },
+
+  saveLeaveRequestConfig: async (payload) => {
+    try {
+      const res = await axiosInstance.put(putLeaveRequestConfig, payload);
+      return res.data;
+    } catch (err) {
+      console.error("Error in saveLeaveRequestConfig:", err.response || err);
+      throw new Error(
+        err.response?.data?.message || "Failed to save leave request settings",
+      );
+    }
+  },
+
+  deleteLeaveRequestConfig: async () => {
+    try {
+      const res = await axiosInstance.delete(deleteLeaveRequestConfigUrl);
+      return res.data;
+    } catch (err) {
+      console.error("Error in deleteLeaveRequestConfig:", err.response || err);
+      throw err;
+    }
+  },
+
+  getEmploymentTypeLeaveConfigs: async () => {
+    try {
+      const res = await axiosInstance.get(getEmploymentTypeLeaveConfig);
+      return res.data?.data || [];
+    } catch (err) {
+      console.error(
+        "Error in getEmploymentTypeLeaveConfigs:",
+        err.response || err,
+      );
+      throw err;
+    }
+  },
+
+  saveEmploymentTypeLeaveConfig: async (payload) => {
+    // payload: { employment_type_id, can_apply_without_leave_allocation }
+    try {
+      const res = await axiosInstance.put(
+        putEmploymentTypeLeaveConfig,
+        payload,
+      );
+      return res.data;
+    } catch (err) {
+      console.error(
+        "Error in saveEmploymentTypeLeaveConfig:",
+        err.response || err,
+      );
+      throw new Error(
+        err.response?.data?.message ||
+          "Failed to save employment type settings",
+      );
+    }
+  },
+
+  deleteEmploymentTypeLeaveConfig: async (employmentTypeId) => {
+    try {
+      const res = await axiosInstance.delete(
+        `${deleteEmploymentTypeLeaveConfigUrl}/${employmentTypeId}`,
+      );
+      return res.data;
+    } catch (err) {
+      console.error(
+        "Error in deleteEmploymentTypeLeaveConfig:",
+        err.response || err,
+      );
+      throw err;
     }
   },
 };

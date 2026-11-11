@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Icon } from "@iconify/react";
 import { Loader2, Plus } from "lucide-react";
+import { toast } from "react-toastify"; // uses the global <ToastContainer /> from App.jsx
 
 import {
   addEducationDetails,
@@ -107,7 +108,7 @@ const EducationFields = ({ draft, onChange }) => (
 );
 
 /* ---------- MAIN COMPONENT ---------- */
-const EducationalDetailsSection = ({ employee, onSuccess, onError }) => {
+const EducationalDetailsSection = ({ employee }) => {
   const educationData = employee?.education_details || [];
   const isEmpty = educationData.length === 0;
 
@@ -163,16 +164,16 @@ const EducationalDetailsSection = ({ employee, onSuccess, onError }) => {
   /* ---------- SAVE: ADD ---------- */
   const saveNew = async () => {
     if (!employee?.id) {
-      onError?.("Cannot add: employee id is missing");
+      toast.error("Cannot add: employee id is missing");
       return false;
     }
     if (!newEntry.institution_name.trim() || !newEntry.degree.trim()) {
-      onError?.("Institution and Degree are required");
+      toast.error("Institution and Degree are required");
       return false;
     }
 
     await addEducationDetails(employee.id, newEntry);
-    onSuccess?.("Education detail added successfully");
+    toast.success("Education detail added successfully");
     return true;
   };
 
@@ -184,11 +185,11 @@ const EducationalDetailsSection = ({ employee, onSuccess, onError }) => {
       const draft = drafts[entryKey(edu, i)];
 
       if (edu.id === undefined || edu.id === null || edu.id === "") {
-        onError?.("Cannot update: education record has no id");
+        toast.error("Cannot update: education record has no id");
         return false;
       }
       if (!draft?.institution_name?.trim() || !draft?.degree?.trim()) {
-        onError?.("Institution and Degree are required");
+        toast.error("Institution and Degree are required");
         return false;
       }
     }
@@ -200,7 +201,7 @@ const EducationalDetailsSection = ({ employee, onSuccess, onError }) => {
         ...drafts[entryKey(edu, index)],
       })),
     );
-    onSuccess?.("Educational details updated successfully");
+    toast.success("Educational details updated successfully");
     return true;
   };
 
@@ -221,7 +222,7 @@ const EducationalDetailsSection = ({ employee, onSuccess, onError }) => {
       setNewEntry(EMPTY_ENTRY);
     } catch (err) {
       console.error("Error saving education:", err);
-      onError?.(
+      toast.error(
         getErrorMessage(
           err,
           mode === "add"

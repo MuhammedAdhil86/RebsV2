@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Icon } from "@iconify/react";
-import toast, { Toaster } from "react-hot-toast";
+import { toast } from "react-toastify"; // uses the global <ToastContainer /> from App.jsx
 import axiosInstance from "../../service/axiosinstance";
 
 const DependantDetailsSection = ({ employee, setEmployee }) => {
@@ -51,7 +51,10 @@ const DependantDetailsSection = ({ employee, setEmployee }) => {
 
     try {
       setLoading(true);
-      await axiosInstance.put(`/staff/updatedependantinfo/${employee.id}`, payload);
+      await axiosInstance.put(
+        `/staff/updatedependantinfo/${employee.id}`,
+        payload,
+      );
       toast.success("Dependant details updated successfully!");
 
       // Update local employee state
@@ -104,7 +107,9 @@ const DependantDetailsSection = ({ employee, setEmployee }) => {
               className="border border-gray-300 rounded px-2 py-1 w-full max-w-[180px]"
             />
           ) : (
-            <span className="text-gray-800 font-medium">{formData.dependant_name || "Not specified"}</span>
+            <span className="text-gray-800 font-medium">
+              {formData.dependant_name || "Not specified"}
+            </span>
           )}
         </div>
 
@@ -114,11 +119,15 @@ const DependantDetailsSection = ({ employee, setEmployee }) => {
             <input
               type="text"
               value={formData.dependant_relation}
-              onChange={(e) => handleChange("dependant_relation", e.target.value)}
+              onChange={(e) =>
+                handleChange("dependant_relation", e.target.value)
+              }
               className="border border-gray-300 rounded px-2 py-1 w-full max-w-[180px]"
             />
           ) : (
-            <span className="text-gray-800 font-medium">{formData.dependant_relation || "Not specified"}</span>
+            <span className="text-gray-800 font-medium">
+              {formData.dependant_relation || "Not specified"}
+            </span>
           )}
         </div>
 
@@ -128,7 +137,9 @@ const DependantDetailsSection = ({ employee, setEmployee }) => {
             <input
               type="date"
               value={formData.dependant_date_of_birth}
-              onChange={(e) => handleChange("dependant_date_of_birth", e.target.value)}
+              onChange={(e) =>
+                handleChange("dependant_date_of_birth", e.target.value)
+              }
               className="border border-gray-300 rounded px-2 py-1 w-full max-w-[180px]"
             />
           ) : (
@@ -138,8 +149,6 @@ const DependantDetailsSection = ({ employee, setEmployee }) => {
           )}
         </div>
       </div>
-
-      <Toaster />
     </div>
   );
 };

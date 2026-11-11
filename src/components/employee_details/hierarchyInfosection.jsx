@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Icon } from "@iconify/react";
 import useEmployeeStore from "../../store/employeeStore";
 import axiosInstance from "../../service/axiosinstance";
-import toast, { Toaster } from "react-hot-toast";
+import { toast } from "react-toastify"; // uses the global <ToastContainer /> from App.jsx
 
 export default function HierarchyInfoSection() {
   const { selectedEmployee, setSelectedEmployee } = useEmployeeStore();
@@ -87,7 +87,6 @@ export default function HierarchyInfoSection() {
 
   return (
     <div className="bg-white p-4 rounded-xl shadow-sm border w-full">
-      <Toaster />
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <h3 className="font-medium text-gray-800 text-[14px]">

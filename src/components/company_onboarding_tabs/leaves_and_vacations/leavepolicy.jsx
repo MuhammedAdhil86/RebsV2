@@ -17,14 +17,12 @@ import CreateLeavePolicyTab from "../leaves_and_vacations/createleavepolicymodal
 import UpdateLeavePolicyTab from "./updateleavepolicy";
 import DefaultTemplatesTable from "./leavepolicy/defaultleave";
 import BulkAllocationTab from "./leavepolicy/bulkallocationtab";
-import toast from "react-hot-toast";
+import { toast } from "react-toastify";
 
-// Shows backend "message" (bold) and "data" (below it) in the toast.
-// Pass { id: toastId } as options to replace an existing loading toast.
-const showApiError = (error, fallback, options = {}) => {
+// Builds the toast body: backend "message" (bold) and "data" (below it).
+const errorBody = (error, fallback) => {
   const res = error?.response?.data;
-
-  toast.error(
+  return (
     <div>
       <div style={{ fontWeight: 600 }}>{res?.message || fallback}</div>
       {res?.data && (
@@ -32,9 +30,34 @@ const showApiError = (error, fallback, options = {}) => {
           {typeof res.data === "string" ? res.data : JSON.stringify(res.data)}
         </div>
       )}
-    </div>,
-    { duration: 6000, ...options },
+    </div>
   );
+};
+
+// Shows an error toast. Pass a toastId to turn an existing loading toast
+// into the error instead of stacking a second one.
+const showApiError = (error, fallback, toastId) => {
+  const render = errorBody(error, fallback);
+  if (toastId && toast.isActive(toastId)) {
+    toast.update(toastId, {
+      render,
+      type: "error",
+      isLoading: false,
+      autoClose: 6000,
+    });
+  } else {
+    toast.error(render, { autoClose: 6000 });
+  }
+};
+
+// Turns an existing loading toast into a success toast.
+const finishSuccess = (toastId, message) => {
+  toast.update(toastId, {
+    render: message,
+    type: "success",
+    isLoading: false,
+    autoClose: 4000,
+  });
 };
 
 const LeavesAndVacations = () => {
@@ -79,17 +102,18 @@ const LeavesAndVacations = () => {
 
   const handleCloneTemplate = async (ids) => {
     if (!ids || ids.length === 0) return;
-    const toastId = "clone-proc";
-    toast.loading("Cloning selected policies...", { id: toastId });
+    const toastId = toast.loading("Cloning selected policies...", {
+      toastId: "clone-proc",
+    });
 
     try {
       await payrollService.cloneLeavePolicy(ids);
-      toast.success("Templates cloned successfully!", { id: toastId });
+      finishSuccess(toastId, "Templates cloned successfully!");
       setSelectedIds([]);
       setActiveTab("all_leaves");
       loadAllData();
     } catch (error) {
-      showApiError(error, "Failed to clone", { id: toastId });
+      showApiError(error, "Failed to clone", toastId);
     }
   };
 
@@ -121,12 +145,12 @@ const LeavesAndVacations = () => {
     const toastId = toast.loading("Deleting policy...");
     try {
       await payrollService.deleteLeavePolicy(selectedRow.id);
-      toast.success("Policy deleted successfully", { id: toastId });
+      finishSuccess(toastId, "Policy deleted successfully");
       setShowDeleteModal(false);
       setSelectedRow(null);
       loadAllData();
     } catch (error) {
-      showApiError(error, "Failed to delete policy", { id: toastId });
+      showApiError(error, "Failed to delete policy", toastId);
     }
   };
 

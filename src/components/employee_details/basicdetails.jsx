@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Icon } from "@iconify/react";
 import useEmployeeStore from "../../store/employeeStore";
 import axiosInstance from "../../service/axiosinstance";
-import toast from "react-hot-toast"; // uses the global <Toaster /> from App.jsx
+import { toast } from "react-toastify"; // uses the global <ToastContainer /> from App.jsx
 
 // Formats "2003-02-02T00:00:00Z" as "02 Feb 2003" (no timezone shift)
 const formatDob = (value) => {

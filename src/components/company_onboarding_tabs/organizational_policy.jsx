@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import Shifts from "./workshifts/shifts";
 import AttendancePolicy from "./workshifts/attendancepolicy";
 import LeavesAndVacations from "./leaves_and_vacations/leavepolicy";
+import LeaveConfiguration from "./leaves_and_vacations/leaveconfiguration"; // NEW
 import WeekendsAndOffDays from "./leaves_and_vacations/weeklyoff";
 
 import Holidays from "./leaves_and_vacations/holidays";
@@ -85,7 +86,13 @@ const OrganizationalPolicy = () => {
       {activeTab === "leaves-holidays" && (
         <>
           <div className="flex gap-4 border-b border-gray-200 mb-4">
-            {["Leave Policy", "WeeklyOff", "Holidays"].map((subTab) => (
+            {/* NEW: "Leave Configuration" added after "Leave Policy" */}
+            {[
+              "Leave Policy",
+              "Leave Configuration",
+              "WeeklyOff",
+              "Holidays",
+            ].map((subTab) => (
               <button
                 key={subTab}
                 onClick={() => setActiveLeaveTab(subTab)}
@@ -104,6 +111,7 @@ const OrganizationalPolicy = () => {
           </div>
           <div>
             {activeLeaveTab === "Leave Policy" && <LeavesAndVacations />}
+            {activeLeaveTab === "Leave Configuration" && <LeaveConfiguration />}
             {activeLeaveTab === "WeeklyOff" && <WeekendsAndOffDays />}
             {activeLeaveTab === "Holidays" && <Holidays />}
           </div>

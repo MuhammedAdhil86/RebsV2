@@ -1,12 +1,55 @@
 import React, { useEffect, useState } from "react";
-import { FileText, Plus, X, Download } from "lucide-react";
-import toast, { Toaster } from "react-hot-toast";
+import { FileText, Plus, X, Download, Upload } from "lucide-react";
+import { toast } from "react-toastify"; // uses the global <ToastContainer /> from App.jsx
 import useEmployeeStore from "../../store/employeeStore"; // update path if different
 import {
   fetchCategory,
   fetchAttachments,
   attachmentUpload,
 } from "../../service/mainServices"; // update path if different
+
+const inputCls =
+  "w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm text-gray-800 placeholder-gray-400 bg-white focus:outline-none focus:ring-1 focus:ring-black focus:border-black transition-colors";
+const labelCls = "block text-xs font-medium text-gray-600 mb-1.5";
+
+// Full-width select used only in this file's modal (fills its grid cell, never overflows)
+const FormSelect = ({ value, options, onChange }) => (
+  <div className="relative w-full min-w-0">
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="appearance-none w-full truncate bg-white border border-gray-300 rounded-lg pl-3 pr-9 py-2.5 text-sm text-gray-800 cursor-pointer focus:outline-none focus:ring-1 focus:ring-black focus:border-black transition-colors"
+    >
+      {options.map((opt) => (
+        <option key={opt.value} value={opt.value}>
+          {opt.label}
+        </option>
+      ))}
+    </select>
+
+    <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
+      <svg
+        className="w-3 h-3 text-gray-500"
+        viewBox="0 0 20 20"
+        fill="currentColor"
+      >
+        <path
+          fillRule="evenodd"
+          d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.08 1.04l-4.25 4.25a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z"
+          clipRule="evenodd"
+        />
+      </svg>
+    </div>
+  </div>
+);
+
+// Label + control wrapper; min-w-0 keeps children from overflowing the grid cell
+const Field = ({ label, children }) => (
+  <div className="min-w-0">
+    <label className={labelCls}>{label}</label>
+    {children}
+  </div>
+);
 
 export default function AttachmentsTab({
   attachments: initialAttachments = [],
@@ -38,7 +81,10 @@ export default function AttachmentsTab({
   const [expiryDate, setExpiryDate] = useState("");
 
   // get user's company country (same as old logic)
-  const userData = typeof window !== "undefined" ? JSON.parse(localStorage.getItem("userData") || "null") : null;
+  const userData =
+    typeof window !== "undefined"
+      ? JSON.parse(localStorage.getItem("userData") || "null")
+      : null;
   const userCountry = userData?.company?.country || "";
 
   // Fetch categories once on mount
@@ -83,7 +129,11 @@ export default function AttachmentsTab({
       setInsuranceNumber("");
     }
     // Baladiya / Driving default country to user's company country
-    if (!selected || (selected.name !== "Baladiya Card (Labour card)" && selected.name !== "Driving Licence")) {
+    if (
+      !selected ||
+      (selected.name !== "Baladiya Card (Labour card)" &&
+        selected.name !== "Driving Licence")
+    ) {
       setCountry("");
     } else {
       setCountry(userCountry || "");
@@ -151,7 +201,9 @@ export default function AttachmentsTab({
       return;
     }
 
-    const selectedCategory = categories.find((c) => `${c.id}` === `${category}`);
+    const selectedCategory = categories.find(
+      (c) => `${c.id}` === `${category}`,
+    );
 
     if (!validateForCategory(selectedCategory)) return;
 
@@ -188,7 +240,8 @@ export default function AttachmentsTab({
       // refresh attachments list
       const refreshed = await fetchAttachments(employeeUUID);
       setAttachments(refreshed || []);
-      if (typeof onUploadSuccess === "function") onUploadSuccess(refreshed || []);
+      if (typeof onUploadSuccess === "function")
+        onUploadSuccess(refreshed || []);
       clearForm();
       setIsModalOpen(false);
     } catch (err) {
@@ -216,7 +269,9 @@ export default function AttachmentsTab({
       <div className="flex flex-col items-center justify-center h-40 border rounded-md bg-gray-50 p-3">
         <FileText size={32} className="text-gray-400" />
         <p className="mt-2 text-[12px] text-gray-600">{f.name}</p>
-        <p className="text-[12px] text-gray-400">{(f.size / 1024).toFixed(2)} KB</p>
+        <p className="text-[12px] text-gray-400">
+          {(f.size / 1024).toFixed(2)} KB
+        </p>
       </div>
     );
   };
@@ -232,7 +287,11 @@ export default function AttachmentsTab({
     if (isImage) {
       return (
         <div className="relative group">
-          <img src={url} alt={attachment.title} className="w-full h-40 object-cover rounded-md border" />
+          <img
+            src={url}
+            alt={attachment.title}
+            className="w-full h-40 object-cover rounded-md border"
+          />
           <a
             href={url}
             target="_blank"
@@ -251,7 +310,12 @@ export default function AttachmentsTab({
           <div className="w-full h-40 bg-gray-50 rounded-md border flex items-center justify-center p-4">
             <FileText size={36} className="text-gray-400" />
           </div>
-          <a href={url} target="_blank" rel="noreferrer noopener" className="mt-2 text-sm text-blue-600 hover:text-blue-800 flex items-center gap-2">
+          <a
+            href={url}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="mt-2 text-sm text-blue-600 hover:text-blue-800 flex items-center gap-2"
+          >
             <Download size={14} /> View PDF
           </a>
         </div>
@@ -263,19 +327,29 @@ export default function AttachmentsTab({
         <div className="w-full h-40 bg-gray-50 rounded-md border flex items-center justify-center p-4">
           <FileText size={36} className="text-gray-400" />
         </div>
-        <a href={url} target="_blank" rel="noreferrer noopener" className="mt-2 text-sm text-blue-600 hover:text-blue-800 flex items-center gap-2">
+        <a
+          href={url}
+          target="_blank"
+          rel="noreferrer noopener"
+          className="mt-2 text-sm text-blue-600 hover:text-blue-800 flex items-center gap-2"
+        >
           <Download size={14} /> Download
         </a>
       </div>
     );
   };
 
+  const selectedCategoryName = categories.find(
+    (c) => `${c.id}` === `${category}`,
+  )?.name;
+
   return (
     <div className="bg-white rounded-xl p-6">
-      <Toaster position="top-right" />
-
       <div className="flex items-start justify-between mb-4">
-        <h2 className="text-[16px] text-gray-800" style={{ fontFamily: "'Poppins', sans-serif", fontWeight: 500 }}>
+        <h2
+          className="text-[16px] text-gray-800"
+          style={{ fontFamily: "'Poppins', sans-serif", fontWeight: 500 }}
+        >
           All Attachments
         </h2>
 
@@ -295,11 +369,12 @@ export default function AttachmentsTab({
 
       {/* Empty state */}
       {isLoading ? (
-        <div className="py-8 text-center text-gray-500">Loading attachments...</div>
+        <div className="py-8 text-center text-gray-500">
+          Loading attachments...
+        </div>
       ) : attachments.length === 0 ? (
         <div className="text-center py-10">
           <p className="text-gray-500 mb-4">No attachments available.</p>
-
         </div>
       ) : (
         <div className="space-y-4">
@@ -313,14 +388,38 @@ export default function AttachmentsTab({
                   <FileText size={24} className="text-gray-500" />
                 </div>
                 <div className="flex flex-col justify-between py-1">
-                  <p className="text-sm text-gray-800" style={{ fontFamily: "'Poppins', sans-serif", fontWeight: 400 }}>
+                  <p
+                    className="text-sm text-gray-800"
+                    style={{
+                      fontFamily: "'Poppins', sans-serif",
+                      fontWeight: 400,
+                    }}
+                  >
                     {file.title || file.name || "Untitled Document"}
                   </p>
-                  <p className="text-xs text-gray-500" style={{ fontFamily: "'Poppins', sans-serif", fontWeight: 400 }}>
-                    Category: {file.category || file.category_name || "Uncategorized"}
+                  <p
+                    className="text-xs text-gray-500"
+                    style={{
+                      fontFamily: "'Poppins', sans-serif",
+                      fontWeight: 400,
+                    }}
+                  >
+                    Category:{" "}
+                    {file.category || file.category_name || "Uncategorized"}
                   </p>
-                  <p className="text-xs text-gray-400" style={{ fontFamily: "'Poppins', sans-serif", fontWeight: 400 }}>
-                    Added: {file.created_at ? new Date(file.created_at).toLocaleDateString() : file.addedOn ? new Date(file.addedOn).toLocaleDateString() : "Unknown"}
+                  <p
+                    className="text-xs text-gray-400"
+                    style={{
+                      fontFamily: "'Poppins', sans-serif",
+                      fontWeight: 400,
+                    }}
+                  >
+                    Added:{" "}
+                    {file.created_at
+                      ? new Date(file.created_at).toLocaleDateString()
+                      : file.addedOn
+                        ? new Date(file.addedOn).toLocaleDateString()
+                        : "Unknown"}
                   </p>
                 </div>
               </div>
@@ -331,7 +430,10 @@ export default function AttachmentsTab({
                   target="_blank"
                   rel="noopener noreferrer"
                   className="px-3 py-2 bg-black text-white text-xs rounded-md hover:bg-gray-800"
-                  style={{ fontFamily: "'Poppins', sans-serif", fontWeight: 500 }}
+                  style={{
+                    fontFamily: "'Poppins', sans-serif",
+                    fontWeight: 500,
+                  }}
                 >
                   View pdf
                 </a>
@@ -343,142 +445,200 @@ export default function AttachmentsTab({
 
       {/* ----- Modal for adding attachment ----- */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-2xl bg-white rounded-xl p-6 relative shadow-lg">
-            <button
-              onClick={() => {
-                setIsModalOpen(false);
-                clearForm();
-              }}
-              className="absolute top-4 right-4 text-gray-500 hover:text-gray-800"
-            >
-              <X />
-            </button>
-
-            <h3 className="text-lg font-medium mb-4">Add Attachment</h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm text-gray-700 mb-1 block">Title</label>
-                <input
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  className="w-full border rounded-md p-2 text-sm"
-                  placeholder="Enter title"
-                />
-              </div>
-
-              <div>
-                <label className="text-sm text-gray-700 mb-1 block">Category</label>
-                <select
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
-                  className="w-full border rounded-md p-2 text-sm bg-white"
-                >
-                  <option value="">Select Category</option>
-                  {categories.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Conditional fields based on category name */}
-              {categories.find((c) => `${c.id}` === `${category}`)?.name === "Insurance" && (
-                <>
-                  <div>
-                    <label className="text-sm text-gray-700 mb-1 block">Insurance Company</label>
-                    <input value={insuranceCompany} onChange={(e) => setInsuranceCompany(e.target.value)} className="w-full border rounded-md p-2 text-sm" placeholder="Insurance company" />
-                  </div>
-
-                  <div>
-                    <label className="text-sm text-gray-700 mb-1 block">Insurance Number</label>
-                    <input value={insuranceNumber} onChange={(e) => setInsuranceNumber(e.target.value)} className="w-full border rounded-md p-2 text-sm" placeholder="Insurance number" />
-                  </div>
-
-                  <div>
-                    <label className="text-sm text-gray-700 mb-1 block">Issue Date</label>
-                    <input type="date" value={issueDate} onChange={(e) => setIssueDate(e.target.value)} className="w-full border rounded-md p-2 text-sm" />
-                  </div>
-
-                  <div>
-                    <label className="text-sm text-gray-700 mb-1 block">Expiry Date</label>
-                    <input type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} className="w-full border rounded-md p-2 text-sm" />
-                  </div>
-                </>
-              )}
-
-              {categories.find((c) => `${c.id}` === `${category}`)?.name === "Baladiya Card (Labour card)" && (
-                <>
-                  <div>
-                    <label className="text-sm text-gray-700 mb-1 block">Issued Country</label>
-                    <input value={country} onChange={(e) => setCountry(e.target.value)} className="w-full border rounded-md p-2 text-sm" placeholder="Country" />
-                  </div>
-
-                  <div>
-                    <label className="text-sm text-gray-700 mb-1 block">ID Card Number</label>
-                    <input value={baladiyaNumber} onChange={(e) => setBaladiyaNumber(e.target.value)} className="w-full border rounded-md p-2 text-sm" placeholder="Baladiya number" />
-                  </div>
-
-                  <div>
-                    <label className="text-sm text-gray-700 mb-1 block">Issue Date</label>
-                    <input type="date" value={issueDate} onChange={(e) => setIssueDate(e.target.value)} className="w-full border rounded-md p-2 text-sm" />
-                  </div>
-
-                  <div>
-                    <label className="text-sm text-gray-700 mb-1 block">Expiry Date</label>
-                    <input type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} className="w-full border rounded-md p-2 text-sm" />
-                  </div>
-                </>
-              )}
-
-              {categories.find((c) => `${c.id}` === `${category}`)?.name === "Driving Licence" && (
-                <>
-                  <div>
-                    <label className="text-sm text-gray-700 mb-1 block">Issued Country</label>
-                    <input value={country} onChange={(e) => setCountry(e.target.value)} className="w-full border rounded-md p-2 text-sm" placeholder="Country" />
-                  </div>
-
-                  <div>
-                    <label className="text-sm text-gray-700 mb-1 block">DL Number</label>
-                    <input value={dlNumber} onChange={(e) => setDLNumber(e.target.value)} className="w-full border rounded-md p-2 text-sm" placeholder="DL number" />
-                  </div>
-
-                  <div>
-                    <label className="text-sm text-gray-700 mb-1 block">Issue Date</label>
-                    <input type="date" value={issueDate} onChange={(e) => setIssueDate(e.target.value)} className="w-full border rounded-md p-2 text-sm" />
-                  </div>
-
-                  <div>
-                    <label className="text-sm text-gray-700 mb-1 block">Expiry Date</label>
-                    <input type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} className="w-full border rounded-md p-2 text-sm" />
-                  </div>
-                </>
-              )}
-
-              {/* File upload */}
-              <div className="md:col-span-2">
-                <label className="text-sm text-gray-700 mb-1 block">Upload File</label>
-                <input type="file" onChange={handleFileChange} accept="image/*,.pdf,.doc,.docx" className="w-full" />
-              </div>
-
-              {/* preview */}
-              {file && (
-                <div className="md:col-span-2">
-                  <p className="text-sm text-gray-600 mb-2">Preview:</p>
-                  {getFilePreview(file)}
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="w-full max-w-2xl max-h-[90vh] flex flex-col bg-white rounded-2xl shadow-2xl overflow-hidden">
+            {/* Header */}
+            <div className="flex items-start justify-between gap-4 px-6 py-5 border-b border-gray-100">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 shrink-0 rounded-lg bg-black text-white flex items-center justify-center">
+                  <FileText size={18} />
                 </div>
-              )}
-            </div>
+                <div className="min-w-0">
+                  <h3
+                    className="text-base text-gray-900"
+                    style={{
+                      fontFamily: "'Poppins', sans-serif",
+                      fontWeight: 500,
+                    }}
+                  >
+                    Add Attachment
+                  </h3>
+                  <p className="text-xs text-gray-500">
+                    Upload a document and choose its category
+                  </p>
+                </div>
+              </div>
 
-            <div className="mt-6 flex justify-end gap-3">
               <button
                 onClick={() => {
                   setIsModalOpen(false);
                   clearForm();
                 }}
-                className="px-4 py-2 border rounded-md hover:bg-gray-50"
+                aria-label="Close"
+                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-800 hover:bg-gray-100 transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Body (scrolls if the form gets long) */}
+            <div className="px-6 py-5 overflow-y-auto">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Field label="Title">
+                  <input
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    className={inputCls}
+                    placeholder="Enter title"
+                  />
+                </Field>
+
+                <Field label="Category">
+                  <FormSelect
+                    value={category}
+                    onChange={(val) => setCategory(val)}
+                    options={[
+                      { value: "", label: "Select Category" },
+                      ...categories.map((c) => ({
+                        value: String(c.id),
+                        label: c.name,
+                      })),
+                    ]}
+                  />
+                </Field>
+
+                {/* Conditional fields based on category name */}
+                {selectedCategoryName === "Insurance" && (
+                  <>
+                    <Field label="Insurance Company">
+                      <input
+                        value={insuranceCompany}
+                        onChange={(e) => setInsuranceCompany(e.target.value)}
+                        className={inputCls}
+                        placeholder="Insurance company"
+                      />
+                    </Field>
+                    <Field label="Insurance Number">
+                      <input
+                        value={insuranceNumber}
+                        onChange={(e) => setInsuranceNumber(e.target.value)}
+                        className={inputCls}
+                        placeholder="Insurance number"
+                      />
+                    </Field>
+                  </>
+                )}
+
+                {selectedCategoryName === "Baladiya Card (Labour card)" && (
+                  <>
+                    <Field label="Issued Country">
+                      <input
+                        value={country}
+                        onChange={(e) => setCountry(e.target.value)}
+                        className={inputCls}
+                        placeholder="Country"
+                      />
+                    </Field>
+                    <Field label="ID Card Number">
+                      <input
+                        value={baladiyaNumber}
+                        onChange={(e) => setBaladiyaNumber(e.target.value)}
+                        className={inputCls}
+                        placeholder="Baladiya number"
+                      />
+                    </Field>
+                  </>
+                )}
+
+                {selectedCategoryName === "Driving Licence" && (
+                  <>
+                    <Field label="Issued Country">
+                      <input
+                        value={country}
+                        onChange={(e) => setCountry(e.target.value)}
+                        className={inputCls}
+                        placeholder="Country"
+                      />
+                    </Field>
+                    <Field label="DL Number">
+                      <input
+                        value={dlNumber}
+                        onChange={(e) => setDLNumber(e.target.value)}
+                        className={inputCls}
+                        placeholder="DL number"
+                      />
+                    </Field>
+                  </>
+                )}
+
+                {/* Dates are shared by Insurance / Baladiya / Driving Licence */}
+                {[
+                  "Insurance",
+                  "Baladiya Card (Labour card)",
+                  "Driving Licence",
+                ].includes(selectedCategoryName) && (
+                  <>
+                    <Field label="Issue Date">
+                      <input
+                        type="date"
+                        value={issueDate}
+                        onChange={(e) => setIssueDate(e.target.value)}
+                        className={inputCls}
+                      />
+                    </Field>
+                    <Field label="Expiry Date">
+                      <input
+                        type="date"
+                        value={expiryDate}
+                        onChange={(e) => setExpiryDate(e.target.value)}
+                        className={inputCls}
+                      />
+                    </Field>
+                  </>
+                )}
+
+                {/* File upload */}
+                <div className="md:col-span-2 min-w-0">
+                  <label className={labelCls}>Upload File</label>
+                  <label className="flex flex-col items-center justify-center gap-1.5 border-2 border-dashed border-gray-300 rounded-xl py-6 px-4 text-center cursor-pointer hover:border-black hover:bg-gray-50 transition-colors">
+                    <Upload size={22} className="text-gray-400" />
+                    <span className="text-sm text-gray-700">
+                      {file
+                        ? "Click to choose a different file"
+                        : "Click to upload a file"}
+                    </span>
+                    <span className="text-[11px] text-gray-400">
+                      Images, PDF, DOC or DOCX
+                    </span>
+                    <input
+                      type="file"
+                      onChange={handleFileChange}
+                      accept="image/*,.pdf,.doc,.docx"
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+
+                {/* preview */}
+                {file && (
+                  <div className="md:col-span-2 min-w-0">
+                    <p className="text-xs font-medium text-gray-600 mb-2">
+                      Preview
+                    </p>
+                    {getFilePreview(file)}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50">
+              <button
+                onClick={() => {
+                  setIsModalOpen(false);
+                  clearForm();
+                }}
+                className="px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-700 bg-white hover:bg-gray-100 transition-colors"
               >
                 Cancel
               </button>
@@ -486,7 +646,7 @@ export default function AttachmentsTab({
               <button
                 onClick={handleSubmit}
                 disabled={isLoading}
-                className="px-4 py-2 bg-black text-white rounded-md hover:bg-gray-900"
+                className="px-5 py-2 text-sm bg-black text-white rounded-lg hover:bg-gray-900 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {isLoading ? "Uploading..." : "Submit"}
               </button>

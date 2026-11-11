@@ -12,7 +12,6 @@ import { toast } from "react-toastify";
 import { COLORS } from "./chat_sidebar";
 
 const MAX_FILES = 10;
-const MAX_FILE_MB = 10;
 const MAX_VOICE_SEC = 300; // auto-stop after 5 minutes
 
 // Voice quality: Opus, mono, 192 kbps (about 7 MB for 5 minutes)
@@ -159,12 +158,8 @@ export default function ChatTool({
     const incoming = Array.from(list || []);
     if (!incoming.length) return;
 
-    const tooBig = incoming.filter((f) => f.size > MAX_FILE_MB * 1024 * 1024);
-    const ok = incoming.filter((f) => f.size <= MAX_FILE_MB * 1024 * 1024);
-    if (tooBig.length)
-      toast.error(
-        `${tooBig.length} file${tooBig.length > 1 ? "s" : ""} over ${MAX_FILE_MB} MB skipped`,
-      );
+    // file size is validated by the backend, not here
+    const ok = incoming;
 
     const room = Math.max(MAX_FILES - files.length, 0);
     if (ok.length > room)

@@ -302,6 +302,105 @@ const Toggle = ({ id, checked, onChange, disabled }) => (
   </button>
 );
 
+/* Responsive table: real table on >= sm, stacked cards on mobile. */
+const BalanceTable = ({
+  rows,
+  startIndex = 0,
+  showIndex = true,
+  emptyText = "No records.",
+}) => {
+  const colSpan = showIndex ? 4 : 3;
+  return (
+    <>
+      {/* Tablet / desktop */}
+      <div className="hidden overflow-hidden rounded-lg border border-gray-200 sm:block">
+        <table className="w-full table-fixed text-left text-xs">
+          <colgroup>
+            {showIndex && <col className="w-14" />}
+            <col className="w-32 md:w-40" />
+            <col className="w-40 md:w-48" />
+            <col />
+          </colgroup>
+          <thead className="bg-gray-50 text-[11px] uppercase tracking-wide text-gray-500">
+            <tr>
+              {showIndex && <th className="px-4 py-3 font-medium">#</th>}
+              <th className="px-4 py-3 font-medium">User ID</th>
+              <th className="px-4 py-3 text-right font-medium">TDS deducted</th>
+              <th className="py-3 pl-8 pr-4 font-medium">Note</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {rows.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={colSpan}
+                  className="px-4 py-8 text-center text-gray-500"
+                >
+                  {emptyText}
+                </td>
+              </tr>
+            ) : (
+              rows.map((r, i) => (
+                <tr
+                  key={`${r.userId}-${i}`}
+                  className="align-top hover:bg-gray-50/60"
+                >
+                  {showIndex && (
+                    <td className="px-4 py-3 tabular-nums text-gray-400">
+                      {startIndex + i + 1}
+                    </td>
+                  )}
+                  <td className="px-4 py-3 font-mono">{r.userId}</td>
+                  <td className="px-4 py-3 text-right font-medium tabular-nums">
+                    {formatINR(r.amount)}
+                  </td>
+                  <td
+                    className="break-words py-3 pl-8 pr-4 text-gray-600"
+                    title={r.note || undefined}
+                  >
+                    {r.note || "--"}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Mobile */}
+      <ul className="divide-y divide-gray-100 overflow-hidden rounded-lg border border-gray-200 sm:hidden">
+        {rows.length === 0 ? (
+          <li className="px-4 py-8 text-center text-xs text-gray-500">
+            {emptyText}
+          </li>
+        ) : (
+          rows.map((r, i) => (
+            <li
+              key={`${r.userId}-${i}`}
+              className="space-y-1 px-4 py-3 text-xs"
+            >
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="font-mono">
+                  {showIndex && (
+                    <span className="mr-2 text-gray-400">
+                      {startIndex + i + 1}.
+                    </span>
+                  )}
+                  {r.userId}
+                </span>
+                <span className="font-semibold tabular-nums">
+                  {formatINR(r.amount)}
+                </span>
+              </div>
+              <p className="break-words text-gray-600">{r.note || "--"}</p>
+            </li>
+          ))
+        )}
+      </ul>
+    </>
+  );
+};
+
 /* ================================================================== */
 /* Opening balance view (upload + info)                                */
 /* ================================================================== */
@@ -544,90 +643,63 @@ const OpeningBalanceView = ({ financialYearId, financialYearName, onBack }) => {
             </div>
           ) : (
             <div className="space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-gray-700">
-                  <span>
-                    <strong>{saved.records.length}</strong> employee
-                    {saved.records.length === 1 ? "" : "s"}
-                  </span>
-                  <span>
-                    Total TDS: <strong>{formatINR(savedTotal)}</strong>
-                  </span>
+              {/* Summary */}
+              <div className="grid grid-cols-2 gap-3 sm:max-w-md">
+                <div className="rounded-lg border border-gray-200 px-4 py-3">
+                  <p className="text-[11px] uppercase tracking-wide text-gray-500">
+                    Employees
+                  </p>
+                  <p className="mt-1 text-lg font-semibold tabular-nums">
+                    {saved.records.length}
+                  </p>
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <input
-                    type="search"
-                    value={query}
-                    onChange={(e) => {
-                      setQuery(e.target.value);
-                      setPage(1);
-                    }}
-                    placeholder="Search user ID or note"
-                    aria-label="Search saved opening balances"
-                    className="w-56 rounded-md border border-gray-300 px-3 py-1.5 text-xs outline-none focus:border-black focus:ring-1 focus:ring-black"
-                  />
+                <div className="rounded-lg border border-gray-200 px-4 py-3">
+                  <p className="text-[11px] uppercase tracking-wide text-gray-500">
+                    Total TDS
+                  </p>
+                  <p className="mt-1 truncate text-lg font-semibold tabular-nums">
+                    {formatINR(savedTotal)}
+                  </p>
+                </div>
+              </div>
+
+              {/* Toolbar */}
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <input
+                  type="search"
+                  value={query}
+                  onChange={(e) => {
+                    setQuery(e.target.value);
+                    setPage(1);
+                  }}
+                  placeholder="Search user ID or note"
+                  aria-label="Search saved opening balances"
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-xs outline-none focus:border-black focus:ring-1 focus:ring-black sm:max-w-xs"
+                />
+                <div className="flex gap-2">
                   <button
                     onClick={loadSaved}
-                    className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium hover:bg-gray-50"
+                    className="flex-1 rounded-md border border-gray-300 px-4 py-2 text-xs font-medium hover:bg-gray-50 sm:flex-none"
                   >
                     Refresh
                   </button>
                   <button
                     onClick={downloadSaved}
-                    className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium hover:bg-gray-50"
+                    className="flex-1 rounded-md border border-gray-300 px-4 py-2 text-xs font-medium hover:bg-gray-50 sm:flex-none"
                   >
                     Download CSV
                   </button>
                 </div>
               </div>
 
-              <div className="overflow-x-auto rounded-md border border-gray-200">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-gray-50 text-gray-500">
-                    <tr>
-                      <th className="w-12 px-3 py-2 font-medium">#</th>
-                      <th className="px-3 py-2 font-medium">User ID</th>
-                      <th className="px-3 py-2 text-right font-medium">
-                        TDS deducted
-                      </th>
-                      <th className="px-3 py-2 font-medium">Note</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {pageRows.length === 0 ? (
-                      <tr>
-                        <td
-                          colSpan={4}
-                          className="px-3 py-6 text-center text-gray-500"
-                        >
-                          No records match “{query}”.
-                        </td>
-                      </tr>
-                    ) : (
-                      pageRows.map((r, i) => (
-                        <tr
-                          key={`${r.userId}-${i}`}
-                          className="border-t border-gray-100"
-                        >
-                          <td className="px-3 py-2 text-gray-400">
-                            {(currentPage - 1) * SAVED_PAGE_SIZE + i + 1}
-                          </td>
-                          <td className="px-3 py-2 font-mono">{r.userId}</td>
-                          <td className="px-3 py-2 text-right">
-                            {formatINR(r.amount)}
-                          </td>
-                          <td className="px-3 py-2 text-gray-600">
-                            {r.note || "--"}
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
+              <BalanceTable
+                rows={pageRows}
+                startIndex={(currentPage - 1) * SAVED_PAGE_SIZE}
+                emptyText={`No records match “${query}”.`}
+              />
 
               {pageCount > 1 && (
-                <div className="flex items-center justify-between text-xs text-gray-600">
+                <div className="flex flex-col items-center gap-2 text-xs text-gray-600 sm:flex-row sm:justify-between">
                   <span>
                     Page {currentPage} of {pageCount} · {filteredSaved.length}{" "}
                     record
@@ -637,7 +709,7 @@ const OpeningBalanceView = ({ financialYearId, financialYearName, onBack }) => {
                     <button
                       onClick={() => setPage(Math.max(1, currentPage - 1))}
                       disabled={currentPage === 1}
-                      className="rounded-md border border-gray-300 px-3 py-1 font-medium hover:bg-gray-50 disabled:opacity-40"
+                      className="rounded-md border border-gray-300 px-4 py-1.5 font-medium hover:bg-gray-50 disabled:opacity-40"
                     >
                       Previous
                     </button>
@@ -646,7 +718,7 @@ const OpeningBalanceView = ({ financialYearId, financialYearName, onBack }) => {
                         setPage(Math.min(pageCount, currentPage + 1))
                       }
                       disabled={currentPage === pageCount}
-                      className="rounded-md border border-gray-300 px-3 py-1 font-medium hover:bg-gray-50 disabled:opacity-40"
+                      className="rounded-md border border-gray-300 px-4 py-1.5 font-medium hover:bg-gray-50 disabled:opacity-40"
                     >
                       Next
                     </button>
@@ -778,32 +850,10 @@ const OpeningBalanceView = ({ financialYearId, financialYearName, onBack }) => {
                     Total TDS: <strong>{formatINR(total)}</strong>
                   </span>
                 </div>
-                <div className="overflow-x-auto rounded-md border border-gray-200">
-                  <table className="w-full text-left text-xs">
-                    <thead className="bg-gray-50 text-gray-500">
-                      <tr>
-                        <th className="px-3 py-2 font-medium">User ID</th>
-                        <th className="px-3 py-2 text-right font-medium">
-                          TDS deducted
-                        </th>
-                        <th className="px-3 py-2 font-medium">Note</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {analysis.records.slice(0, 5).map((r) => (
-                        <tr key={r.userId} className="border-t border-gray-100">
-                          <td className="px-3 py-2 font-mono">{r.userId}</td>
-                          <td className="px-3 py-2 text-right">
-                            {formatINR(r.amount)}
-                          </td>
-                          <td className="px-3 py-2 text-gray-600">
-                            {r.note || "--"}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <BalanceTable
+                  rows={analysis.records.slice(0, 5)}
+                  showIndex={false}
+                />
                 {analysis.records.length > 5 && (
                   <p className="mt-1 text-[11px] text-gray-500">
                     Showing the first 5 of {analysis.records.length} rows.

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { Icon } from "@iconify/react";
 import useEmployeeStore from "../../store/employeeStore";
 import axiosInstance from "../../service/axiosinstance";
-import toast, { Toaster } from "react-hot-toast";
+import { toast } from "react-toastify"; // uses the global <ToastContainer /> from App.jsx
 
 export default function IdInformationSection() {
   const { selectedEmployee, setSelectedEmployee } = useEmployeeStore();
@@ -40,7 +40,7 @@ export default function IdInformationSection() {
       setLoading(true);
       await axiosInstance.put(
         `/staff/updateidinfo/${selectedEmployee.id}`,
-        payload
+        payload,
       );
 
       // Update local store
@@ -70,7 +70,9 @@ export default function IdInformationSection() {
     <div className="bg-white p-4 rounded-xl shadow-sm border w-full">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
-        <h3 className="font-medium text-gray-800 text-[14px]">ID Information</h3>
+        <h3 className="font-medium text-gray-800 text-[14px]">
+          ID Information
+        </h3>
         <div className="flex items-center gap-2">
           {isEditing && (
             <button
@@ -126,8 +128,6 @@ export default function IdInformationSection() {
           );
         })}
       </div>
-
-      <Toaster />
     </div>
   );
 }

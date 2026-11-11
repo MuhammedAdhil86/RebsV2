@@ -508,6 +508,19 @@ export const userLocationDeviceUrl = (uuid) =>
   `/master/location-device/${uuid}`;
 export const getEmployeeLeavePolicy = (uuid) =>
   `/leave-policy/employees/${uuid}`;
+// ---------------- LEAVE CONFIGURATION: REQUEST SETTINGS ----------------
+export const getLeaveRequestConfig = "/leave-policy/company/request-config";
+export const putLeaveRequestConfig = "/leave-policy/company/request-config";
+export const deleteLeaveRequestConfig = "/leave-policy/company/request-config";
+
+// ---------------- LEAVE CONFIGURATION: EMPLOYMENT TYPE SETTINGS ----------------
+export const getEmploymentTypeLeaveConfig =
+  "/leave-policy/company/employement-type-config";
+export const putEmploymentTypeLeaveConfig =
+  "/leave-policy/company/employement-type-config";
+// usage: `${deleteEmploymentTypeLeaveConfig}/${employment_type_id}`
+export const deleteEmploymentTypeLeaveConfig =
+  "/leave-policy/company/employement-type-config";
 export const fetchEffectiveAllocations = "/shifts/effective-allocations";
 export const postSwapShift = "/shifts/admin/swap";
 

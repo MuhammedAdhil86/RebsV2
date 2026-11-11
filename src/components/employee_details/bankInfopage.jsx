@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Icon } from "@iconify/react";
 import useEmployeeStore from "../../store/employeeStore";
 import axiosInstance from "../../service/axiosinstance";
-import toast, { Toaster } from "react-hot-toast";
+import { toast } from "react-toastify"; // uses the global <ToastContainer /> from App.jsx
 
 export default function BankInfoSection() {
   const { selectedEmployee, setSelectedEmployee } = useEmployeeStore();
@@ -43,7 +43,7 @@ export default function BankInfoSection() {
 
       await axiosInstance.put(
         `/staff/updatebankinfo/${selectedEmployee.id}`,
-        payload
+        payload,
       );
 
       setSelectedEmployee({ ...selectedEmployee, ...payload });
@@ -114,8 +114,6 @@ export default function BankInfoSection() {
           </div>
         ))}
       </div>
-
-      <Toaster />
     </div>
   );
 }

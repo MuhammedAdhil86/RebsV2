@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { Icon } from "@iconify/react";
-import toast from "react-hot-toast";
+import { toast } from "react-toastify"; // uses the global <ToastContainer /> from App.jsx
 import useEmployeeStore from "../../store/employeeStore";
 import axiosInstance from "../../service/axiosinstance";
 import {
@@ -14,13 +14,7 @@ import {
   fetchEmployeeRoles,
 } from "../../service/employeeService";
 
-export default function WorkInfoSection({ onSuccess, onError }) {
-  // Use the parent's handlers (same global Toaster as the other sections);
-  // fall back to react-hot-toast if they are not passed.
-  const notifySuccess = (msg) =>
-    onSuccess ? onSuccess(msg) : toast.success(msg);
-  const notifyError = (msg) => (onError ? onError(msg) : toast.error(msg));
-
+export default function WorkInfoSection() {
   const { selectedEmployee, setSelectedEmployee } = useEmployeeStore();
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -75,7 +69,7 @@ export default function WorkInfoSection({ onSuccess, onError }) {
         setEmploymentTypeList(normalize(t));
       } catch (err) {
         console.error("Failed to fetch dropdowns:", err);
-        notifyError("Failed to load dropdowns");
+        toast.error("Failed to load dropdowns");
       }
     };
     fetchDropdowns();
@@ -147,7 +141,7 @@ export default function WorkInfoSection({ onSuccess, onError }) {
   const handleSave = async () => {
     const staffId = getStaffId();
     if (!staffId) {
-      notifyError("No valid staff ID found.");
+      toast.error("No valid staff ID found.");
       return;
     }
 
@@ -162,7 +156,7 @@ export default function WorkInfoSection({ onSuccess, onError }) {
       roleId = match ? String(match.id) : "";
     }
     if (!roleId) {
-      notifyError("Please select a valid role.");
+      toast.error("Please select a valid role.");
       return;
     }
 
@@ -242,13 +236,13 @@ export default function WorkInfoSection({ onSuccess, onError }) {
         location: updatedEmployee.location || "Panampilly Nagar",
       });
 
-      notifySuccess("Work information updated successfully!");
+      toast.success("Work information updated successfully!");
       setIsEditing(false);
     } catch (err) {
       console.error("Update failed:", err);
       const msg =
         err?.response?.data?.message || "Failed to update work information.";
-      notifyError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }

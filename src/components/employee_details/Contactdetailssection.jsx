@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { Icon } from "@iconify/react";
 import useEmployeeStore from "../../store/employeeStore";
 import axiosInstance from "../../service/axiosinstance";
-import toast, { Toaster } from "react-hot-toast";
+import { toast } from "react-toastify"; // uses the global <ToastContainer /> from App.jsx
 
 export default function ContactInfoSection() {
   const { selectedEmployee, setSelectedEmployee } = useEmployeeStore();
@@ -45,12 +45,15 @@ export default function ContactInfoSection() {
     if (!formData || !selectedEmployee?.id) return;
 
     const sanitizedData = Object.fromEntries(
-      Object.entries(formData).map(([k, v]) => [k, v === "N/A" ? "" : v])
+      Object.entries(formData).map(([k, v]) => [k, v === "N/A" ? "" : v]),
     );
 
     try {
       setLoading(true);
-      await axiosInstance.put(`/staff/updatecontactinfo/${selectedEmployee.id}`, sanitizedData);
+      await axiosInstance.put(
+        `/staff/updatecontactinfo/${selectedEmployee.id}`,
+        sanitizedData,
+      );
 
       setSelectedEmployee({ ...selectedEmployee, ...sanitizedData });
       toast.success("Contact details updated successfully!");
@@ -63,13 +66,16 @@ export default function ContactInfoSection() {
     }
   }, [formData, selectedEmployee, setSelectedEmployee]);
 
-  if (!formData) return <p className="p-4 text-gray-500">Loading contact info...</p>;
+  if (!formData)
+    return <p className="p-4 text-gray-500">Loading contact info...</p>;
 
   return (
     <div className="bg-white p-4 rounded-xl shadow-sm border w-full">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
-        <h3 className="font-medium text-gray-800 text-[14px]">Contact Details</h3>
+        <h3 className="font-medium text-gray-800 text-[14px]">
+          Contact Details
+        </h3>
         <div className="flex items-center gap-2">
           {isEditing && (
             <button
@@ -92,10 +98,16 @@ export default function ContactInfoSection() {
       <div className="text-sm space-y-2">
         {contactFields.map((field) => {
           const value = formData[field.key];
-          const displayValue = value === null || value === undefined || value.trim() === "" ? "N/A" : value;
+          const displayValue =
+            value === null || value === undefined || value.trim() === ""
+              ? "N/A"
+              : value;
 
           return (
-            <div key={field.key} className="flex justify-between border-b border-gray-100 py-2">
+            <div
+              key={field.key}
+              className="flex justify-between border-b border-gray-100 py-2"
+            >
               <span className="text-gray-500 text-[12px]">{field.label}</span>
               <span className="min-w-0 break-words text-right">
                 {isEditing ? (
@@ -106,15 +118,15 @@ export default function ContactInfoSection() {
                     className="border border-gray-300 rounded px-2 py-1 text-gray-800 text-[13px] w-full max-w-[160px]"
                   />
                 ) : (
-                  <span className="text-gray-800 text-[13px]">{displayValue}</span>
+                  <span className="text-gray-800 text-[13px]">
+                    {displayValue}
+                  </span>
                 )}
               </span>
             </div>
           );
         })}
       </div>
-
-      <Toaster />
     </div>
   );
 }

@@ -15,7 +15,7 @@ import { Icon } from "@iconify/react";
 import { useNavigate, Link } from "react-router-dom";
 import useEmployeeStore from "../store/employeeStore";
 import UniversalTable from "../ui/universal_table";
-import toast, { Toaster } from "react-hot-toast";
+import { toast } from "react-toastify";
 import { fetchDeletedUsers } from "../service/employeeService";
 import DeactivateConfirmationModal from "../ui/deactivatemodal";
 
@@ -183,7 +183,7 @@ function ManageEmployees() {
     setShowDeactivateConfirm(false);
   };
 
-  const handleAddPrivilege = () => toast("Add Privilege clicked!");
+  const handleAddPrivilege = () => toast.info("Add Privilege clicked!");
 
   const handleDelete = () => {
     if (selectedRows.length === 0) {
@@ -467,8 +467,6 @@ function ManageEmployees() {
 
   return (
     <DashboardLayout>
-      <Toaster position="top-right" reverseOrder={false} />
-
       <div className="h-full flex flex-col">
         <div className="flex-1 overflow-y-auto px-4 flex flex-col gap-6">
           {/* Integrated Global Shared Header */}
@@ -512,10 +510,17 @@ function ManageEmployees() {
             <div className="flex items-center space-x-3">
               {/* Operations Dropdown Panel */}
               {view === "table" && !isDeletedTab && (
-                <div className="relative">
+                <div className="relative" ref={dropdownRef}>
                   <button
                     type="button"
-                    onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                    onClick={() => {
+                      if (selectedRows.length === 0) {
+                        setIsDropdownOpen(false);
+                        toast.error("Please select employee");
+                        return;
+                      }
+                      setIsDropdownOpen(!isDropdownOpen);
+                    }}
                     className="flex items-center bg-gray-800 hover:bg-gray-900 text-white px-3 sm:px-4 py-2 rounded-lg text-[12px]"
                   >
                     Update Status
@@ -523,10 +528,7 @@ function ManageEmployees() {
                   </button>
 
                   {isDropdownOpen && selectedRows.length > 0 && (
-                    <div
-                      ref={dropdownRef}
-                      className="absolute top-full left-0 mt-1 w-48 bg-white border border-gray-200 rounded-md shadow-lg z-50"
-                    >
+                    <div className="absolute top-full left-0 mt-1 w-48 bg-white border border-gray-200 rounded-md shadow-lg z-50">
                       <div className="py-1">
                         <button
                           type="button"
@@ -536,33 +538,46 @@ function ManageEmployees() {
                           <Shield size={16} className="mr-2 text-gray-600" />{" "}
                           Add Privilege
                         </button>
-                        <button
-                          type="button"
-                          onClick={handleActivateUser}
-                          className="w-full text-left px-4 py-2 text-[12px] text-gray-700 hover:bg-gray-100 flex items-center"
-                        >
-                          <UserCheck size={16} className="mr-2 text-gray-600" />{" "}
-                          Activate User
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleDeactivateUser}
-                          className="w-full text-left px-4 py-2 text-[12px] text-gray-700 hover:bg-gray-100 flex items-center"
-                        >
-                          <UserX size={16} className="mr-2 text-gray-600" />{" "}
-                          Deactivate User
-                        </button>
+                        {/* Inactive tab (and All): Activate */}
+                        {(tab === "inactive" || tab === "all") && (
+                          <button
+                            type="button"
+                            onClick={handleActivateUser}
+                            className="w-full text-left px-4 py-2 text-[12px] text-gray-700 hover:bg-gray-100 flex items-center"
+                          >
+                            <UserCheck
+                              size={16}
+                              className="mr-2 text-gray-600"
+                            />{" "}
+                            Activate User
+                          </button>
+                        )}
+                        {/* Active tab (and All): Deactivate */}
+                        {(tab === "active" || tab === "all") && (
+                          <button
+                            type="button"
+                            onClick={handleDeactivateUser}
+                            className="w-full text-left px-4 py-2 text-[12px] text-gray-700 hover:bg-gray-100 flex items-center"
+                          >
+                            <UserX size={16} className="mr-2 text-gray-600" />{" "}
+                            Deactivate User
+                          </button>
+                        )}
 
-                        <hr className="my-1 border-gray-200" />
-
-                        <button
-                          type="button"
-                          onClick={handleDelete}
-                          className="w-full text-left px-4 py-2 text-[12px] text-red-600 hover:bg-red-50 flex items-center"
-                        >
-                          <Trash2 size={16} className="mr-2 text-red-600" />{" "}
-                          Delete User
-                        </button>
+                        {/* Delete only on the All tab */}
+                        {tab === "all" && (
+                          <>
+                            <hr className="my-1 border-gray-200" />
+                            <button
+                              type="button"
+                              onClick={handleDelete}
+                              className="w-full text-left px-4 py-2 text-[12px] text-red-600 hover:bg-red-50 flex items-center"
+                            >
+                              <Trash2 size={16} className="mr-2 text-red-600" />{" "}
+                              Delete User
+                            </button>
+                          </>
+                        )}
                       </div>
                     </div>
                   )}
