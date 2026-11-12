@@ -140,6 +140,7 @@ const useLeaveStore = create((set, get) => ({
   // -------------------------------
   // APPROVE / REJECT LEAVE
   // -------------------------------
+  // CHANGED: now returns the server response to the component for better error handling
   updateLeaveStatus: async ({
     leaveRefNo,
     status,
