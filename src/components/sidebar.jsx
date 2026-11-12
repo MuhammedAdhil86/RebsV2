@@ -114,6 +114,7 @@ function SideBar({ isCollapsed, toggleSidebar }) {
     ),
     performance: <Icon icon="mdi:chart-line" width="20" />, // KPI icon updated
     employees: <Icon icon="clarity:employee-group-line" width="20" />,
+    team: <Icon icon="clarity:group-line" width="20" />, // NEW: Team module
     assets: <Icon icon="fluent:web-asset-16-regular" width="20" />,
     shift: <Icon icon="ic:twotone-manage-history" width="20" />,
     events: <Icon icon="carbon:event" width="20" />,
@@ -140,6 +141,8 @@ function SideBar({ isCollapsed, toggleSidebar }) {
         { title: "Requests", path: "/requests", icon: icons.requests },
         { title: "Performance", path: "/kpi", icon: icons.performance },
         { title: "Employees", path: "/manageemployee", icon: icons.employees },
+        // NEW: Team module (opens on the Overview tab by default)
+        { title: "Team", path: "/team", icon: icons.team },
         { title: "Assets", path: "/asset", icon: icons.assets },
         { title: "Shift Management", path: "/shift", icon: icons.shift },
         { title: "Events", path: "/events", icon: icons.events },

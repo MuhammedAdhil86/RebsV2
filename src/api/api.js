@@ -596,3 +596,5 @@ export const removeChatParticipants = (id) =>
   `/employee/chat/${id}/participants`;
 export const editChatMessage = (id, mid) =>
   `/employee/chat/${id}/messages/${mid}`;
+//Teams
+export const getAdminProjectsOverview = "/admin/projects/overview";

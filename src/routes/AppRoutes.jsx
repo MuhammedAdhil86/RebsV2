@@ -35,6 +35,7 @@ import Timesheet from "../page/timesheet";
 import EmailTemplates from "../page/email";
 import Kpi from "../page/Kpi";
 import Chat from "../page/chat";
+import Team from "../page/team";
 function AppRoutes() {
   return (
     <Routes>
@@ -54,6 +55,7 @@ function AppRoutes() {
         path="/dashboard"
         element={<ProtectedRoute element={Dashboard} />}
       />
+      <Route path="/team" element={<ProtectedRoute element={Team} />} />
       <Route
         path="/employeeonboarding"
         element={<ProtectedRoute element={EmployeeOnboarding} />}

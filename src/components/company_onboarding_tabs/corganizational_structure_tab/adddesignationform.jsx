@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Icon } from "@iconify/react";
-import toast, { Toaster } from "react-hot-toast";
+import { toast } from "react-toastify"; // uses the global <ToastContainer /> from App.jsx
 import { addDesignation } from "../../../service/companyService";
 
 import GlowButton from "../../helpers/glowbutton";
@@ -41,31 +41,35 @@ const AddDesignationForm = () => {
     if (!name) {
       newErrors.name = "Designation name is required";
     } else if (name.length < 2) {
-      newErrors.name = "Designation name must be at least 2 characters";
+      newErrors.name =
+        "Designation name is too short. Enter at least 2 characters";
     } else if (name.length > 100) {
-      newErrors.name = "Designation name must be 100 characters or less";
+      newErrors.name =
+        "Designation name is too long. Enter 100 characters or fewer";
     }
 
     // Designation Code
     if (!code) {
       newErrors.code = "Designation code is required";
     } else if (!/^[A-Za-z0-9_-]{2,20}$/.test(code)) {
-      newErrors.code = "2-20 characters: letters, numbers, - or _ only";
+      newErrors.code =
+        "Designation code must be 2 to 20 characters and can only contain letters, numbers, hyphen (-) or underscore (_)";
     }
 
     // Designation Email (optional, but must be valid if entered)
     if (email) {
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-        newErrors.email = "Invalid email format";
+        newErrors.email =
+          "Please enter a valid email address, for example name@company.com";
       } else if (email.length > 254) {
-        newErrors.email = "Email must be 254 characters or less";
+        newErrors.email = "Email is too long. Enter 254 characters or fewer";
       }
     }
 
     setErrors(newErrors);
 
     if (Object.keys(newErrors).length > 0) {
-      toast.error("Please fix the errors");
+      toast.error("Please correct the highlighted fields and try again");
       return false;
     }
 
@@ -96,104 +100,100 @@ const AddDesignationForm = () => {
       setErrors({});
     } catch (error) {
       console.error(error);
-      toast.error("Failed to add designation");
+      toast.error("Could not add the designation. Please try again");
     }
   };
 
   return (
-    <>
-      <Toaster position="top-right" />
+    <form onSubmit={handleSubmit} className="space-y-6">
+      <div className="grid grid-cols-3 gap-4">
+        {/* Designation Name */}
+        <div className="flex flex-col relative">
+          <label className="text-sm text-gray-600 mb-1">
+            Designation Name <span className="text-red-500">*</span>
+          </label>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="grid grid-cols-3 gap-4">
-          {/* Designation Name */}
-          <div className="flex flex-col relative">
-            <label className="text-sm text-gray-600 mb-1">
-              Designation Name <span className="text-red-500">*</span>
-            </label>
+          <input
+            type="text"
+            name="name"
+            value={formData.name}
+            onChange={handleChange}
+            placeholder="Enter name"
+            className={`border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 ${
+              errors.name
+                ? "border-red-500 focus:ring-red-200"
+                : "border-gray-200 focus:ring-gray-200"
+            }`}
+          />
 
-            <input
-              type="text"
-              name="name"
-              value={formData.name}
-              onChange={handleChange}
-              placeholder="Enter name"
-              className={`border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 ${
-                errors.name
-                  ? "border-red-500 focus:ring-red-200"
-                  : "border-gray-200 focus:ring-gray-200"
-              }`}
-            />
-
-            {errors.name && (
-              <p className="text-red-500 text-xs mt-1">{errors.name}</p>
-            )}
-          </div>
-
-          {/* Designation Code */}
-          <div className="flex flex-col">
-            <label className="text-sm text-gray-600 mb-1">
-              Designation Code <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              name="code"
-              value={formData.code}
-              onChange={handleChange}
-              placeholder="Enter code"
-              className={`border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 ${
-                errors.code
-                  ? "border-red-500 focus:ring-red-200"
-                  : "border-gray-200 focus:ring-gray-200"
-              }`}
-            />
-            {errors.code && (
-              <p className="text-red-500 text-xs mt-1">{errors.code}</p>
-            )}
-          </div>
-
-          {/* Designation Email */}
-          <div className="flex flex-col">
-            <label className="text-sm text-gray-600 mb-1">
-              Designation Email
-            </label>
-            <input
-              type="email"
-              name="email"
-              value={formData.email}
-              onChange={handleChange}
-              placeholder="Enter email"
-              className={`border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 ${
-                errors.email
-                  ? "border-red-500 focus:ring-red-200"
-                  : "border-gray-200 focus:ring-gray-200"
-              }`}
-            />
-            {errors.email && (
-              <p className="text-red-500 text-xs mt-1">{errors.email}</p>
-            )}
-          </div>
+          {errors.name && (
+            <p className="text-red-500 text-xs mt-1">{errors.name}</p>
+          )}
         </div>
 
-        {/* Buttons */}
-        <div className="flex justify-end gap-2 pt-4">
-          <CancelButton
-            onClick={() => {
-              setFormData({
-                name: "",
-                code: "",
-                email: "",
-              });
-              setErrors({});
-            }}
-          >
-            Cancel
-          </CancelButton>
-
-          <GlowButton type="submit">Save</GlowButton>
+        {/* Designation Code */}
+        <div className="flex flex-col">
+          <label className="text-sm text-gray-600 mb-1">
+            Designation Code <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="text"
+            name="code"
+            value={formData.code}
+            onChange={handleChange}
+            placeholder="Enter code"
+            className={`border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 ${
+              errors.code
+                ? "border-red-500 focus:ring-red-200"
+                : "border-gray-200 focus:ring-gray-200"
+            }`}
+          />
+          {errors.code && (
+            <p className="text-red-500 text-xs mt-1">{errors.code}</p>
+          )}
         </div>
-      </form>
-    </>
+
+        {/* Designation Email */}
+        <div className="flex flex-col">
+          <label className="text-sm text-gray-600 mb-1">
+            Designation Email
+          </label>
+          <input
+            type="email"
+            name="email"
+            value={formData.email}
+            onChange={handleChange}
+            placeholder="Enter email"
+            className={`border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 ${
+              errors.email
+                ? "border-red-500 focus:ring-red-200"
+                : "border-gray-200 focus:ring-gray-200"
+            }`}
+          />
+          {errors.email && (
+            <p className="text-red-500 text-xs mt-1">{errors.email}</p>
+          )}
+        </div>
+      </div>
+
+      {/* Buttons */}
+      <div className="flex justify-end gap-2 pt-4">
+        <CancelButton
+          onClick={() => {
+            setFormData({
+              name: "",
+              code: "",
+              email: "",
+            });
+            setErrors({});
+          }}
+        >
+          Cancel
+        </CancelButton>
+
+        <GlowButton type="submit">Save</GlowButton>
+      </div>
+    </form>
   );
 };
 

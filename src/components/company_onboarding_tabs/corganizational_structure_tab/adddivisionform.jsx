@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Icon } from "@iconify/react";
-import toast, { Toaster } from "react-hot-toast";
+import { toast } from "react-toastify"; // uses the global <ToastContainer /> from App.jsx
 import { addDivision, getBranchData } from "../../../service/companyService";
 import { fetchTimeZone } from "../../../service/eventservice";
 import { getGeolocation } from "../../../utils/geolocation";
@@ -79,71 +79,77 @@ const AddDivisionForm = () => {
     if (!name) {
       newErrors.divisionName = "Division name is required";
     } else if (name.length < 2) {
-      newErrors.divisionName = "Division name must be at least 2 characters";
+      newErrors.divisionName =
+        "Division name is too short. Enter at least 2 characters";
     } else if (name.length > 100) {
-      newErrors.divisionName = "Division name must be 100 characters or less";
+      newErrors.divisionName =
+        "Division name is too long. Enter 100 characters or fewer";
     }
 
     // Division Code
     if (!code) {
       newErrors.divisionCode = "Division code is required";
     } else if (!/^[A-Za-z0-9_-]{2,20}$/.test(code)) {
-      newErrors.divisionCode = "2-20 characters: letters, numbers, - or _ only";
+      newErrors.divisionCode =
+        "Division code must be 2 to 20 characters and can only contain letters, numbers, hyphen (-) or underscore (_)";
     }
 
     // Location
     if (!location) {
       newErrors.location = "Location is required";
     } else if (location.length < 2) {
-      newErrors.location = "Location must be at least 2 characters";
+      newErrors.location = "Location is too short. Enter at least 2 characters";
     } else if (location.length > 255) {
-      newErrors.location = "Location must be 255 characters or less";
+      newErrors.location =
+        "Location is too long. Enter 255 characters or fewer";
     }
 
     // Description
     if (!description) {
       newErrors.description = "Description is required";
     } else if (description.length < 5) {
-      newErrors.description = "Description must be at least 5 characters";
+      newErrors.description =
+        "Description is too short. Enter at least 5 characters";
     } else if (description.length > 500) {
-      newErrors.description = "Description must be 500 characters or less";
+      newErrors.description =
+        "Description is too long. Enter 500 characters or fewer";
     }
 
     // Address
     if (!address) {
       newErrors.address = "Address is required";
     } else if (address.length < 5) {
-      newErrors.address = "Address must be at least 5 characters";
+      newErrors.address = "Address is too short. Enter at least 5 characters";
     } else if (address.length > 255) {
-      newErrors.address = "Address must be 255 characters or less";
+      newErrors.address = "Address is too long. Enter 255 characters or fewer";
     }
 
     // Time Zone
     if (!formData.timeZone) {
-      newErrors.timeZone = "Time zone is required";
+      newErrors.timeZone = "Please select a time zone";
     }
 
     // Parent Branch
     if (!formData.parentBranch) {
-      newErrors.parentBranch = "Parent branch is required";
+      newErrors.parentBranch = "Please select a parent branch";
     }
 
     // Latitude
     if (!lat) {
       newErrors.latitude = "Latitude is required";
     } else if (isNaN(Number(lat))) {
-      newErrors.latitude = "Latitude must be a number";
+      newErrors.latitude = "Latitude must be a number, for example 10.5204";
     } else if (Number(lat) < -90 || Number(lat) > 90) {
-      newErrors.latitude = "Latitude must be between -90 and 90";
+      newErrors.latitude = "Latitude must be a value between -90 and 90";
     }
 
     // Longitude
     if (!lng) {
       newErrors.longitude = "Longitude is required";
     } else if (isNaN(Number(lng))) {
-      newErrors.longitude = "Longitude must be a number";
+      newErrors.longitude = "Longitude must be a number, for example 76.2144";
     } else if (Number(lng) < -180 || Number(lng) > 180) {
-      newErrors.longitude = "Longitude must be between -180 and 180";
+      newErrors.longitude = "Longitude must be a value between -180 and 180";
     }
 
     setErrors(newErrors);
@@ -153,7 +159,7 @@ const AddDivisionForm = () => {
   /* ---------------- Fetch Current Location ---------------- */
   const handleFetchLocation = async () => {
     if (!navigator.geolocation) {
-      toast.error("Geolocation not supported");
+      toast.error("Your browser does not support location access");
       return;
     }
 
@@ -182,15 +188,17 @@ const AddDivisionForm = () => {
             location: "",
           }));
 
-          toast.success("Location fetched");
+          toast.success("Current location added successfully");
         } catch (err) {
-          toast.error("Failed to fetch location");
+          toast.error("Could not get your location details. Please try again");
         } finally {
           setLoadingLocation(false);
         }
       },
       () => {
-        toast.error("Location permission denied");
+        toast.error(
+          "Location access was denied. Please allow location permission in your browser settings",
+        );
         setLoadingLocation(false);
       },
     );
@@ -201,7 +209,7 @@ const AddDivisionForm = () => {
     e.preventDefault();
 
     if (!validateForm()) {
-      toast.error("Please fix the errors");
+      toast.error("Please correct the highlighted fields and try again");
       return;
     }
 
@@ -236,215 +244,209 @@ const AddDivisionForm = () => {
       setErrors({});
     } catch (err) {
       console.error(err);
-      toast.error("Failed to add division");
+      toast.error("Could not add the division. Please try again");
     }
   };
 
   return (
-    <>
-      <Toaster position="top-right" />
-
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Row 1 */}
-        <div className="grid grid-cols-3 gap-6">
-          <div>
-            <label className="block text-sm text-gray-700 mb-1">
-              Division Name
-            </label>
-            <input
-              type="text"
-              name="divisionName"
-              value={formData.divisionName}
-              onChange={handleChange}
-              className="w-full border border-gray-300 bg-gray-50 rounded-md px-3 py-2 text-sm"
-            />
-            {errors.divisionName && (
-              <p className="text-red-500 text-xs mt-1">{errors.divisionName}</p>
-            )}
-          </div>
-
-          <div>
-            <label className="block text-sm text-gray-700 mb-1">
-              Division Code
-            </label>
-            <input
-              type="text"
-              name="divisionCode"
-              value={formData.divisionCode}
-              onChange={handleChange}
-              className="w-full border border-gray-300 bg-gray-50 rounded-md px-3 py-2 text-sm"
-            />
-            {errors.divisionCode && (
-              <p className="text-red-500 text-xs mt-1">{errors.divisionCode}</p>
-            )}
-          </div>
-
-          <div>
-            <label className="block text-sm text-gray-700 mb-1">Location</label>
-            <input
-              type="text"
-              name="location"
-              value={formData.location}
-              onChange={handleChange}
-              className="w-full border border-gray-300 bg-gray-50 rounded-md px-3 py-2 text-sm"
-            />
-            {errors.location && (
-              <p className="text-red-500 text-xs mt-1">{errors.location}</p>
-            )}
-          </div>
+    <form onSubmit={handleSubmit} className="space-y-6">
+      {/* Row 1 */}
+      <div className="grid grid-cols-3 gap-6">
+        <div>
+          <label className="block text-sm text-gray-700 mb-1">
+            Division Name
+          </label>
+          <input
+            type="text"
+            name="divisionName"
+            value={formData.divisionName}
+            onChange={handleChange}
+            className="w-full border border-gray-300 bg-gray-50 rounded-md px-3 py-2 text-sm"
+          />
+          {errors.divisionName && (
+            <p className="text-red-500 text-xs mt-1">{errors.divisionName}</p>
+          )}
         </div>
 
-        {/* Row 2 */}
-        <div className="grid grid-cols-3 gap-6">
+        <div>
+          <label className="block text-sm text-gray-700 mb-1">
+            Division Code
+          </label>
+          <input
+            type="text"
+            name="divisionCode"
+            value={formData.divisionCode}
+            onChange={handleChange}
+            className="w-full border border-gray-300 bg-gray-50 rounded-md px-3 py-2 text-sm"
+          />
+          {errors.divisionCode && (
+            <p className="text-red-500 text-xs mt-1">{errors.divisionCode}</p>
+          )}
+        </div>
+
+        <div>
+          <label className="block text-sm text-gray-700 mb-1">Location</label>
+          <input
+            type="text"
+            name="location"
+            value={formData.location}
+            onChange={handleChange}
+            className="w-full border border-gray-300 bg-gray-50 rounded-md px-3 py-2 text-sm"
+          />
+          {errors.location && (
+            <p className="text-red-500 text-xs mt-1">{errors.location}</p>
+          )}
+        </div>
+      </div>
+
+      {/* Row 2 */}
+      <div className="grid grid-cols-3 gap-6">
+        <div>
+          <label className="block text-sm text-gray-700 mb-1">
+            Description
+          </label>
+          <textarea
+            name="description"
+            value={formData.description}
+            onChange={handleChange}
+            className="w-full h-[120px] border border-gray-300 bg-gray-50 rounded-md px-3 py-2 text-sm resize-none"
+          />
+          {errors.description && (
+            <p className="text-red-500 text-xs mt-1">{errors.description}</p>
+          )}
+        </div>
+
+        <div className="flex flex-col justify-between">
           <div>
             <label className="block text-sm text-gray-700 mb-1">
-              Description
+              Address Line
             </label>
-            <textarea
-              name="description"
-              value={formData.description}
+            <input
+              type="text"
+              name="address"
+              value={formData.address}
               onChange={handleChange}
-              className="w-full h-[120px] border border-gray-300 bg-gray-50 rounded-md px-3 py-2 text-sm resize-none"
+              className="w-full border border-gray-300 bg-gray-50 rounded-md px-3 py-2 text-sm"
             />
-            {errors.description && (
-              <p className="text-red-500 text-xs mt-1">{errors.description}</p>
+            {errors.address && (
+              <p className="text-red-500 text-xs mt-1">{errors.address}</p>
             )}
           </div>
 
-          <div className="flex flex-col justify-between">
-            <div>
-              <label className="block text-sm text-gray-700 mb-1">
-                Address Line
-              </label>
-              <input
-                type="text"
-                name="address"
-                value={formData.address}
-                onChange={handleChange}
-                className="w-full border border-gray-300 bg-gray-50 rounded-md px-3 py-2 text-sm"
-              />
-              {errors.address && (
-                <p className="text-red-500 text-xs mt-1">{errors.address}</p>
-              )}
-            </div>
-
-            <div className="pt-4">
-              <label className="block text-sm text-gray-700 mb-1">
-                Time Zone
-              </label>
-              <div className="relative">
-                <select
-                  name="timeZone"
-                  value={formData.timeZone}
-                  onChange={handleChange}
-                  className="w-full appearance-none border border-gray-300 bg-gray-50 rounded-md px-3 py-2 text-sm"
-                >
-                  <option value="">Select</option>
-                  {timeZones.map((tz) => (
-                    <option key={tz.id} value={tz.id}>
-                      {tz.name}
-                    </option>
-                  ))}
-                </select>
-                <Icon
-                  icon="material-symbols:arrow-left-rounded"
-                  className="absolute right-3 top-3 rotate-[-90deg]"
-                />
-              </div>
-              {errors.timeZone && (
-                <p className="text-red-500 text-xs mt-1">{errors.timeZone}</p>
-              )}
-            </div>
-          </div>
-
-          <div className="flex flex-col justify-between">
-            <div>
-              <div className="flex items-end gap-3">
-                <div
-                  onClick={handleFetchLocation}
-                  className="flex items-center justify-center w-10 h-10 border bg-gray-50 rounded-md cursor-pointer"
-                >
-                  <Icon icon="mdi:location" />
-                </div>
-
-                <div className="flex-1">
-                  <label className="block text-sm">Latitude</label>
-                  <input
-                    name="latitude"
-                    value={formData.latitude}
-                    onChange={handleChange}
-                    className="w-full border bg-gray-50 rounded-md px-3 py-2 text-sm"
-                  />
-                </div>
-
-                <div className="flex-1">
-                  <label className="block text-sm">Longitude</label>
-                  <input
-                    name="longitude"
-                    value={formData.longitude}
-                    onChange={handleChange}
-                    className="w-full border bg-gray-50 rounded-md px-3 py-2 text-sm"
-                  />
-                </div>
-              </div>
-              {(errors.latitude || errors.longitude) && (
-                <p className="text-red-500 text-xs mt-1">
-                  {errors.latitude || errors.longitude}
-                </p>
-              )}
-            </div>
-
-            <div className="pt-4">
-              <label className="block text-sm text-gray-700 mb-1">
-                Parent Branch
-              </label>
+          <div className="pt-4">
+            <label className="block text-sm text-gray-700 mb-1">
+              Time Zone
+            </label>
+            <div className="relative">
               <select
-                name="parentBranch"
-                value={formData.parentBranch}
+                name="timeZone"
+                value={formData.timeZone}
                 onChange={handleChange}
-                className="w-full border bg-gray-50 rounded-md px-3 py-2 text-sm"
+                className="w-full appearance-none border border-gray-300 bg-gray-50 rounded-md px-3 py-2 text-sm"
               >
                 <option value="">Select</option>
-                {branches.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name}
+                {timeZones.map((tz) => (
+                  <option key={tz.id} value={tz.id}>
+                    {tz.name}
                   </option>
                 ))}
               </select>
-              {errors.parentBranch && (
-                <p className="text-red-500 text-xs mt-1">
-                  {errors.parentBranch}
-                </p>
-              )}
+              <Icon
+                icon="material-symbols:arrow-left-rounded"
+                className="absolute right-3 top-3 rotate-[-90deg]"
+              />
             </div>
+            {errors.timeZone && (
+              <p className="text-red-500 text-xs mt-1">{errors.timeZone}</p>
+            )}
           </div>
         </div>
 
-        {/* Footer Buttons */}
-        <div className="flex justify-end gap-4 pt-6">
-          <CancelButton
-            onClick={() => {
-              setFormData({
-                divisionName: "",
-                divisionCode: "",
-                location: "",
-                description: "",
-                address: "",
-                latitude: "",
-                longitude: "",
-                timeZone: "",
-                parentBranch: "",
-              });
-              setErrors({});
-            }}
-          >
-            Cancel
-          </CancelButton>
+        <div className="flex flex-col justify-between">
+          <div>
+            <div className="flex items-end gap-3">
+              <div
+                onClick={handleFetchLocation}
+                className="flex items-center justify-center w-10 h-10 border bg-gray-50 rounded-md cursor-pointer"
+              >
+                <Icon icon="mdi:location" />
+              </div>
 
-          <GlowButton type="submit">Save</GlowButton>
+              <div className="flex-1">
+                <label className="block text-sm">Latitude</label>
+                <input
+                  name="latitude"
+                  value={formData.latitude}
+                  onChange={handleChange}
+                  className="w-full border bg-gray-50 rounded-md px-3 py-2 text-sm"
+                />
+              </div>
+
+              <div className="flex-1">
+                <label className="block text-sm">Longitude</label>
+                <input
+                  name="longitude"
+                  value={formData.longitude}
+                  onChange={handleChange}
+                  className="w-full border bg-gray-50 rounded-md px-3 py-2 text-sm"
+                />
+              </div>
+            </div>
+            {(errors.latitude || errors.longitude) && (
+              <p className="text-red-500 text-xs mt-1">
+                {errors.latitude || errors.longitude}
+              </p>
+            )}
+          </div>
+
+          <div className="pt-4">
+            <label className="block text-sm text-gray-700 mb-1">
+              Parent Branch
+            </label>
+            <select
+              name="parentBranch"
+              value={formData.parentBranch}
+              onChange={handleChange}
+              className="w-full border bg-gray-50 rounded-md px-3 py-2 text-sm"
+            >
+              <option value="">Select</option>
+              {branches.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
+            </select>
+            {errors.parentBranch && (
+              <p className="text-red-500 text-xs mt-1">{errors.parentBranch}</p>
+            )}
+          </div>
         </div>
-      </form>
-    </>
+      </div>
+
+      {/* Footer Buttons */}
+      <div className="flex justify-end gap-4 pt-6">
+        <CancelButton
+          onClick={() => {
+            setFormData({
+              divisionName: "",
+              divisionCode: "",
+              location: "",
+              description: "",
+              address: "",
+              latitude: "",
+              longitude: "",
+              timeZone: "",
+              parentBranch: "",
+            });
+            setErrors({});
+          }}
+        >
+          Cancel
+        </CancelButton>
+
+        <GlowButton type="submit">Save</GlowButton>
+      </div>
+    </form>
   );
 };
 

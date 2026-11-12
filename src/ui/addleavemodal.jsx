@@ -263,7 +263,7 @@ const AdminLeaveModal = ({ isOpen, onClose }) => {
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm font-poppins text-[12px]">
-      <div className="bg-white w-[95%] max-w-[500px] rounded-[2rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] border border-white/20">
+      <div className="bg-white w-[95%] max-w-[980px] rounded-[2rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] border border-white/20">
         {/* Header */}
         <div className="px-8 py-5 flex items-center justify-between border-b border-gray-50 bg-white">
           <div>
@@ -279,349 +279,354 @@ const AdminLeaveModal = ({ isOpen, onClose }) => {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-8 space-y-5 overflow-y-auto">
-          {/* Employee Selection */}
-          <div>
-            <label className="block mb-1 font-medium text-gray-700">
-              Employee
-            </label>
-            <select
-              value={formData.employeeUuid}
-              onChange={(e) => handleEmployeeChange(e.target.value)}
-              className="w-full border p-3 rounded-2xl"
-            >
-              <option value="">Select Staff Member</option>
-              {staffList.map((s) => (
-                <option key={s.uuid} value={s.uuid}>
-                  {s.full_name || s.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Leave Policy Selection */}
-          <div>
-            <label className="block mb-1 font-medium text-gray-700">
-              Leave Policy / Type
-            </label>
-            <select
-              value={formData.leave_policy}
-              disabled={!formData.employeeUuid || fetchingPolicies}
-              onChange={(e) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  leave_policy: Number(e.target.value),
-                }))
-              }
-              className="w-full border p-3 rounded-2xl disabled:bg-gray-50 disabled:text-gray-400"
-            >
-              <option value="">
-                {fetchingPolicies
-                  ? "Loading policies..."
-                  : !formData.employeeUuid
-                    ? "Select an employee first"
-                    : !employeeLeavePolicies ||
-                        employeeLeavePolicies.length === 0
-                      ? "No policies found"
-                      : "Select Leave Policy"}
-              </option>
-              {Array.isArray(employeeLeavePolicies) &&
-                employeeLeavePolicies.map((policy) => (
-                  <option key={policy.id} value={policy.id}>
-                    {policy.name}
-                  </option>
-                ))}
-            </select>
-          </div>
-
-          {/* Dates Section - Calendar */}
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="font-medium text-gray-700">Leave Dates</label>
-              {formData.leave_date.length > 0 && (
-                <button
-                  type="button"
-                  onClick={clearDates}
-                  className="text-gray-400 hover:text-red-500 transition-colors"
+        <form onSubmit={handleSubmit} className="p-8 overflow-y-auto">
+          {/* Two columns: inputs on the left, calendar on the right */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* ================= LEFT: inputs ================= */}
+            <div className="space-y-5 min-w-0">
+              {/* Employee Selection */}
+              <div>
+                <label className="block mb-1 font-medium text-gray-700">
+                  Employee
+                </label>
+                <select
+                  value={formData.employeeUuid}
+                  onChange={(e) => handleEmployeeChange(e.target.value)}
+                  className="w-full border p-3 rounded-2xl"
                 >
-                  Clear all
-                </button>
-              )}
-            </div>
+                  <option value="">Select Staff Member</option>
+                  {staffList.map((s) => (
+                    <option key={s.uuid} value={s.uuid}>
+                      {s.full_name || s.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-            <div className="border rounded-2xl p-4">
-              {/* Mode switch */}
-              <div className="flex items-center justify-between gap-2 mb-3">
-                <div className="flex bg-gray-100 rounded-full p-0.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setRangeMode(false);
-                      setAnchor(null);
-                    }}
-                    className={`px-3 py-1 rounded-full transition-colors ${
-                      !rangeMode
-                        ? "bg-black text-white"
-                        : "text-gray-600 hover:text-gray-900"
-                    }`}
-                  >
-                    Pick days
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setRangeMode(true);
-                      setAnchor(null);
-                    }}
-                    className={`px-3 py-1 rounded-full transition-colors ${
-                      rangeMode
-                        ? "bg-black text-white"
-                        : "text-gray-600 hover:text-gray-900"
-                    }`}
-                  >
-                    Select range
-                  </button>
+              {/* Leave Policy Selection */}
+              <div>
+                <label className="block mb-1 font-medium text-gray-700">
+                  Leave Policy / Type
+                </label>
+                <select
+                  value={formData.leave_policy}
+                  disabled={!formData.employeeUuid || fetchingPolicies}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      leave_policy: Number(e.target.value),
+                    }))
+                  }
+                  className="w-full border p-3 rounded-2xl disabled:bg-gray-50 disabled:text-gray-400"
+                >
+                  <option value="">
+                    {fetchingPolicies
+                      ? "Loading policies..."
+                      : !formData.employeeUuid
+                        ? "Select an employee first"
+                        : !employeeLeavePolicies ||
+                            employeeLeavePolicies.length === 0
+                          ? "No policies found"
+                          : "Select Leave Policy"}
+                  </option>
+                  {Array.isArray(employeeLeavePolicies) &&
+                    employeeLeavePolicies.map((policy) => (
+                      <option key={policy.id} value={policy.id}>
+                        {policy.name}
+                      </option>
+                    ))}
+                </select>
+              </div>
+
+              {/* CC Notification Search */}
+              <div className="space-y-2">
+                <label className="block mb-1 font-medium text-gray-700">
+                  CC (Notify Staff)
+                </label>
+                <div className="relative">
+                  <Search
+                    className="absolute left-3 top-3 text-gray-400"
+                    size={16}
+                  />
+                  <input
+                    type="text"
+                    placeholder="Search staff..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-9 border p-2.5 rounded-2xl"
+                  />
                 </div>
 
-                {rangeMode && (
-                  <label className="flex items-center gap-2 text-gray-600 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      className="accent-black w-4 h-4 rounded"
-                      checked={skipWeekends}
-                      onChange={(e) => setSkipWeekends(e.target.checked)}
-                    />
-                    Skip weekends
-                  </label>
+                <div className="max-h-[180px] overflow-y-auto border rounded-2xl p-2 space-y-1">
+                  {filteredStaff.length === 0 ? (
+                    <div className="p-3 text-center text-gray-400">
+                      No staff found
+                    </div>
+                  ) : (
+                    filteredStaff.map((s) => (
+                      <label
+                        key={s.uuid}
+                        className="flex justify-between items-center p-2 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors"
+                      >
+                        <span className="font-medium text-gray-800">
+                          {s.full_name || s.name}
+                        </span>
+                        <input
+                          type="checkbox"
+                          checked={formData.cc.includes(s.uuid)}
+                          onChange={() => toggleCcEmployee(s.uuid)}
+                          className="rounded border-gray-300"
+                        />
+                      </label>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* Reason Section */}
+              <div>
+                <label className="block mb-1 font-medium text-gray-700">
+                  Reason
+                </label>
+                <textarea
+                  rows="3"
+                  value={formData.reason}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, reason: e.target.value }))
+                  }
+                  placeholder="Personal work..."
+                  className="w-full border p-3 rounded-2xl"
+                />
+              </div>
+            </div>
+
+            {/* ================= RIGHT: calendar ================= */}
+            <div className="min-w-0">
+              <div className="flex items-center justify-between mb-1">
+                <label className="font-medium text-gray-700">Leave Dates</label>
+                {formData.leave_date.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={clearDates}
+                    className="text-gray-400 hover:text-red-500 transition-colors"
+                  >
+                    Clear all
+                  </button>
                 )}
               </div>
 
-              {/* Month navigation */}
-              <div className="flex items-center justify-between mb-2">
-                <button
-                  type="button"
-                  onClick={() => changeMonth(-1)}
-                  aria-label="Previous month"
-                  className="p-1.5 rounded-full hover:bg-gray-100 transition-colors"
-                >
-                  <Icon
-                    icon="solar:alt-arrow-left-outline"
-                    className="w-4 h-4"
-                  />
-                </button>
-                <span className="font-medium text-gray-900 text-[13px]">
-                  {MONTHS[view.month]} {view.year}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => changeMonth(1)}
-                  aria-label="Next month"
-                  className="p-1.5 rounded-full hover:bg-gray-100 transition-colors"
-                >
-                  <Icon
-                    icon="solar:alt-arrow-right-outline"
-                    className="w-4 h-4"
-                  />
-                </button>
-              </div>
-
-              {/* Weekday header */}
-              <div className="grid grid-cols-7 mb-1">
-                {WEEKDAYS.map((w) => (
-                  <div
-                    key={w}
-                    className="text-center text-[10px] text-gray-400 py-1"
-                  >
-                    {w}
-                  </div>
-                ))}
-              </div>
-
-              {/* Day grid */}
-              <div className="grid grid-cols-7 gap-y-1">
-                {calendarCells.map((day, i) => {
-                  if (day === null) return <div key={`b-${i}`} />;
-                  const key = toKey(view.year, view.month, day);
-                  const row = selectedMap[key];
-                  const isSelected = !!row;
-                  const isToday = key === todayKey;
-                  const isAnchor = key === anchor;
-                  const isWeekend = i % 7 === 0 || i % 7 === 6;
-
-                  return (
-                    <div key={key} className="flex justify-center">
-                      <button
-                        type="button"
-                        onClick={() => handleDayClick(key)}
-                        title={row?.half_day ? "Half day" : undefined}
-                        className={`relative w-9 h-9 rounded-full flex items-center justify-center transition-colors ${
-                          isSelected
-                            ? "bg-black text-white font-medium"
-                            : isAnchor
-                              ? "bg-gray-200 text-gray-900 font-medium"
-                              : isWeekend
-                                ? "text-gray-400 hover:bg-gray-100"
-                                : "text-gray-800 hover:bg-gray-100"
-                        } ${
-                          isToday && !isSelected
-                            ? "ring-1 ring-black ring-inset"
-                            : ""
-                        }`}
-                      >
-                        {day}
-                        {isSelected && row.half_day && (
-                          <span className="absolute bottom-1 w-1 h-1 rounded-full bg-white" />
-                        )}
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <p className="mt-3 text-[10px] text-gray-400">
-                {rangeMode
-                  ? anchor
-                    ? `Start: ${formatKey(anchor)}. Now tap the end date.`
-                    : "Tap a start date, then an end date to add the whole range."
-                  : "Tap any day to select or unselect it."}
-              </p>
-            </div>
-
-            {/* Selected dates */}
-            {sortedDates.length > 0 && (
-              <div className="mt-3">
-                <p className="mb-2 text-gray-500">
-                  {sortedDates.length} date{sortedDates.length > 1 ? "s" : ""}{" "}
-                  selected · {totalDays} day{totalDays !== 1 ? "s" : ""} of
-                  leave
-                </p>
-                <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
-                  {sortedDates.map((row) => (
-                    <div
-                      key={row.date}
-                      className="flex items-center justify-between gap-3 border px-3 py-2 rounded-2xl"
+              <div className="border rounded-2xl p-4">
+                {/* Mode switch */}
+                <div className="flex items-center justify-between gap-2 mb-3">
+                  <div className="flex bg-gray-100 rounded-full p-0.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRangeMode(false);
+                        setAnchor(null);
+                      }}
+                      className={`px-3 py-1 rounded-full transition-colors ${
+                        !rangeMode
+                          ? "bg-black text-white"
+                          : "text-gray-600 hover:text-gray-900"
+                      }`}
                     >
-                      <span className="font-medium text-gray-800">
-                        {formatKey(row.date)}
-                      </span>
+                      Pick days
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRangeMode(true);
+                        setAnchor(null);
+                      }}
+                      className={`px-3 py-1 rounded-full transition-colors ${
+                        rangeMode
+                          ? "bg-black text-white"
+                          : "text-gray-600 hover:text-gray-900"
+                      }`}
+                    >
+                      Select range
+                    </button>
+                  </div>
 
-                      <div className="flex items-center gap-3">
-                        <label className="flex items-center gap-2 text-gray-600 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            className="accent-black w-4 h-4 rounded"
-                            checked={row.half_day}
-                            onChange={(e) =>
-                              updateDateRow(row.date, {
-                                half_day: e.target.checked,
-                                half_day_type: e.target.checked ? 1 : 0,
-                              })
-                            }
-                          />
-                          Half Day
-                        </label>
+                  {rangeMode && (
+                    <label className="flex items-center gap-2 text-gray-600 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="accent-black w-4 h-4 rounded"
+                        checked={skipWeekends}
+                        onChange={(e) => setSkipWeekends(e.target.checked)}
+                      />
+                      Skip weekends
+                    </label>
+                  )}
+                </div>
 
-                        <button
-                          type="button"
-                          onClick={() => removeDate(row.date)}
-                          aria-label="Remove date"
-                          title="Remove"
-                          className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
-                        >
-                          <Icon
-                            icon="solar:trash-bin-trash-outline"
-                            className="w-4 h-4"
-                          />
-                        </button>
-                      </div>
+                {/* Month navigation */}
+                <div className="flex items-center justify-between mb-2">
+                  <button
+                    type="button"
+                    onClick={() => changeMonth(-1)}
+                    aria-label="Previous month"
+                    className="p-1.5 rounded-full hover:bg-gray-100 transition-colors"
+                  >
+                    <Icon
+                      icon="solar:alt-arrow-left-outline"
+                      className="w-4 h-4"
+                    />
+                  </button>
+                  <span className="font-medium text-gray-900 text-[13px]">
+                    {MONTHS[view.month]} {view.year}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => changeMonth(1)}
+                    aria-label="Next month"
+                    className="p-1.5 rounded-full hover:bg-gray-100 transition-colors"
+                  >
+                    <Icon
+                      icon="solar:alt-arrow-right-outline"
+                      className="w-4 h-4"
+                    />
+                  </button>
+                </div>
+
+                {/* Weekday header */}
+                <div className="grid grid-cols-7 mb-1">
+                  {WEEKDAYS.map((w) => (
+                    <div
+                      key={w}
+                      className="text-center text-[10px] text-gray-400 py-1"
+                    >
+                      {w}
                     </div>
                   ))}
                 </div>
-              </div>
-            )}
-          </div>
 
-          {/* CC Notification Search */}
-          <div className="space-y-2">
-            <label className="block mb-1 font-medium text-gray-700">
-              CC (Notify Staff)
-            </label>
-            <div className="relative">
-              <Search
-                className="absolute left-3 top-3 text-gray-400"
-                size={16}
-              />
-              <input
-                type="text"
-                placeholder="Search staff..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-9 border p-2.5 rounded-2xl"
-              />
-            </div>
+                {/* Day grid */}
+                <div className="grid grid-cols-7 gap-y-1">
+                  {calendarCells.map((day, i) => {
+                    if (day === null) return <div key={`b-${i}`} />;
+                    const key = toKey(view.year, view.month, day);
+                    const row = selectedMap[key];
+                    const isSelected = !!row;
+                    const isToday = key === todayKey;
+                    const isAnchor = key === anchor;
+                    const isWeekend = i % 7 === 0 || i % 7 === 6;
 
-            <div className="max-h-[180px] overflow-y-auto border rounded-2xl p-2 space-y-1">
-              {filteredStaff.length === 0 ? (
-                <div className="p-3 text-center text-gray-400">
-                  No staff found
+                    return (
+                      <div key={key} className="flex justify-center">
+                        <button
+                          type="button"
+                          onClick={() => handleDayClick(key)}
+                          title={row?.half_day ? "Half day" : undefined}
+                          className={`relative w-9 h-9 rounded-full flex items-center justify-center transition-colors ${
+                            isSelected
+                              ? "bg-black text-white font-medium"
+                              : isAnchor
+                                ? "bg-gray-200 text-gray-900 font-medium"
+                                : isWeekend
+                                  ? "text-gray-400 hover:bg-gray-100"
+                                  : "text-gray-800 hover:bg-gray-100"
+                          } ${
+                            isToday && !isSelected
+                              ? "ring-1 ring-black ring-inset"
+                              : ""
+                          }`}
+                        >
+                          {day}
+                          {isSelected && row.half_day && (
+                            <span className="absolute bottom-1 w-1 h-1 rounded-full bg-white" />
+                          )}
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
-              ) : (
-                filteredStaff.map((s) => (
-                  <label
-                    key={s.uuid}
-                    className="flex justify-between items-center p-2 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors"
-                  >
-                    <span className="font-medium text-gray-800">
-                      {s.full_name || s.name}
-                    </span>
-                    <input
-                      type="checkbox"
-                      checked={formData.cc.includes(s.uuid)}
-                      onChange={() => toggleCcEmployee(s.uuid)}
-                      className="rounded border-gray-300"
-                    />
-                  </label>
-                ))
+
+                <p className="mt-3 text-[10px] text-gray-400">
+                  {rangeMode
+                    ? anchor
+                      ? `Start: ${formatKey(anchor)}. Now tap the end date.`
+                      : "Tap a start date, then an end date to add the whole range."
+                    : "Tap any day to select or unselect it."}
+                </p>
+              </div>
+
+              {/* Selected dates */}
+              {sortedDates.length > 0 && (
+                <div className="mt-3">
+                  <p className="mb-2 text-gray-500">
+                    {sortedDates.length} date
+                    {sortedDates.length > 1 ? "s" : ""} selected · {totalDays}{" "}
+                    day{totalDays !== 1 ? "s" : ""} of leave
+                  </p>
+                  <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
+                    {sortedDates.map((row) => (
+                      <div
+                        key={row.date}
+                        className="flex items-center justify-between gap-3 border px-3 py-2 rounded-2xl"
+                      >
+                        <span className="font-medium text-gray-800">
+                          {formatKey(row.date)}
+                        </span>
+
+                        <div className="flex items-center gap-3">
+                          <label className="flex items-center gap-2 text-gray-600 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              className="accent-black w-4 h-4 rounded"
+                              checked={row.half_day}
+                              onChange={(e) =>
+                                updateDateRow(row.date, {
+                                  half_day: e.target.checked,
+                                  half_day_type: e.target.checked ? 1 : 0,
+                                })
+                              }
+                            />
+                            Half Day
+                          </label>
+
+                          <button
+                            type="button"
+                            onClick={() => removeDate(row.date)}
+                            aria-label="Remove date"
+                            title="Remove"
+                            className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                          >
+                            <Icon
+                              icon="solar:trash-bin-trash-outline"
+                              className="w-4 h-4"
+                            />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               )}
+              {/* Footer: Cancel / Confirm under the calendar */}
+              <div className="flex justify-end gap-3 pt-5">
+                <button
+                  type="button"
+                  onClick={handleClose}
+                  className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                >
+                  Cancel
+                </button>
+
+                <GlowButton
+                  onClick={handleSubmit}
+                  disabled={loading || fetchingPolicies}
+                >
+                  {loading ? (
+                    <Loader2 className="animate-spin" size={16} />
+                  ) : (
+                    "Confirm Leave"
+                  )}
+                </GlowButton>
+              </div>
             </div>
-          </div>
-
-          {/* Reason Section */}
-          <div>
-            <label className="block mb-1 font-medium text-gray-700">
-              Reason
-            </label>
-            <textarea
-              rows="3"
-              value={formData.reason}
-              onChange={(e) =>
-                setFormData((prev) => ({ ...prev, reason: e.target.value }))
-              }
-              placeholder="Personal work..."
-              className="w-full border p-3 rounded-2xl"
-            />
-          </div>
-
-          {/* Footer */}
-          <div className="flex justify-end gap-3 pt-2">
-            <button
-              type="button"
-              onClick={handleClose}
-              className="px-4 py-2 text-gray-600 hover:text-gray-800"
-            >
-              Cancel
-            </button>
-
-            <GlowButton
-              onClick={handleSubmit}
-              disabled={loading || fetchingPolicies}
-            >
-              {loading ? (
-                <Loader2 className="animate-spin" size={16} />
-              ) : (
-                "Confirm Leave"
-              )}
-            </GlowButton>
           </div>
         </form>
       </div>

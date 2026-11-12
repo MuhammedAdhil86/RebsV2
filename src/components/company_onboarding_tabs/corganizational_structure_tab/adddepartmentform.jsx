@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Icon } from "@iconify/react";
-import toast, { Toaster } from "react-hot-toast";
+import { toast } from "react-toastify"; // uses the global <ToastContainer /> from App.jsx
 import {
   addDepartment,
   getDepartmentData,
@@ -8,25 +8,44 @@ import {
 import GlowButton from "../../helpers/glowbutton";
 import CancelButton from "../../helpers/cancelbutton";
 
+const EMPTY_FORM = {
+  departmentName: "",
+  departmentCode: "",
+  email: "",
+  description: "",
+  hasParent: false,
+  parentBranch: "",
+};
+
+/* ---------- shared styles (same tokens as the KPI / Team pages) ---------- */
+
+const inputClass = (hasError) =>
+  `w-full border rounded-lg px-3 py-2.5 text-sm text-black placeholder:text-black/30 outline-none transition-colors ${
+    hasError ? "border-red-400" : "border-black/10 focus:border-black"
+  }`;
+
+const Field = ({ label, required, error, children }) => (
+  <div>
+    <label className="block text-xs text-black/60 mb-1.5">
+      {label}
+      {required && <span className="text-red-500"> *</span>}
+    </label>
+    {children}
+    {error && <p className="text-red-600 text-[11px] mt-1">{error}</p>}
+  </div>
+);
+
 const AddDepartmentForm = () => {
   const [parentDepartments, setParentDepartments] = useState([]);
   const [errors, setErrors] = useState({});
-
-  const [formData, setFormData] = useState({
-    departmentName: "",
-    departmentCode: "",
-    email: "",
-    description: "",
-    hasParent: false,
-    parentBranch: "",
-  });
+  const [formData, setFormData] = useState(EMPTY_FORM);
 
   /* ---------------- Fetch Parent Departments ---------------- */
   useEffect(() => {
     const fetchDepartments = async () => {
       try {
         const data = await getDepartmentData();
-        setParentDepartments(data);
+        setParentDepartments(Array.isArray(data) ? data : []);
       } catch (error) {
         console.error("Failed to fetch departments", error);
       }
@@ -41,16 +60,12 @@ const AddDepartmentForm = () => {
     setFormData((prev) => ({
       ...prev,
       [name]: type === "checkbox" ? checked : value,
+      // Unchecking "Has Parent" clears the selected parent
       ...(name === "hasParent" && !checked ? { parentBranch: "" } : {}),
     }));
 
     if (errors[name]) {
       setErrors((prev) => ({ ...prev, [name]: "" }));
-    }
-
-    // Unchecking "Has Parent" also clears any parent department error
-    if (name === "hasParent" && !checked && errors.parentBranch) {
-      setErrors((prev) => ({ ...prev, parentBranch: "" }));
     }
   };
 
@@ -68,10 +83,10 @@ const AddDepartmentForm = () => {
       newErrors.departmentName = "Department name is required";
     } else if (name.length < 2) {
       newErrors.departmentName =
-        "Department name must be at least 2 characters";
+        "Department name is too short. Enter at least 2 characters";
     } else if (name.length > 100) {
       newErrors.departmentName =
-        "Department name must be 100 characters or less";
+        "Department name is too long. Enter 100 characters or fewer";
     }
 
     // Department Code
@@ -79,15 +94,16 @@ const AddDepartmentForm = () => {
       newErrors.departmentCode = "Department code is required";
     } else if (!/^[A-Za-z0-9_-]{2,20}$/.test(code)) {
       newErrors.departmentCode =
-        "2-20 characters: letters, numbers, - or _ only";
+        "Department code must be 2 to 20 characters and can only contain letters, numbers, hyphen (-) or underscore (_)";
     }
 
     // Email (optional, but must be valid if entered)
     if (email) {
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-        newErrors.email = "Invalid email format";
+        newErrors.email =
+          "Please enter a valid email address, for example name@company.com";
       } else if (email.length > 254) {
-        newErrors.email = "Email must be 254 characters or less";
+        newErrors.email = "Email is too long. Enter 254 characters or fewer";
       }
     }
 
@@ -95,18 +111,23 @@ const AddDepartmentForm = () => {
     if (!description) {
       newErrors.description = "Description is required";
     } else if (description.length < 5) {
-      newErrors.description = "Description must be at least 5 characters";
+      newErrors.description =
+        "Description is too short. Enter at least 5 characters";
     } else if (description.length > 500) {
-      newErrors.description = "Description must be 500 characters or less";
+      newErrors.description =
+        "Description is too long. Enter 500 characters or fewer";
     }
 
-    // Parent Department (required only when "Has Parent" is checked)
-    if (formData.hasParent && !formData.parentBranch) {
-      newErrors.parentBranch = "Please select a parent department";
-    }
+    // Parent Department is optional: no validation needed
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
+  };
+
+  /* ---------------- Reset ---------------- */
+  const resetForm = () => {
+    setFormData(EMPTY_FORM);
+    setErrors({});
   };
 
   /* ---------------- Submit ---------------- */
@@ -114,198 +135,126 @@ const AddDepartmentForm = () => {
     e.preventDefault();
 
     if (!validateForm()) {
-      toast.error("Please correct the highlighted errors");
+      toast.error("Please correct the highlighted fields and try again");
       return;
     }
 
+    // Parent is optional: only a child department when one is actually chosen
+    const hasParent = formData.hasParent && !!formData.parentBranch;
+
     const payload = {
-      name: formData.departmentName,
-      code: formData.departmentCode,
-      email: formData.email,
-      desc: formData.description,
-      has_parent: formData.hasParent ? "true" : "false",
-      parent:
-        formData.hasParent && formData.parentBranch
-          ? formData.parentBranch
-          : "0",
+      name: formData.departmentName.trim(),
+      code: formData.departmentCode.trim(),
+      email: formData.email.trim(),
+      desc: formData.description.trim(),
+      has_parent: hasParent ? "true" : "false",
+      parent: hasParent ? formData.parentBranch : "0",
       lead: 0,
     };
 
     try {
       await addDepartment(payload);
-
-      toast.success("Department Added Successfully");
-
-      setFormData({
-        departmentName: "",
-        departmentCode: "",
-        email: "",
-        description: "",
-        hasParent: false,
-        parentBranch: "",
-      });
-
-      setErrors({});
+      toast.success("Department added successfully");
+      resetForm();
     } catch (error) {
-      toast.error("Error Adding Department. Please Try Again!!");
+      toast.error("Could not add the department. Please try again");
       console.error(error);
     }
   };
 
   return (
-    <>
-      <Toaster position="top-right" />
+    <form onSubmit={handleSubmit} className="space-y-6">
+      {/* Row 1 */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Field label="Department Name" required error={errors.departmentName}>
+          <input
+            type="text"
+            name="departmentName"
+            value={formData.departmentName}
+            onChange={handleChange}
+            placeholder="Enter name"
+            className={inputClass(errors.departmentName)}
+          />
+        </Field>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Row 1 */}
-        <div className="grid grid-cols-3 gap-6">
-          <div>
-            <label className="block text-sm text-gray-700 mb-1">
-              Department Name <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              name="departmentName"
-              value={formData.departmentName}
-              onChange={handleChange}
-              placeholder="Enter name"
-              className={`w-full border rounded-md px-3 py-2 text-sm focus:outline-none ${
-                errors.departmentName ? "border-red-500" : "border-gray-300"
-              }`}
-            />
-            {errors.departmentName && (
-              <p className="text-red-500 text-xs mt-1">
-                {errors.departmentName}
-              </p>
-            )}
-          </div>
+        <Field label="Department Code" required error={errors.departmentCode}>
+          <input
+            type="text"
+            name="departmentCode"
+            value={formData.departmentCode}
+            onChange={handleChange}
+            placeholder="Enter code"
+            className={inputClass(errors.departmentCode)}
+          />
+        </Field>
 
-          <div>
-            <label className="block text-sm text-gray-700 mb-1">
-              Department Code <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              name="departmentCode"
-              value={formData.departmentCode}
-              onChange={handleChange}
-              placeholder="Enter code"
-              className={`w-full border rounded-md px-3 py-2 text-sm focus:outline-none ${
-                errors.departmentCode ? "border-red-500" : "border-gray-300"
-              }`}
-            />
-            {errors.departmentCode && (
-              <p className="text-red-500 text-xs mt-1">
-                {errors.departmentCode}
-              </p>
-            )}
-          </div>
+        <Field label="Email" error={errors.email}>
+          <input
+            type="email"
+            name="email"
+            value={formData.email}
+            onChange={handleChange}
+            placeholder="Enter email"
+            className={inputClass(errors.email)}
+          />
+        </Field>
+      </div>
 
-          <div>
-            <label className="block text-sm text-gray-700 mb-1">Email</label>
+      {/* Row 2 */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Field label="Description" required error={errors.description}>
+          <textarea
+            name="description"
+            value={formData.description}
+            onChange={handleChange}
+            placeholder="Enter description"
+            className={`${inputClass(errors.description)} h-[120px] resize-none`}
+          />
+        </Field>
+
+        <div className="flex items-start md:mt-6">
+          <label className="flex items-center gap-2 text-sm text-black cursor-pointer select-none">
             <input
-              type="email"
-              name="email"
-              value={formData.email}
+              type="checkbox"
+              name="hasParent"
+              checked={formData.hasParent}
               onChange={handleChange}
-              placeholder="Enter email"
-              className={`w-full border rounded-md px-3 py-2 text-sm focus:outline-none ${
-                errors.email ? "border-red-500" : "border-gray-300"
-              }`}
+              className="w-4 h-4 accent-black"
             />
-            {errors.email && (
-              <p className="text-red-500 text-xs mt-1">{errors.email}</p>
-            )}
-          </div>
+            Has Parent Department
+          </label>
         </div>
 
-        {/* Row 2 */}
-        <div className="grid grid-cols-3 gap-6">
-          <div>
-            <label className="block text-sm text-gray-700 mb-1">
-              Description <span className="text-red-500">*</span>
-            </label>
-            <textarea
-              name="description"
-              value={formData.description}
+        <Field label="Parent Department (optional)">
+          <div className="relative">
+            <select
+              name="parentBranch"
+              value={formData.parentBranch}
               onChange={handleChange}
-              placeholder="Enter description"
-              className={`w-full h-[120px] border rounded-md px-3 py-2 text-sm resize-none focus:outline-none ${
-                errors.description ? "border-red-500" : "border-gray-300"
-              }`}
+              disabled={!formData.hasParent}
+              className={`${inputClass(false)} appearance-none bg-white pr-9 disabled:bg-zinc-50 disabled:text-black/30 disabled:cursor-not-allowed`}
+            >
+              <option value="">Select</option>
+              {parentDepartments.map((dept) => (
+                <option key={dept.id} value={dept.id}>
+                  {dept.name}
+                </option>
+              ))}
+            </select>
+            <Icon
+              icon="mdi:chevron-down"
+              className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-black/40 pointer-events-none"
             />
-            {errors.description && (
-              <p className="text-red-500 text-xs mt-1">{errors.description}</p>
-            )}
           </div>
+        </Field>
+      </div>
 
-          <div className="flex items-start mt-6">
-            <label className="flex items-center gap-2 text-sm text-gray-700">
-              <input
-                type="checkbox"
-                name="hasParent"
-                checked={formData.hasParent}
-                onChange={handleChange}
-                className="w-4 h-4 accent-black"
-              />
-              Has Parent Department
-            </label>
-          </div>
-
-          <div className="mt-6">
-            <label className="block text-sm text-gray-700 mb-1">
-              Parent Department
-            </label>
-            <div className="relative">
-              <select
-                name="parentBranch"
-                value={formData.parentBranch}
-                onChange={handleChange}
-                disabled={!formData.hasParent}
-                className={`w-full appearance-none border rounded-md px-3 py-2 text-sm bg-white focus:outline-none ${
-                  errors.parentBranch ? "border-red-500" : "border-gray-300"
-                }`}
-              >
-                <option value="">Select</option>
-                {parentDepartments.map((dept) => (
-                  <option key={dept.id} value={dept.id}>
-                    {dept.name}
-                  </option>
-                ))}
-              </select>
-              <Icon
-                icon="material-symbols:arrow-left-rounded"
-                className="absolute right-3 top-3 text-gray-500 rotate-[-90deg] text-lg pointer-events-none"
-              />
-            </div>
-            {errors.parentBranch && (
-              <p className="text-red-500 text-xs mt-1">{errors.parentBranch}</p>
-            )}
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="flex justify-end gap-4 pt-6">
-          <CancelButton
-            onClick={() => {
-              setFormData({
-                departmentName: "",
-                departmentCode: "",
-                email: "",
-                description: "",
-                hasParent: false,
-                parentBranch: "",
-              });
-              setErrors({});
-            }}
-          >
-            Cancel
-          </CancelButton>
-
-          <GlowButton type="submit">Save</GlowButton>
-        </div>
-      </form>
-    </>
+      {/* Footer */}
+      <div className="flex justify-end gap-4 pt-5 border-t border-black/10">
+        <CancelButton onClick={resetForm}>Cancel</CancelButton>
+        <GlowButton type="submit">Save</GlowButton>
+      </div>
+    </form>
   );
 };
 

@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { FiUpload } from "react-icons/fi";
 import { Icon } from "@iconify/react";
-import toast from "react-hot-toast";
+import { toast } from "react-toastify"; // ToastContainer lives in App.jsx
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
@@ -140,12 +140,26 @@ const AddBasicInformation = () => {
 
     try {
       const response = await updateCompanyDetails(data);
-      toast.success(response?.message || "All details updated!", {
-        id: savingToast,
+      // Turn the loading toast into the success toast
+      toast.update(savingToast, {
+        render: response?.message || "All details updated!",
+        type: "success",
+        isLoading: false,
+        autoClose: 3000,
+        closeOnClick: true,
+        closeButton: true,
+        draggable: true,
       });
     } catch (err) {
-      toast.error(err.response?.data?.message || "Upload failed", {
-        id: savingToast,
+      // Turn the loading toast into the error toast
+      toast.update(savingToast, {
+        render: err.response?.data?.message || "Upload failed",
+        type: "error",
+        isLoading: false,
+        autoClose: 3000,
+        closeOnClick: true,
+        closeButton: true,
+        draggable: true,
       });
     } finally {
       setLoading(false);

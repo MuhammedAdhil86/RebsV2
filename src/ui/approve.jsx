@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import dayjs from "dayjs";
 import { AiOutlinePlus } from "react-icons/ai";
-import { X } from "lucide-react";
+import { Icon } from "@iconify/react";
 import { toast } from "react-toastify";
 import useLeaveStore from "../store/useleaveStore";
 
@@ -51,12 +51,13 @@ const getApiBody = (res) =>
 
 // Badge colours for approval / leave status (lowercase input)
 const getApprovalBadge = (status) => {
-  if (status.includes("approved")) return "bg-green-100 text-green-600";
-  if (status.includes("pending") || !status)
-    return "bg-orange-100 text-orange-600";
-  if (status.includes("rejected")) return "bg-red-100 text-red-600";
-  return "bg-gray-100 text-gray-600";
+  if (status.includes("approved")) return "bg-green-100 text-green-700";
+  if (status.includes("rejected"))
+    return "bg-red-50 text-red-600 border border-red-200";
+  return "bg-gray-100 text-gray-700"; // pending / anything else
 };
+
+const WEEKDAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 
 const LeaveRequestApprove = ({ user, onClose }) => {
   const { updateLeaveStatus } = useLeaveStore();
@@ -214,9 +215,13 @@ const LeaveRequestApprove = ({ user, onClose }) => {
       })(firstLeaveDate)
     : [];
 
-  const labelCls =
-    "text-[9px] font-normal text-gray-400 uppercase tracking-tighter mb-1";
-  const boxCls = "bg-[#F8F9FA] border border-gray-200 px-4 py-3 rounded-2xl";
+  // Blank cells so day 1 sits under the right weekday
+  const leadingBlanks =
+    calendarDates.length > 0 ? calendarDates[0].getDay() : 0;
+
+  // ---------- Theme styles ----------
+  const labelCls = "text-[11px] text-gray-500 mb-1";
+  const boxCls = "bg-slate-50 border border-gray-200 px-4 py-3 rounded-lg";
 
   const spinner = (
     <span className="inline-block w-3.5 h-3.5 mr-2 align-middle border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -224,45 +229,54 @@ const LeaveRequestApprove = ({ user, onClose }) => {
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center px-4 bg-black/40 backdrop-blur-sm font-poppins text-[12px]"
+      className="fixed inset-0 z-[100] flex items-center justify-center px-4 bg-black/50 backdrop-blur-[2px] font-poppins text-[12px]"
       onClick={handleClose}
     >
       <div
-        className="bg-white w-full max-w-[640px] max-h-[90vh] rounded-[2rem] shadow-2xl overflow-hidden flex flex-col border border-white/20 animate-in fade-in zoom-in duration-200"
+        className="bg-white w-full max-w-[640px] max-h-[90vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in duration-200"
         onClick={(e) => e.stopPropagation()}
       >
         {/* HEADER */}
-        <div className="px-8 py-4 flex items-center justify-between border-b border-gray-50 bg-white">
-          <div>
-            <h2 className="text-gray-900 text-[16px] font-medium uppercase">
-              Leave Request Approval
-            </h2>
-            <p className="text-gray-400 text-[10px]">
-              Review the leave dates and update the request status
-            </p>
+        <div className="flex items-start justify-between gap-3 px-6 pt-5 pb-4 border-b border-gray-100">
+          <div className="flex items-start gap-3">
+            <span className="p-2 bg-slate-100 rounded-lg">
+              <Icon
+                icon="solar:clipboard-check-outline"
+                className="w-5 h-5 text-black"
+              />
+            </span>
+            <div>
+              <h2 className="text-[16px] text-gray-900">
+                Leave Request Approval
+              </h2>
+              <p className="text-[11px] text-gray-500 mt-0.5">
+                Review the leave dates and update the request status
+              </p>
+            </div>
           </div>
           <button
             type="button"
             onClick={handleClose}
             aria-label="Close"
             disabled={submitting}
+            className="text-gray-400 hover:text-black transition-colors disabled:opacity-50"
           >
-            <X size={20} />
+            <Icon icon="material-symbols:close" className="w-6 h-6" />
           </button>
         </div>
 
         {/* BODY */}
-        <div className="px-8 py-5 space-y-4 overflow-y-auto">
+        <div className="px-6 py-5 space-y-4 overflow-y-auto">
           {/* User Info */}
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center text-lg font-normal text-gray-600">
+            <div className="w-11 h-11 bg-slate-100 border border-gray-200 rounded-full flex items-center justify-center text-[15px] text-gray-700 uppercase">
               {user.name && user.name.charAt(0)}
             </div>
             <div>
-              <h3 className="text-lg font-normal text-gray-900 leading-tight">
+              <h3 className="text-[14px] font-medium text-gray-800 leading-tight">
                 {user.name}
               </h3>
-              <p className="text-xs font-normal text-gray-400">
+              <p className="text-[12px] text-gray-500">
                 {user.type} | {totalDays} day(s)
               </p>
             </div>
@@ -272,13 +286,13 @@ const LeaveRequestApprove = ({ user, onClose }) => {
           <div className="grid grid-cols-2 gap-3">
             <div className={boxCls}>
               <p className={labelCls}>Start Date</p>
-              <p className="text-sm font-normal text-gray-800 tabular-nums">
+              <p className="text-[13px] text-gray-800 tabular-nums">
                 {firstLeaveDate ? formatDate(firstLeaveDate) : "N/A"}
               </p>
             </div>
             <div className={boxCls}>
               <p className={labelCls}>End Date</p>
-              <p className="text-sm font-normal text-gray-800 tabular-nums">
+              <p className="text-[13px] text-gray-800 tabular-nums">
                 {endLeaveDate ? formatDate(endLeaveDate) : "N/A"}
               </p>
             </div>
@@ -287,7 +301,7 @@ const LeaveRequestApprove = ({ user, onClose }) => {
           {/* Reason */}
           <div className={boxCls}>
             <p className={labelCls}>Reason</p>
-            <p className="text-sm font-normal text-gray-800 break-words">
+            <p className="text-[13px] text-gray-800 break-words">
               {user.reason}
             </p>
           </div>
@@ -296,13 +310,13 @@ const LeaveRequestApprove = ({ user, onClose }) => {
           {managerApproval && (
             <>
               {managerApproval === "pending" && (
-                <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-2xl">
-                  <span className="mt-1 w-2 h-2 rounded-full bg-amber-500 shrink-0" />
+                <div className="flex items-start gap-3 bg-slate-50 border border-gray-200 px-4 py-3 rounded-lg">
+                  <span className="mt-1.5 w-2 h-2 rounded-full bg-gray-500 shrink-0" />
                   <div>
-                    <p className="text-[13px] font-medium">
+                    <p className="text-[13px] text-gray-800">
                       Pending for manager approval
                     </p>
-                    <p className="text-[11px] text-amber-700">
+                    <p className="text-[11px] text-gray-500">
                       The manager has not yet responded to this leave request.
                     </p>
                   </div>
@@ -313,7 +327,7 @@ const LeaveRequestApprove = ({ user, onClose }) => {
                 <div className={boxCls}>
                   <p className={labelCls}>Manager Approval</p>
                   <span
-                    className={`px-3 py-1 rounded-full text-[11px] font-normal inline-block capitalize ${getApprovalBadge(managerApproval)}`}
+                    className={`px-3 py-1 rounded-full text-[11px] inline-block capitalize ${getApprovalBadge(managerApproval)}`}
                   >
                     {managerApproval}
                   </span>
@@ -321,7 +335,7 @@ const LeaveRequestApprove = ({ user, onClose }) => {
                 <div className={boxCls}>
                   <p className={labelCls}>Leave Status</p>
                   <span
-                    className={`px-3 py-1 rounded-full text-[11px] font-normal inline-block capitalize ${getApprovalBadge(leaveStatus)}`}
+                    className={`px-3 py-1 rounded-full text-[11px] inline-block capitalize ${getApprovalBadge(leaveStatus)}`}
                   >
                     {leaveStatus || "pending"}
                   </span>
@@ -331,36 +345,87 @@ const LeaveRequestApprove = ({ user, onClose }) => {
           )}
 
           {/* Calendar */}
-          <div className="border border-gray-200 rounded-2xl p-4 flex">
-            <div className="w-3/4">
+          <div className="border border-gray-200 rounded-lg p-4 flex gap-4">
+            <div className="flex-1 min-w-0">
               {firstLeaveDate && (
-                <p className="text-[11px] font-medium text-gray-600 mb-2">
+                <p className="text-[13px] font-medium text-gray-800 mb-2">
                   {dayjs(firstLeaveDate).format("MMMM YYYY")}
                 </p>
               )}
-              <div className="grid grid-cols-7 gap-1">
+
+              <div className="grid grid-cols-7 mb-1">
+                {WEEKDAYS.map((d, i) => (
+                  <div
+                    key={d}
+                    className={`text-center text-[10px] py-1 ${
+                      i === 0 || i === 6 ? "text-gray-900" : "text-gray-400"
+                    }`}
+                  >
+                    {d}
+                  </div>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-7 gap-y-1">
+                {Array.from({ length: leadingBlanks }).map((_, i) => (
+                  <div key={`blank-${i}`} />
+                ))}
                 {calendarDates.map((date, idx) => {
                   const dateStr = dayjs(date).format("YYYY-MM-DD");
                   const isSelected = selectedDates.includes(dateStr);
+                  const half = isHalfDay(date);
+                  const leave = isLeaveDay(date);
                   return (
                     <div
                       key={idx}
                       onClick={() => toggleDateSelection(date)}
-                      className={`h-8 w-8 flex items-center justify-center rounded-full cursor-pointer text-[11px] font-normal tabular-nums transition-colors
-                        ${isSelected ? "bg-[#00C582] text-white" : isHalfDay(date) ? "bg-orange-500 text-white" : isLeaveDay(date) ? "bg-gray-800 text-white" : "bg-[#F8F9FA] text-gray-700 hover:bg-gray-100"}`}
+                      className={`relative mx-auto h-8 w-8 flex items-center justify-center rounded-full cursor-pointer text-[12px] tabular-nums transition-colors
+                        ${
+                          isSelected
+                            ? "bg-black text-white"
+                            : half
+                              ? "bg-gray-100 text-gray-900 ring-1 ring-gray-400"
+                              : leave
+                                ? "bg-gray-200 text-gray-900"
+                                : "text-gray-700 hover:bg-gray-100"
+                        }`}
                     >
                       {date.getDate()}
+                      {half && (
+                        <span
+                          className={`absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full ${
+                            isSelected ? "bg-white" : "bg-gray-600"
+                          }`}
+                        />
+                      )}
                     </div>
                   );
                 })}
               </div>
+
+              {/* Legend */}
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-3 text-[10px] text-gray-500">
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-gray-200" />
+                  Leave day
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-gray-100 ring-1 ring-gray-400" />
+                  Half day
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-black" />
+                  Selected
+                </span>
+              </div>
             </div>
-            <div className="w-1/4 flex flex-col space-y-4 ml-4">
-              <div className="bg-[#F8F9FA] border border-gray-200 px-3 py-2 rounded-2xl text-center">
-                <p className="text-lg font-normal text-gray-800 tabular-nums">
+
+            <div className="w-24 shrink-0 flex flex-col">
+              <div className="bg-slate-50 border border-gray-200 px-3 py-3 rounded-lg text-center">
+                <p className="text-[18px] font-medium text-gray-800 tabular-nums">
                   {totalDays}
                 </p>
-                <p className={labelCls}>Total Days</p>
+                <p className="text-[11px] text-gray-500">Total Days</p>
               </div>
             </div>
           </div>
@@ -374,7 +439,7 @@ const LeaveRequestApprove = ({ user, onClose }) => {
                   setNoteDraft(note);
                   setNoteOpen((o) => !o);
                 }}
-                className="w-full py-2.5 px-4 text-[13px] font-normal bg-[#F8F9FA] border border-gray-200 text-gray-800 rounded-2xl flex items-center justify-center hover:bg-gray-100 transition-colors"
+                className="w-full py-2 px-4 text-[12px] bg-white border border-gray-300 text-gray-700 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors"
               >
                 <AiOutlinePlus className="mr-2" /> Add a Note
               </button>
@@ -382,23 +447,23 @@ const LeaveRequestApprove = ({ user, onClose }) => {
               {noteOpen && (
                 <div className="mt-3">
                   <textarea
-                    className="w-full h-24 px-4 py-3 text-sm font-normal text-gray-800 bg-[#F8F9FA] border border-gray-200 rounded-2xl focus:outline-none focus:border-gray-900 resize-none"
+                    className="w-full h-24 px-3 py-2.5 text-[13px] text-gray-800 placeholder-gray-400 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-black focus:border-black resize-none"
                     placeholder="Type your note here..."
                     value={noteDraft}
                     onChange={(e) => setNoteDraft(e.target.value)}
                   />
-                  <div className="flex justify-end gap-3 mt-2">
+                  <div className="flex justify-end gap-2 mt-2">
                     <button
                       type="button"
                       onClick={() => setNoteOpen(false)}
-                      className="py-2 px-5 text-[13px] font-normal border border-gray-200 text-gray-500 rounded-2xl hover:bg-gray-50 transition-colors"
+                      className="py-2 px-4 text-[12px] border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
                     >
                       Close
                     </button>
                     <button
                       type="button"
                       onClick={handleNoteSubmit}
-                      className="py-2 px-5 text-[13px] font-normal bg-gray-800 text-white rounded-2xl hover:bg-black transition-colors"
+                      className="py-2 px-4 text-[12px] bg-black text-white rounded-lg hover:bg-gray-900 transition-colors"
                     >
                       Submit
                     </button>
@@ -409,7 +474,7 @@ const LeaveRequestApprove = ({ user, onClose }) => {
               {!noteOpen && note && (
                 <div className={`mt-3 ${boxCls}`}>
                   <p className={labelCls}>Note</p>
-                  <p className="text-sm font-normal text-gray-800 break-words">
+                  <p className="text-[13px] text-gray-800 break-words">
                     {note}
                   </p>
                 </div>
@@ -419,12 +484,12 @@ const LeaveRequestApprove = ({ user, onClose }) => {
         </div>
 
         {/* FOOTER */}
-        <div className="px-8 py-4 border-t border-gray-50 flex justify-end gap-3">
+        <div className="px-6 py-4 border-t border-gray-100 bg-slate-50/60 flex justify-end gap-2">
           <button
             type="button"
             onClick={handleClose}
             disabled={submitting}
-            className="px-6 py-2.5 border border-gray-200 text-gray-600 hover:bg-gray-50 rounded-2xl disabled:opacity-60 transition-colors"
+            className="px-4 py-2 border border-gray-300 text-gray-700 text-[12px] rounded-lg hover:bg-gray-100 disabled:opacity-60 transition-colors"
           >
             {shouldShowApprovalButtons ? "Cancel" : "Close"}
           </button>
@@ -434,7 +499,7 @@ const LeaveRequestApprove = ({ user, onClose }) => {
               type="button"
               onClick={handleReject}
               disabled={submitting}
-              className="px-6 py-2.5 border border-[#FF8A8A] text-[#FF8A8A] hover:bg-red-50 rounded-2xl disabled:opacity-60 transition-colors"
+              className="px-4 py-2 bg-red-600 text-white text-[12px] rounded-lg hover:bg-red-700 disabled:opacity-60 transition-colors"
             >
               Reject
             </button>
@@ -445,7 +510,7 @@ const LeaveRequestApprove = ({ user, onClose }) => {
               type="button"
               onClick={handleApprove}
               disabled={submitting}
-              className="px-6 py-2.5 bg-[#00C582] text-white hover:opacity-90 rounded-2xl shadow-sm disabled:opacity-60 transition-all"
+              className="px-4 py-2 bg-black text-white text-[12px] rounded-lg hover:bg-gray-900 shadow-sm disabled:opacity-60 transition-all"
             >
               {submitting && spinner}
               Approve
