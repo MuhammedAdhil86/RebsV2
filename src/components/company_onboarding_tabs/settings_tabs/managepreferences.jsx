@@ -2,19 +2,42 @@ import React, { useState, useEffect } from "react";
 import { Trash2 } from "lucide-react";
 import { Icon } from "@iconify/react";
 import axiosInstance from "../../../service/axiosinstance";
-import toast from "react-hot-toast";
+import { toast } from "react-toastify"; // uses the global <ToastContainer /> from App.jsx
 import { useNavigate } from "react-router-dom";
 
+// Exact message from the backend; also appends the `data` detail string if present
+const getBackendMessage = (error, fallback) => {
+  const data = error?.response?.data;
+  if (typeof data === "string" && data.trim()) return data;
+  const main = data?.message || data?.error || data?.detail || "";
+  const detail =
+    typeof data?.data === "string" && data.data.trim() ? data.data.trim() : "";
+  if (main && detail && !main.includes(detail)) return `${main}: ${detail}`;
+  return main || detail || fallback;
+};
+
 // ----------------------------------------------------
-// ✔ Toggle Component (Updated to Green)
+// ✔ Toggle Component (green when on)
 // ----------------------------------------------------
-const Toggle = ({ enabled, onToggle, disabled }) => {
+const Toggle = ({ enabled, onToggle, disabled, label }) => {
   return (
     <div
+      role="switch"
+      aria-checked={enabled}
+      aria-label={label}
+      aria-disabled={disabled}
+      tabIndex={disabled ? -1 : 0}
       onClick={() => !disabled && onToggle()}
-      className={`w-10 h-5 flex items-center rounded-full p-1 cursor-pointer transition 
-        ${enabled ? "bg-green-500" : "bg-gray-300"} 
-        ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
+      onKeyDown={(e) => {
+        if (disabled) return;
+        if (e.key === " " || e.key === "Enter") {
+          e.preventDefault();
+          onToggle();
+        }
+      }}
+      className={`w-10 h-5 shrink-0 flex items-center rounded-full p-1 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400
+        ${enabled ? "bg-green-500" : "bg-gray-300"}
+        ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
     >
       <div
         className={`bg-white w-4 h-4 rounded-full shadow transform duration-200
@@ -43,7 +66,7 @@ export default function ManagePreferencesSection({ uuid, initialPreferences }) {
   const [deleteReason, setDeleteReason] = useState("");
 
   // ----------------------------------------------------
-  // ✔ Fetch attendanceRequired from baseURL2 (ngrok)
+  // ✔ Fetch attendanceRequired
   // ----------------------------------------------------
   useEffect(() => {
     const fetchAttendanceRule = async () => {
@@ -54,15 +77,16 @@ export default function ManagePreferencesSection({ uuid, initialPreferences }) {
 
         const data = response.data?.data;
         if (data) {
-          setPreferences((prev) => ({
-            ...prev,
-            attendanceRequired:
-              data.is_attendance_required === true ||
-              data.is_attendance_required === "true",
-          }));
+          const required =
+            data.is_attendance_required === true ||
+            data.is_attendance_required === "true";
+          setPreferences((prev) => ({ ...prev, attendanceRequired: required }));
+          setOriginalPref((prev) =>
+            prev ? { ...prev, attendanceRequired: required } : prev,
+          );
         }
       } catch (error) {
-        // Check if it's the specific "no shift" error
+        // The specific "no shift" case is not an error for the user
         const serverMessage = error.response?.data?.data;
 
         if (serverMessage === "no shift allocated for the user so far") {
@@ -70,8 +94,10 @@ export default function ManagePreferencesSection({ uuid, initialPreferences }) {
             "User has no shift allocated; defaulting attendance to false.",
           );
           setPreferences((prev) => ({ ...prev, attendanceRequired: false }));
+          setOriginalPref((prev) =>
+            prev ? { ...prev, attendanceRequired: false } : prev,
+          );
         } else {
-          // Only show toast for actual connection/server issues
           toast.error("Failed to load attendance settings");
         }
       }
@@ -81,57 +107,80 @@ export default function ManagePreferencesSection({ uuid, initialPreferences }) {
   }, [uuid]);
 
   // ----------------------------------------------------
-  // ✔ Initialize From Backend initialPreferences
+  // ✔ Initialize from backend initialPreferences
+  //   (runs only when the employee data changes, so toggling in edit mode
+  //    never resets the other switches)
   // ----------------------------------------------------
   useEffect(() => {
-    if (initialPreferences) {
-      const mapped = {
-        attendanceRequired: preferences.attendanceRequired, // keep fetched value
-        userActive:
-          initialPreferences.is_active === true ||
-          initialPreferences.is_active === "true",
-        deleteUser: false,
-      };
+    if (!initialPreferences) return;
 
-      setPreferences(mapped);
-      setOriginalPref(mapped);
-    }
-  }, [initialPreferences, preferences.attendanceRequired]);
+    const active =
+      initialPreferences.is_active === true ||
+      initialPreferences.is_active === "true";
+
+    setPreferences((prev) => ({
+      ...prev,
+      userActive: active,
+      deleteUser: false,
+    }));
+    setOriginalPref((prev) => ({
+      attendanceRequired: prev?.attendanceRequired ?? true,
+      userActive: active,
+      deleteUser: false,
+    }));
+  }, [initialPreferences]);
+
+  // Keep originalPref attendance in sync before the first save
+  useEffect(() => {
+    setOriginalPref((prev) =>
+      prev ? prev : { ...preferences, deleteUser: false },
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ----------------------------------------------------
-  // ✔ Local Toggle (NO API CALL)
+  // ✔ Local toggle (no API call)
   // ----------------------------------------------------
   const handleToggle = (key) => {
     if (!isEditing) return;
     setPreferences((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
+  // Discard edits and leave edit mode
+  const cancelEditing = () => {
+    if (originalPref) setPreferences({ ...originalPref, deleteUser: false });
+    setDeleteReason("");
+    setIsEditing(false);
+  };
+
   // ----------------------------------------------------
-  // ✔ Save — Backend Call Happens Only on Save
+  // ✔ Save: the backend call happens only here
   // ----------------------------------------------------
   const handleSave = async () => {
+    const statusChanged =
+      originalPref && preferences.userActive !== originalPref.userActive;
+
+    if (!statusChanged) {
+      toast.info("No changes to save");
+      setIsEditing(false);
+      return;
+    }
+
     setSaving(true);
     try {
-      let backendMessage = "";
+      const response = await axiosInstance.put(
+        `staff/toggle-activate/${uuid}?activate=${preferences.userActive}`,
+      );
 
-      if (preferences.userActive !== originalPref.userActive) {
-        const response = await axiosInstance.put(
-          `staff/toggle-activate/${uuid}?activate=${preferences.userActive}`,
-        );
-        backendMessage =
-          response.data?.message || "User status updated successfully";
-      }
+      toast.success(
+        response.data?.message || "User status updated successfully",
+      );
 
-      toast.success(backendMessage || "Preferences saved");
-
-      setOriginalPref(preferences);
-      setPreferences({ ...preferences });
-
+      setOriginalPref({ ...preferences, deleteUser: false });
       setIsEditing(false);
     } catch (error) {
       toast.error(
-        error.response?.data?.message ||
-          "Failed to save changes. Try again later.",
+        getBackendMessage(error, "Failed to save changes. Try again later."),
       );
     } finally {
       setSaving(false);
@@ -139,7 +188,7 @@ export default function ManagePreferencesSection({ uuid, initialPreferences }) {
   };
 
   // ----------------------------------------------------
-  // ✔ Delete — Call Backend API with toast & redirect
+  // ✔ Delete: backend call, toast and redirect
   // ----------------------------------------------------
   const handleDelete = async () => {
     if (!deleteReason.trim()) {
@@ -160,13 +209,15 @@ export default function ManagePreferencesSection({ uuid, initialPreferences }) {
       setTimeout(() => navigate("/manageemployee"), 1000);
     } catch (error) {
       toast.error(
-        error.response?.data?.message ||
-          "Failed to delete employee. Try again later.",
+        getBackendMessage(error, "Failed to delete employee. Try again later."),
       );
     } finally {
       setDeleting(false);
     }
   };
+
+  const hasChanges =
+    originalPref && preferences.userActive !== originalPref.userActive;
 
   // ----------------------------------------------------
   // ✔ UI
@@ -180,18 +231,30 @@ export default function ManagePreferencesSection({ uuid, initialPreferences }) {
         </h3>
 
         {isEditing ? (
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="text-sm text-blue-600 font-medium hover:underline disabled:opacity-50"
-          >
-            {saving ? "Saving..." : "Save"}
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={cancelEditing}
+              disabled={saving}
+              className="text-sm text-gray-500 hover:text-gray-800 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={saving}
+              className="text-sm text-blue-600 font-medium hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {saving ? "Saving..." : "Save"}
+            </button>
+          </div>
         ) : (
           <Icon
             icon="basil:edit-outline"
             className="w-5 h-5 text-gray-400 cursor-pointer"
             onClick={() => setIsEditing(true)}
+            title="Edit"
           />
         )}
       </div>
@@ -204,6 +267,7 @@ export default function ManagePreferencesSection({ uuid, initialPreferences }) {
             Is attendance required?
           </span>
           <Toggle
+            label="Is attendance required?"
             enabled={preferences.attendanceRequired}
             onToggle={() => handleToggle("attendanceRequired")}
             disabled={!isEditing}
@@ -212,14 +276,20 @@ export default function ManagePreferencesSection({ uuid, initialPreferences }) {
 
         {/* Activation */}
         <div className="flex justify-between items-center border-b border-gray-100 py-2">
-          <span className="text-gray-500 text-[12px] flex items-center gap-1">
+          <span className="text-gray-500 text-[12px] flex items-center gap-2">
             Activate / Deactivate User
+            {hasChanges && !saving && (
+              <span className="text-[10px] text-gray-600 bg-slate-100 border border-gray-200 rounded-full px-2 py-0.5">
+                Unsaved
+              </span>
+            )}
             {saving && (
               <span className="text-gray-400 text-[10px]">(Saving...)</span>
             )}
           </span>
 
           <Toggle
+            label="Activate or deactivate user"
             enabled={preferences.userActive}
             onToggle={() => handleToggle("userActive")}
             disabled={!isEditing}
@@ -233,17 +303,21 @@ export default function ManagePreferencesSection({ uuid, initialPreferences }) {
               <Trash2 size={16} /> Delete User
             </span>
             <Toggle
+              label="Delete user"
               enabled={preferences.deleteUser}
               onToggle={() => handleToggle("deleteUser")}
               disabled={!isEditing}
             />
           </div>
 
-          {/* Delete Reason Input */}
+          {/* Delete reason */}
           {preferences.deleteUser && (
-            <div className="mt-2 flex flex-col gap-1">
+            <div className="mt-2 flex flex-col gap-2 rounded-lg border border-red-100 bg-red-50/40 p-3">
+              <label className="text-[11px] text-gray-500">
+                Reason for deletion
+              </label>
               <textarea
-                className="w-full border rounded-md p-2 text-sm"
+                className="w-full border border-gray-300 rounded-md p-2 text-[13px] text-gray-800 placeholder-gray-400 bg-white focus:outline-none focus:border-gray-500"
                 rows={2}
                 placeholder="Reason for deletion..."
                 value={deleteReason}
@@ -251,9 +325,10 @@ export default function ManagePreferencesSection({ uuid, initialPreferences }) {
                 disabled={deleting}
               />
               <button
+                type="button"
                 onClick={handleDelete}
                 disabled={deleting || !deleteReason.trim()}
-                className="self-end px-4 py-2 bg-red-600 text-white rounded-md text-sm hover:bg-red-700 disabled:opacity-50"
+                className="self-end px-4 py-2 bg-red-600 text-white rounded-md text-[12px] hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {deleting ? "Deleting..." : "Confirm Delete"}
               </button>

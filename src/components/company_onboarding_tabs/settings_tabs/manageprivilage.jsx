@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Icon } from "@iconify/react";
 import { ChevronDown, RefreshCw } from "lucide-react";
-import toast, { Toaster } from "react-hot-toast";
+import { toast } from "react-toastify"; // uses the global <ToastContainer /> from App.jsx
 import {
   fetchShifts,
   fetchUserShiftDetails,
@@ -37,6 +37,21 @@ const formatDate = (value) => {
     year: "numeric",
   });
 };
+
+// Exact message from the backend; also appends the `data` detail string if present
+// e.g. { message: "Failed to upsert shift allocation", data: "at least one policy_id is required" }
+const getBackendMessage = (error, fallback = "") => {
+  const data = error?.response?.data;
+  if (typeof data === "string" && data.trim()) return data;
+  const main = data?.message || data?.error || data?.detail || "";
+  const detail =
+    typeof data?.data === "string" && data.data.trim() ? data.data.trim() : "";
+  if (main && detail && !main.includes(detail)) return `${main}: ${detail}`;
+  return main || detail || fallback;
+};
+
+// A mapped policy's id (some APIs call it policy_id)
+const policyId = (p) => p?.id ?? p?.policy_id;
 
 export default function ManagePrivilegesSection({ uuid }) {
   const [userType, setUserType] = useState("-");
@@ -77,7 +92,7 @@ export default function ManagePrivilegesSection({ uuid }) {
     if (pend && String(pend.shiftId) === String(selectedShiftId)) {
       return pend.policyIds;
     }
-    return policies.map((p) => p.id);
+    return policies.map(policyId);
   };
 
   const getPolicies = (shiftId) => {
@@ -86,7 +101,13 @@ export default function ManagePrivilegesSection({ uuid }) {
     }
     if (!policyInflight.current[shiftId]) {
       policyInflight.current[shiftId] = fetchShiftMappedPolicies(shiftId)
-        .then((list) => {
+        .then((res) => {
+          // Accept an array or { data: [...] }
+          const list = Array.isArray(res)
+            ? res
+            : Array.isArray(res?.data)
+              ? res.data
+              : [];
           policyCache.current[shiftId] = list;
           return list;
         })
@@ -105,10 +126,12 @@ export default function ManagePrivilegesSection({ uuid }) {
   useEffect(() => {
     const getShifts = async () => {
       try {
-        const data = await fetchShifts();
-        setShifts(data);
+        const res = await fetchShifts();
+        // Accept either the array itself or { status_code, message, data: [...] }
+        const list = Array.isArray(res) ? res : res?.data;
+        setShifts(Array.isArray(list) ? list : []);
       } catch (error) {
-        toast.error("Failed to fetch shifts");
+        toast.error(getBackendMessage(error, "Failed to fetch shifts"));
       }
     };
     getShifts();
@@ -141,7 +164,9 @@ export default function ManagePrivilegesSection({ uuid }) {
           setLocation("-");
         }
       } catch (error) {
-        toast.error("Failed to fetch user privileges");
+        toast.error(
+          getBackendMessage(error, "Failed to fetch user privileges"),
+        );
       } finally {
         setLoading(false);
       }
@@ -236,7 +261,7 @@ export default function ManagePrivilegesSection({ uuid }) {
       setDeviceHistory(history);
     } catch (error) {
       console.error("Error loading high-scale device collection:", error);
-      toast.error("Failed to fetch device history");
+      toast.error(getBackendMessage(error, "Failed to fetch device history"));
       setShowHistoryModal(false);
     } finally {
       setLoadingHistory(false);
@@ -253,8 +278,21 @@ export default function ManagePrivilegesSection({ uuid }) {
       toast.error("Effective To cannot be before Effective From.");
       return;
     }
-    if (mappedPolicies.length > 0 && selectedPolicyIds.length === 0) {
-      toast.error("Select at least one policy.");
+    if (policiesLoading) {
+      toast.error("Policies are still loading. Please wait a moment.");
+      return;
+    }
+    if (policiesError) {
+      toast.error("Could not load policies. Press Retry and try again.");
+      return;
+    }
+    // The API needs at least one policy_id
+    if (selectedPolicyIds.length === 0) {
+      toast.error(
+        mappedPolicies.length > 0
+          ? "Select at least one policy."
+          : "This shift has no policies mapped. Map a policy to it first.",
+      );
       return;
     }
 
@@ -274,7 +312,7 @@ export default function ManagePrivilegesSection({ uuid }) {
   // Header "Save": send the pending allocation
   const saveChanges = async () => {
     if (!pendingChange) {
-      toast.error("No changes to save.");
+      toast.info("No changes to save.");
       return;
     }
 
@@ -296,7 +334,7 @@ export default function ManagePrivilegesSection({ uuid }) {
       setIsEditing(false);
       toast.success("Shift updated successfully!");
     } catch (error) {
-      toast.error(error.response?.data?.message || "Failed to update shift");
+      toast.error(getBackendMessage(error, "Failed to update shift"));
     } finally {
       setSaving(false);
     }
@@ -315,8 +353,6 @@ export default function ManagePrivilegesSection({ uuid }) {
 
   return (
     <div className="bg-white rounded-xl p-4 shadow-sm border w-full space-y-4">
-      <Toaster position="top-right" />
-
       <div className="flex items-center justify-between mb-4">
         <h3 className="font-medium text-gray-800 text-[14px]">
           Manage Privileges
@@ -414,7 +450,10 @@ export default function ManagePrivilegesSection({ uuid }) {
               <button
                 type="button"
                 onClick={applyShiftChange}
-                className="flex items-center gap-2 bg-black text-white px-4 py-2 rounded-lg text-[12px] font-normal hover:bg-gray-800 transition-all shadow-sm cursor-pointer"
+                disabled={policiesLoading}
+                className={`flex items-center gap-2 bg-black text-white px-4 py-2 rounded-lg text-[12px] font-normal hover:bg-gray-800 transition-all shadow-sm cursor-pointer ${
+                  policiesLoading ? "opacity-50 cursor-not-allowed" : ""
+                }`}
               >
                 <Icon icon="solar:check-circle-outline" className="w-4 h-4" />
                 Apply
@@ -497,12 +536,12 @@ export default function ManagePrivilegesSection({ uuid }) {
                 ) : (
                   <div className="flex flex-wrap gap-1.5">
                     {mappedPolicies.map((p) => {
-                      const active = selectedPolicyIds.includes(p.id);
+                      const active = selectedPolicyIds.includes(policyId(p));
                       return (
                         <button
-                          key={p.id}
+                          key={policyId(p)}
                           type="button"
-                          onClick={() => togglePolicy(p.id)}
+                          onClick={() => togglePolicy(policyId(p))}
                           aria-pressed={active}
                           title={p.code}
                           className={`inline-flex items-center gap-1 px-2 py-1 rounded border text-[10px] transition-colors ${

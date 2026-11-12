@@ -1,10 +1,51 @@
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { X, Search, Loader2 } from "lucide-react";
 import { Icon } from "@iconify/react";
 import { getAllStaff } from "../service/staffservice";
 import useLeaveStore from "../store/useleaveStore";
 import GlowButton from "../components/helpers/glowbutton";
 import { toast } from "react-toastify";
+
+/* ---------- date helpers (local time, no timezone shifts) ---------- */
+const pad = (n) => String(n).padStart(2, "0");
+const toKey = (y, m, d) => `${y}-${pad(m + 1)}-${pad(d)}`;
+const keyFromDate = (dt) =>
+  toKey(dt.getFullYear(), dt.getMonth(), dt.getDate());
+const parseKey = (k) => {
+  const [y, m, d] = k.split("-").map(Number);
+  return new Date(y, m - 1, d);
+};
+const formatKey = (k) =>
+  parseKey(k).toLocaleDateString("en-GB", {
+    weekday: "short",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+
+const WEEKDAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+const MONTHS = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
+
+const emptyForm = {
+  employeeUuid: "",
+  leave_policy: "",
+  reason: "",
+  leave_date: [], // [{ date, half_day, half_day_type }]
+  cc: [],
+};
 
 const AdminLeaveModal = ({ isOpen, onClose }) => {
   const {
@@ -18,16 +59,18 @@ const AdminLeaveModal = ({ isOpen, onClose }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [fetchingPolicies, setFetchingPolicies] = useState(false);
 
-  // Refs to each date input so the calendar icon can open its picker
-  const dateInputRefs = useRef([]);
-
-  const [formData, setFormData] = useState({
-    employeeUuid: "",
-    leave_policy: "",
-    reason: "",
-    leave_date: [{ date: "", half_day: false, half_day_type: 0 }],
-    cc: [],
+  // Calendar state
+  const today = new Date();
+  const todayKey = keyFromDate(today);
+  const [view, setView] = useState({
+    year: today.getFullYear(),
+    month: today.getMonth(),
   });
+  const [rangeMode, setRangeMode] = useState(false);
+  const [skipWeekends, setSkipWeekends] = useState(true);
+  const [anchor, setAnchor] = useState(null);
+
+  const [formData, setFormData] = useState(emptyForm);
 
   // Fetch staff list when modal opens
   useEffect(() => {
@@ -70,53 +113,96 @@ const AdminLeaveModal = ({ isOpen, onClose }) => {
     }
   };
 
-  const addDateRow = () => {
-    setFormData((prev) => ({
-      ...prev,
-      leave_date: [
-        ...prev.leave_date,
-        { date: "", half_day: false, half_day_type: 0 },
-      ],
-    }));
-  };
+  /* ---------- calendar selection logic ---------- */
+  const selectedMap = useMemo(() => {
+    const map = {};
+    formData.leave_date.forEach((r) => (map[r.date] = r));
+    return map;
+  }, [formData.leave_date]);
 
-  // Remove a date row (always keep at least one row)
-  const removeDateRow = (index) => {
+  const sortedDates = useMemo(
+    () => [...formData.leave_date].sort((a, b) => (a.date < b.date ? -1 : 1)),
+    [formData.leave_date],
+  );
+
+  const totalDays = useMemo(
+    () =>
+      formData.leave_date.reduce((sum, r) => sum + (r.half_day ? 0.5 : 1), 0),
+    [formData.leave_date],
+  );
+
+  // Add many dates at once, keeping existing rows (and their half-day flags)
+  const addDates = (keys) => {
     setFormData((prev) => {
-      if (prev.leave_date.length <= 1) return prev;
-      return {
-        ...prev,
-        leave_date: prev.leave_date.filter((_, i) => i !== index),
-      };
+      const existing = new Set(prev.leave_date.map((r) => r.date));
+      const added = keys
+        .filter((k) => !existing.has(k))
+        .map((k) => ({ date: k, half_day: false, half_day_type: 0 }));
+      return { ...prev, leave_date: [...prev.leave_date, ...added] };
     });
   };
 
-  // Update one date row without mutating the existing row object
-  const updateDateRow = (index, changes) => {
+  const removeDate = (key) => {
     setFormData((prev) => ({
       ...prev,
-      leave_date: prev.leave_date.map((row, i) =>
-        i === index ? { ...row, ...changes } : row,
+      leave_date: prev.leave_date.filter((r) => r.date !== key),
+    }));
+  };
+
+  const updateDateRow = (key, changes) => {
+    setFormData((prev) => ({
+      ...prev,
+      leave_date: prev.leave_date.map((row) =>
+        row.date === key ? { ...row, ...changes } : row,
       ),
     }));
   };
 
-  // Open the native date picker for a given row
-  const openDatePicker = (index) => {
-    const input = dateInputRefs.current[index];
-    if (!input) return;
-    if (typeof input.showPicker === "function") {
-      try {
-        input.showPicker();
-        return;
-      } catch {
-        // fall through to focus/click
-      }
-    }
-    input.focus();
-    input.click();
+  const clearDates = () => {
+    setFormData((prev) => ({ ...prev, leave_date: [] }));
+    setAnchor(null);
   };
 
+  const handleDayClick = (key) => {
+    if (!rangeMode) {
+      if (selectedMap[key]) removeDate(key);
+      else addDates([key]);
+      return;
+    }
+
+    // Range mode: first click = start, second click = end
+    if (!anchor) {
+      setAnchor(key);
+      return;
+    }
+    const start = parseKey(anchor < key ? anchor : key);
+    const end = parseKey(anchor < key ? key : anchor);
+    const keys = [];
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+      if (skipWeekends && isWeekend) continue;
+      keys.push(keyFromDate(d));
+    }
+    addDates(keys);
+    setAnchor(null);
+  };
+
+  const changeMonth = (delta) => {
+    setView((prev) => {
+      const d = new Date(prev.year, prev.month + delta, 1);
+      return { year: d.getFullYear(), month: d.getMonth() };
+    });
+  };
+
+  const calendarCells = useMemo(() => {
+    const first = new Date(view.year, view.month, 1).getDay();
+    const daysInMonth = new Date(view.year, view.month + 1, 0).getDate();
+    const cells = Array(first).fill(null);
+    for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+    return cells;
+  }, [view]);
+
+  /* ---------- CC ---------- */
   const filteredStaff = useMemo(() => {
     return staffList.filter((s) => {
       const fullName = (s.full_name || s.name || "").toLowerCase();
@@ -134,29 +220,31 @@ const AdminLeaveModal = ({ isOpen, onClose }) => {
   };
 
   const handleClose = () => {
-    setFormData({
-      employeeUuid: "",
-      leave_policy: "",
-      reason: "",
-      leave_date: [{ date: "", half_day: false, half_day_type: 0 }],
-      cc: [],
-    });
+    setFormData(emptyForm);
     setSearchTerm("");
+    setAnchor(null);
+    setRangeMode(false);
     onClose();
   };
 
   const handleSubmit = async (e) => {
     if (e) e.preventDefault();
-    if (!formData.employeeUuid) return toast.error("Please select an employee");
+    if (!formData.employeeUuid)
+      return toast.error("Please select an employee", {
+        toastId: "leave-employee",
+      });
     if (!formData.leave_policy)
-      return toast.error("Please select a leave policy");
-
-    const hasInvalidDates = formData.leave_date.some((item) => !item.date);
-    if (hasInvalidDates) return toast.error("Please select all leave dates");
+      return toast.error("Please select a leave policy", {
+        toastId: "leave-policy",
+      });
+    if (formData.leave_date.length === 0)
+      return toast.error("Please select at least one leave date", {
+        toastId: "leave-dates",
+      });
 
     try {
       await applyLeaveAdmin(formData.employeeUuid, {
-        leave_date: formData.leave_date,
+        leave_date: sortedDates,
         reason: formData.reason,
         leave_policy: Number(formData.leave_policy),
         cc: formData.cc,
@@ -246,84 +334,211 @@ const AdminLeaveModal = ({ isOpen, onClose }) => {
             </select>
           </div>
 
-          {/* Dates Section */}
+          {/* Dates Section - Calendar */}
           <div>
-            <label className="block mb-1 font-medium text-gray-700">
-              Leave Dates
-            </label>
-            <div className="space-y-2">
-              {formData.leave_date.map((row, index) => (
-                <div
-                  key={index}
-                  className="flex items-center justify-between gap-3 border p-3 rounded-2xl"
+            <div className="flex items-center justify-between mb-1">
+              <label className="font-medium text-gray-700">Leave Dates</label>
+              {formData.leave_date.length > 0 && (
+                <button
+                  type="button"
+                  onClick={clearDates}
+                  className="text-gray-400 hover:text-red-500 transition-colors"
                 >
-                  <div className="relative flex items-center gap-2">
-                    {/* Calendar icon opens the date picker */}
-                    <button
-                      type="button"
-                      onClick={() => openDatePicker(index)}
-                      aria-label="Open date picker"
-                      className="p-0.5 rounded hover:bg-gray-100 transition-colors"
-                    >
-                      <Icon
-                        icon="solar:calendar-outline"
-                        className="w-4 h-4 text-black"
-                      />
-                    </button>
+                  Clear all
+                </button>
+              )}
+            </div>
+
+            <div className="border rounded-2xl p-4">
+              {/* Mode switch */}
+              <div className="flex items-center justify-between gap-2 mb-3">
+                <div className="flex bg-gray-100 rounded-full p-0.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRangeMode(false);
+                      setAnchor(null);
+                    }}
+                    className={`px-3 py-1 rounded-full transition-colors ${
+                      !rangeMode
+                        ? "bg-black text-white"
+                        : "text-gray-600 hover:text-gray-900"
+                    }`}
+                  >
+                    Pick days
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRangeMode(true);
+                      setAnchor(null);
+                    }}
+                    className={`px-3 py-1 rounded-full transition-colors ${
+                      rangeMode
+                        ? "bg-black text-white"
+                        : "text-gray-600 hover:text-gray-900"
+                    }`}
+                  >
+                    Select range
+                  </button>
+                </div>
+
+                {rangeMode && (
+                  <label className="flex items-center gap-2 text-gray-600 cursor-pointer">
                     <input
-                      ref={(el) => (dateInputRefs.current[index] = el)}
-                      type="date"
-                      value={row.date}
-                      onClick={(e) => e.target.showPicker?.()}
-                      onChange={(e) =>
-                        updateDateRow(index, { date: e.target.value })
-                      }
-                      className="bg-transparent outline-none font-medium cursor-pointer [&::-webkit-calendar-picker-indicator]:hidden"
+                      type="checkbox"
+                      className="accent-black w-4 h-4 rounded"
+                      checked={skipWeekends}
+                      onChange={(e) => setSkipWeekends(e.target.checked)}
                     />
+                    Skip weekends
+                  </label>
+                )}
+              </div>
+
+              {/* Month navigation */}
+              <div className="flex items-center justify-between mb-2">
+                <button
+                  type="button"
+                  onClick={() => changeMonth(-1)}
+                  aria-label="Previous month"
+                  className="p-1.5 rounded-full hover:bg-gray-100 transition-colors"
+                >
+                  <Icon
+                    icon="solar:alt-arrow-left-outline"
+                    className="w-4 h-4"
+                  />
+                </button>
+                <span className="font-medium text-gray-900 text-[13px]">
+                  {MONTHS[view.month]} {view.year}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => changeMonth(1)}
+                  aria-label="Next month"
+                  className="p-1.5 rounded-full hover:bg-gray-100 transition-colors"
+                >
+                  <Icon
+                    icon="solar:alt-arrow-right-outline"
+                    className="w-4 h-4"
+                  />
+                </button>
+              </div>
+
+              {/* Weekday header */}
+              <div className="grid grid-cols-7 mb-1">
+                {WEEKDAYS.map((w) => (
+                  <div
+                    key={w}
+                    className="text-center text-[10px] text-gray-400 py-1"
+                  >
+                    {w}
                   </div>
+                ))}
+              </div>
 
-                  <div className="flex items-center gap-3">
-                    <label className="flex items-center gap-2 text-gray-600 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        className="accent-black w-4 h-4 rounded"
-                        checked={row.half_day}
-                        onChange={(e) =>
-                          updateDateRow(index, {
-                            half_day: e.target.checked,
-                            half_day_type: e.target.checked ? 1 : 0,
-                          })
-                        }
-                      />
-                      Half Day
-                    </label>
+              {/* Day grid */}
+              <div className="grid grid-cols-7 gap-y-1">
+                {calendarCells.map((day, i) => {
+                  if (day === null) return <div key={`b-${i}`} />;
+                  const key = toKey(view.year, view.month, day);
+                  const row = selectedMap[key];
+                  const isSelected = !!row;
+                  const isToday = key === todayKey;
+                  const isAnchor = key === anchor;
+                  const isWeekend = i % 7 === 0 || i % 7 === 6;
 
-                    {/* Delete row (hidden when only one row is left) */}
-                    {formData.leave_date.length > 1 && (
+                  return (
+                    <div key={key} className="flex justify-center">
                       <button
                         type="button"
-                        onClick={() => removeDateRow(index)}
-                        aria-label="Delete date row"
-                        title="Delete"
-                        className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                        onClick={() => handleDayClick(key)}
+                        title={row?.half_day ? "Half day" : undefined}
+                        className={`relative w-9 h-9 rounded-full flex items-center justify-center transition-colors ${
+                          isSelected
+                            ? "bg-black text-white font-medium"
+                            : isAnchor
+                              ? "bg-gray-200 text-gray-900 font-medium"
+                              : isWeekend
+                                ? "text-gray-400 hover:bg-gray-100"
+                                : "text-gray-800 hover:bg-gray-100"
+                        } ${
+                          isToday && !isSelected
+                            ? "ring-1 ring-black ring-inset"
+                            : ""
+                        }`}
                       >
-                        <Icon
-                          icon="solar:trash-bin-trash-outline"
-                          className="w-4 h-4"
-                        />
+                        {day}
+                        {isSelected && row.half_day && (
+                          <span className="absolute bottom-1 w-1 h-1 rounded-full bg-white" />
+                        )}
                       </button>
-                    )}
-                  </div>
-                </div>
-              ))}
+                    </div>
+                  );
+                })}
+              </div>
+
+              <p className="mt-3 text-[10px] text-gray-400">
+                {rangeMode
+                  ? anchor
+                    ? `Start: ${formatKey(anchor)}. Now tap the end date.`
+                    : "Tap a start date, then an end date to add the whole range."
+                  : "Tap any day to select or unselect it."}
+              </p>
             </div>
-            <button
-              type="button"
-              onClick={addDateRow}
-              className="mt-2 w-full flex items-center justify-center gap-2 border border-dashed border-gray-300 p-3 rounded-2xl text-gray-600 hover:bg-gray-50"
-            >
-              + Add Row
-            </button>
+
+            {/* Selected dates */}
+            {sortedDates.length > 0 && (
+              <div className="mt-3">
+                <p className="mb-2 text-gray-500">
+                  {sortedDates.length} date{sortedDates.length > 1 ? "s" : ""}{" "}
+                  selected · {totalDays} day{totalDays !== 1 ? "s" : ""} of
+                  leave
+                </p>
+                <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
+                  {sortedDates.map((row) => (
+                    <div
+                      key={row.date}
+                      className="flex items-center justify-between gap-3 border px-3 py-2 rounded-2xl"
+                    >
+                      <span className="font-medium text-gray-800">
+                        {formatKey(row.date)}
+                      </span>
+
+                      <div className="flex items-center gap-3">
+                        <label className="flex items-center gap-2 text-gray-600 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            className="accent-black w-4 h-4 rounded"
+                            checked={row.half_day}
+                            onChange={(e) =>
+                              updateDateRow(row.date, {
+                                half_day: e.target.checked,
+                                half_day_type: e.target.checked ? 1 : 0,
+                              })
+                            }
+                          />
+                          Half Day
+                        </label>
+
+                        <button
+                          type="button"
+                          onClick={() => removeDate(row.date)}
+                          aria-label="Remove date"
+                          title="Remove"
+                          className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                        >
+                          <Icon
+                            icon="solar:trash-bin-trash-outline"
+                            className="w-4 h-4"
+                          />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* CC Notification Search */}

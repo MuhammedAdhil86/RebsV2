@@ -5,7 +5,18 @@ import {
   allocateLeavePolicy,
 } from "../../../service/policiesService";
 import { fetchAllLeavePolicy } from "../../../service/companyService";
-import toast from "react-hot-toast";
+import { toast } from "react-toastify"; // uses the global <ToastContainer /> from App.jsx
+
+// Exact message from the backend; also appends the `data` detail string if present
+const getBackendMessage = (error, fallback = "") => {
+  const data = error?.response?.data;
+  if (typeof data === "string" && data.trim()) return data;
+  const main = data?.message || data?.error || data?.detail || "";
+  const detail =
+    typeof data?.data === "string" && data.data.trim() ? data.data.trim() : "";
+  if (main && detail && !main.includes(detail)) return `${main}: ${detail}`;
+  return main || detail || fallback;
+};
 
 export default function LeavesSettings({ uuid }) {
   const [isEditing, setIsEditing] = useState(false);
@@ -21,6 +32,7 @@ export default function LeavesSettings({ uuid }) {
 
   const [allPolicies, setAllPolicies] = useState([]);
   const [selectedPolicyId, setSelectedPolicyId] = useState("");
+  const [currentPolicyId, setCurrentPolicyId] = useState("");
 
   useEffect(() => {
     const loadData = async () => {
@@ -46,13 +58,14 @@ export default function LeavesSettings({ uuid }) {
 
           if (mainPolicy.id) {
             setSelectedPolicyId(String(mainPolicy.id));
+            setCurrentPolicyId(String(mainPolicy.id));
           }
         }
 
         setAllPolicies(allPoliciesRes || []);
       } catch (error) {
         console.error("Error loading leave data:", error);
-        toast.error("Failed to load leave settings");
+        toast.error(getBackendMessage(error, "Failed to load leave settings"));
       } finally {
         setLoading(false);
       }
@@ -61,8 +74,23 @@ export default function LeavesSettings({ uuid }) {
     if (uuid) loadData();
   }, [uuid]);
 
+  // Discard the selection and leave edit mode
+  const cancelEditing = () => {
+    setSelectedPolicyId(currentPolicyId);
+    setIsEditing(false);
+  };
+
   const handleSave = async () => {
-    if (!selectedPolicyId) return;
+    if (!selectedPolicyId) {
+      toast.error("Please select a leave policy.");
+      return;
+    }
+    if (selectedPolicyId === currentPolicyId) {
+      toast.info("No changes to save");
+      setIsEditing(false);
+      return;
+    }
+
     setSaving(true);
     try {
       const payload = {
@@ -83,10 +111,11 @@ export default function LeavesSettings({ uuid }) {
           annualLeave: main.annual_leave || 0,
         }));
       }
+      setCurrentPolicyId(selectedPolicyId);
       setIsEditing(false);
     } catch (error) {
       console.error("Backend 400 Detail:", error.response?.data);
-      toast.error("Failed to update policy");
+      toast.error(getBackendMessage(error, "Failed to update policy"));
     } finally {
       setSaving(false);
     }
@@ -106,15 +135,16 @@ export default function LeavesSettings({ uuid }) {
         {isEditing ? (
           <div className="flex gap-3">
             <button
-              onClick={() => setIsEditing(false)}
-              className="text-[12px] font-normal text-gray-400"
+              onClick={cancelEditing}
+              disabled={saving}
+              className="text-[12px] font-normal text-gray-400 hover:text-gray-700 disabled:opacity-50"
             >
               CANCEL
             </button>
             <button
               onClick={handleSave}
               disabled={saving}
-              className="text-[12px] font-normal text-blue-600"
+              className="text-[12px] font-normal text-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {saving ? "SAVING..." : "SAVE"}
             </button>

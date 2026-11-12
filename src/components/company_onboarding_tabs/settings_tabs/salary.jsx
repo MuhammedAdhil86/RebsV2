@@ -7,7 +7,18 @@ import {
   allocatePayrollTemplate,
 } from "../../../service/staffservice";
 import useEmployeeStore from "../../../store/employeeStore";
-import toast, { Toaster } from "react-hot-toast";
+import { toast } from "react-toastify"; // uses the global <ToastContainer /> from App.jsx
+
+// Exact message from the backend; also appends the `data` detail string if present
+const getBackendMessage = (error, fallback = "") => {
+  const data = error?.response?.data;
+  if (typeof data === "string" && data.trim()) return data;
+  const main = data?.message || data?.error || data?.detail || "";
+  const detail =
+    typeof data?.data === "string" && data.data.trim() ? data.data.trim() : "";
+  if (main && detail && !main.includes(detail)) return `${main}: ${detail}`;
+  return main || detail || fallback;
+};
 
 export default function SalarySection({ uuid }) {
   const { selectedEmployee } = useEmployeeStore();
@@ -39,7 +50,7 @@ export default function SalarySection({ uuid }) {
         setTemplates(data || []);
       } catch (err) {
         toast.error(
-          err?.response?.data?.message || "Failed to fetch payroll templates",
+          getBackendMessage(err, "Failed to fetch payroll templates"),
         );
       }
     };
@@ -63,7 +74,7 @@ export default function SalarySection({ uuid }) {
         setCurrentTemplateId(templateId);
       } catch (error) {
         toast.error(
-          error?.response?.data?.message || "Failed to fetch payroll template",
+          getBackendMessage(error, "Failed to fetch payroll template"),
         );
       } finally {
         setIsLoading(false);
@@ -118,7 +129,7 @@ export default function SalarySection({ uuid }) {
   // Header "Save": send the pending allocation
   const savePayroll = async () => {
     if (!pendingChange) {
-      toast.error("No changes to save.");
+      toast.info("No changes to save.");
       return;
     }
 
@@ -144,7 +155,7 @@ export default function SalarySection({ uuid }) {
       setPendingChange(null);
       setIsEditing(false);
     } catch (error) {
-      toast.error(error?.response?.data?.message || "Failed to save payroll");
+      toast.error(getBackendMessage(error, "Failed to save payroll"));
     } finally {
       setSaving(false);
     }
@@ -163,8 +174,6 @@ export default function SalarySection({ uuid }) {
 
   return (
     <div className="bg-white rounded-xl p-4 shadow-sm border w-full">
-      <Toaster position="top-right" />
-
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <h3 className="font-medium text-gray-800 text-[14px]">Annual CTC</h3>

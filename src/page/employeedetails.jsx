@@ -1,10 +1,10 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Bell, X } from "lucide-react";
 import { Icon } from "@iconify/react";
 import DashboardLayout from "../ui/pagelayout";
 import avatar from "../assets/img/avatar.svg";
-import toast from "react-hot-toast"; // DO NOT import <Toaster /> here
+import { toast } from "react-toastify"; // uses the global <ToastContainer /> from App.jsx (DO NOT add a container here)
 
 // Zustand Store
 import useEmployeeStore from "../store/employeeStore";
@@ -18,6 +18,19 @@ import ManageShiftTab from "../components/profiledetailstabs/manageshift.jsx";
 
 import axiosInstance from "../service/axiosinstance.js";
 
+// Exact message from the backend; also appends the `data` detail string if present
+// e.g. { status_code: 200, message: "Successfully deleted user", data: null }
+const getBackendMessage = (source, fallback = "") => {
+  // `source` can be an axios response or an axios error
+  const data = source?.response?.data ?? source?.data;
+  if (typeof data === "string" && data.trim()) return data;
+  const main = data?.message || data?.error || data?.detail || "";
+  const detail =
+    typeof data?.data === "string" && data.data.trim() ? data.data.trim() : "";
+  if (main && detail && !main.includes(detail)) return `${main}: ${detail}`;
+  return main || detail || fallback;
+};
+
 export default function EmployeeProfile() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -27,22 +40,34 @@ export default function EmployeeProfile() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteReason, setDeleteReason] = useState("");
 
+  // Guards against double clicks while a request is running (no visual change)
+  const deletingRef = useRef(false);
+  const redirectTimer = useRef(null);
+
   const { selectedEmployee, fetchEmployeeById } = useEmployeeStore();
 
   useEffect(() => {
     if (id) fetchEmployeeById(id);
   }, [id, fetchEmployeeById]);
 
+  // Clear the pending redirect if the page unmounts first
+  useEffect(() => () => clearTimeout(redirectTimer.current), []);
+
   const isActive =
     selectedEmployee?.is_active === true ||
     selectedEmployee?.is_active === "true";
 
-  // Centralized Toast Handlers
+  // Centralized Toast Handlers (react-toastify)
   const handleSuccess = (msg) => toast.success(msg);
   const handleError = (err) => toast.error(err);
 
+  const closeDeleteModal = () => {
+    setShowDeleteModal(false);
+    setDeleteReason("");
+  };
+
   const toggleStatus = async () => {
-    if (!selectedEmployee?.uuid) return;
+    if (!selectedEmployee?.uuid || statusUpdating) return;
     try {
       setStatusUpdating(true);
       const newStatus = !isActive;
@@ -54,7 +79,7 @@ export default function EmployeeProfile() {
       );
       await fetchEmployeeById(selectedEmployee.id);
     } catch (err) {
-      handleError("Status update failed");
+      handleError(getBackendMessage(err, "Status update failed"));
       console.error(err);
     } finally {
       setStatusUpdating(false);
@@ -62,21 +87,36 @@ export default function EmployeeProfile() {
   };
 
   const handleDelete = async () => {
+    if (!selectedEmployee?.uuid || deletingRef.current) return;
     if (!deleteReason.trim()) {
       handleError("Please provide a reason for deletion");
       return;
     }
+
+    deletingRef.current = true;
     try {
-      await axiosInstance.delete(`/staff/delete/${selectedEmployee.uuid}`, {
-        data: { reason: deleteReason },
-        headers: { "Content-Type": "application/json" },
-      });
-      handleSuccess("Employee deleted successfully");
-      setShowDeleteModal(false);
-      setTimeout(() => navigate("/manageemployee"), 1500);
+      const response = await axiosInstance.delete(
+        `/staff/delete/${selectedEmployee.uuid}`,
+        {
+          data: { reason: deleteReason.trim() },
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+
+      // Shows the backend message, e.g. "Successfully deleted user"
+      handleSuccess(
+        getBackendMessage(response, "Employee deleted successfully"),
+      );
+      closeDeleteModal();
+      redirectTimer.current = setTimeout(
+        () => navigate("/manageemployee"),
+        1500,
+      );
     } catch (err) {
-      handleError("Failed to delete employee");
+      handleError(getBackendMessage(err, "Failed to delete employee"));
       console.error(err);
+    } finally {
+      deletingRef.current = false;
     }
   };
 
@@ -230,7 +270,7 @@ export default function EmployeeProfile() {
           <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 backdrop-blur-sm">
             <div className="bg-white rounded-2xl p-6 w-[400px] shadow-xl relative animate-in fade-in zoom-in duration-200">
               <button
-                onClick={() => setShowDeleteModal(false)}
+                onClick={closeDeleteModal}
                 className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
               >
                 <X size={20} />
@@ -251,7 +291,7 @@ export default function EmployeeProfile() {
               ></textarea>
               <div className="flex justify-end gap-3">
                 <button
-                  onClick={() => setShowDeleteModal(false)}
+                  onClick={closeDeleteModal}
                   className="px-5 py-2 text-xs text-gray-500 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
                 >
                   Cancel
