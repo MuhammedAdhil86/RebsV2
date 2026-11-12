@@ -119,7 +119,7 @@ const useLeaveStore = create((set, get) => ({
 
       const response = await axiosInstance.post(
         `/admin/leave/apply?employeeId=${employeeId}`,
-        sanitizedPayload
+        sanitizedPayload,
       );
 
       await get().fetchLeaves();
@@ -174,7 +174,7 @@ const useLeaveStore = create((set, get) => ({
                 remarks,
                 ...(role === "admin" ? { lop, dates } : {}),
               }
-            : l
+            : l,
         ),
       }));
 
@@ -192,12 +192,14 @@ const useLeaveStore = create((set, get) => ({
     if (get().socket) return;
 
     const socket = new WebSocket(
-      `wss://rebs-hr-cwhyx.ondigitalocean.app/ws?token=${encodeURIComponent(token)}`
+      `wss://rebs-hr-cwhyx.ondigitalocean.app/ws?token=${encodeURIComponent(token)}`,
     );
 
     socket.onopen = () => {
       console.log("✅ WebSocket connected");
-      socket.send(JSON.stringify({ type: "greeting", content: "Hello server" }));
+      socket.send(
+        JSON.stringify({ type: "greeting", content: "Hello server" }),
+      );
     };
 
     socket.onmessage = (event) => {
@@ -205,12 +207,13 @@ const useLeaveStore = create((set, get) => ({
         const msg = JSON.parse(event.data);
 
         if (
-          (msg.type === "apply_leave" || msg.type === "manager_leave_approval") &&
+          (msg.type === "apply_leave" ||
+            msg.type === "manager_leave_approval") &&
           msg.data
         ) {
           set((state) => {
             const exists = state.leaves.some(
-              (req) => req.leave_ref_no === msg.data.leave_ref_no
+              (req) => req.leave_ref_no === msg.data.leave_ref_no,
             );
 
             if (!exists) {
@@ -222,7 +225,7 @@ const useLeaveStore = create((set, get) => ({
               leaves: state.leaves.map((req) =>
                 req.leave_ref_no === msg.data.leave_ref_no
                   ? { ...req, ...msg.data }
-                  : req
+                  : req,
               ),
             };
           });

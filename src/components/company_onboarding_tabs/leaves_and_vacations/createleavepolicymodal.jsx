@@ -61,12 +61,100 @@ export const Switch = ({ value, onChange, label }) => (
   </button>
 );
 
+/* ---------- Allowed dropdown values (must match backend exactly) ---------- */
+
+export const LEAVE_TYPES = ["Paid", "Unpaid"];
+export const ACCRUAL_METHODS = ["yearly", "monthly"];
+export const NEGATIVE_BALANCE_OPTIONS = [
+  "no limit",
+  "till year end",
+  "unlimited and mark as lop",
+];
+
+/* ---------- Payload builder ---------- */
+
+// Every dependent field is always present (never undefined) and follows the
+// recommended disabled convention. Validation is left to the backend.
+export const buildLeavePayload = (f) => ({
+  ...f,
+  company_default: Boolean(f.company_default),
+  employee_accrues: Number(f.employee_accrues || 0),
+  description: f.description || `${f.name} policy`,
+
+  // Enabled: value | Disabled: 0
+  postpone_accrual_value: f.postpone_accrual
+    ? Number(f.postpone_accrual_value)
+    : 0,
+  carry_forward_limit: f.carry_forward ? Number(f.carry_forward_limit) : 0,
+  encash_limit: f.encash_leave ? Number(f.encash_limit) : 0,
+
+  // Enabled: selected value | Disabled: ""
+  consider_negative_balance: f.allow_negative_balance
+    ? f.consider_negative_balance
+    : "",
+
+  // Enabled: positive integer | Disabled: 0
+  allow_past_leave: Boolean(f.allow_past_leave),
+  past_leave_limit: f.allow_past_leave ? Number(f.past_leave_limit) : 0,
+  allow_future_leave: Boolean(f.allow_future_leave),
+  future_leave_limit: f.allow_future_leave ? Number(f.future_leave_limit) : 0,
+});
+
+/* ---------- Field change handler (shared by create + update) ---------- */
+
+// Toggling a flag also fixes up its dependent field so the state always
+// follows the convention: enabled -> valid value, disabled -> 0 / "" / null.
+const DEPENDENTS = {
+  postpone_accrual: {
+    field: "postpone_accrual_value",
+    onEnable: (cur) => (Number(cur) > 0 ? cur : 1),
+    onDisable: () => 0,
+  },
+  carry_forward: {
+    field: "carry_forward_limit",
+    onEnable: (cur) => cur ?? 0,
+    onDisable: () => 0,
+  },
+  encash_leave: {
+    field: "encash_limit",
+    onEnable: (cur) => cur ?? 0,
+    onDisable: () => 0,
+  },
+  allow_negative_balance: {
+    field: "consider_negative_balance",
+    onEnable: (cur) =>
+      NEGATIVE_BALANCE_OPTIONS.includes(cur)
+        ? cur
+        : NEGATIVE_BALANCE_OPTIONS[0],
+    onDisable: () => "",
+  },
+  allow_past_leave: {
+    field: "past_leave_limit",
+    onEnable: (cur) => (Number(cur) > 0 ? cur : 1),
+    onDisable: () => 0,
+  },
+  allow_future_leave: {
+    field: "future_leave_limit",
+    onEnable: (cur) => (Number(cur) > 0 ? cur : 1),
+    onDisable: () => 0,
+  },
+};
+
+export const applyFieldChange = (prev, field, value) => {
+  const next = { ...prev, [field]: value };
+  const dep = DEPENDENTS[field];
+  if (dep) {
+    next[dep.field] = value ? dep.onEnable(prev[dep.field]) : dep.onDisable();
+  }
+  return next;
+};
+
 /* ---------- Backend error helpers ---------- */
 
 // Finds the backend body ({ status_code, message, data }) from any error shape:
 // 1. normal axios error      -> error.response.data
 // 2. service threw the body  -> error itself ({ message, data })
-const getErrorBody = (error) => {
+export const getErrorBody = (error) => {
   if (error?.response?.data) return error.response.data;
   if (error && typeof error === "object" && error.data !== undefined) {
     return error;
@@ -74,8 +162,8 @@ const getErrorBody = (error) => {
   return null;
 };
 
-// Shows backend "message" (bold) and "data" (below it) in the toast
-const showBackendError = (body, fallback) => {
+// Shows ONLY the backend "message" (bold) and "data" (below it) in the toast
+export const showBackendError = (body, fallback) => {
   const message = body?.message || body?.error || fallback;
   const data = body?.data;
 
@@ -117,53 +205,24 @@ const CreateLeavePolicyTab = ({ onClose }) => {
     // API allowed values: "no limit", "till year end", "unlimited and mark as lop"
     consider_negative_balance: "no limit",
     allow_past_leave: false,
-    past_leave_limit: null,
+    past_leave_limit: 0,
     allow_future_leave: false,
-    future_leave_limit: null,
+    future_leave_limit: 0,
     is_active: true,
   });
 
   const handleChange = (field, value) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
+    setFormData((prev) => applyFieldChange(prev, field, value));
   };
 
   const handleSubmit = async () => {
     if (loading) return;
 
-    if (!formData.name?.trim()) {
-      toast.error("Please enter a policy name");
-      return;
-    }
-    if (!formData.code?.trim()) {
-      toast.error("Please enter a policy code");
-      return;
-    }
-
     try {
       setLoading(true);
 
       // 1. Prepare the final payload
-      const { consider_negative_balance, ...rest } = formData;
-
-      const requestBody = {
-        ...rest,
-        company_default: Boolean(formData.company_default),
-        employee_accrues: Number(formData.employee_accrues || 0),
-        postpone_accrual_value: Number(formData.postpone_accrual_value || 0),
-        carry_forward_limit: Number(formData.carry_forward_limit || 0),
-        encash_limit: Number(formData.encash_limit || 0),
-        past_leave_limit: formData.allow_past_leave
-          ? Number(formData.past_leave_limit)
-          : null,
-        future_leave_limit: formData.allow_future_leave
-          ? Number(formData.future_leave_limit)
-          : null,
-        description: formData.description || `${formData.name} policy`,
-        // Only send when negative balance is enabled, always a valid value
-        ...(formData.allow_negative_balance && {
-          consider_negative_balance: consider_negative_balance || "no limit",
-        }),
-      };
+      const requestBody = buildLeavePayload(formData);
 
       // 2. LOG THE PAYLOAD
       console.log("-----------------------------------------");

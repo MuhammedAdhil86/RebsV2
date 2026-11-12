@@ -6,40 +6,16 @@ import { toast } from "react-toastify";
 import BasicInfoCard from "./leavepolicy/basicinfocard";
 import AccrualPolicyCard from "./leavepolicy/accrualpolicycard";
 import RequestPreferencesCard from "./leavepolicy/requestpreferencecard";
-import { Switch, cardClass } from "./createleavepolicymodal";
+import {
+  Switch,
+  cardClass,
+  buildLeavePayload,
+  applyFieldChange,
+  getErrorBody,
+  showBackendError,
+} from "./createleavepolicymodal";
 
 export const globalFont = "font-['Poppins'] font-normal text-[12px]";
-
-/* ---------- Backend error helpers (same as create) ---------- */
-
-// Finds the backend body ({ status_code, message, data }) from any error shape:
-// 1. normal axios error      -> error.response.data
-// 2. service threw the body  -> error itself ({ message, data })
-const getErrorBody = (error) => {
-  if (error?.response?.data) return error.response.data;
-  if (error && typeof error === "object" && error.data !== undefined) {
-    return error;
-  }
-  return null;
-};
-
-// Shows backend "message" (bold) and "data" (below it) in the toast.
-// Position, timing and style come only from <ToastContainer /> in App.jsx.
-const showBackendError = (body, fallback) => {
-  const message = body?.message || body?.error || fallback;
-  const data = body?.data;
-
-  toast.error(
-    <div>
-      <div style={{ fontWeight: 600 }}>{message}</div>
-      {data && (
-        <div style={{ marginTop: 4, opacity: 0.8 }}>
-          {typeof data === "string" ? data : JSON.stringify(data)}
-        </div>
-      )}
-    </div>,
-  );
-};
 
 const UpdateLeavePolicyTab = ({ onClose, policyData, refreshData }) => {
   const [loading, setLoading] = useState(false);
@@ -65,70 +41,45 @@ const UpdateLeavePolicyTab = ({ onClose, policyData, refreshData }) => {
     encash_leave: policyData?.encash_leave ?? false,
     encash_limit: policyData?.encash_limit || 0,
     allow_negative_balance: policyData?.allow_negative_balance ?? false,
-    // API allowed values: "no limit", "till year end", "unlimited and mark as lop"
+    // API allowed values: "no limit", "till year end", "unlimited and mark as lop".
+    // The backend may return "" when the flag was off, so fall back to a valid
+    // option to keep the dropdown usable if the user turns the flag on.
     consider_negative_balance:
       policyData?.consider_negative_balance || "no limit",
+    // Flag off -> limit is 0 (handled in buildLeavePayload)
     allow_past_leave: policyData?.allow_past_leave ?? false,
-    past_leave_limit: policyData?.past_leave_limit ?? null,
+    past_leave_limit: policyData?.past_leave_limit || 0,
     allow_future_leave: policyData?.allow_future_leave ?? false,
-    future_leave_limit: policyData?.future_leave_limit ?? null,
+    future_leave_limit: policyData?.future_leave_limit || 0,
     is_active: policyData?.is_active ?? policyData?.status === "active",
   });
 
   const handleChange = (field, value) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
+    setFormData((prev) => applyFieldChange(prev, field, value));
   };
 
   const handleUpdate = async () => {
     if (loading) return;
 
-    if (!formData.id) {
-      toast.error("Policy ID is missing.");
-      return;
-    }
-    if (!formData.name?.trim()) {
-      toast.error("Please enter a policy name");
-      return;
-    }
-    if (!formData.code?.trim()) {
-      toast.error("Please enter a policy code");
-      return;
-    }
-
     try {
       setLoading(true);
 
-      const { id, consider_negative_balance, ...rest } = formData;
+      // Prepare the final payload (id goes in the URL, not the body)
+      const { id, ...rest } = formData;
 
+      // allow_past_leave / allow_future_leave and their limits come from
+      // buildLeavePayload; they must not be overridden here.
       const requestBody = {
-        ...rest,
+        ...buildLeavePayload(rest),
         name: String(formData.name),
         code: String(formData.code),
-        company_default: Boolean(formData.company_default),
-        employee_accrues: Number(formData.employee_accrues || 0),
         prorate_for_new_joiners: Boolean(formData.prorate_for_new_joiners),
         postpone_accrual: Boolean(formData.postpone_accrual),
-        postpone_accrual_value: Number(formData.postpone_accrual_value || 0),
         reset_leave_balance: Boolean(formData.reset_leave_balance),
         carry_forward: Boolean(formData.carry_forward),
-        carry_forward_limit: Number(formData.carry_forward_limit || 0),
         encash_leave: Boolean(formData.encash_leave),
-        encash_limit: Number(formData.encash_limit || 0),
         allow_negative_balance: Boolean(formData.allow_negative_balance),
-        allow_past_leave: Boolean(formData.allow_past_leave),
-        past_leave_limit: formData.allow_past_leave
-          ? Number(formData.past_leave_limit)
-          : null,
-        allow_future_leave: Boolean(formData.allow_future_leave),
-        future_leave_limit: formData.allow_future_leave
-          ? Number(formData.future_leave_limit)
-          : null,
         is_active: Boolean(formData.is_active),
-        description: formData.description || `${formData.name} policy`,
-        // Only send when negative balance is enabled, always a valid value
-        ...(formData.allow_negative_balance && {
-          consider_negative_balance: consider_negative_balance || "no limit",
-        }),
       };
 
       console.log("-----------------------------------------");
@@ -150,14 +101,21 @@ const UpdateLeavePolicyTab = ({ onClose, policyData, refreshData }) => {
         return;
       }
 
-      toast.success("Leave policy updated successfully");
+      toast.success(
+        response?.message ||
+          response?.data?.message ||
+          "Leave policy updated successfully",
+      );
       if (refreshData) refreshData();
       onClose();
     } catch (error) {
       console.error("❌ Update failed:", error);
       console.error("❌ Backend body:", getErrorBody(error));
 
-      showBackendError(getErrorBody(error), "Failed to update leave policy");
+      showBackendError(
+        getErrorBody(error),
+        error?.message || "Failed to update leave policy",
+      );
     } finally {
       setLoading(false);
     }

@@ -1,24 +1,19 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
 // Import shared styles and components from your local utils
 import {
   cardClass,
   sectionTitle,
   CheckboxRow,
-  RadioRow,
 } from "../../../helpers/leavepolicyutils";
 
+// Keeps digits only and drops leading zeros, so the field can only ever hold
+// a positive whole number (or be empty while the user is typing).
+const toPositiveInt = (raw) =>
+  String(raw ?? "")
+    .replace(/\D/g, "")
+    .replace(/^0+/, "");
+
 const RequestPreferencesCard = ({ formData, handleChange }) => {
-  // Local state for radio button toggles
-  // Defaulting to "none" or null to ensure nothing is pre-selected
-  const [pastLimitType, setPastLimitType] = useState(null);
-  const [futureLimitType, setFutureLimitType] = useState(null);
-
-  // Sync local radio state if formData already has values (useful for edits)
-  useEffect(() => {
-    if (formData.past_leave_limit) setPastLimitType("set");
-    if (formData.future_leave_limit) setFutureLimitType("set");
-  }, []);
-
   return (
     <div className={cardClass}>
       <h3 className={sectionTitle}>Employee Leave Request Preferences</h3>
@@ -64,43 +59,25 @@ const RequestPreferencesCard = ({ formData, handleChange }) => {
           <CheckboxRow
             label="Allow applying for leave on past dates"
             checked={formData.allow_past_leave || false}
-            onChange={(e) => {
-              handleChange("allow_past_leave", e.target.checked);
-              if (!e.target.checked) setPastLimitType(null); // Reset radio on uncheck
-            }}
+            onChange={(e) => handleChange("allow_past_leave", e.target.checked)}
           />
-          <div
-            className={`ml-6 space-y-3 mt-2 ${!formData.allow_past_leave && "opacity-50 pointer-events-none"}`}
-          >
-            <RadioRow
-              label="No limit on past dates"
-              checked={pastLimitType === "none"}
-              onClick={() => {
-                if (!formData.allow_past_leave) return;
-                setPastLimitType("none");
-                handleChange("past_leave_limit", null);
-              }}
-            />
-            <div className="flex items-center gap-4">
-              <RadioRow
-                label="Set Limit"
-                checked={pastLimitType === "set"}
-                onClick={() =>
-                  formData.allow_past_leave && setPastLimitType("set")
-                }
-              />
+          {formData.allow_past_leave && (
+            <div className="ml-6 mt-2">
               <input
-                type="number"
-                disabled={pastLimitType !== "set" || !formData.allow_past_leave}
-                className="flex-1 bg-[#F4F6F8] border border-gray-200 rounded-xl px-3 py-1 text-[11px] focus:outline-none"
+                type="text"
+                inputMode="numeric"
+                className="w-full bg-[#F4F6F8] border border-gray-200 rounded-xl px-3 py-2 text-[11px] focus:outline-none"
                 placeholder="days before today"
-                value={formData.past_leave_limit || ""}
+                value={formData.past_leave_limit ?? ""}
                 onChange={(e) =>
-                  handleChange("past_leave_limit", e.target.value)
+                  handleChange(
+                    "past_leave_limit",
+                    toPositiveInt(e.target.value),
+                  )
                 }
               />
             </div>
-          </div>
+          )}
         </div>
 
         {/* 3. Future Date Leave */}
@@ -108,45 +85,27 @@ const RequestPreferencesCard = ({ formData, handleChange }) => {
           <CheckboxRow
             label="Allow applying for leave on future dates"
             checked={formData.allow_future_leave || false}
-            onChange={(e) => {
-              handleChange("allow_future_leave", e.target.checked);
-              if (!e.target.checked) setFutureLimitType(null); // Reset radio on uncheck
-            }}
+            onChange={(e) =>
+              handleChange("allow_future_leave", e.target.checked)
+            }
           />
-          <div
-            className={`ml-6 space-y-3 mt-2 ${!formData.allow_future_leave && "opacity-50 pointer-events-none"}`}
-          >
-            <RadioRow
-              label="No limit on future dates"
-              checked={futureLimitType === "none"}
-              onClick={() => {
-                if (!formData.allow_future_leave) return;
-                setFutureLimitType("none");
-                handleChange("future_leave_limit", null);
-              }}
-            />
-            <div className="flex items-center gap-4">
-              <RadioRow
-                label="Set Limit"
-                checked={futureLimitType === "set"}
-                onClick={() =>
-                  formData.allow_future_leave && setFutureLimitType("set")
-                }
-              />
+          {formData.allow_future_leave && (
+            <div className="ml-6 mt-2">
               <input
-                type="number"
-                disabled={
-                  futureLimitType !== "set" || !formData.allow_future_leave
-                }
-                className="flex-1 bg-[#F4F6F8] border border-gray-200 rounded-xl px-3 py-1 text-[11px] focus:outline-none"
+                type="text"
+                inputMode="numeric"
+                className="w-full bg-[#F4F6F8] border border-gray-200 rounded-xl px-3 py-2 text-[11px] focus:outline-none"
                 placeholder="days after today"
-                value={formData.future_leave_limit || ""}
+                value={formData.future_leave_limit ?? ""}
                 onChange={(e) =>
-                  handleChange("future_leave_limit", e.target.value)
+                  handleChange(
+                    "future_leave_limit",
+                    toPositiveInt(e.target.value),
+                  )
                 }
               />
             </div>
-          </div>
+          )}
         </div>
       </div>
     </div>
