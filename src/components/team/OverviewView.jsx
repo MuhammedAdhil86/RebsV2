@@ -1,8 +1,15 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { Folder, ListChecks, Users, AlertTriangle } from "lucide-react";
+import {
+  Folder,
+  ListChecks,
+  Users,
+  AlertTriangle,
+  ChevronDown,
+  CheckCircle2,
+} from "lucide-react";
 import teamService from "../../service/teamservice"; // adjust path if different
 
-/* ---------- helpers + small UI pieces ---------- */
+/* ---------- helpers ---------- */
 
 const num = (v) =>
   v === null || v === undefined || Number.isNaN(Number(v))
@@ -26,6 +33,46 @@ const formatDate = (iso) => {
   });
 };
 
+const formatDateTime = (iso) => {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+};
+
+const initials = (name = "") =>
+  name
+    .split(" ")
+    .filter(Boolean)
+    .map((n) => n[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+
+/* Same palette as the dashboard KPI cards */
+const COLORS = {
+  green: "#EBFDEF",
+  blue: "#E8EFF9",
+  orange: "#FFEFE7",
+  yellow: "#FFFBDB",
+  red: "#FFDADA",
+};
+
+/* Stronger tones of the same palette, for chart fills (pastels are too faint on white) */
+const CHART = {
+  green: "#34c759",
+  blue: "#5b8def",
+  orange: "#ff9a62",
+  yellow: "#f2c94c",
+  red: "#ef6b6b",
+};
+
 const Badge = ({ children, className = "bg-zinc-100 text-zinc-600" }) => (
   <span
     className={`inline-block px-2.5 py-1 rounded-full text-[11px] whitespace-nowrap ${className}`}
@@ -34,14 +81,165 @@ const Badge = ({ children, className = "bg-zinc-100 text-zinc-600" }) => (
   </span>
 );
 
-const StatCard = ({ icon: IconCmp, label, value, hint }) => (
-  <div className="border border-black/10 rounded-2xl bg-white shadow-sm p-4">
-    <div className="flex items-center gap-2 text-black/50">
-      {IconCmp && <IconCmp size={14} />}
-      <span className="text-xs">{label}</span>
+/* StatCard — dashboard style: pastel bg + black round icon */
+const StatCard = ({ icon: IconCmp, label, value, hint, bg }) => (
+  <div
+    className="shadow-sm rounded-lg p-3 flex items-center gap-3"
+    style={{ backgroundColor: bg }}
+  >
+    <div className="flex items-center justify-center min-w-10 h-10 rounded-full bg-black text-white">
+      {IconCmp && <IconCmp size={18} />}
     </div>
-    <p className="text-2xl text-black mt-2 tracking-tight">{value}</p>
-    {hint && <p className="text-[11px] text-black/40 mt-1">{hint}</p>}
+    <div className="overflow-hidden">
+      <p className="text-gray-500 text-[10px] sm:text-xs truncate uppercase font-semibold">
+        {label}
+      </p>
+      <h2 className="text-lg sm:text-xl font-medium text-gray-800">{value}</h2>
+      {hint && <p className="text-[10px] text-gray-500 truncate">{hint}</p>}
+    </div>
+  </div>
+);
+
+const Avatar = ({ src, name, size = 40 }) => {
+  const [failed, setFailed] = useState(false);
+  const style = { width: size, height: size };
+  if (!src || failed) {
+    return (
+      <div
+        style={style}
+        className="rounded-full bg-black text-white flex items-center justify-center text-xs shrink-0"
+      >
+        {initials(name)}
+      </div>
+    );
+  }
+  return (
+    <img
+      src={encodeURI(src)}
+      alt={name}
+      style={style}
+      onError={() => setFailed(true)}
+      className="rounded-full object-cover shrink-0"
+    />
+  );
+};
+
+const Field = ({ label, value }) => (
+  <div>
+    <p className="text-[10px] uppercase font-semibold text-gray-400">{label}</p>
+    <p className="text-xs text-black mt-0.5 break-words">{value ?? "—"}</p>
+  </div>
+);
+
+/* ---------- charts (pure SVG / CSS, no extra dependency) ---------- */
+
+const Donut = ({ assigned, unassigned }) => {
+  const total = assigned + unassigned;
+  const r = 40;
+  const c = 2 * Math.PI * r;
+  const assignedLen = total ? (assigned / total) * c : 0;
+  return (
+    <div className="flex items-center gap-5">
+      <svg viewBox="0 0 100 100" className="w-32 h-32 -rotate-90 shrink-0">
+        <circle
+          cx="50"
+          cy="50"
+          r={r}
+          fill="none"
+          stroke={COLORS.red}
+          strokeWidth="14"
+        />
+        <circle
+          cx="50"
+          cy="50"
+          r={r}
+          fill="none"
+          stroke={CHART.green}
+          strokeWidth="14"
+          strokeDasharray={`${assignedLen} ${c - assignedLen}`}
+        />
+        <text
+          x="50"
+          y="50"
+          textAnchor="middle"
+          dominantBaseline="central"
+          className="rotate-90 origin-center"
+          style={{
+            transform: "rotate(90deg)",
+            transformOrigin: "50% 50%",
+            fontSize: 18,
+          }}
+          fill="#111"
+        >
+          {total ? Math.round((assigned / total) * 100) : 0}%
+        </text>
+      </svg>
+      <ul className="space-y-2 text-xs text-black">
+        <li className="flex items-center gap-2">
+          <span
+            className="w-2.5 h-2.5 rounded-full"
+            style={{ background: CHART.green }}
+          />
+          Assigned · {assigned}
+        </li>
+        <li className="flex items-center gap-2">
+          <span
+            className="w-2.5 h-2.5 rounded-full"
+            style={{ background: CHART.red }}
+          />
+          Unassigned · {unassigned}
+        </li>
+      </ul>
+    </div>
+  );
+};
+
+const BarRow = ({ label, value, max, color, sub }) => (
+  <div>
+    <div className="flex items-center justify-between text-xs mb-1">
+      <span className="text-black truncate pr-2">
+        {label}
+        {sub && <span className="text-black/40"> · {sub}</span>}
+      </span>
+      <span className="text-black/60">{value}</span>
+    </div>
+    <div className="h-2.5 rounded-full bg-zinc-100 overflow-hidden">
+      <div
+        className="h-full rounded-full transition-all"
+        style={{
+          width: `${max ? (value / max) * 100 : 0}%`,
+          background: color,
+        }}
+      />
+    </div>
+  </div>
+);
+
+const StackedBar = ({ assigned, unassigned }) => {
+  const total = assigned + unassigned;
+  return (
+    <div className="h-2.5 rounded-full bg-zinc-100 overflow-hidden flex">
+      <div
+        style={{
+          width: `${total ? (assigned / total) * 100 : 0}%`,
+          background: CHART.green,
+        }}
+      />
+      <div
+        style={{
+          width: `${total ? (unassigned / total) * 100 : 0}%`,
+          background: CHART.red,
+        }}
+      />
+    </div>
+  );
+};
+
+const ChartCard = ({ title, subtitle, children }) => (
+  <div className="border border-black/10 rounded-2xl bg-white shadow-sm p-5">
+    <h3 className="text-sm text-black">{title}</h3>
+    {subtitle && <p className="text-[11px] text-black/40 mt-0.5">{subtitle}</p>}
+    <div className="mt-4">{children}</div>
   </div>
 );
 
@@ -59,6 +257,14 @@ const OverviewView = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
+  const [openIds, setOpenIds] = useState(() => new Set());
+
+  const toggle = (id) =>
+    setOpenIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
 
   // GET /admin/projects/overview
   useEffect(() => {
@@ -72,6 +278,9 @@ const OverviewView = () => {
         if (cancelled) return;
         setProjects(res.projects);
         setTotal(res.total);
+        // open the first project by default
+        if (res.projects?.length)
+          setOpenIds(new Set([res.projects[0].project_id]));
       })
       .catch((err) => {
         if (cancelled) return;
@@ -90,23 +299,56 @@ const OverviewView = () => {
     };
   }, [reloadKey]);
 
-  const { taskCount, members, unassigned } = useMemo(() => {
-    const memberIds = new Set();
-    const open = [];
-    let count = 0;
+  const { taskCount, members, unassigned, perProject, workload } =
+    useMemo(() => {
+      const memberIds = new Set();
+      const open = [];
+      const load = {}; // employee_id -> { name, count }
+      const per = [];
+      let count = 0;
 
-    projects.forEach((p) =>
-      (p.tasks || []).forEach((t) => {
-        count += 1;
-        if (!t.allocations?.length) {
-          open.push({ ...t, project: p.project });
-        }
-        (t.allocations || []).forEach((a) => memberIds.add(a.employee_id));
-      }),
-    );
+      projects.forEach((p) => {
+        let assignedN = 0;
+        let unassignedN = 0;
 
-    return { taskCount: count, members: memberIds.size, unassigned: open };
-  }, [projects]);
+        (p.team || []).forEach((m) => {
+          memberIds.add(m.employee_id);
+          if (!load[m.employee_id])
+            load[m.employee_id] = { name: m.name, count: 0 };
+        });
+
+        (p.tasks || []).forEach((t) => {
+          count += 1;
+          if (!t.allocations?.length) {
+            unassignedN += 1;
+            open.push({ ...t, project: p.project });
+          } else {
+            assignedN += 1;
+          }
+          (t.allocations || []).forEach((a) => {
+            memberIds.add(a.employee_id);
+            if (!load[a.employee_id])
+              load[a.employee_id] = { name: a.employee_name, count: 0 };
+            load[a.employee_id].count += 1;
+          });
+        });
+
+        per.push({
+          id: p.project_id,
+          name: p.project,
+          assigned: assignedN,
+          unassigned: unassignedN,
+        });
+      });
+
+      return {
+        taskCount: count,
+        members: memberIds.size,
+        unassigned: open,
+        perProject: per,
+        workload: Object.values(load).sort((a, b) => b.count - a.count),
+      };
+    }, [projects]);
 
   if (loading) {
     return (
@@ -132,28 +374,105 @@ const OverviewView = () => {
     );
   }
 
+  const assignedCount = taskCount - unassigned.length;
+  const maxLoad = Math.max(1, ...workload.map((w) => w.count));
+  const maxPerProject = Math.max(
+    1,
+    ...perProject.map((p) => p.assigned + p.unassigned),
+  );
+
   return (
-    <>
+    <div className="space-y-6">
       {/* SUMMARY CARDS */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <StatCard
           icon={Folder}
           label="Projects"
           value={num(total ?? projects.length)}
+          bg={COLORS.green}
         />
-        <StatCard icon={ListChecks} label="Tasks" value={num(taskCount)} />
-        <StatCard icon={Users} label="Members" value={num(members)} />
+        <StatCard
+          icon={ListChecks}
+          label="Tasks"
+          value={num(taskCount)}
+          hint={`${assignedCount} assigned`}
+          bg={COLORS.blue}
+        />
+        <StatCard
+          icon={Users}
+          label="Members"
+          value={num(members)}
+          bg={COLORS.yellow}
+        />
         <StatCard
           icon={AlertTriangle}
           label="Unassigned tasks"
           value={num(unassigned.length)}
+          bg={COLORS.red}
         />
       </div>
 
-      {/* PROJECTS + UNASSIGNED */}
+      {/* GRAPHS */}
+      {projects.length > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <ChartCard title="Task assignment" subtitle="Assigned vs unassigned">
+            <Donut assigned={assignedCount} unassigned={unassigned.length} />
+          </ChartCard>
+
+          <ChartCard
+            title="Workload by member"
+            subtitle="Tasks allocated per person"
+          >
+            <div className="space-y-3">
+              {workload.length === 0 ? (
+                <p className="text-xs text-black/40">No members yet.</p>
+              ) : (
+                workload.map((w) => (
+                  <BarRow
+                    key={w.name}
+                    label={w.name}
+                    value={w.count}
+                    max={maxLoad}
+                    color={CHART.blue}
+                  />
+                ))
+              )}
+            </div>
+          </ChartCard>
+
+          <ChartCard
+            title="Tasks per project"
+            subtitle="Green assigned · red unassigned"
+          >
+            <div className="space-y-4">
+              {perProject.map((p) => (
+                <div key={p.id}>
+                  <div className="flex items-center justify-between text-xs mb-1">
+                    <span className="text-black truncate pr-2">{p.name}</span>
+                    <span className="text-black/60">
+                      {p.assigned + p.unassigned}
+                    </span>
+                  </div>
+                  <div
+                    style={{
+                      width: `${((p.assigned + p.unassigned) / maxPerProject) * 100}%`,
+                    }}
+                  >
+                    <StackedBar
+                      assigned={p.assigned}
+                      unassigned={p.unassigned}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </ChartCard>
+        </div>
+      )}
+
+      {/* PROJECTS (accordion) + UNASSIGNED */}
       <div className="grid grid-cols-1 xl:grid-cols-[1fr_340px] gap-6 items-start">
-        {/* Projects loop: project -> tasks -> allocations */}
-        <div className="space-y-6">
+        <div className="space-y-4">
           {projects.length === 0 ? (
             <div className="border border-black/10 rounded-2xl bg-white shadow-sm py-16 text-center">
               <p className="text-sm text-black">No projects yet</p>
@@ -162,95 +481,241 @@ const OverviewView = () => {
               </p>
             </div>
           ) : (
-            projects.map((p) => (
-              <div
-                key={p.project_id}
-                className="border border-black/10 rounded-2xl bg-white shadow-sm overflow-hidden"
-              >
-                <div className="flex flex-wrap items-start justify-between gap-3 px-5 py-4 border-b border-black/10">
-                  <div className="min-w-0">
-                    <h3 className="text-sm text-black">{p.project}</h3>
-                    <p className="text-xs text-black/40 mt-0.5">
-                      Created by {p.created_by_name}
-                      {[p.designation, p.department].filter(Boolean).length
-                        ? ` (${[p.designation, p.department]
-                            .filter(Boolean)
-                            .join(" | ")})`
-                        : ""}{" "}
-                      on {formatDate(p.created_at)}
-                    </p>
-                  </div>
-                  <Badge
-                    className={
-                      STATUS_STYLES[p.status] || "bg-zinc-100 text-zinc-600"
-                    }
-                  >
-                    {humanize(p.status)}
-                  </Badge>
-                </div>
+            projects.map((p) => {
+              const isOpen = openIds.has(p.project_id);
+              const tasks = p.tasks || [];
+              const team = p.team || [];
+              const unassignedN = tasks.filter(
+                (t) => !t.allocations?.length,
+              ).length;
+              const assignedN = tasks.length - unassignedN;
 
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs min-w-[560px]">
-                    <thead>
-                      <tr className="bg-zinc-50 text-black/50 border-b border-black/10">
-                        <th className="font-normal px-5 py-3">Task</th>
-                        <th className="font-normal px-3 py-3">Assigned to</th>
-                        <th className="font-normal px-5 py-3">Created</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-black/5">
-                      {(p.tasks || []).length === 0 ? (
-                        <tr>
-                          <td
-                            colSpan={3}
-                            className="px-5 py-10 text-center text-black/40"
-                          >
-                            No tasks in this project yet.
-                          </td>
-                        </tr>
-                      ) : (
-                        p.tasks.map((t) => (
-                          <tr
-                            key={t.task_id}
-                            className="hover:bg-black/[0.02] transition-colors align-top"
-                          >
-                            <td className="px-5 py-3.5 text-sm text-black">
-                              {t.task}
-                            </td>
-                            <td className="px-3 py-3.5">
-                              {t.allocations?.length ? (
-                                <ul className="space-y-2">
-                                  {t.allocations.map((a) => (
-                                    <li key={a.allocation_id}>
-                                      <p className="text-sm text-black">
-                                        {a.employee_name}
-                                      </p>
-                                      <p className="text-[11px] text-black/40 mt-0.5">
-                                        {[a.designation, a.department]
-                                          .filter(Boolean)
-                                          .join(" | ")}{" "}
-                                        · Allocated {formatDate(a.allocated_at)}
-                                      </p>
-                                    </li>
-                                  ))}
-                                </ul>
-                              ) : (
-                                <Badge className="bg-amber-50 text-amber-700">
-                                  Unassigned
-                                </Badge>
-                              )}
-                            </td>
-                            <td className="px-5 py-3.5 text-black whitespace-nowrap">
-                              {formatDate(t.created_at)}
-                            </td>
-                          </tr>
-                        ))
+              return (
+                <div
+                  key={p.project_id}
+                  className="border border-black/10 rounded-2xl bg-white shadow-sm overflow-hidden"
+                >
+                  {/* Accordion header */}
+                  <button
+                    type="button"
+                    onClick={() => toggle(p.project_id)}
+                    aria-expanded={isOpen}
+                    className="w-full flex flex-wrap items-center justify-between gap-3 px-5 py-4 text-left hover:bg-black/[0.02] transition-colors"
+                  >
+                    <div className="min-w-0">
+                      <h3 className="text-sm text-black">{p.project}</h3>
+                      <p className="text-xs text-black/40 mt-0.5">
+                        Created by {p.created_by_name}
+                        {[p.designation, p.department].filter(Boolean).length
+                          ? ` (${[p.designation, p.department]
+                              .filter(Boolean)
+                              .join(" | ")})`
+                          : ""}{" "}
+                        on {formatDate(p.created_at)}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge className="bg-[#E8EFF9] text-black/70">
+                        {tasks.length} tasks
+                      </Badge>
+                      <Badge className="bg-[#FFFBDB] text-black/70">
+                        {team.length} members
+                      </Badge>
+                      {unassignedN > 0 && (
+                        <Badge className="bg-[#FFDADA] text-red-700">
+                          {unassignedN} unassigned
+                        </Badge>
                       )}
-                    </tbody>
-                  </table>
+                      <Badge
+                        className={
+                          STATUS_STYLES[p.status] || "bg-zinc-100 text-zinc-600"
+                        }
+                      >
+                        {humanize(p.status)}
+                      </Badge>
+                      <ChevronDown
+                        size={16}
+                        className={`text-black/50 transition-transform duration-200 ${
+                          isOpen ? "rotate-180" : ""
+                        }`}
+                      />
+                    </div>
+                  </button>
+
+                  {/* Accordion body — full data */}
+                  {isOpen && (
+                    <div className="border-t border-black/10">
+                      {/* Project details */}
+                      <div className="px-5 py-4 grid grid-cols-2 md:grid-cols-4 gap-4 bg-zinc-50/60">
+                        <Field label="Project ID" value={p.project_id} />
+                        <Field label="Company ID" value={p.company_id} />
+                        <Field label="Status" value={humanize(p.status)} />
+                        <Field label="Created by ID" value={p.created_by} />
+                        <Field label="Created by" value={p.created_by_name} />
+                        <Field label="Designation" value={p.designation} />
+                        <Field label="Department" value={p.department} />
+                        <Field
+                          label="Created at"
+                          value={formatDateTime(p.created_at)}
+                        />
+                        <Field
+                          label="Updated at"
+                          value={formatDateTime(p.updated_at)}
+                        />
+                      </div>
+
+                      {/* Progress */}
+                      <div className="px-5 py-4 border-t border-black/5">
+                        <div className="flex items-center justify-between text-xs mb-1.5">
+                          <span className="text-black">Task assignment</span>
+                          <span className="text-black/50">
+                            {assignedN}/{tasks.length} assigned
+                          </span>
+                        </div>
+                        <StackedBar
+                          assigned={assignedN}
+                          unassigned={unassignedN}
+                        />
+                      </div>
+
+                      {/* Tasks table */}
+                      <div className="border-t border-black/5">
+                        <p className="px-5 pt-4 text-[10px] uppercase font-semibold text-gray-400">
+                          Tasks ({tasks.length})
+                        </p>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left text-xs min-w-[640px] mt-2">
+                            <thead>
+                              <tr className="bg-zinc-50 text-black/50 border-y border-black/10">
+                                <th className="font-normal px-5 py-3">ID</th>
+                                <th className="font-normal px-3 py-3">Task</th>
+                                <th className="font-normal px-3 py-3">
+                                  Assigned to
+                                </th>
+                                <th className="font-normal px-3 py-3">
+                                  Created
+                                </th>
+                                <th className="font-normal px-5 py-3">
+                                  Updated
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-black/5">
+                              {tasks.length === 0 ? (
+                                <tr>
+                                  <td
+                                    colSpan={5}
+                                    className="px-5 py-10 text-center text-black/40"
+                                  >
+                                    No tasks in this project yet.
+                                  </td>
+                                </tr>
+                              ) : (
+                                tasks.map((t) => (
+                                  <tr
+                                    key={t.task_id}
+                                    className="hover:bg-black/[0.02] transition-colors align-top"
+                                  >
+                                    <td className="px-5 py-3.5 text-black/50">
+                                      #{t.task_id}
+                                    </td>
+                                    <td className="px-3 py-3.5 text-sm text-black">
+                                      {t.task}
+                                    </td>
+                                    <td className="px-3 py-3.5">
+                                      {t.allocations?.length ? (
+                                        <ul className="space-y-2">
+                                          {t.allocations.map((a) => (
+                                            <li key={a.allocation_id}>
+                                              <p className="text-sm text-black">
+                                                {a.employee_name}{" "}
+                                                <span className="text-[11px] text-black/40">
+                                                  (ID {a.employee_id})
+                                                </span>
+                                              </p>
+                                              <p className="text-[11px] text-black/40 mt-0.5">
+                                                {[a.designation, a.department]
+                                                  .filter(Boolean)
+                                                  .join(" | ")}{" "}
+                                                · Allocated{" "}
+                                                {formatDateTime(a.allocated_at)}
+                                              </p>
+                                            </li>
+                                          ))}
+                                        </ul>
+                                      ) : (
+                                        <Badge className="bg-amber-50 text-amber-700">
+                                          Unassigned
+                                        </Badge>
+                                      )}
+                                    </td>
+                                    <td className="px-3 py-3.5 text-black whitespace-nowrap">
+                                      {formatDate(t.created_at)}
+                                    </td>
+                                    <td className="px-5 py-3.5 text-black whitespace-nowrap">
+                                      {formatDate(t.updated_at)}
+                                    </td>
+                                  </tr>
+                                ))
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+
+                      {/* Team */}
+                      <div className="border-t border-black/5 px-5 py-4">
+                        <p className="text-[10px] uppercase font-semibold text-gray-400">
+                          Team ({team.length})
+                        </p>
+                        {team.length === 0 ? (
+                          <p className="text-xs text-black/40 mt-3">
+                            No team members yet.
+                          </p>
+                        ) : (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                            {team.map((m) => (
+                              <div
+                                key={m.employee_id}
+                                className="flex items-center gap-3 border border-black/10 rounded-xl p-3"
+                              >
+                                <Avatar src={m.image} name={m.name} />
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-sm text-black truncate">
+                                    {m.name}
+                                    {m.is_me && (
+                                      <span className="ml-1.5 text-[10px] text-emerald-700">
+                                        (You)
+                                      </span>
+                                    )}
+                                  </p>
+                                  <p className="text-[11px] text-black/40 truncate">
+                                    ID {m.employee_id} ·{" "}
+                                    {[m.designation, m.department]
+                                      .filter(Boolean)
+                                      .join(" | ")}
+                                  </p>
+                                  <div className="flex flex-wrap gap-1.5 mt-1.5">
+                                    {(m.roles || []).map((r) => (
+                                      <Badge
+                                        key={r}
+                                        className="bg-[#EBFDEF] text-black/70"
+                                      >
+                                        {humanize(r)}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
 
@@ -268,6 +733,10 @@ const OverviewView = () => {
 
           {unassigned.length === 0 ? (
             <div className="px-5 py-10 text-center">
+              <CheckCircle2
+                size={20}
+                className="mx-auto text-emerald-600 mb-2"
+              />
               <p className="text-sm text-black">All clear</p>
               <p className="text-xs text-black/40 mt-1">
                 Every task has someone assigned.
@@ -290,7 +759,7 @@ const OverviewView = () => {
           )}
         </aside>
       </div>
-    </>
+    </div>
   );
 };
 
