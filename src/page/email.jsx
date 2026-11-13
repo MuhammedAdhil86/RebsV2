@@ -1,6 +1,4 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
-import DashboardLayout from "../ui/pagelayout";
-import HeaderGlobal from "../ui/headerglobal";
 import PayrollTable from "../ui/payrolltable";
 import TemplatePreviewView from "../ui/emailandletterpriview";
 import CreateEmailTemplateView from "../ui/createemailmodal";
@@ -30,7 +28,7 @@ import {
   sendCustomEmailService,
 } from "../service/mainServices";
 
-import toast, { Toaster } from "react-hot-toast";
+import toast from "react-hot-toast";
 
 // ---------------------------------------------------------------------------
 // Display helpers: backend keeps snake_case, the UI never shows it.
@@ -412,185 +410,180 @@ const EmailTemplates = () => {
   ];
 
   return (
-    <DashboardLayout>
-      <Toaster position="top-right" />
-      <div className="w-full space-y-4">
-        <HeaderGlobal userName="Admin" />
+    <div className="w-full space-y-4">
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmationModal
+        isOpen={deleteModal.show}
+        onClose={() => setDeleteModal({ show: false, id: null, name: "" })}
+        onConfirm={handleDeleteTemplate}
+        itemName={deleteModal.name}
+      />
 
-        {/* Delete Confirmation Modal */}
-        <DeleteConfirmationModal
-          isOpen={deleteModal.show}
-          onClose={() => setDeleteModal({ show: false, id: null, name: "" })}
-          onConfirm={handleDeleteTemplate}
-          itemName={deleteModal.name}
-        />
+      {/* Send Custom Mail Modal */}
+      <SendCustomMailModal
+        isOpen={sendMailOpen}
+        onClose={() => setSendMailOpen(false)}
+        loading={sendingMail}
+        onSubmit={handleSendCustomMail}
+        onSuccess={handleMailSent}
+      />
 
-        {/* Send Custom Mail Modal */}
-        <SendCustomMailModal
-          isOpen={sendMailOpen}
-          onClose={() => setSendMailOpen(false)}
-          loading={sendingMail}
-          onSubmit={handleSendCustomMail}
-          onSuccess={handleMailSent}
-        />
-
-        <div className="font-poppins font-normal px-3 text-black">
-          {viewMode === "table" ? (
-            <>
-              {/* Subtab Switcher & Action Buttons */}
-              <div className="flex justify-between items-center mb-4 px-2">
-                <div className="flex gap-2 bg-gray-50 p-1 rounded-lg border border-gray-100">
-                  <button
-                    type="button"
-                    onClick={() => setSubTab("my-templates")}
-                    className={`px-4 py-1.5 rounded-md text-[11px] transition-all cursor-pointer ${
-                      subTab === "my-templates"
-                        ? "bg-white shadow-sm text-black font-medium"
-                        : "text-gray-400 hover:text-black"
-                    }`}
-                  >
-                    My Templates
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSubTab("presets")}
-                    className={`px-4 py-1.5 rounded-md text-[11px] transition-all cursor-pointer ${
-                      subTab === "presets"
-                        ? "bg-white shadow-sm text-black font-medium"
-                        : "text-gray-400 hover:text-black"
-                    }`}
-                  >
-                    System Presets
-                  </button>
-                </div>
-
-                <div className="flex items-center gap-2.5">
-                  {/* Search Input */}
-                  <div className="relative">
-                    <FiSearch
-                      className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
-                      size={13}
-                    />
-                    <input
-                      type="text"
-                      placeholder="Search templates..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="pl-8 pr-3 py-1.5 border border-gray-200 bg-white rounded-lg text-[12px] focus:outline-none focus:ring-1 focus:ring-black w-44 sm:w-56 transition-all"
-                    />
-                  </div>
-
-                  {/* Upload Template Button */}
-                  <button
-                    type="button"
-                    onClick={() => setViewMode("upload")}
-                    title="Upload Template"
-                    className="p-2 border border-gray-200 bg-white rounded-lg hover:bg-gray-50 transition-all text-gray-600 cursor-pointer shadow-2xs"
-                  >
-                    <FiUpload size={14} />
-                  </button>
-
-                  {/* Send Custom Mail: My Templates tab only */}
-                  {showSendCustomMail && (
-                    <button
-                      type="button"
-                      onClick={() => setSendMailOpen(true)}
-                      className="flex items-center gap-1.5 bg-black text-white px-4 py-2 rounded-lg text-[12px] font-medium hover:bg-gray-800 transition-all shadow-2xs cursor-pointer"
-                    >
-                      <FiSend size={14} />
-                      <span>Send Custom Mail</span>
-                    </button>
-                  )}
-
-                  {/* Create Template: Company 8 -> System Presets only,
-                      other companies -> My Templates only */}
-                  {showCreateButton && (
-                    <button
-                      type="button"
-                      onClick={() => setViewMode("create")}
-                      className="flex items-center gap-1.5 bg-white border border-gray-300 text-gray-800 px-4 py-2 rounded-lg text-[12px] font-medium hover:bg-gray-50 hover:border-gray-400 transition-all shadow-2xs cursor-pointer"
-                    >
-                      <FiPlus size={15} className="text-black" />
-                      <span>Create Template</span>
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* Table / Loader */}
-              <div className="bg-white rounded-xl shadow-sm border border-gray-100 min-h-[400px] text-[12px]">
-                {loading ? (
-                  <div className="flex flex-col items-center justify-center h-64">
-                    <FiLoader className="animate-spin text-black" size={24} />
-                  </div>
-                ) : (
-                  <PayrollTable
-                    columns={columns}
-                    data={filteredData}
-                    rowsPerPage={8}
-                  />
-                )}
-              </div>
-            </>
-          ) : viewMode === "preview" ? (
-            <TemplatePreviewView
-              data={selectedForPreview}
-              subTab={subTab}
-              onBack={() => setViewMode("table")}
-              onClone={(id) => handleClonePreset(id)}
-            />
-          ) : viewMode === "create" ? (
-            <div className="space-y-4">
-              <CreateEmailTemplateView
-                onBack={() => setViewMode("table")}
-                onSuccess={() => {
-                  setViewMode("table");
-                  loadTemplatesData();
-                }}
-              />
-            </div>
-          ) : viewMode === "upload" ? (
-            <div className="space-y-4">
-              <UploadEmailTemplateView
-                onBack={() => setViewMode("table")}
-                onSuccess={() => {
-                  setViewMode("table");
-                  loadTemplatesData();
-                }}
-              />
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between pb-2 border-b border-gray-100">
+      <div className="font-poppins font-normal px-3 text-black">
+        {viewMode === "table" ? (
+          <>
+            {/* Subtab Switcher & Action Buttons */}
+            <div className="flex justify-between items-center mb-4 px-2">
+              <div className="flex gap-2 bg-gray-50 p-1 rounded-lg border border-gray-100">
                 <button
                   type="button"
-                  onClick={() => {
-                    setInitialData(null);
-                    setViewMode("table");
-                  }}
-                  className="text-xs text-gray-500 hover:text-black transition-colors cursor-pointer"
+                  onClick={() => setSubTab("my-templates")}
+                  className={`px-4 py-1.5 rounded-md text-[11px] transition-all cursor-pointer ${
+                    subTab === "my-templates"
+                      ? "bg-white shadow-sm text-black font-medium"
+                      : "text-gray-400 hover:text-black"
+                  }`}
                 >
-                  ← Back to templates
+                  My Templates
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSubTab("presets")}
+                  className={`px-4 py-1.5 rounded-md text-[11px] transition-all cursor-pointer ${
+                    subTab === "presets"
+                      ? "bg-white shadow-sm text-black font-medium"
+                      : "text-gray-400 hover:text-black"
+                  }`}
+                >
+                  System Presets
                 </button>
               </div>
 
-              <EditEmailTemplateView
-                initialData={initialData}
-                onBack={() => {
-                  setInitialData(null);
-                  setViewMode("table");
-                }}
-                onSuccess={() => {
-                  setInitialData(null);
-                  setViewMode("table");
-                  loadTemplatesData();
-                }}
-              />
+              <div className="flex items-center gap-2.5">
+                {/* Search Input */}
+                <div className="relative">
+                  <FiSearch
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+                    size={13}
+                  />
+                  <input
+                    type="text"
+                    placeholder="Search templates..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-8 pr-3 py-1.5 border border-gray-200 bg-white rounded-lg text-[12px] focus:outline-none focus:ring-1 focus:ring-black w-44 sm:w-56 transition-all"
+                  />
+                </div>
+
+                {/* Upload Template Button */}
+                <button
+                  type="button"
+                  onClick={() => setViewMode("upload")}
+                  title="Upload Template"
+                  className="p-2 border border-gray-200 bg-white rounded-lg hover:bg-gray-50 transition-all text-gray-600 cursor-pointer shadow-2xs"
+                >
+                  <FiUpload size={14} />
+                </button>
+
+                {/* Send Custom Mail: My Templates tab only */}
+                {showSendCustomMail && (
+                  <button
+                    type="button"
+                    onClick={() => setSendMailOpen(true)}
+                    className="flex items-center gap-1.5 bg-black text-white px-4 py-2 rounded-lg text-[12px] font-medium hover:bg-gray-800 transition-all shadow-2xs cursor-pointer"
+                  >
+                    <FiSend size={14} />
+                    <span>Send Custom Mail</span>
+                  </button>
+                )}
+
+                {/* Create Template: Company 8 -> System Presets only,
+                    other companies -> My Templates only */}
+                {showCreateButton && (
+                  <button
+                    type="button"
+                    onClick={() => setViewMode("create")}
+                    className="flex items-center gap-1.5 bg-white border border-gray-300 text-gray-800 px-4 py-2 rounded-lg text-[12px] font-medium hover:bg-gray-50 hover:border-gray-400 transition-all shadow-2xs cursor-pointer"
+                  >
+                    <FiPlus size={15} className="text-black" />
+                    <span>Create Template</span>
+                  </button>
+                )}
+              </div>
             </div>
-          )}
-        </div>
+
+            {/* Table / Loader */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 min-h-[400px] text-[12px]">
+              {loading ? (
+                <div className="flex flex-col items-center justify-center h-64">
+                  <FiLoader className="animate-spin text-black" size={24} />
+                </div>
+              ) : (
+                <PayrollTable
+                  columns={columns}
+                  data={filteredData}
+                  rowsPerPage={8}
+                />
+              )}
+            </div>
+          </>
+        ) : viewMode === "preview" ? (
+          <TemplatePreviewView
+            data={selectedForPreview}
+            subTab={subTab}
+            onBack={() => setViewMode("table")}
+            onClone={(id) => handleClonePreset(id)}
+          />
+        ) : viewMode === "create" ? (
+          <div className="space-y-4">
+            <CreateEmailTemplateView
+              onBack={() => setViewMode("table")}
+              onSuccess={() => {
+                setViewMode("table");
+                loadTemplatesData();
+              }}
+            />
+          </div>
+        ) : viewMode === "upload" ? (
+          <div className="space-y-4">
+            <UploadEmailTemplateView
+              onBack={() => setViewMode("table")}
+              onSuccess={() => {
+                setViewMode("table");
+                loadTemplatesData();
+              }}
+            />
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-gray-100">
+              <button
+                type="button"
+                onClick={() => {
+                  setInitialData(null);
+                  setViewMode("table");
+                }}
+                className="text-xs text-gray-500 hover:text-black transition-colors cursor-pointer"
+              >
+                ← Back to templates
+              </button>
+            </div>
+
+            <EditEmailTemplateView
+              initialData={initialData}
+              onBack={() => {
+                setInitialData(null);
+                setViewMode("table");
+              }}
+              onSuccess={() => {
+                setInitialData(null);
+                setViewMode("table");
+                loadTemplatesData();
+              }}
+            />
+          </div>
+        )}
       </div>
-    </DashboardLayout>
+    </div>
   );
 };
 

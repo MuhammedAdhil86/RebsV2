@@ -1,0 +1,590 @@
+import React, { useState, useEffect, useRef, useMemo } from "react";
+import PayrollTable from "../../ui/payrolltable";
+import TemplatePreviewView from "../../ui/emailandletterpriview";
+import CreateEmailTemplateView from "../../ui/createemailmodal";
+import EditEmailTemplateView from "../../ui/updateemailmodal";
+import UploadEmailTemplateView from "../../ui/uploademailmodal";
+import DeleteConfirmationModal from "../../ui/deletemodal";
+import SendCustomMailModal from "../../ui/SendCustomMailModal";
+import {
+  FiLoader,
+  FiMoreHorizontal,
+  FiMaximize,
+  FiEdit2,
+  FiTrash2,
+  FiCopy,
+  FiPlus,
+  FiUpload,
+  FiSearch,
+  FiSend,
+} from "react-icons/fi";
+
+// Standard Backend Services
+import {
+  fetchEmailTemplates,
+  fetchDefaultEmailTemplates,
+  cloneDefaultEmailTemplate,
+  deleteEmailTemplateService,
+  sendCustomEmailService,
+} from ".././../service/mainServices";
+
+import toast from "react-hot-toast";
+
+// ---------------------------------------------------------------------------
+// Display helpers: backend keeps snake_case, the UI never shows it.
+// ---------------------------------------------------------------------------
+
+// Words that must be fully upper-case when displayed
+const ACRONYMS = new Set(["pdf", "hr", "id", "ctc", "otp", "sms", "pf", "esi"]);
+
+// Exact overrides for special labels (optional)
+const PURPOSE_LABELS = {
+  // offer_letter_pdf: "Offer Letter PDF",
+};
+
+// "offer_letter_pdf" -> "Offer Letter PDF"
+const formatPurpose = (value) => {
+  if (!value || typeof value !== "string") return "-";
+  if (PURPOSE_LABELS[value]) return PURPOSE_LABELS[value];
+
+  return value
+    .replace(/[_-]+/g, " ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => {
+      const lower = word.toLowerCase();
+      if (ACRONYMS.has(lower)) return lower.toUpperCase();
+      return lower.charAt(0).toUpperCase() + lower.slice(1);
+    })
+    .join(" ");
+};
+
+// Also protects the "Template Name" column in case a name arrives as snake_case
+const formatDisplayText = (value) => {
+  if (!value || typeof value !== "string") return "-";
+  return /^[a-z0-9]+(_[a-z0-9]+)+$/.test(value) ? formatPurpose(value) : value;
+};
+
+const EmailTemplates = () => {
+  // --- Navigation & View States ---
+  const [subTab, setSubTab] = useState("my-templates"); // 'my-templates' or 'presets'
+  const [viewMode, setViewMode] = useState("table"); // 'table', 'preview', 'edit', 'create', 'upload'
+
+  // --- Data States ---
+  const [customTemplates, setCustomTemplates] = useState([]);
+  const [presetTemplates, setPresetTemplates] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  // --- UI Component States ---
+  const [initialData, setInitialData] = useState(null);
+  const [selectedForPreview, setSelectedForPreview] = useState(null);
+  const [openMenuId, setOpenMenuId] = useState(null);
+  const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
+  const [searchQuery, setSearchQuery] = useState("");
+  const [deleteModal, setDeleteModal] = useState({
+    show: false,
+    id: null,
+    name: "",
+  });
+
+  const [sendMailOpen, setSendMailOpen] = useState(false);
+  const [sendingMail, setSendingMail] = useState(false);
+
+  const menuRef = useRef(null);
+
+  // --- Determine Active Company ID ---
+  const currentCompanyId = useMemo(() => {
+    try {
+      const user = JSON.parse(localStorage.getItem("user") || "{}");
+      const id =
+        user?.company_id ??
+        user?.companyId ??
+        user?.company?.id ??
+        localStorage.getItem("company_id") ??
+        0;
+      return Number(id) || 0;
+    } catch {
+      return 0;
+    }
+  }, []);
+
+  const isCompany8 = currentCompanyId === 8;
+  const isPresetsTab = subTab === "presets";
+
+  // Company 8 (admin company): "Create Template" only on System Presets.
+  // Other companies: "Create Template" only on My Templates.
+  const showCreateButton = isCompany8 ? isPresetsTab : !isPresetsTab;
+
+  // "Send Custom Mail" only on My Templates
+  const showSendCustomMail = !isPresetsTab;
+
+  // Helper to extract detailed backend error messages
+  const extractErrorMessage = (error, defaultMsg) => {
+    return (
+      error?.response?.data?.message ||
+      error?.response?.data?.error ||
+      error?.data?.message ||
+      error?.message ||
+      defaultMsg
+    );
+  };
+
+  // --- Data Fetching ---
+  const loadTemplatesData = async () => {
+    setLoading(true);
+    try {
+      const [customRes, presetRes] = await Promise.all([
+        fetchEmailTemplates(),
+        fetchDefaultEmailTemplates(),
+      ]);
+
+      const parsedCustom = Array.isArray(customRes)
+        ? customRes
+        : Array.isArray(customRes?.data)
+          ? customRes.data
+          : [];
+
+      const parsedPresets = Array.isArray(presetRes)
+        ? presetRes
+        : Array.isArray(presetRes?.data)
+          ? presetRes.data
+          : [];
+
+      // Raw backend data is stored untouched (purpose stays snake_case).
+      setCustomTemplates(parsedCustom);
+      setPresetTemplates(parsedPresets);
+    } catch (error) {
+      toast.error(extractErrorMessage(error, "Failed to load templates"));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadTemplatesData();
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (menuRef.current && !menuRef.current.contains(event.target)) {
+        setOpenMenuId(null);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleToggleMenu = (e, id) => {
+    if (openMenuId === id) {
+      setOpenMenuId(null);
+    } else {
+      const rect = e.currentTarget.getBoundingClientRect();
+      setMenuPosition({
+        top: rect.bottom + window.scrollY + 5,
+        left: rect.left + window.scrollX - 150,
+      });
+      setOpenMenuId(id);
+    }
+  };
+
+  const handleClonePreset = async (id) => {
+    setOpenMenuId(null);
+    const loadingToast = toast.loading("Cloning preset...");
+    try {
+      await cloneDefaultEmailTemplate(id);
+      toast.success("Cloned to My Templates!", { id: loadingToast });
+      setSubTab("my-templates");
+      await loadTemplatesData();
+      setViewMode("table");
+    } catch (error) {
+      toast.error(extractErrorMessage(error, "Clone failed"), {
+        id: loadingToast,
+      });
+    }
+  };
+
+  // Toggle ON: the modal already called
+  // POST /admin/send/custom-email/by-purpose/{purpose}, so just show the result.
+  const handleMailSent = (res) => {
+    toast.success(res?.message || "Email sent successfully");
+  };
+
+  // Toggle OFF: Gmail-style compose
+  const handleSendCustomMail = async (payload) => {
+    // payload: { continue_with_custom_mail: false, purpose, to, cc, bcc,
+    //            subject, body_html, attachments, scheduled_at }
+    setSendingMail(true);
+    try {
+      // POST /admin/send/custom-email
+      const res = await sendCustomEmailService({
+        to: payload.to,
+        cc: payload.cc,
+        bcc: payload.bcc,
+        subject: payload.subject,
+        body: payload.body_html,
+        attachments: payload.attachments,
+        use_manual_templates: false,
+      });
+      toast.success(res?.message || "Mail sent successfully");
+      setSendMailOpen(false);
+    } catch (error) {
+      toast.error(extractErrorMessage(error, "Failed to send custom mail"));
+    } finally {
+      setSendingMail(false);
+    }
+  };
+
+  const handleDeleteTemplate = async () => {
+    const templateId = deleteModal.id;
+    if (!templateId) return;
+
+    const loadingToast = toast.loading("Deleting template...");
+    try {
+      await deleteEmailTemplateService(templateId);
+
+      setCustomTemplates((prev) =>
+        prev.filter((item) => item.id !== templateId),
+      );
+      setPresetTemplates((prev) =>
+        prev.filter((item) => item.id !== templateId),
+      );
+
+      setDeleteModal({ show: false, id: null, name: "" });
+      toast.success("Deleted successfully!", { id: loadingToast });
+    } catch (error) {
+      toast.error(extractErrorMessage(error, "Failed to delete template"), {
+        id: loadingToast,
+      });
+    }
+  };
+
+  // --- Filtering Logic (same data arrangement as the Letter module) ---
+  const filteredData = useMemo(() => {
+    let sourceData = [];
+
+    if (isCompany8) {
+      // Company 8: presets + custom merged into one deduped list
+      const map = new Map();
+      [...presetTemplates, ...customTemplates].forEach((item) => {
+        if (item?.id) map.set(item.id, item);
+      });
+      sourceData = Array.from(map.values());
+    } else if (subTab === "presets") {
+      sourceData = presetTemplates;
+    } else {
+      sourceData = customTemplates.filter(
+        (item) => item.is_default === false || item.is_default === undefined,
+      );
+    }
+
+    // Standard email templates exclude letter generation templates
+    const emailOnly = sourceData.filter((item) => !item.for_letter_generation);
+
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return emailOnly;
+
+    // Search works on raw value, readable label, and name
+    return emailOnly.filter(
+      (item) =>
+        item?.name?.toLowerCase().includes(query) ||
+        formatDisplayText(item?.name).toLowerCase().includes(query) ||
+        item?.purpose?.toLowerCase().includes(query) ||
+        formatPurpose(item?.purpose).toLowerCase().includes(query),
+    );
+  }, [subTab, presetTemplates, customTemplates, searchQuery, isCompany8]);
+
+  const columns = [
+    {
+      key: "name",
+      label: "Template Name",
+      align: "left",
+      render: (val) => formatDisplayText(val),
+    },
+    {
+      key: "purpose",
+      label: "Purpose",
+      align: "left",
+      // Display only: "offer_letter_pdf" -> "Offer Letter PDF"
+      render: (val) => formatPurpose(val),
+    },
+    {
+      key: "is_active",
+      label: "Status",
+      render: (val) => (
+        <span
+          className={`px-2 py-1 rounded-full text-[10px] font-normal ${
+            val ? "text-green-600 bg-green-50" : "text-gray-400 bg-gray-50"
+          }`}
+        >
+          {val ? "Active" : "Inactive"}
+        </span>
+      ),
+    },
+    {
+      key: "actions",
+      label: "Actions",
+      align: "center",
+      render: (_, row) => {
+        // Clone is shown ONLY in System Presets for non-Company-8 users
+        const canClone = subTab === "presets" && !isCompany8;
+
+        return (
+          <div className="relative flex justify-center">
+            <button
+              type="button"
+              onClick={(e) => handleToggleMenu(e, row.id)}
+              className="p-1 text-gray-400 hover:text-black transition-colors cursor-pointer"
+            >
+              <FiMoreHorizontal size={18} />
+            </button>
+            {openMenuId === row.id && (
+              <div
+                ref={menuRef}
+                className="fixed w-48 border border-gray-200 rounded-xl shadow-2xl bg-white z-[9999] py-1 animate-in fade-in zoom-in duration-100"
+                style={{ top: menuPosition.top, left: menuPosition.left }}
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Raw row is passed; purpose_label is an extra display-only field
+                    setSelectedForPreview({
+                      ...row,
+                      purpose_label: formatPurpose(row.purpose),
+                    });
+                    setViewMode("preview");
+                    setOpenMenuId(null);
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-[12px] text-black hover:bg-gray-50 font-poppins font-normal cursor-pointer"
+                >
+                  <FiMaximize size={14} className="text-black" /> Preview
+                </button>
+
+                {canClone ? (
+                  <button
+                    type="button"
+                    onClick={() => handleClonePreset(row.id)}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-[12px] text-black hover:bg-gray-50 border-t border-gray-50 font-poppins font-normal cursor-pointer"
+                  >
+                    <FiCopy size={14} className="text-black" /> Clone
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        // Edit receives the raw row so the backend format is preserved
+                        setInitialData(row);
+                        setViewMode("edit");
+                        setOpenMenuId(null);
+                      }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-[12px] text-black hover:bg-gray-50 border-t border-gray-50 font-poppins font-normal cursor-pointer"
+                    >
+                      <FiEdit2 size={14} className="text-black" /> Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDeleteModal({
+                          show: true,
+                          id: row.id,
+                          name:
+                            formatDisplayText(row.name) !== "-"
+                              ? formatDisplayText(row.name)
+                              : `Template #${row.id}`,
+                        });
+                        setOpenMenuId(null);
+                      }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-[12px] text-red-500 hover:bg-red-50 font-poppins font-normal cursor-pointer"
+                    >
+                      <FiTrash2 size={14} /> Delete
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      },
+    },
+  ];
+
+  return (
+    <div className="w-full space-y-4">
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmationModal
+        isOpen={deleteModal.show}
+        onClose={() => setDeleteModal({ show: false, id: null, name: "" })}
+        onConfirm={handleDeleteTemplate}
+        itemName={deleteModal.name}
+      />
+
+      {/* Send Custom Mail Modal */}
+      <SendCustomMailModal
+        isOpen={sendMailOpen}
+        onClose={() => setSendMailOpen(false)}
+        loading={sendingMail}
+        onSubmit={handleSendCustomMail}
+        onSuccess={handleMailSent}
+      />
+
+      <div className="font-poppins font-normal px-3 text-black">
+        {viewMode === "table" ? (
+          <>
+            {/* Subtab Switcher & Action Buttons */}
+            <div className="flex justify-between items-center mb-4 px-2">
+              <div className="flex gap-2 bg-gray-50 p-1 rounded-lg border border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setSubTab("my-templates")}
+                  className={`px-4 py-1.5 rounded-md text-[11px] transition-all cursor-pointer ${
+                    subTab === "my-templates"
+                      ? "bg-white shadow-sm text-black font-medium"
+                      : "text-gray-400 hover:text-black"
+                  }`}
+                >
+                  My Templates
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSubTab("presets")}
+                  className={`px-4 py-1.5 rounded-md text-[11px] transition-all cursor-pointer ${
+                    subTab === "presets"
+                      ? "bg-white shadow-sm text-black font-medium"
+                      : "text-gray-400 hover:text-black"
+                  }`}
+                >
+                  System Presets
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2.5">
+                {/* Search Input */}
+                <div className="relative">
+                  <FiSearch
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+                    size={13}
+                  />
+                  <input
+                    type="text"
+                    placeholder="Search templates..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-8 pr-3 py-1.5 border border-gray-200 bg-white rounded-lg text-[12px] focus:outline-none focus:ring-1 focus:ring-black w-44 sm:w-56 transition-all"
+                  />
+                </div>
+
+                {/* Upload Template Button */}
+                <button
+                  type="button"
+                  onClick={() => setViewMode("upload")}
+                  title="Upload Template"
+                  className="p-2 border border-gray-200 bg-white rounded-lg hover:bg-gray-50 transition-all text-gray-600 cursor-pointer shadow-2xs"
+                >
+                  <FiUpload size={14} />
+                </button>
+
+                {/* Send Custom Mail: My Templates tab only */}
+                {showSendCustomMail && (
+                  <button
+                    type="button"
+                    onClick={() => setSendMailOpen(true)}
+                    className="flex items-center gap-1.5 bg-black text-white px-4 py-2 rounded-lg text-[12px] font-medium hover:bg-gray-800 transition-all shadow-2xs cursor-pointer"
+                  >
+                    <FiSend size={14} />
+                    <span>Send Custom Mail</span>
+                  </button>
+                )}
+
+                {/* Create Template: Company 8 -> System Presets only,
+                    other companies -> My Templates only */}
+                {showCreateButton && (
+                  <button
+                    type="button"
+                    onClick={() => setViewMode("create")}
+                    className="flex items-center gap-1.5 bg-white border border-gray-300 text-gray-800 px-4 py-2 rounded-lg text-[12px] font-medium hover:bg-gray-50 hover:border-gray-400 transition-all shadow-2xs cursor-pointer"
+                  >
+                    <FiPlus size={15} className="text-black" />
+                    <span>Create Template</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Table / Loader */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 min-h-[400px] text-[12px]">
+              {loading ? (
+                <div className="flex flex-col items-center justify-center h-64">
+                  <FiLoader className="animate-spin text-black" size={24} />
+                </div>
+              ) : (
+                <PayrollTable
+                  columns={columns}
+                  data={filteredData}
+                  rowsPerPage={8}
+                />
+              )}
+            </div>
+          </>
+        ) : viewMode === "preview" ? (
+          <TemplatePreviewView
+            data={selectedForPreview}
+            subTab={subTab}
+            onBack={() => setViewMode("table")}
+            onClone={(id) => handleClonePreset(id)}
+          />
+        ) : viewMode === "create" ? (
+          <div className="space-y-4">
+            <CreateEmailTemplateView
+              onBack={() => setViewMode("table")}
+              onSuccess={() => {
+                setViewMode("table");
+                loadTemplatesData();
+              }}
+            />
+          </div>
+        ) : viewMode === "upload" ? (
+          <div className="space-y-4">
+            <UploadEmailTemplateView
+              onBack={() => setViewMode("table")}
+              onSuccess={() => {
+                setViewMode("table");
+                loadTemplatesData();
+              }}
+            />
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-gray-100">
+              <button
+                type="button"
+                onClick={() => {
+                  setInitialData(null);
+                  setViewMode("table");
+                }}
+                className="text-xs text-gray-500 hover:text-black transition-colors cursor-pointer"
+              >
+                ← Back to templates
+              </button>
+            </div>
+
+            <EditEmailTemplateView
+              initialData={initialData}
+              onBack={() => {
+                setInitialData(null);
+                setViewMode("table");
+              }}
+              onSuccess={() => {
+                setInitialData(null);
+                setViewMode("table");
+                loadTemplatesData();
+              }}
+            />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default EmailTemplates;

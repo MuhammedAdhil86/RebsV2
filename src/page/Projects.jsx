@@ -5,10 +5,6 @@ import OverviewView from "../components/team/OverviewView";
 import ProjectsView from "../components/team/ProjectsView";
 
 /* ---------- static data (full API response) ---------- */
-// ONE data source for the whole page. Both tabs get the same projects.
-// Swap for an API call later (see the TODO in Team()).
-// Task `status` is optional; if the API doesn't send it, normalizeProjects
-// derives it.
 
 const ago = (days) => new Date(Date.now() - days * 86400000).toISOString();
 
@@ -163,8 +159,13 @@ const STATIC_RESPONSE = {
   },
 };
 
-// Make sure every task has a status. If the API doesn't send one:
-// someone allocated -> in_progress, nobody allocated -> pending.
+/* ---------- normalize project data ---------- */
+
+// Make sure every task has a status.
+// If the API doesn't send one:
+// allocated -> in_progress
+// not allocated -> pending
+
 const normalizeProjects = (response) =>
   (response?.data?.projects || []).map((p) => ({
     ...p,
@@ -174,7 +175,7 @@ const normalizeProjects = (response) =>
     })),
   }));
 
-/* ---------- page ---------- */
+/* ---------- tabs ---------- */
 
 const TABS = [
   { id: "overview", label: "Overview" },
@@ -183,20 +184,28 @@ const TABS = [
 
 const TAB_KEY = "team_active_tab";
 
-function Team() {
+/* ---------- page ---------- */
+
+function Projects() {
   const [activeTab, setActiveTab] = useState(() => {
     const saved = localStorage.getItem(TAB_KEY);
-    // Ignore an old/unknown saved tab so the page never opens blank.
+
+    // Ignore an old/unknown saved tab.
     return TABS.some((t) => t.id === saved) ? saved : "overview";
   });
 
-  // TODO: replace STATIC_RESPONSE with an API call (fetch into state here).
-  // Both tabs get the same `projects` array, so they always stay in sync.
+  // Both tabs use the same projects array.
+  // Replace STATIC_RESPONSE with API data later.
+
   const projects = useMemo(() => normalizeProjects(STATIC_RESPONSE), []);
+
+  // Save active tab in localStorage.
 
   useEffect(() => {
     localStorage.setItem(TAB_KEY, activeTab);
   }, [activeTab]);
+
+  // Tab button styles.
 
   const tabButtonClass = (id) =>
     `pb-2 px-1 transition-all relative whitespace-nowrap ${
@@ -210,11 +219,17 @@ function Team() {
   return (
     <DashboardLayout userName="Admin" onLogout={() => {}}>
       <div className="w-full space-y-4">
+        {/* Global Header */}
+
         <HeaderGlobal userName="Admin" />
 
         {/* Tab navigation */}
+
         <div
-          style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+          style={{
+            scrollbarWidth: "none",
+            msOverflowStyle: "none",
+          }}
           className="flex gap-4 border-b px-4 text-[14px] bg-white pt-2 shadow-sm rounded-t-lg select-none overflow-x-auto scrollbar-none [&::-webkit-scrollbar]:hidden"
         >
           {TABS.map((t) => (
@@ -229,17 +244,23 @@ function Team() {
           ))}
         </div>
 
+        {/* Main Content */}
+
         <div className="p-4 bg-white rounded-lg shadow-sm space-y-6">
           {/* HEADER */}
+
           <div>
             <h2 className="text-2xl text-black tracking-tight">Team</h2>
+
             <p className="text-xs text-black/40 mt-0.5">
               {activeLabel} dashboard
             </p>
           </div>
 
           {/* TAB PANELS */}
+
           {activeTab === "overview" && <OverviewView projects={projects} />}
+
           {activeTab === "projects" && <ProjectsView projects={projects} />}
         </div>
       </div>
@@ -247,4 +268,4 @@ function Team() {
   );
 }
 
-export default Team;
+export default Projects;

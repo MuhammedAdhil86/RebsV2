@@ -27,15 +27,16 @@ import Payslip from "../page/payslip";
 import Announcement from "../page/announcement";
 import AssetManager from "../page/assetmanager";
 import Events from "../page/event";
-import Letter from "../page/letter";
+
 import JobEnquiry from "../page/jobenquiry";
 import manageinsurance from "../page/manageinsurance";
 import InsuranceDetails from "../page/insurancedetails";
 import Timesheet from "../page/timesheet";
-import EmailTemplates from "../page/email";
+
 import Kpi from "../page/Kpi";
 import Chat from "../page/chat";
-import Team from "../page/team";
+import Projects from "../page/Projects";
+import Templates from "../page/Templates";
 function AppRoutes() {
   return (
     <Routes>
@@ -55,7 +56,7 @@ function AppRoutes() {
         path="/dashboard"
         element={<ProtectedRoute element={Dashboard} />}
       />
-      <Route path="/team" element={<ProtectedRoute element={Team} />} />
+      <Route path="/projects" element={<ProtectedRoute element={Projects} />} />
       <Route
         path="/employeeonboarding"
         element={<ProtectedRoute element={EmployeeOnboarding} />}
@@ -78,7 +79,10 @@ function AppRoutes() {
         path="/timesheet"
         element={<ProtectedRoute element={Timesheet} />}
       />
-
+      <Route
+        path="/templates"
+        element={<ProtectedRoute element={Templates} />}
+      />
       <Route path="/kpi" element={<ProtectedRoute element={Kpi} />} />
       <Route
         path="/insurance-details/:id"
@@ -115,11 +119,7 @@ function AppRoutes() {
         path="/asset"
         element={<ProtectedRoute element={AssetManager} />}
       />
-      <Route path="/letter" element={<ProtectedRoute element={Letter} />} />
-      <Route
-        path="/email"
-        element={<ProtectedRoute element={EmailTemplates} />}
-      />
+
       <Route path="/events" element={<ProtectedRoute element={Events} />} />
       <Route
         path="/jobenquiry"

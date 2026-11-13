@@ -114,13 +114,12 @@ function SideBar({ isCollapsed, toggleSidebar }) {
     ),
     performance: <Icon icon="mdi:chart-line" width="20" />, // KPI icon updated
     employees: <Icon icon="clarity:employee-group-line" width="20" />,
-    team: <Icon icon="clarity:group-line" width="20" />, // NEW: Team module
+    projects: <Icon icon="clarity:folder-line" width="20" />,
     assets: <Icon icon="fluent:web-asset-16-regular" width="20" />,
     shift: <Icon icon="ic:twotone-manage-history" width="20" />,
     events: <Icon icon="carbon:event" width="20" />,
     announcement: <Icon icon="lucide:megaphone" width="20" />,
-    letter: <Icon icon="mynaui:table" width="20" />,
-    email: <Icon icon="ic:outline-email" width="20" />,
+    templates: <Icon icon="lucide:layout-template" width="20" />,
     chat: <Icon icon="lucide:messages-square" width="20" />,
     insurance: <Icon icon="solar:shield-user-outline" width="20" />,
     timesheet: <Icon icon="lucide:calendar-clock" width="20" />,
@@ -142,7 +141,7 @@ function SideBar({ isCollapsed, toggleSidebar }) {
         { title: "Performance", path: "/kpi", icon: icons.performance },
         { title: "Employees", path: "/manageemployee", icon: icons.employees },
         // NEW: Team module (opens on the Overview tab by default)
-        { title: "Team", path: "/team", icon: icons.team },
+        { title: "Projects", path: "/projects", icon: icons.projects },
         { title: "Assets", path: "/asset", icon: icons.assets },
         { title: "Shift Management", path: "/shift", icon: icons.shift },
         { title: "Events", path: "/events", icon: icons.events },
@@ -151,8 +150,7 @@ function SideBar({ isCollapsed, toggleSidebar }) {
           path: "/announcements",
           icon: icons.announcement,
         },
-        { title: "Letter", path: "/letter", icon: icons.letter },
-        { title: "Email", path: "/email", icon: icons.email },
+        { title: "Templates", path: "/templates", icon: icons.templates },
         { title: "Chat", path: "/chat", icon: icons.chat },
         {
           title: "Insurance",

@@ -243,6 +243,96 @@ const ChartCard = ({ title, subtitle, children }) => (
   </div>
 );
 
+/* Pie chart for "Workload by member" */
+const PIE_COLORS = [
+  CHART.blue,
+  CHART.green,
+  CHART.orange,
+  CHART.yellow,
+  CHART.red,
+  "#a78bfa",
+  "#2dd4bf",
+  "#f472b6",
+];
+
+const WorkloadPie = ({ data }) => {
+  const items = data.filter((w) => w.count > 0);
+  const total = items.reduce((sum, w) => sum + w.count, 0);
+
+  if (!total) {
+    return <p className="text-xs text-black/40">No tasks allocated yet.</p>;
+  }
+
+  const cx = 50;
+  const cy = 50;
+  const r = 48;
+  let angle = -Math.PI / 2;
+
+  const slices = items.map((w, i) => {
+    const frac = w.count / total;
+    const start = angle;
+    const end = angle + frac * 2 * Math.PI;
+    angle = end;
+    const x1 = cx + r * Math.cos(start);
+    const y1 = cy + r * Math.sin(start);
+    const x2 = cx + r * Math.cos(end);
+    const y2 = cy + r * Math.sin(end);
+    const large = frac > 0.5 ? 1 : 0;
+    return {
+      ...w,
+      pct: Math.round(frac * 100),
+      full: items.length === 1,
+      color: PIE_COLORS[i % PIE_COLORS.length],
+      d: `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2} Z`,
+    };
+  });
+
+  return (
+    <div className="flex flex-col items-center gap-4">
+      <svg viewBox="0 0 100 100" className="w-36 h-36 shrink-0">
+        {slices.map((s) =>
+          s.full ? (
+            <circle key={s.name} cx={cx} cy={cy} r={r} fill={s.color}>
+              <title>{`${s.name} · ${s.count} tasks`}</title>
+            </circle>
+          ) : (
+            <path
+              key={s.name}
+              d={s.d}
+              fill={s.color}
+              stroke="#fff"
+              strokeWidth="1"
+            >
+              <title>{`${s.name} · ${s.count} task${s.count === 1 ? "" : "s"} (${s.pct}%)`}</title>
+            </path>
+          ),
+        )}
+      </svg>
+
+      {/* legend: scrolls to the right when there are many members */}
+      <div className="w-full overflow-x-auto pb-2">
+        <ul className="flex items-center gap-2 w-max">
+          {slices.map((s) => (
+            <li
+              key={s.name}
+              className="flex items-center gap-2 text-xs text-black border border-black/10 rounded-full px-3 py-1.5 whitespace-nowrap shrink-0"
+            >
+              <span
+                className="w-2.5 h-2.5 rounded-full shrink-0"
+                style={{ background: s.color }}
+              />
+              {s.name}
+              <span className="text-black/50">
+                · {s.count} ({s.pct}%)
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+};
+
 /* ---------- Overview tab ---------- */
 
 const STATUS_STYLES = {
@@ -278,9 +368,6 @@ const OverviewView = () => {
         if (cancelled) return;
         setProjects(res.projects);
         setTotal(res.total);
-        // open the first project by default
-        if (res.projects?.length)
-          setOpenIds(new Set([res.projects[0].project_id]));
       })
       .catch((err) => {
         if (cancelled) return;
@@ -423,21 +510,11 @@ const OverviewView = () => {
             title="Workload by member"
             subtitle="Tasks allocated per person"
           >
-            <div className="space-y-3">
-              {workload.length === 0 ? (
-                <p className="text-xs text-black/40">No members yet.</p>
-              ) : (
-                workload.map((w) => (
-                  <BarRow
-                    key={w.name}
-                    label={w.name}
-                    value={w.count}
-                    max={maxLoad}
-                    color={CHART.blue}
-                  />
-                ))
-              )}
-            </div>
+            {workload.length === 0 ? (
+              <p className="text-xs text-black/40">No members yet.</p>
+            ) : (
+              <WorkloadPie data={workload} />
+            )}
           </ChartCard>
 
           <ChartCard

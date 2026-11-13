@@ -1,7 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
-import DashboardLayout from "../ui/pagelayout";
-import HeaderGlobal from "../ui/headerglobal";
-import PayrollTable from "../ui/payrolltable";
+import PayrollTable from "../";
 import TemplatePreviewView from "../ui/emailandletterpriview";
 import EditEmailTemplateView from "../ui/editemailandletter";
 import EditLetterPdfTemplateView from "../ui/editletterpdftemplate";
@@ -397,207 +395,203 @@ const Letter = () => {
   ];
 
   return (
-    <DashboardLayout>
-      <div className="w-full space-y-4">
-        <HeaderGlobal userName="Admin" />
+    <div className="w-full space-y-4">
+      {/* Action Modal (Generate PDF / Send Email) */}
+      <LetterActionModal
+        isOpen={isActionModalOpen}
+        onClose={() => setIsActionModalOpen(false)}
+        onExecute={handleExecuteAction}
+        activeTab={activeTab}
+      />
 
-        {/* Action Modal (Generate PDF / Send Email) */}
-        <LetterActionModal
-          isOpen={isActionModalOpen}
-          onClose={() => setIsActionModalOpen(false)}
-          onExecute={handleExecuteAction}
-          activeTab={activeTab}
-        />
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmationModal
+        isOpen={deleteModal.show}
+        onClose={() => setDeleteModal({ show: false, id: null, name: "" })}
+        onConfirm={handleDeleteTemplate}
+        itemName={deleteModal.name}
+      />
 
-        {/* Delete Confirmation Modal */}
-        <DeleteConfirmationModal
-          isOpen={deleteModal.show}
-          onClose={() => setDeleteModal({ show: false, id: null, name: "" })}
-          onConfirm={handleDeleteTemplate}
-          itemName={deleteModal.name}
-        />
+      <div className="font-poppins font-normal px-3 text-black">
+        {viewMode === "table" ? (
+          <>
+            {/* Type Switcher: PDF vs Email */}
+            <div className="flex gap-6 border-b border-gray-100 px-2 mb-3 text-[12px]">
+              <button
+                type="button"
+                onClick={() => setActiveTab("pdf")}
+                className={`pb-2 transition-all relative cursor-pointer ${
+                  activeTab === "pdf"
+                    ? "text-black font-semibold after:content-[''] after:absolute after:bottom-0 after:left-0 after:w-full after:h-[2px] after:bg-black"
+                    : "text-gray-400"
+                }`}
+              >
+                PDF Letters
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("email")}
+                className={`pb-2 transition-all relative cursor-pointer ${
+                  activeTab === "email"
+                    ? "text-black font-semibold after:content-[''] after:absolute after:bottom-0 after:left-0 after:w-full after:h-[2px] after:bg-black"
+                    : "text-gray-400"
+                }`}
+              >
+                Email Letters
+              </button>
+            </div>
 
-        <div className="font-poppins font-normal px-3 text-black">
-          {viewMode === "table" ? (
-            <>
-              {/* Type Switcher: PDF vs Email */}
-              <div className="flex gap-6 border-b border-gray-100 px-2 mb-3 text-[12px]">
+            {/* Subtab Switcher & Action Buttons */}
+            <div className="flex justify-between items-center mb-4 px-2">
+              <div className="flex gap-2 bg-gray-50 p-1 rounded-lg border border-gray-100">
                 <button
                   type="button"
-                  onClick={() => setActiveTab("pdf")}
-                  className={`pb-2 transition-all relative cursor-pointer ${
-                    activeTab === "pdf"
-                      ? "text-black font-semibold after:content-[''] after:absolute after:bottom-0 after:left-0 after:w-full after:h-[2px] after:bg-black"
+                  onClick={() => setSubTab("my-templates")}
+                  className={`px-4 py-1.5 rounded-md text-[11px] transition-all cursor-pointer ${
+                    subTab === "my-templates"
+                      ? "bg-white shadow-sm text-black font-medium"
                       : "text-gray-400"
                   }`}
                 >
-                  PDF Letters
+                  My Templates
                 </button>
                 <button
                   type="button"
-                  onClick={() => setActiveTab("email")}
-                  className={`pb-2 transition-all relative cursor-pointer ${
-                    activeTab === "email"
-                      ? "text-black font-semibold after:content-[''] after:absolute after:bottom-0 after:left-0 after:w-full after:h-[2px] after:bg-black"
+                  onClick={() => setSubTab("presets")}
+                  className={`px-4 py-1.5 rounded-md text-[11px] transition-all cursor-pointer ${
+                    subTab === "presets"
+                      ? "bg-white shadow-sm text-black font-medium"
                       : "text-gray-400"
                   }`}
                 >
-                  Email Letters
+                  System Presets
                 </button>
               </div>
 
-              {/* Subtab Switcher & Action Buttons */}
-              <div className="flex justify-between items-center mb-4 px-2">
-                <div className="flex gap-2 bg-gray-50 p-1 rounded-lg border border-gray-100">
+              <div className="flex items-center gap-2.5">
+                {/* Generated List Button (shown in PDF Letters tab) */}
+                {activeTab === "pdf" && (
                   <button
                     type="button"
-                    onClick={() => setSubTab("my-templates")}
-                    className={`px-4 py-1.5 rounded-md text-[11px] transition-all cursor-pointer ${
-                      subTab === "my-templates"
-                        ? "bg-white shadow-sm text-black font-medium"
-                        : "text-gray-400"
-                    }`}
+                    onClick={() => setViewMode("generated-list")}
+                    className="flex items-center gap-1.5 bg-white border border-gray-300 text-gray-800 px-3.5 py-2 rounded-lg text-[12px] font-medium hover:bg-gray-50 hover:border-gray-400 transition-all shadow-2xs cursor-pointer"
                   >
-                    My Templates
+                    <FiList size={14} className="text-black" />
+                    <span>Generated List</span>
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setSubTab("presets")}
-                    className={`px-4 py-1.5 rounded-md text-[11px] transition-all cursor-pointer ${
-                      subTab === "presets"
-                        ? "bg-white shadow-sm text-black font-medium"
-                        : "text-gray-400"
-                    }`}
-                  >
-                    System Presets
-                  </button>
-                </div>
-
-                <div className="flex items-center gap-2.5">
-                  {/* Generated List Button (shown in PDF Letters tab) */}
-                  {activeTab === "pdf" && (
-                    <button
-                      type="button"
-                      onClick={() => setViewMode("generated-list")}
-                      className="flex items-center gap-1.5 bg-white border border-gray-300 text-gray-800 px-3.5 py-2 rounded-lg text-[12px] font-medium hover:bg-gray-50 hover:border-gray-400 transition-all shadow-2xs cursor-pointer"
-                    >
-                      <FiList size={14} className="text-black" />
-                      <span>Generated List</span>
-                    </button>
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={() => setIsActionModalOpen(true)}
-                    className="flex items-center gap-2 bg-black text-white px-4 py-2 rounded-lg text-[12px] font-normal hover:bg-gray-800 transition-all shadow-sm cursor-pointer"
-                  >
-                    {activeTab === "pdf" ? (
-                      <>
-                        <FiFileText size={14} /> Generate PDF
-                      </>
-                    ) : (
-                      <>
-                        <FiSend size={14} /> Send Email
-                      </>
-                    )}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setViewMode("create")}
-                    className="flex items-center gap-1.5 bg-white border border-gray-300 text-gray-800 px-4 py-2 rounded-lg text-[12px] font-medium hover:bg-gray-50 hover:border-gray-400 transition-all shadow-2xs cursor-pointer"
-                  >
-                    <FiPlus size={15} className="text-black" />
-                    <span>Create Template</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Table / Loader */}
-              <div className="bg-white rounded-xl shadow-sm border border-gray-100 min-h-[400px] text-[12px]">
-                {loading ? (
-                  <div className="flex flex-col items-center justify-center h-64">
-                    <FiLoader className="animate-spin text-black" size={24} />
-                  </div>
-                ) : (
-                  <PayrollTable
-                    columns={columns}
-                    data={filteredData}
-                    rowsPerPage={8}
-                  />
                 )}
-              </div>
-            </>
-          ) : viewMode === "generated-list" ? (
-            /* Dedicated Generated Letter List View */
-            <GeneratedLetterListView
-              data={generatedLetters}
-              onBack={() => setViewMode("table")}
-            />
-          ) : viewMode === "preview" ? (
-            <TemplatePreviewView
-              data={selectedForPreview}
-              subTab={subTab}
-              onBack={() => setViewMode("table")}
-              onClone={(id) => handleClonePreset(id)}
-            />
-          ) : viewMode === "create" ? (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between pb-2 border-b border-gray-100">
+
                 <button
                   type="button"
-                  onClick={() => setViewMode("table")}
-                  className="text-xs text-gray-500 hover:text-black transition-colors cursor-pointer"
+                  onClick={() => setIsActionModalOpen(true)}
+                  className="flex items-center gap-2 bg-black text-white px-4 py-2 rounded-lg text-[12px] font-normal hover:bg-gray-800 transition-all shadow-sm cursor-pointer"
                 >
-                  ← Back to templates
+                  {activeTab === "pdf" ? (
+                    <>
+                      <FiFileText size={14} /> Generate PDF
+                    </>
+                  ) : (
+                    <>
+                      <FiSend size={14} /> Send Email
+                    </>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setViewMode("create")}
+                  className="flex items-center gap-1.5 bg-white border border-gray-300 text-gray-800 px-4 py-2 rounded-lg text-[12px] font-medium hover:bg-gray-50 hover:border-gray-400 transition-all shadow-2xs cursor-pointer"
+                >
+                  <FiPlus size={15} className="text-black" />
+                  <span>Create Template</span>
                 </button>
               </div>
-              {activeTab === "pdf" ? (
-                <CreateLetterPdfTemplateForm
-                  onBack={() => setViewMode("table")}
-                  onSuccess={() => {
-                    setViewMode("table");
-                    loadTemplatesData();
-                  }}
-                />
+            </div>
+
+            {/* Table / Loader */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 min-h-[400px] text-[12px]">
+              {loading ? (
+                <div className="flex flex-col items-center justify-center h-64">
+                  <FiLoader className="animate-spin text-black" size={24} />
+                </div>
               ) : (
-                <CreateLetterEmailTemplateForm
-                  onBack={() => setViewMode("table")}
-                  onSuccess={() => {
-                    setViewMode("table");
-                    loadTemplatesData();
-                  }}
+                <PayrollTable
+                  columns={columns}
+                  data={filteredData}
+                  rowsPerPage={8}
                 />
               )}
             </div>
-          ) : activeTab === "pdf" ? (
-            <EditLetterPdfTemplateView
-              initialData={initialData}
-              onBack={() => {
-                setViewMode("table");
-                loadTemplatesData();
-              }}
-              onSuccess={() => {
-                setViewMode("table");
-                loadTemplatesData();
-              }}
-            />
-          ) : (
-            <EditEmailTemplateView
-              initialData={initialData}
-              onBack={() => {
-                setViewMode("table");
-                loadTemplatesData();
-              }}
-              onSuccess={() => {
-                setViewMode("table");
-                loadTemplatesData();
-              }}
-            />
-          )}
-        </div>
+          </>
+        ) : viewMode === "generated-list" ? (
+          /* Dedicated Generated Letter List View */
+          <GeneratedLetterListView
+            data={generatedLetters}
+            onBack={() => setViewMode("table")}
+          />
+        ) : viewMode === "preview" ? (
+          <TemplatePreviewView
+            data={selectedForPreview}
+            subTab={subTab}
+            onBack={() => setViewMode("table")}
+            onClone={(id) => handleClonePreset(id)}
+          />
+        ) : viewMode === "create" ? (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-gray-100">
+              <button
+                type="button"
+                onClick={() => setViewMode("table")}
+                className="text-xs text-gray-500 hover:text-black transition-colors cursor-pointer"
+              >
+                ← Back to templates
+              </button>
+            </div>
+            {activeTab === "pdf" ? (
+              <CreateLetterPdfTemplateForm
+                onBack={() => setViewMode("table")}
+                onSuccess={() => {
+                  setViewMode("table");
+                  loadTemplatesData();
+                }}
+              />
+            ) : (
+              <CreateLetterEmailTemplateForm
+                onBack={() => setViewMode("table")}
+                onSuccess={() => {
+                  setViewMode("table");
+                  loadTemplatesData();
+                }}
+              />
+            )}
+          </div>
+        ) : activeTab === "pdf" ? (
+          <EditLetterPdfTemplateView
+            initialData={initialData}
+            onBack={() => {
+              setViewMode("table");
+              loadTemplatesData();
+            }}
+            onSuccess={() => {
+              setViewMode("table");
+              loadTemplatesData();
+            }}
+          />
+        ) : (
+          <EditEmailTemplateView
+            initialData={initialData}
+            onBack={() => {
+              setViewMode("table");
+              loadTemplatesData();
+            }}
+            onSuccess={() => {
+              setViewMode("table");
+              loadTemplatesData();
+            }}
+          />
+        )}
       </div>
-    </DashboardLayout>
+    </div>
   );
 };
 
