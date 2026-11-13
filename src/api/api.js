@@ -598,3 +598,5 @@ export const editChatMessage = (id, mid) =>
   `/employee/chat/${id}/messages/${mid}`;
 //Teams
 export const getAdminProjectsOverview = "/admin/projects/overview";
+export const getAdminProjectsTaskStatus = "/admin/projects/task-status";
+export const getManagerProjectStatuses = "/manager/projects/statuses";

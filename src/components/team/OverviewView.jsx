@@ -244,15 +244,27 @@ const ChartCard = ({ title, subtitle, children }) => (
 );
 
 /* Pie chart for "Workload by member" */
-const PIE_COLORS = [
-  CHART.blue,
-  CHART.green,
-  CHART.orange,
-  CHART.yellow,
-  CHART.red,
+const WORKLOAD_COLORS = [
+  "#5b8def",
+  "#8b5cf6",
+  "#14b8a6",
+  "#06b6d4",
+  "#6366f1",
+  "#0ea5e9",
   "#a78bfa",
   "#2dd4bf",
+];
+
+/* warm palette for "Tasks per project" so each chart reads differently */
+const PROJECT_COLORS = [
+  "#ff9a62",
+  "#f2c94c",
   "#f472b6",
+  "#fb7185",
+  "#d97706",
+  "#e879f9",
+  "#fcd34d",
+  "#c2410c",
 ];
 
 const WorkloadPie = ({ data }) => {
@@ -282,7 +294,7 @@ const WorkloadPie = ({ data }) => {
       ...w,
       pct: Math.round(frac * 100),
       full: items.length === 1,
-      color: PIE_COLORS[i % PIE_COLORS.length],
+      color: WORKLOAD_COLORS[i % WORKLOAD_COLORS.length],
       d: `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2} Z`,
     };
   });
@@ -325,6 +337,150 @@ const WorkloadPie = ({ data }) => {
               <span className="text-black/50">
                 · {s.count} ({s.pct}%)
               </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+};
+
+/* 3D pie chart for "Tasks per project" */
+const ProjectPie3D = ({ data }) => {
+  const items = data
+    .map((d) => ({ ...d, total: d.assigned + d.unassigned }))
+    .filter((d) => d.total > 0);
+  const sum = items.reduce((acc, d) => acc + d.total, 0);
+
+  if (!sum) {
+    return <p className="text-xs text-black/40">No tasks yet.</p>;
+  }
+
+  const cx = 100;
+  const cy = 62;
+  const rx = 90;
+  const ry = 46;
+  const depth = 14;
+  const pt = (a, dy = 0) => [cx + rx * Math.cos(a), cy + ry * Math.sin(a) + dy];
+
+  let angle = -Math.PI / 2;
+  const slices = items.map((d, i) => {
+    const frac = d.total / sum;
+    const a0 = angle;
+    const a1 = angle + frac * 2 * Math.PI;
+    angle = a1;
+    const mid = (a0 + a1) / 2;
+    const [x1, y1] = pt(a0);
+    const [x2, y2] = pt(a1);
+    const large = frac > 0.5 ? 1 : 0;
+
+    // outer wall is only visible on the front (lower) half: angles 0..PI
+    const lo = Math.max(a0, 0);
+    const hi = Math.min(a1, Math.PI);
+    let wall = null;
+    if (hi > lo) {
+      const [wx1, wy1] = pt(lo);
+      const [wx2, wy2] = pt(hi);
+      wall = `M ${wx1} ${wy1} L ${wx1} ${wy1 + depth} A ${rx} ${ry} 0 0 1 ${wx2} ${wy2 + depth} L ${wx2} ${wy2} A ${rx} ${ry} 0 0 0 ${wx1} ${wy1} Z`;
+    }
+
+    const labelR = frac < 0.08 ? 0.8 : 0.6;
+    return {
+      ...d,
+      pct: Math.round(frac * 100),
+      full: items.length === 1,
+      color: PROJECT_COLORS[i % PROJECT_COLORS.length],
+      top: `M ${cx} ${cy} L ${x1} ${y1} A ${rx} ${ry} 0 ${large} 1 ${x2} ${y2} Z`,
+      wall,
+      lx: cx + rx * labelR * Math.cos(mid),
+      ly: cy + ry * labelR * Math.sin(mid),
+    };
+  });
+
+  const fullWall = `M ${cx - rx} ${cy} L ${cx - rx} ${cy + depth} A ${rx} ${ry} 0 0 0 ${cx + rx} ${cy + depth} L ${cx + rx} ${cy} A ${rx} ${ry} 0 0 1 ${cx - rx} ${cy} Z`;
+
+  return (
+    <div className="flex flex-col items-center gap-4">
+      <svg viewBox="0 0 200 140" className="w-full max-w-[190px]">
+        <defs>
+          <radialGradient id="pie3dGloss" cx="35%" cy="30%" r="80%">
+            <stop offset="0%" stopColor="#fff" stopOpacity="0.45" />
+            <stop offset="100%" stopColor="#fff" stopOpacity="0" />
+          </radialGradient>
+        </defs>
+
+        {/* side walls (front half) */}
+        {slices.map((sl) => {
+          const d = sl.full ? fullWall : sl.wall;
+          if (!d) return null;
+          return (
+            <g key={`w-${sl.id}`}>
+              <path d={d} fill={sl.color} />
+              <path d={d} fill="#000" fillOpacity="0.28" />
+            </g>
+          );
+        })}
+
+        {/* top faces */}
+        {slices.map((sl) => (
+          <g key={`t-${sl.id}`}>
+            <title>{`${sl.name} · ${sl.total} task${sl.total === 1 ? "" : "s"} (${sl.pct}%) · ${sl.assigned} assigned, ${sl.unassigned} unassigned`}</title>
+            {sl.full ? (
+              <ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill={sl.color} />
+            ) : (
+              <path
+                d={sl.top}
+                fill={sl.color}
+                stroke="#fff"
+                strokeWidth="0.6"
+                strokeLinejoin="round"
+              />
+            )}
+          </g>
+        ))}
+
+        {/* gloss */}
+        <ellipse
+          cx={cx}
+          cy={cy}
+          rx={rx}
+          ry={ry}
+          fill="url(#pie3dGloss)"
+          pointerEvents="none"
+        />
+
+        {/* percentage labels */}
+        {slices.map((sl) => (
+          <text
+            key={`p-${sl.id}`}
+            x={sl.lx}
+            y={sl.ly}
+            textAnchor="middle"
+            dominantBaseline="central"
+            fontSize="8"
+            fontWeight="600"
+            fill="#111"
+            pointerEvents="none"
+          >
+            {sl.pct}%
+          </text>
+        ))}
+      </svg>
+
+      {/* legend: scrolls to the right when there are many projects */}
+      <div className="w-full overflow-x-auto pb-2">
+        <ul className="flex items-center gap-2 w-max">
+          {slices.map((sl) => (
+            <li
+              key={sl.id}
+              className="flex items-center gap-2 text-xs text-black border border-black/10 rounded-full px-3 py-1.5 whitespace-nowrap shrink-0"
+            >
+              <span
+                className="w-2.5 h-2.5 rounded-sm shrink-0"
+                style={{ background: sl.color }}
+              />
+              {sl.name}
+              <span className="text-black/50">· {sl.total}</span>
             </li>
           ))}
         </ul>
@@ -519,30 +675,9 @@ const OverviewView = () => {
 
           <ChartCard
             title="Tasks per project"
-            subtitle="Green assigned · red unassigned"
+            subtitle="Share of tasks by project"
           >
-            <div className="space-y-4">
-              {perProject.map((p) => (
-                <div key={p.id}>
-                  <div className="flex items-center justify-between text-xs mb-1">
-                    <span className="text-black truncate pr-2">{p.name}</span>
-                    <span className="text-black/60">
-                      {p.assigned + p.unassigned}
-                    </span>
-                  </div>
-                  <div
-                    style={{
-                      width: `${((p.assigned + p.unassigned) / maxPerProject) * 100}%`,
-                    }}
-                  >
-                    <StackedBar
-                      assigned={p.assigned}
-                      unassigned={p.unassigned}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
+            <ProjectPie3D data={perProject} />
           </ChartCard>
         </div>
       )}

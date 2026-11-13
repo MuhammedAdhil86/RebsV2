@@ -1,5 +1,9 @@
 import axiosInstance from "./axiosinstance";
-import { getAdminProjectsOverview } from "../api/api";
+import {
+  getAdminProjectsOverview,
+  getAdminProjectsTaskStatus,
+  getManagerProjectStatuses,
+} from "../api/api";
 
 /* ---------- mappers (API shape -> UI shape) ---------- */
 
@@ -52,6 +56,47 @@ const toProject = (p = {}) => ({
   team: (p.team ?? []).map(toTeamMember),
 });
 
+/* ---------- task-status mappers (GET /admin/projects/task-status) ---------- */
+
+// assignee: one person's work on one task. Fields besides id/name are
+// optional in the API (a task can be allocated but not started yet).
+const toAssignee = (a = {}) => ({
+  employee_id: String(a.employee_id ?? ""),
+  name: a.name ?? "",
+  status_id: a.status_id ?? null,
+  status: a.status ?? "",
+  status_color: a.status_color ?? "",
+  is_working: Boolean(a.is_working),
+  start_time: a.start_time ?? null,
+  work_date: a.work_date ?? null,
+  time_taken_minutes: Number(a.time_taken_minutes ?? 0),
+  days_worked: Number(a.days_worked ?? 0),
+  remarks: a.remarks ?? "",
+});
+
+const toStatusTask = (t = {}) => ({
+  task_id: t.task_id,
+  task: t.task ?? "",
+  assignees: (t.assignees ?? []).map(toAssignee),
+});
+
+const toStatusProject = (p = {}) => ({
+  project_id: p.project_id,
+  project: p.project ?? "",
+  status: p.status ?? "",
+  working_now: Number(p.working_now ?? 0),
+  tasks: (p.tasks ?? []).map(toStatusTask),
+});
+
+const toTaskStatusSummary = (s = {}) => ({
+  total_projects: Number(s.total_projects ?? 0),
+  completed_projects: Number(s.completed_projects ?? 0),
+  completion_rate: Number(s.completion_rate ?? 0),
+  completion_label: s.completion_label ?? "",
+  total_tasks: Number(s.total_tasks ?? 0),
+  allocated_employees: Number(s.allocated_employees ?? 0),
+});
+
 // Only send params that have a value (all query params are optional)
 const cleanParams = (params = {}) => {
   const out = {};
@@ -67,6 +112,28 @@ const cleanParams = (params = {}) => {
 };
 
 const teamService = {
+  // GET /manager/projects/statuses
+  // -> { default: "active", statuses: [{ value, label }] }
+  fetchProjectStatuses: async () => {
+    try {
+      const response = await axiosInstance.get(getManagerProjectStatuses);
+      const d = response.data?.data ?? {};
+      return {
+        default: d.default ?? "",
+        statuses: (d.statuses ?? []).map((s) => ({
+          value: s.value,
+          label: s.label ?? s.value,
+        })),
+      };
+    } catch (error) {
+      console.error(
+        "Error fetching project statuses:",
+        error.response?.data || error.message,
+      );
+      throw error;
+    }
+  },
+
   // GET /admin/projects/overview   (API 9, same params/response as API 5)
   // params (all optional):
   //   project, task            string   filter by project / task name
@@ -96,6 +163,37 @@ const teamService = {
     } catch (error) {
       console.error(
         "Error fetching projects overview:",
+        error.response?.data || error.message,
+      );
+      throw error;
+    }
+  },
+
+  // GET /admin/projects/task-status
+  // params (all optional):
+  //   project_status           string | string[]  active,on_hold,...
+  //   status                   string | string[]  task status, e.g. "In Progress,Blocked"
+  //   employees                string | string[]  employee ids (uuid1,uuid2)
+  //   period                   daily | weekly | monthly
+  //   date                     YYYY-MM-DD         (period=daily)
+  //   month, year              integer            (period=weekly | monthly)
+  //   week                     integer            (period=weekly)
+  fetchProjectsTaskStatus: async (params = {}) => {
+    try {
+      const query = cleanParams(params);
+
+      const response = await axiosInstance.get(getAdminProjectsTaskStatus, {
+        params: query,
+      });
+
+      const d = response.data?.data ?? {};
+      return {
+        summary: toTaskStatusSummary(d.summary),
+        projects: (d.projects ?? []).map(toStatusProject),
+      };
+    } catch (error) {
+      console.error(
+        "Error fetching projects task status:",
         error.response?.data || error.message,
       );
       throw error;
