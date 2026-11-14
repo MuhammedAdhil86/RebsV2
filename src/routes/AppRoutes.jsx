@@ -32,7 +32,7 @@ import JobEnquiry from "../page/jobenquiry";
 import manageinsurance from "../page/manageinsurance";
 import InsuranceDetails from "../page/insurancedetails";
 import Timesheet from "../page/timesheet";
-import ExitProcess from "../page/ExitProcess";
+import ExitProcess from "../page/exitprocess";
 import Kpi from "../page/Kpi";
 import Chat from "../page/chat";
 import Projects from "../page/Projects";
