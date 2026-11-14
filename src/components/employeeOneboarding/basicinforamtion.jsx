@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { Icon } from "@iconify/react";
 import { ChevronDown } from "lucide-react";
+import { toast } from "react-toastify"; // <ToastContainer /> lives in App.jsx
 import CommonUploadActions from "../../ui/commonupload";
 import { addBasicInformation } from "../../service/employeeService";
 import payrollService from "../../service/payrollService";
 import { calculatePayroll } from "../../service/payrollother"; // use your real service file name
-import toast from "react-hot-toast";
+import { convertToWebp } from "../../components/helpers/imageToWebp"; // reusable WebP converter
 
 const initialFormData = {
   first_name: "",
@@ -27,6 +28,9 @@ const REQUIRED_FOR_PAYROLL = [
   "basic_salary",
 ];
 
+// Profile photo: only these image types are accepted, then converted to WebP
+const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
+
 const formatMoney = (value) =>
   `₹${Number(value || 0).toLocaleString("en-IN", {
     maximumFractionDigits: 2,
@@ -37,17 +41,30 @@ const formatCalcType = (type) =>
     .replace(/_/g, " ")
     .replace(/^\w/, (c) => c.toUpperCase());
 
-/**
- * Pull the backend's { message, data } out of whatever the service threw.
- * Handles: axios errors (error.response.data), XHR-style errors
- * (error.responseText / error.response as a JSON string), or a plain object.
- */
-const parseBackendError = (error) => {
+/* ---------- Backend messages -> React-Toastify (no custom texts) ---------- */
+
+// backend `data` (string | array | object) -> list of text lines
+const dataToLines = (data) => {
+  if (data == null || data === "") return [];
+  if (typeof data === "string") return [data];
+  if (Array.isArray(data)) return data.flatMap(dataToLines);
+  if (typeof data === "object") {
+    return Object.entries(data).flatMap(([key, value]) =>
+      dataToLines(value).map((line) =>
+        /^\d+$/.test(key) ? line : `${key}: ${line}`,
+      ),
+    );
+  }
+  return [String(data)];
+};
+
+// find the backend's { message, data } in whatever the service returned/threw
+const findBody = (input) => {
   const candidates = [
-    error?.response?.data,
-    error?.responseText,
-    error?.response,
-    error,
+    input?.response?.data, // axios error
+    input?.responseText, // XHR-style error
+    input?.response,
+    input,
   ];
 
   for (const candidate of candidates) {
@@ -63,30 +80,33 @@ const parseBackendError = (error) => {
     }
 
     if (body && typeof body === "object" && (body.message || body.data)) {
-      return {
-        message: typeof body.message === "string" ? body.message : "",
-        detail: typeof body.data === "string" ? body.data : "",
-      };
+      return body;
     }
   }
-
-  return {
-    message:
-      error?.message ||
-      error?.error ||
-      error?.detail ||
-      "Something went wrong. Please try again.",
-    detail: "",
-  };
+  return null;
 };
 
+// success: show the backend's message
+const showBackendSuccess = (response) => {
+  const message = response?.message ?? response?.data?.message;
+  if (typeof message === "string" && message) toast.success(message);
+};
+
+// error: show the backend's message + the error's data
 const showBackendError = (error) => {
-  const { message, detail } = parseBackendError(error);
+  const body = findBody(error);
+  const message =
+    (typeof body?.message === "string" && body.message) || error?.message || "";
+  const lines = body ? dataToLines(body.data) : [];
 
   toast.error(
     <div>
-      <p className="font-medium">{message}</p>
-      {detail && <p className="text-sm">{detail}</p>}
+      {message && <div style={{ fontWeight: 600 }}>{message}</div>}
+      {lines.map((line, i) => (
+        <div key={i} style={{ fontSize: 12, opacity: 0.85, marginTop: 2 }}>
+          {line}
+        </div>
+      ))}
     </div>,
   );
 };
@@ -132,6 +152,13 @@ const BasicInformation = ({ goNextStep, onStepComplete }) => {
     );
   }, [formData]);
 
+  // 🧹 Free the preview blob URL when it changes / on unmount
+  useEffect(() => {
+    return () => {
+      if (imagePreview?.startsWith("blob:")) URL.revokeObjectURL(imagePreview);
+    };
+  }, [imagePreview]);
+
   // 📋 Fetch payroll templates (same call SalarySection uses)
   useEffect(() => {
     const fetchTemplates = async () => {
@@ -139,9 +166,7 @@ const BasicInformation = ({ goNextStep, onStepComplete }) => {
         const data = await payrollService.getSalaryTemplates();
         setTemplates(data || []);
       } catch (err) {
-        toast.error(
-          err?.response?.data?.message || "Failed to fetch payroll templates",
-        );
+        showBackendError(err);
       }
     };
     fetchTemplates();
@@ -161,15 +186,23 @@ const BasicInformation = ({ goNextStep, onStepComplete }) => {
     }
   };
 
-  // 🧩 Handle file upload
-  const handleFileChange = (e) => {
+  // 🖼️ Handle file upload: only images, converted to WebP before sending
+  const handleFileChange = async (e) => {
     const file = e.target.files[0];
-    if (file) {
-      setFormData((prev) => ({ ...prev, image: file }));
+    e.target.value = ""; // allows picking the same file again
+    if (!file || !ALLOWED_IMAGE_TYPES.includes(file.type)) return;
 
-      const reader = new FileReader();
-      reader.onloadend = () => setImagePreview(reader.result);
-      reader.readAsDataURL(file);
+    try {
+      const webpFile = await convertToWebp(file, {
+        quality: 0.8,
+        maxWidth: 800,
+        maxHeight: 800,
+      });
+
+      setFormData((prev) => ({ ...prev, image: webpFile }));
+      setImagePreview(URL.createObjectURL(webpFile));
+    } catch (err) {
+      showBackendError(err); // shows the error's own message
     }
   };
 
@@ -183,7 +216,6 @@ const BasicInformation = ({ goNextStep, onStepComplete }) => {
     if (!templateId) return;
 
     if (!(Number(formData.basic_salary) > 0)) {
-      toast.error("Enter a valid annual salary.");
       setSelectedTemplateId("");
       return;
     }
@@ -222,16 +254,11 @@ const BasicInformation = ({ goNextStep, onStepComplete }) => {
       email: formData.email.trim().toLowerCase(),
       ph_no: formData.ph_no.trim(),
       basic_salary: String(formData.basic_salary).trim(),
-      image: formData.image, // File -> backend uploads to DigitalOcean Spaces
+      image: formData.image, // WebP File -> backend uploads to DigitalOcean Spaces
     };
 
-    // Validation
-    if (!payload.first_name || !payload.last_name || !payload.email) {
-      toast.error("Please fill out all required fields.");
-      return;
-    }
-
     // Empty optional fields are skipped so the backend stores them as NULL
+    // (required-field validation is done by the backend and shown via toast)
     const formDataToSend = new FormData();
     Object.entries(payload).forEach(([key, value]) => {
       if (value !== null && value !== "") {
@@ -249,8 +276,8 @@ const BasicInformation = ({ goNextStep, onStepComplete }) => {
         localStorage.setItem("employeeId", employeeId);
       }
 
-      // ✅ Show success toast (rendered by the global <Toaster /> in App.jsx)
-      toast.success("Employee created successfully!");
+      // ✅ Backend success message
+      showBackendSuccess(response);
 
       // 🧹 Remove saved form data
       localStorage.removeItem("basicInfoForm");
@@ -273,7 +300,7 @@ const BasicInformation = ({ goNextStep, onStepComplete }) => {
       }
     } catch (error) {
       console.error("Error creating employee:", error);
-      showBackendError(error);
+      showBackendError(error); // backend message + error data
     } finally {
       setIsSubmitting(false);
     }
@@ -297,27 +324,38 @@ const BasicInformation = ({ goNextStep, onStepComplete }) => {
         {/* Profile Picture */}
         <div className="relative inline-block mb-6">
           <label htmlFor="file-upload" className="cursor-pointer">
-            <img
-              src={imagePreview || "https://i.pravatar.cc/100?img=12"}
-              alt="profile"
-              className="w-20 h-20 rounded-full border-2 border-gray-300 object-cover"
-            />
+            {imagePreview ? (
+              <img
+                src={imagePreview}
+                alt="profile"
+                className="w-20 h-20 rounded-full border-2 border-gray-300 object-cover"
+              />
+            ) : (
+              <div className="w-20 h-20 rounded-full border-2 border-dashed border-gray-300 bg-gray-50 flex items-center justify-center">
+                <Icon
+                  icon="solar:camera-outline"
+                  className="w-6 h-6 text-gray-400"
+                />
+              </div>
+            )}
             <input
               id="file-upload"
               type="file"
-              accept="image/*"
+              accept="image/jpeg,image/png,image/webp"
               className="hidden"
               onChange={handleFileChange}
             />
-            <div
-              className="absolute bottom-2 left-1/2 transform -translate-x-1/2 
+            {imagePreview && (
+              <div
+                className="absolute bottom-2 left-1/2 transform -translate-x-1/2 
                 backdrop-blur-md rounded-full p-1.5 shadow-md transition"
-            >
-              <Icon
-                icon="solar:camera-outline"
-                className="w-5 h-5 text-white opacity-90"
-              />
-            </div>
+              >
+                <Icon
+                  icon="solar:camera-outline"
+                  className="w-5 h-5 text-white opacity-90"
+                />
+              </div>
+            )}
           </label>
         </div>
 
@@ -502,7 +540,7 @@ const BasicInformation = ({ goNextStep, onStepComplete }) => {
         />
       )}
 
-      {/* No <Toaster /> here: the single global one lives in App.jsx */}
+      {/* No <ToastContainer /> here: the single global one lives in App.jsx */}
     </div>
   );
 };

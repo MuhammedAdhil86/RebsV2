@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Icon } from "@iconify/react";
 import { Loader2 } from "lucide-react";
-import toast from "react-hot-toast";
+import { toast } from "react-toastify"; // <ToastContainer /> lives in App.jsx
 
 import UniversalTable from "../../../ui/universal_table";
 import DeleteConfirmationModal from "../../../ui/deletemodal";
@@ -46,11 +46,40 @@ const formatDisplayDate = (isoString) => {
   return `${day}-${month}-${year}`;
 };
 
-const extractErrorMessage = (error) =>
-  error?.response?.data?.message ||
-  error?.response?.data?.error ||
-  error?.message ||
-  "Something went wrong";
+/* ================= TOAST HELPERS ================= */
+// Plain text only: App.jsx's <ToastContainer /> controls how every toast looks.
+
+// Flattens backend "errors" / "data" (string | array | object) into lines.
+const detailsText = (data, key) => {
+  if (data === null || data === undefined || data === "") return [];
+  if (typeof data === "string" || typeof data === "number")
+    return [key ? `${key}: ${data}` : String(data)];
+  if (Array.isArray(data)) return data.flatMap((d) => detailsText(d, key));
+  if (typeof data === "object")
+    return Object.entries(data).flatMap(([k, v]) => detailsText(v, k));
+  return [];
+};
+
+const asText = (v) => (typeof v === "string" ? v : "");
+
+// Backend message + errors + data as one plain string.
+// Works for axios errors ({ response: { data } }), for interceptors that throw
+// the response body itself, and for a plain Error("message").
+const extractErrorMessage = (error) => {
+  const fallback = "Something went wrong";
+  const res = error?.response?.data ?? error;
+  if (!res) return fallback;
+  if (typeof res === "string") return res.slice(0, 300);
+  const message =
+    asText(res.message) ||
+    asText(res.error) ||
+    asText(error?.message) ||
+    fallback;
+  const details = [
+    ...new Set([...detailsText(res.errors), ...detailsText(res.data)]),
+  ].filter((d) => d !== message);
+  return details.length ? `${message}: ${details.join("; ")}` : message;
+};
 
 /* -------------------------------------------------------------------------- */
 /*                         Tracking Date Info Tooltip                         */
@@ -224,9 +253,9 @@ function SubViewHeader({ title, onBack }) {
       <button
         type="button"
         onClick={onBack}
-        className="flex items-center gap-1 px-3 py-1.5 rounded border border-gray-300 bg-white hover:bg-gray-50 text-xs"
+        className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-black text-[12px] font-light hover:bg-gray-50 transition-colors"
       >
-        <Icon icon="solar:arrow-left-outline" className="w-4 h-4" />
+        <Icon icon="solar:arrow-left-outline" className="w-3.5 h-3.5" />
         Back
       </button>
 
@@ -344,9 +373,9 @@ export default function KpiConfiguration() {
     try {
       setIsDeleting(true);
 
-      await removeKpiCriteria(deleteTarget.id);
+      const response = await removeKpiCriteria(deleteTarget.id);
 
-      toast.success("Criteria deleted successfully.");
+      toast.success(response?.message || "Criteria deleted successfully.");
       setDeleteTarget(null);
       reloadCriteria();
     } catch (error) {
@@ -476,20 +505,20 @@ export default function KpiConfiguration() {
       setIsCriteriaSaving(true);
 
       if (editingCriteriaId) {
-        await updateKpiCriteria({
+        const response = await updateKpiCriteria({
           id: editingCriteriaId,
           name: criteriaName,
           department_id: criteriaDepartmentId,
         });
 
-        toast.success("Criteria updated successfully.");
+        toast.success(response?.message || "Criteria updated successfully.");
       } else {
-        await createKpiCriteria({
+        const response = await createKpiCriteria({
           name: criteriaName,
           department_id: criteriaDepartmentId,
         });
 
-        toast.success("Criteria saved successfully.");
+        toast.success(response?.message || "Criteria saved successfully.");
       }
 
       setCriteriaName("");
@@ -519,7 +548,9 @@ export default function KpiConfiguration() {
 
       setSettingsUpdatedAt(savedSettings?.updated_at || null);
 
-      toast.success("KPI settings saved successfully.");
+      toast.success(
+        savedSettings?.message || "KPI settings saved successfully.",
+      );
 
       returnToList();
     } catch (error) {
@@ -640,26 +671,19 @@ export default function KpiConfiguration() {
             <div className="flex flex-col gap-1">
               <label className="text-gray-500">Department</label>
 
-              <select
+              <FitSelect
                 value={criteriaDepartmentId}
-                onChange={(event) =>
-                  setCriteriaDepartmentId(event.target.value)
-                }
-                className="border border-gray-300 rounded px-3 py-2 text-[12px] outline-none focus:border-black bg-white min-w-[180px]"
-              >
-                {departmentOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+                onChange={setCriteriaDepartmentId}
+                options={departmentOptions}
+                minWidth={180}
+              />
             </div>
 
             <button
               type="button"
               onClick={handleSaveCriteria}
               disabled={isCriteriaSaving}
-              className="flex items-center gap-2 px-4 py-2 rounded border bg-black text-white hover:bg-gray-800 disabled:opacity-60"
+              className="flex items-center gap-2 px-4 py-2 bg-black rounded-lg text-white text-[12px] font-light hover:bg-zinc-800 transition-colors disabled:opacity-60"
             >
               {isCriteriaSaving && <Loader2 className="w-4 h-4 animate-spin" />}
 
@@ -697,7 +721,7 @@ export default function KpiConfiguration() {
                   type="button"
                   onClick={handleSaveSettings}
                   disabled={isSettingsSaving}
-                  className="flex items-center gap-2 px-4 py-2 rounded border bg-black text-white hover:bg-gray-800 disabled:opacity-60"
+                  className="flex items-center gap-2 px-4 py-2 bg-black rounded-lg text-white text-[12px] font-light hover:bg-zinc-800 transition-colors disabled:opacity-60"
                 >
                   {isSettingsSaving && (
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -740,18 +764,18 @@ export default function KpiConfiguration() {
           <button
             type="button"
             onClick={openConfigureView}
-            className="flex items-center gap-2 px-4 py-1.5 rounded border bg-black text-white hover:bg-gray-800 whitespace-nowrap text-xs"
+            className="flex items-center gap-2 px-4 py-2 bg-black rounded-lg text-white text-[12px] font-light hover:bg-zinc-800 transition-colors whitespace-nowrap"
           >
-            <Icon icon="solar:tuning-2-outline" className="w-4 h-4" />
+            <Icon icon="solar:tuning-2-outline" className="w-3.5 h-3.5" />
             Configure
           </button>
 
           <button
             type="button"
             onClick={openSettingsView}
-            className="flex items-center gap-2 px-4 py-1.5 rounded border border-gray-300 bg-white text-gray-800 hover:bg-gray-50 whitespace-nowrap text-xs"
+            className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-black text-[12px] font-light hover:bg-gray-50 transition-colors whitespace-nowrap"
           >
-            <Icon icon="solar:settings-outline" className="w-4 h-4" />
+            <Icon icon="solar:settings-outline" className="w-3.5 h-3.5" />
             Settings
           </button>
 
@@ -761,7 +785,7 @@ export default function KpiConfiguration() {
               placeholder="Search"
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
-              className="border px-3 py-1.5 rounded w-full outline-none text-xs"
+              className="border border-gray-300 px-3 py-2 rounded-lg w-full outline-none text-[12px]"
             />
 
             <Icon

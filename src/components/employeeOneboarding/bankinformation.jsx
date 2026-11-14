@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
+import { toast } from "react-toastify"; // <ToastContainer /> lives in App.jsx
 import CommonUploadActions from "../../ui/commonupload";
-import toast from "react-hot-toast";
 import { updateBankInformation } from "../../service/employeeService"; // ✅ Make sure this path matches your structure
 
 const INITIAL_FORM = {
@@ -9,6 +9,76 @@ const INITIAL_FORM = {
   account_number: "",
   ifsc: "",
   bank_branch: "",
+};
+
+/* ---------- Backend messages -> React-Toastify (no custom texts) ---------- */
+
+// backend `data` (string | array | object) -> list of text lines
+const dataToLines = (data) => {
+  if (data == null || data === "") return [];
+  if (typeof data === "string") return [data];
+  if (Array.isArray(data)) return data.flatMap(dataToLines);
+  if (typeof data === "object") {
+    return Object.entries(data).flatMap(([key, value]) =>
+      dataToLines(value).map((line) =>
+        /^\d+$/.test(key) ? line : `${key}: ${line}`,
+      ),
+    );
+  }
+  return [String(data)];
+};
+
+// find the backend's { message, data } in whatever the service returned/threw
+const findBody = (input) => {
+  const candidates = [
+    input?.response?.data, // axios error
+    input?.responseText, // XHR-style error
+    input?.response,
+    input,
+  ];
+
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+
+    let body = candidate;
+    if (typeof candidate === "string") {
+      try {
+        body = JSON.parse(candidate);
+      } catch {
+        continue;
+      }
+    }
+
+    if (body && typeof body === "object" && (body.message || body.data)) {
+      return body;
+    }
+  }
+  return null;
+};
+
+// success: show the backend's message
+const showBackendSuccess = (response) => {
+  const message = response?.message ?? response?.data?.message;
+  if (typeof message === "string" && message) toast.success(message);
+};
+
+// error: show the backend's message + the error's data
+const showBackendError = (error) => {
+  const body = findBody(error);
+  const message =
+    (typeof body?.message === "string" && body.message) || error?.message || "";
+  const lines = body ? dataToLines(body.data) : [];
+
+  toast.error(
+    <div>
+      {message && <div style={{ fontWeight: 600 }}>{message}</div>}
+      {lines.map((line, i) => (
+        <div key={i} style={{ fontSize: 12, opacity: 0.85, marginTop: 2 }}>
+          {line}
+        </div>
+      ))}
+    </div>,
+  );
 };
 
 const BankInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
@@ -40,31 +110,18 @@ const BankInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
   };
 
   // ✅ Handle form submission
+  // (required-field validation is done by the backend and shown via toast)
   const handleSubmit = async () => {
     if (isSubmitting) return;
-
-    // 🧾 Validation
-    if (
-      !formData.account_holder_name ||
-      !formData.bank_name ||
-      !formData.account_number ||
-      !formData.ifsc
-    ) {
-      toast.error("Please fill in all required fields.");
-      return;
-    }
 
     try {
       setIsSubmitting(true);
 
       // 🧠 Send to backend
       const response = await updateBankInformation(formData);
-      console.log("Bank info response:", response);
 
-      // ✅ Success feedback (rendered by the global <Toaster /> in App.jsx)
-      toast.success(
-        response?.message || "Bank information updated successfully!",
-      );
+      // ✅ Backend success message
+      showBackendSuccess(response);
 
       // 🧹 Clear saved form
       localStorage.removeItem("bankInfoForm");
@@ -83,12 +140,7 @@ const BankInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
       }
     } catch (error) {
       console.error("Error updating bank information:", error);
-      toast.error(
-        error?.message ||
-          error?.error ||
-          error?.detail ||
-          "Failed to update bank information. Please try again.",
-      );
+      showBackendError(error); // backend message + error data
     } finally {
       setIsSubmitting(false);
     }
@@ -203,7 +255,7 @@ const BankInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
         </button>
       </div>
 
-      {/* No <Toaster /> here: the single global one lives in App.jsx */}
+      {/* No <ToastContainer /> here: the single global one lives in App.jsx */}
     </div>
   );
 };

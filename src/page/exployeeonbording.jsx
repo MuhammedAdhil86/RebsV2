@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from "react";
-import toast from "react-hot-toast";
 import DashboardLayout from "../ui/pagelayout";
 import HeaderGlobal from "../ui/headerglobal";
 // Import all steps
@@ -14,6 +13,9 @@ import WorkExperience from "../components/employeeOneboarding/workexperience";
 import EducationalDetails from "../components/employeeOneboarding/educational";
 import DepartmentDetails from "../components/employeeOneboarding/department";
 import AdditionalInformation from "../components/employeeOneboarding/additionalinformation";
+
+// Toasts: this page shows none of its own. Backend success / error messages
+// are shown by each step through react-toastify (<ToastContainer /> in App.jsx).
 
 const PROGRESS_KEY = "employeeOnboardingProgress";
 const CURRENT_STEP_KEY = "employeeCurrentStep";
@@ -127,14 +129,6 @@ const EmployeeOnboarding = () => {
       Math.min(Math.max(prev, currentStep + 1), steps.length),
     );
     setCurrentStep(next);
-
-    // 🎉 Each step already shows its own save toast, so only the last step
-    // gets one here to mark the whole onboarding as finished
-    if (currentStep === LAST_STEP) {
-      toast.success("Employee onboarding completed!", {
-        id: "onboarding-complete", // same id = never shown twice
-      });
-    }
   };
 
   // ✅ Manual navigation (uses the rendered step, so duplicate calls land on the
@@ -152,7 +146,6 @@ const EmployeeOnboarding = () => {
     localStorage.removeItem(CURRENT_STEP_KEY);
     setCompletedSteps(0);
     setCurrentStep(0);
-    toast.success("Onboarding progress has been reset.");
   };
 
   const StepComponent = steps[currentStep].component;
@@ -279,7 +272,7 @@ const EmployeeOnboarding = () => {
         </div>
       </div>
 
-      {/* No <Toaster /> here: the single global one lives in App.jsx */}
+      {/* No <ToastContainer /> here: the single global one lives in App.jsx */}
     </DashboardLayout>
   );
 };

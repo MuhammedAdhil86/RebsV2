@@ -1,9 +1,76 @@
 import React, { useState, useEffect, useRef } from "react";
 import { ChevronLeft, Calendar, ChevronDown } from "lucide-react";
-import toast from "react-hot-toast";
+import { toast } from "react-toastify"; // <ToastContainer /> lives in App.jsx
 import axiosInstance from "../service/axiosinstance";
 import { createShift } from "../service/policiesService";
 import ColorPicker from "./colorpicker";
+
+/* ================= TOAST HELPERS ================= */
+// Flattens backend "data" (string | array | object) into readable text
+const detailsText = (data) => {
+  if (!data) return "";
+  if (typeof data === "string") return data;
+  if (Array.isArray(data))
+    return data.map(detailsText).filter(Boolean).join(", ");
+  if (typeof data === "object")
+    return Object.values(data).map(detailsText).filter(Boolean).join(", ");
+  return String(data);
+};
+
+// Builds the toast body: backend "message" (bold) and "data" (below it).
+const errorBody = (error, fallback) => {
+  const res = error?.response?.data;
+  const message =
+    res?.message || (error?.response ? fallback : error?.message || fallback);
+  const details = detailsText(res?.data);
+
+  return (
+    <div>
+      <div style={{ fontWeight: 600 }}>{message}</div>
+      {details && details !== message && (
+        <div style={{ marginTop: 4, opacity: 0.8 }}>{details}</div>
+      )}
+    </div>
+  );
+};
+
+// A loading toast turns off close/drag; switch them back on when it finishes.
+const END_LOADING = {
+  isLoading: false,
+  closeOnClick: true,
+  closeButton: true,
+  draggable: true,
+};
+
+// Shows an error toast. Pass a toastId to turn an existing loading toast
+// into the error instead of stacking a second one (also stops duplicates).
+const showApiError = (error, fallback, toastId) => {
+  const render = errorBody(error, fallback);
+  if (toastId && toast.isActive(toastId)) {
+    toast.update(toastId, {
+      ...END_LOADING,
+      render,
+      type: "error",
+      autoClose: 6000,
+    });
+  } else {
+    toast.error(render, { autoClose: 6000, toastId });
+  }
+};
+
+// Turns a loading toast into a success toast (new toast if it was dismissed).
+const finishSuccess = (toastId, message) => {
+  if (toast.isActive(toastId)) {
+    toast.update(toastId, {
+      ...END_LOADING,
+      render: message,
+      type: "success",
+      autoClose: 4000,
+    });
+  } else {
+    toast.success(message, { autoClose: 4000 });
+  }
+};
 
 const CreateShiftModal = ({ onClose, refreshData }) => {
   // --- FORM STATE ---
@@ -27,7 +94,7 @@ const CreateShiftModal = ({ onClose, refreshData }) => {
         const res = await axiosInstance.get("/attendance-policy/get");
         setAllPolicies(res.data.data || []);
       } catch (err) {
-        toast.error("Failed to load policies.");
+        showApiError(err, "Failed to load policies.", "policy-load-error");
       }
     };
     fetchPolicies();
@@ -80,25 +147,14 @@ const CreateShiftModal = ({ onClose, refreshData }) => {
     try {
       const response = await createShift(payload);
 
-      toast.success(response?.message || "Shift created successfully!", {
-        id: tid,
-      });
+      finishSuccess(tid, response?.message || "Shift created successfully!");
       if (refreshData) refreshData();
       onClose();
     } catch (err) {
-      // Show the specific backend error (e.g. "weekly off policies cannot be combined...")
-      const serverResponse = err.response?.data;
-      const clientErrorMessage =
-        (typeof serverResponse?.data === "string" && serverResponse.data) ||
-        serverResponse?.message ||
-        "An internal server error occurred.";
-
-      toast.error(clientErrorMessage, {
-        id: tid,
-        duration: 6000,
-      });
-
-      console.error("Shift Creation Failed:", clientErrorMessage);
+      // Shows the backend message plus its details
+      // (e.g. "weekly off policies cannot be combined...")
+      showApiError(err, "An internal server error occurred.", tid);
+      console.error("Shift Creation Failed:", err.response?.data || err);
     } finally {
       setLoading(false);
     }

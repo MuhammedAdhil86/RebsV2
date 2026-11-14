@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Plus, List as ListIcon, Upload } from "lucide-react";
 import { Icon } from "@iconify/react";
-import toast from "react-hot-toast";
+import { toast } from "react-toastify"; // <ToastContainer /> lives in App.jsx
 import HolidayCalendar from "./holidayscalender";
 import HolidayList from "./holidayslist";
 import {
@@ -14,6 +14,33 @@ import { getBranchData } from "../../../service/companyService";
 import HolidayModal from "../../../ui/addholiday";
 import BulkUploadModal from "../../../ui/holidaybulk";
 
+/* ================= TOAST HELPERS ================= */
+// Plain text only: App.jsx's <ToastContainer /> controls how every toast looks.
+
+// Flattens backend "errors" / "data" (string | array | object) into lines.
+const detailsText = (data, key) => {
+  if (data === null || data === undefined || data === "") return [];
+  if (typeof data === "string" || typeof data === "number")
+    return [key ? `${key}: ${data}` : String(data)];
+  if (Array.isArray(data)) return data.flatMap((d) => detailsText(d, key));
+  if (typeof data === "object")
+    return Object.entries(data).flatMap(([k, v]) => detailsText(v, k));
+  return [];
+};
+
+// Backend message + errors + data as one plain string.
+// Also works when a service throws a plain Error("message").
+const apiErrorText = (error, fallback) => {
+  const res = error?.response?.data;
+  if (!res) return error?.message || fallback;
+  if (typeof res === "string") return res.slice(0, 300);
+  const message = res.message || res.error || fallback;
+  const details = [
+    ...new Set([...detailsText(res.errors), ...detailsText(res.data)]),
+  ].filter((d) => d !== message);
+  return details.length ? `${message}: ${details.join("; ")}` : message;
+};
+
 const Holidays = () => {
   const [activeTab, setActiveTab] = useState("calendar");
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -24,6 +51,9 @@ const Holidays = () => {
   const [currentMonth, setCurrentMonth] = useState(
     new Date(new Date().getFullYear(), new Date().getMonth(), 1),
   );
+
+  // The "Syncing holiday records..." toast shows only on the very first load
+  const syncToastShown = useRef(false);
 
   // Year shared by the calendar and the list
   const selectedYear = currentMonth.getFullYear();
@@ -40,7 +70,7 @@ const Holidays = () => {
       );
     } catch (e) {
       console.error("Failed to load year holidays:", e);
-      toast.error(e?.message || "Failed to load holidays for this year.");
+      toast.error(apiErrorText(e, "Failed to load holidays for this year."));
     }
   };
 
@@ -51,8 +81,13 @@ const Holidays = () => {
     );
 
   const loadData = async () => {
+    // Show the sync toast only the first time, every later refresh is silent
+    const showSync = !syncToastShown.current;
+    syncToastShown.current = true;
     const syncToastId = "dashboard-sync-toast";
-    toast.loading("Syncing holiday records...", { id: syncToastId });
+    if (showSync) {
+      toast.loading("Syncing holiday records...", { toastId: syncToastId });
+    }
 
     try {
       const [rawMonthData, rawBranches] = await Promise.all([
@@ -73,12 +108,11 @@ const Holidays = () => {
           })),
         );
       }
-      toast.dismiss(syncToastId);
+      if (showSync) toast.dismiss(syncToastId);
     } catch (e) {
       console.error("Dashboard Synchronization Interrupted:", e);
-      toast.error(e?.message || "Failed to sync holiday records dashboard.", {
-        id: syncToastId,
-      });
+      if (showSync) toast.dismiss(syncToastId);
+      toast.error(apiErrorText(e, "Failed to sync holiday records dashboard."));
     }
   };
 
@@ -92,10 +126,15 @@ const Holidays = () => {
     loadYearHolidays(selectedYear);
   }, [selectedYear]);
 
-  // Refresh both views (after add / edit / delete / bulk upload)
-  const refreshAll = () => {
-    loadData();
-    loadYearHolidays(selectedYear);
+  // Refresh both views silently (after add / edit / delete / bulk upload).
+  // Returns a promise so callers can wait until the screen is up to date.
+  const refreshAll = () =>
+    Promise.all([loadData(), loadYearHolidays(selectedYear)]);
+
+  // Instantly drop a deleted holiday from the calendar and the list
+  const removeHolidayLocal = (id) => {
+    setMonthHolidays((prev) => prev.filter((h) => String(h.id) !== String(id)));
+    setYearHolidays((prev) => prev.filter((h) => String(h.id) !== String(id)));
   };
 
   /**
@@ -135,25 +174,22 @@ const Holidays = () => {
         ? await modifyHoliday(editId, data)
         : await addHoliday(data);
 
-      // 3. Resolve loading toast with success message from backend
+      // 3. Replace loading toast with the success message from backend
+      toast.dismiss(toastId);
       toast.success(
         response?.message ||
           (isEditMode ? "Holiday updated!" : "Holiday added!"),
-        {
-          id: toastId,
-        },
       );
 
-      refreshAll(); // Sync calendar and list
+      // Wait for fresh data so the list is already updated when the modal closes
+      await refreshAll();
       setIsModalOpen(false); // Close modal
     } catch (error) {
       console.error("Core Processing Operation Rejection:", error);
 
-      // 4. Show the backend validation message
-      toast.error(error.message || "Failed to save holiday structure.", {
-        id: toastId,
-        duration: 5000,
-      });
+      // 4. Show the backend message + errors + data
+      toast.dismiss(toastId);
+      toast.error(apiErrorText(error, "Failed to save holiday structure."));
       throw error; // Bubble error down to preserve inner user state
     }
   };
@@ -234,6 +270,7 @@ const Holidays = () => {
             onYearChange={changeYear}
             getBranchName={getBranchName}
             onRefresh={refreshAll}
+            onRemoved={removeHolidayLocal}
             onSubmitAction={handleHolidaySubmit}
           />
         )}

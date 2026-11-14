@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { Calendar, Clock, ChevronDown } from "lucide-react";
 import attendancePolicyService from "../service/attendancepolicyService";
 import ColorPicker from "./colorpicker";
-import toast from "react-hot-toast";
+import { toast } from "react-toastify"; // <ToastContainer /> lives in App.jsx
 
 // ---------- TIME HELPERS ----------
 const toMinutes = (t) => {
@@ -28,6 +28,25 @@ const calcWorkingHours = (start, end) => {
   return (diff / 60).toFixed(2);
 };
 
+// DISPLAY ONLY: plain words for the shift length,
+// e.g. 09:00 - 17:00 -> "8 hours", 09:00 - 17:34 -> "8 hours and 34 minutes".
+// The decimal value sent to the backend (formData.working_hours) is untouched.
+const formatWorkDuration = (start, end) => {
+  const s = toMinutes(start);
+  const e = toMinutes(end);
+  if (s === null || e === null) return "";
+  let total = e - s;
+  if (total < 0) total += 1440; // overnight shift
+
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+
+  const parts = [];
+  if (h > 0 || m === 0) parts.push(`${h} ${h === 1 ? "hour" : "hours"}`);
+  if (m > 0) parts.push(`${m} ${m === 1 ? "minute" : "minutes"}`);
+  return parts.join(" and ");
+};
+
 // ---------- NUMBER HELPERS (backend expects real numbers, not strings) ----------
 const toInt = (v) => {
   const n = parseInt(v, 10);
@@ -39,27 +58,25 @@ const toFloat = (v) => {
   return isNaN(n) ? 0 : n;
 };
 
-// ---------- TOAST HELPER (message + reason on hover) ----------
-const showApiToast = (type, message, detail) => {
-  const detailText =
-    detail === null || detail === undefined || detail === ""
-      ? ""
-      : typeof detail === "object"
-        ? JSON.stringify(detail)
-        : String(detail);
+// ---------- TOAST HELPERS ----------
+// Flattens any backend value (string | array | object) into readable lines.
+// Object keys are kept, e.g. { staff_ids: ["Invalid"] } -> "staff_ids: Invalid"
+const flattenDetails = (value, key) => {
+  if (value === null || value === undefined || value === "") return [];
+  if (typeof value === "string" || typeof value === "number")
+    return [key ? `${key}: ${value}` : String(value)];
+  if (Array.isArray(value)) return value.flatMap((v) => flattenDetails(v, key));
+  if (typeof value === "object")
+    return Object.entries(value).flatMap(([k, v]) => flattenDetails(v, k));
+  return [];
+};
 
-  const content = (
-    <div>
-      <div className="font-semibold">{message}</div>
-      {detailText && (
-        <div className="mt-1 text-[12px] font-normal text-gray-600">
-          {detailText}
-        </div>
-      )}
-    </div>
+// Plain text only (message + errors + data); App.jsx controls the look
+const showApiToast = (type, message, ...details) => {
+  const lines = [...new Set(details.flatMap((d) => flattenDetails(d)))].filter(
+    (line) => line !== message,
   );
-
-  toast[type](content, { id: "policy-update" });
+  toast[type](lines.length ? `${message}: ${lines.join("; ")}` : message);
 };
 
 const UpdateAttendancePolicyTab = ({ initialData, onClose }) => {
@@ -224,7 +241,12 @@ const UpdateAttendancePolicyTab = ({ initialData, onClose }) => {
         showApiToast("success", message || "Policy Updated Successfully!");
         onClose();
       } else {
-        showApiToast("error", message || "Something went wrong", body?.data);
+        showApiToast(
+          "error",
+          message || "Something went wrong",
+          body?.errors,
+          body?.data,
+        );
       }
     } catch (error) {
       // axios throws on 4xx/5xx, so the backend body is in error.response.data
@@ -232,6 +254,7 @@ const UpdateAttendancePolicyTab = ({ initialData, onClose }) => {
       showApiToast(
         "error",
         errBody?.message || error.message || "Internal Server Error",
+        errBody?.errors,
         errBody?.data,
       );
     } finally {
@@ -311,6 +334,11 @@ const UpdateAttendancePolicyTab = ({ initialData, onClose }) => {
       </div>
     );
   };
+
+  const workDurationText = formatWorkDuration(
+    formData.start_time,
+    formData.end_time,
+  );
 
   return (
     <div className="bg-white rounded-xl shadow-xl border border-gray-200 p-6 space-y-6 overflow-y-auto font-['Poppins']">
@@ -516,6 +544,12 @@ const UpdateAttendancePolicyTab = ({ initialData, onClose }) => {
                   handleInputChange("working_hours", e.target.value)
                 }
               />
+              {/* Plain-words version of the number above, e.g. "8 hours and 30 minutes" */}
+              {workDurationText && (
+                <p className="mt-1.5 text-[11px] font-medium text-blue-700">
+                  {workDurationText}
+                </p>
+              )}
             </div>
             <TimeInput label="Late Limit (Time)" field="late" />
             <TimeInput label="Delay Limit (Time)" field="delay" />

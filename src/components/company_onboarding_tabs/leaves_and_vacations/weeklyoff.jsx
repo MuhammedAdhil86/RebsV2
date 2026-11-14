@@ -1,9 +1,35 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { ChevronDown } from "lucide-react";
-import toast, { Toaster } from "react-hot-toast";
+import { toast } from "react-toastify"; // <ToastContainer /> lives in App.jsx
 import { createWeeklyOff } from "../../../service/eventservice";
 import { getBranchData } from "../../../service/staffservice";
 import { fetchWeeklyOffShifts } from "../../../service/mainServices";
+
+/* ================= TOAST HELPERS ================= */
+// Plain text only: App.jsx's <ToastContainer /> controls how every toast looks.
+
+// Flattens backend "errors" / "data" (string | array | object) into lines.
+const detailsText = (data, key) => {
+  if (data === null || data === undefined || data === "") return [];
+  if (typeof data === "string" || typeof data === "number")
+    return [key ? `${key}: ${data}` : String(data)];
+  if (Array.isArray(data)) return data.flatMap((d) => detailsText(d, key));
+  if (typeof data === "object")
+    return Object.entries(data).flatMap(([k, v]) => detailsText(v, k));
+  return [];
+};
+
+// Backend message + errors + data as one plain string
+const apiErrorText = (error, fallback) => {
+  const res = error?.response?.data;
+  if (!res) return error?.message || fallback;
+  if (typeof res === "string") return res.slice(0, 300);
+  const message = res.message || res.error || fallback;
+  const details = [
+    ...new Set([...detailsText(res.errors), ...detailsText(res.data)]),
+  ].filter((d) => d !== message);
+  return details.length ? `${message}: ${details.join("; ")}` : message;
+};
 
 // -------------------- GlowButton Component --------------------
 function GlowButton({ children = "Edit in Chat", onClick }) {
@@ -277,11 +303,8 @@ const WeekendsAndOffDays = () => {
       toast.success(response?.message || "Weekly off created successfully!");
       setWeeks(initialWeeks);
     } catch (error) {
-      const errorMsg =
-        error?.response?.data?.message ||
-        error?.response?.data?.error ||
-        "Failed to create weekly off";
-      toast.error(errorMsg);
+      // Backend message + errors + data
+      toast.error(apiErrorText(error, "Failed to create weekly off"));
     }
   };
 
@@ -291,7 +314,6 @@ const WeekendsAndOffDays = () => {
 
   return (
     <div className="w-full bg-[#F4F7F9] p-6 font-poppins">
-      <Toaster position="top-right" reverseOrder={false} />
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-[20px] text-gray-900">Weekends and Off days</h2>
       </div>

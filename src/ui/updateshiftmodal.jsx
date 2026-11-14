@@ -1,8 +1,42 @@
 import React, { useState, useEffect, useRef } from "react";
 import { ChevronLeft, Calendar, ChevronDown, X } from "lucide-react";
 import axiosInstance from "../service/axiosinstance";
-import toast from "react-hot-toast";
+import { toast } from "react-toastify"; // <ToastContainer /> lives in App.jsx
 import ColorPicker from "./colorpicker";
+
+/* ================= TOAST HELPERS ================= */
+// Flattens backend "data" (string | array | object) into readable text
+const detailsText = (data) => {
+  if (!data) return "";
+  if (typeof data === "string") return data;
+  if (Array.isArray(data))
+    return data.map(detailsText).filter(Boolean).join(", ");
+  if (typeof data === "object")
+    return Object.values(data).map(detailsText).filter(Boolean).join(", ");
+  return String(data);
+};
+
+// Builds the toast body: backend "message" (bold) and "data" (below it).
+const errorBody = (error, fallback) => {
+  const res = error?.response?.data;
+  const message =
+    res?.message || (error?.response ? fallback : error?.message || fallback);
+  const details = detailsText(res?.data);
+
+  return (
+    <div>
+      <div style={{ fontWeight: 600 }}>{message}</div>
+      {details && details !== message && (
+        <div style={{ marginTop: 4, opacity: 0.8 }}>{details}</div>
+      )}
+    </div>
+  );
+};
+
+// Shows an error toast. A toastId stops the same error stacking up.
+const showApiError = (error, fallback, toastId) => {
+  toast.error(errorBody(error, fallback), { autoClose: 6000, toastId });
+};
 
 const UpdateShiftTab = ({ onClose, shiftData, refreshData }) => {
   const [shiftName, setShiftName] = useState(shiftData?.shift_name || "");
@@ -40,7 +74,7 @@ const UpdateShiftTab = ({ onClose, shiftData, refreshData }) => {
         const res = await axiosInstance.get("/attendance-policy/get");
         setAllPolicies(res.data.data || []);
       } catch (err) {
-        toast.error("Failed to load policies.");
+        showApiError(err, "Failed to load policies.", "policy-load-error");
       }
     };
     fetchPolicies();
@@ -89,7 +123,8 @@ const UpdateShiftTab = ({ onClose, shiftData, refreshData }) => {
       if (refreshData) refreshData();
       onClose();
     } catch (err) {
-      toast.error(err.response?.data?.message || "Error updating shift");
+      // Backend message plus any details it sends in "data"
+      showApiError(err, "Error updating shift");
     } finally {
       setLoading(false);
     }

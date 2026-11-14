@@ -3,7 +3,7 @@ import { Clock, ChevronDown } from "lucide-react";
 import { Icon } from "@iconify/react";
 import attendancePolicyService from "../service/attendancepolicyService";
 import ColorPicker from "./colorpicker";
-import toast, { Toaster } from "react-hot-toast";
+import { toast } from "react-toastify"; // <ToastContainer /> lives in App.jsx
 
 // Every field that is sent to the backend as a time value.
 const TIME_FIELDS = [
@@ -57,19 +57,60 @@ const getToday = () => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 };
 
-// Builds the exact error text from the API response: "message: data"
-const getApiErrorText = (error) => {
-  const res = error?.response?.data;
-  if (!res) return error?.message || "Create Failed";
-  const detail =
-    typeof res.data === "string"
-      ? res.data
-      : res.data
-        ? JSON.stringify(res.data)
-        : "";
-  const msg = res.message || res.error || "";
-  return [msg, detail].filter(Boolean).join(": ") || "Create Failed";
+// DISPLAY ONLY: turns check in / check out into plain words,
+// e.g. 09:00 - 17:00 -> "8 hours", 09:00 - 17:34 -> "8 hours and 34 minutes".
+// The decimal value sent to the backend (formData.working_hours) is untouched.
+const formatWorkDuration = (start, end) => {
+  if (!start || !end) return "";
+  const [sH, sM] = start.split(":").map(Number);
+  const [eH, eM] = end.split(":").map(Number);
+  let total = eH * 60 + (eM || 0) - (sH * 60 + (sM || 0));
+  if (total < 0) total += 24 * 60; // overnight shift
+
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+
+  const parts = [];
+  if (h > 0 || m === 0) parts.push(`${h} ${h === 1 ? "hour" : "hours"}`);
+  if (m > 0) parts.push(`${m} ${m === 1 ? "minute" : "minutes"}`);
+  return parts.join(" and ");
 };
+
+// Flattens any backend value (string | array | object) into readable lines.
+// Object keys are kept, e.g. { staff_ids: ["Invalid"] } -> "staff_ids: Invalid"
+const flattenDetails = (value, key) => {
+  if (value === null || value === undefined || value === "") return [];
+  if (typeof value === "string" || typeof value === "number")
+    return [key ? `${key}: ${value}` : String(value)];
+  if (Array.isArray(value)) return value.flatMap((v) => flattenDetails(v, key));
+  if (typeof value === "object")
+    return Object.entries(value).flatMap(([k, v]) => flattenDetails(v, k));
+  return [];
+};
+
+// Reads ONLY what the backend sent: message + errors + data
+const parseApiError = (error) => {
+  const res = error?.response?.data;
+  if (!res) return { message: error?.message || "Create Failed", details: [] };
+  if (typeof res === "string")
+    return { message: res.slice(0, 300), details: [] };
+
+  const message = res.message || res.error || "Create Failed";
+  const details = [
+    ...new Set([...flattenDetails(res.errors), ...flattenDetails(res.data)]),
+  ].filter((d) => d !== message);
+
+  return { message, details };
+};
+
+// Plain-text version for the red banner inside the form
+const getApiErrorText = (error) => {
+  const { message, details } = parseApiError(error);
+  return details.length ? `${message}: ${details.join("; ")}` : message;
+};
+
+// Plain text only (message + errors + data); App.jsx controls the look
+const showApiErrorToast = (error) => toast.error(getApiErrorText(error));
 
 const INITIAL_FORM = {
   policy_name: "",
@@ -308,9 +349,9 @@ const CreateAttendancePolicyTab = ({ onClose, onCreated }) => {
         onClose?.();
       }
     } catch (error) {
-      const errorText = getApiErrorText(error);
-      setApiError(errorText);
-      toast.error(errorText, { duration: 6000 });
+      // Backend message + errors + data only
+      setApiError(getApiErrorText(error));
+      showApiErrorToast(error);
     }
   };
 
@@ -405,8 +446,6 @@ const CreateAttendancePolicyTab = ({ onClose, onCreated }) => {
           -webkit-appearance: none;
         }
       `}</style>
-
-      <Toaster position="top-right" />
 
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -633,7 +672,10 @@ const CreateAttendancePolicyTab = ({ onClose, onCreated }) => {
               <label className={labelClass}>Total Working Hours (Auto)</label>
               <input
                 type="text"
-                value={formData.working_hours}
+                value={formatWorkDuration(
+                  formData.start_time,
+                  formData.end_time,
+                )}
                 className={`${inputClass} bg-blue-50/50 border-blue-100 font-bold text-blue-700`}
                 readOnly
               />

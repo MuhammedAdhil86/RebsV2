@@ -240,15 +240,10 @@ export const addWorkInformation = async (workData) => {
   try {
     const employeeId = localStorage.getItem("employeeId");
 
-    // 🔁 Convert to FormData
-    const formData = new FormData();
-    for (const key in workData) {
-      formData.append(key, workData[key]);
-    }
-
     const response = await axiosInstance.put(
       `/staff/updateworkinfo/${employeeId}`,
-      formData, // send formdata instead of JSON
+      workData, // plain object, sent as JSON
+      { headers: { "Content-Type": "application/json" } },
     );
 
     return response.data;

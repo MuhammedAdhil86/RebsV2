@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
-import toast from "react-hot-toast";
+import { toast } from "react-toastify"; // <ToastContainer /> lives in App.jsx
 import { Icon } from "@iconify/react";
 import CommonUploadActions from "../../ui/commonupload";
+import CustomSelect from "../../ui/customselect"; // adjust to where you save CustomSelect
 import {
   fetchEmployeeStatus,
   fetchEmployeeType,
@@ -14,6 +15,76 @@ import {
   getBranchData,
   getOrganisationDetails,
 } from "../../service/companyService";
+
+/* ---------- Backend messages -> React-Toastify (no custom texts) ---------- */
+
+// backend `data` (string | array | object) -> list of text lines
+const dataToLines = (data) => {
+  if (data == null || data === "") return [];
+  if (typeof data === "string") return [data];
+  if (Array.isArray(data)) return data.flatMap(dataToLines);
+  if (typeof data === "object") {
+    return Object.entries(data).flatMap(([key, value]) =>
+      dataToLines(value).map((line) =>
+        /^\d+$/.test(key) ? line : `${key}: ${line}`,
+      ),
+    );
+  }
+  return [String(data)];
+};
+
+// find the backend's { message, data } in whatever the service returned/threw
+const findBody = (input) => {
+  const candidates = [
+    input?.response?.data, // axios error
+    input?.responseText, // XHR-style error
+    input?.response,
+    input,
+  ];
+
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+
+    let body = candidate;
+    if (typeof candidate === "string") {
+      try {
+        body = JSON.parse(candidate);
+      } catch {
+        continue;
+      }
+    }
+
+    if (body && typeof body === "object" && (body.message || body.data)) {
+      return body;
+    }
+  }
+  return null;
+};
+
+// success: show the backend's message
+const showBackendSuccess = (response) => {
+  const message = response?.message ?? response?.data?.message;
+  if (typeof message === "string" && message) toast.success(message);
+};
+
+// error: show the backend's message + the error's data
+const showBackendError = (error) => {
+  const body = findBody(error);
+  const message =
+    (typeof body?.message === "string" && body.message) || error?.message || "";
+  const lines = body ? dataToLines(body.data) : [];
+
+  toast.error(
+    <div>
+      {message && <div style={{ fontWeight: 600 }}>{message}</div>}
+      {lines.map((line, i) => (
+        <div key={i} style={{ fontSize: 12, opacity: 0.85, marginTop: 2 }}>
+          {line}
+        </div>
+      ))}
+    </div>,
+  );
+};
 
 const WorkInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
   const [formData, setFormData] = useState({
@@ -51,15 +122,7 @@ const WorkInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
         const userData = storedUser ? JSON.parse(storedUser) : null;
         const companyId = userData?.company?.id;
 
-        const [
-          branchRes,
-          orgRes,
-          typeRes,
-          statusRes,
-          deptRes,
-          desigRes,
-          roleRes,
-        ] = await Promise.allSettled([
+        const results = await Promise.allSettled([
           getBranchData(),
           companyId ? getOrganisationDetails() : Promise.resolve([]),
           fetchEmployeeType(),
@@ -68,6 +131,20 @@ const WorkInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
           getDesignationData(),
           fetchEmployeeRoles(),
         ]);
+
+        const [
+          branchRes,
+          orgRes,
+          typeRes,
+          statusRes,
+          deptRes,
+          desigRes,
+          roleRes,
+        ] = results;
+
+        // Show the backend error of the first failed dropdown call (one toast)
+        const failed = results.find((r) => r.status === "rejected");
+        if (failed) showBackendError(failed.reason);
 
         const extractData = (result) => {
           if (result.status === "fulfilled" && result.value) {
@@ -101,7 +178,7 @@ const WorkInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
         }
       } catch (err) {
         console.error("Initialization error:", err);
-        toast.error("Failed to load some dropdown options.");
+        showBackendError(err);
       } finally {
         setLoading(false);
       }
@@ -116,33 +193,24 @@ const WorkInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  /** ✅ Handle form submission */
+  /** ✅ Handle form submission
+   *  (missing employee / branch / role are validated by the backend,
+   *   its message and error data are shown via toast) */
   const handleSubmit = async () => {
-    const employeeId = localStorage.getItem("employeeId");
+    if (isSubmitting) return;
 
-    if (!employeeId) {
-      toast.error("Employee ID missing. Please restart onboarding.");
-      return;
-    }
-    if (!branchId) {
-      toast.error(
-        "No branch found for this company. Please create a branch first.",
-      );
-      return;
-    }
-    if (!formData.role) {
-      toast.error("Please select a role.");
-      return;
-    }
-
+    // Exactly the body that works in Postman: every value is a string and
+    // there is no employee_id (the id is already in the URL)
     const payload = {
-      ...formData,
-      branch_id: Number(branchId),
-      employee_id: Number(employeeId),
-      employment_status_id: Number(formData.employment_status_id),
-      employee_type_id: Number(formData.employee_type_id),
-      department_id: Number(formData.department),
-      designation_id: Number(formData.designation),
+      location: formData.location,
+      employment_status_id: String(formData.employment_status_id),
+      employee_type_id: String(formData.employee_type_id),
+      date_of_join: formData.date_of_join,
+      total_experience: formData.total_experience,
+      source_of_hiring: formData.source_of_hiring,
+      branch_id: String(branchId ?? ""),
+      department_id: String(formData.department),
+      designation_id: String(formData.designation),
       user_type: String(formData.role),
     };
 
@@ -157,26 +225,18 @@ const WorkInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
       }
     }
 
-    // Clean up temporary UI keys
-    delete payload.department;
-    delete payload.designation;
-    delete payload.role;
-
     try {
       setIsSubmitting(true);
-      await addWorkInformation(payload);
+      const response = await addWorkInformation(payload);
 
-      toast.success("Work information saved successfully!");
+      // ✅ Backend success message
+      showBackendSuccess(response);
       localStorage.setItem("workInfoCompleted", "true");
 
       if (onStepComplete) onStepComplete();
       else if (goNextStep) goNextStep();
     } catch (error) {
-      const msg =
-        error.response?.data?.message ||
-        error.response?.data?.error ||
-        "Error updating work information.";
-      toast.error(msg);
+      showBackendError(error); // backend message + error data
     } finally {
       setIsSubmitting(false);
     }
@@ -364,23 +424,29 @@ const SelectField = ({
   onChange,
   options,
   valueKey = "id",
-}) => (
-  <div className="flex flex-col">
-    <label className="text-sm font-medium text-gray-700 mb-1">{label}</label>
-    <select
-      name={name}
-      value={value || ""}
-      onChange={onChange}
-      className="w-full rounded-md border border-gray-300 bg-white p-2 text-sm text-gray-700 focus:ring-1 focus:ring-gray-900 focus:border-gray-900 focus:outline-none transition-all"
-    >
-      <option value="">Select {label}</option>
-      {options?.map((opt) => (
-        <option key={opt.id} value={opt[valueKey] || opt.id}>
-          {opt.name || opt.title || "Unnamed Option"}
-        </option>
-      ))}
-    </select>
-  </div>
-);
+}) => {
+  // CustomSelect takes { value, label } items and onChange(value),
+  // so map the API options and keep the parent's handleChange(e) working
+  const items = [
+    { value: "", label: `Select ${label}` },
+    ...(options || []).map((opt) => ({
+      value: String(opt[valueKey] || opt.id),
+      label: opt.name || opt.title || "Unnamed Option",
+    })),
+  ];
+
+  return (
+    <div className="flex flex-col">
+      <label className="text-sm font-medium text-gray-700 mb-1">{label}</label>
+      <CustomSelect
+        value={value || ""}
+        options={items}
+        fullWidth
+        selectClassName="w-full rounded-md border border-gray-300 bg-white p-2 pr-9 text-sm text-gray-700 focus:ring-1 focus:ring-gray-900 focus:border-gray-900 focus:outline-none transition-all"
+        onChange={(v) => onChange({ target: { name, value: v } })}
+      />
+    </div>
+  );
+};
 
 export default WorkInformation;

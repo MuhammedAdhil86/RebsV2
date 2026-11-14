@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { X, Upload, HelpCircle, Download } from "lucide-react";
-import toast from "react-hot-toast";
+import { toast } from "react-toastify"; // <ToastContainer /> lives in App.jsx
 import { uploadHolidayCSV } from "../service/holidayservices";
 import { getBranchData } from "../service/companyService";
 // Demo CSV saved in src/assets/docs/holidays.csv
@@ -93,27 +93,30 @@ const BulkUploadModal = ({ isOpen, onClose, onRefresh }) => {
     toast.promise(
       action,
       {
-        loading: <b>Uploading holidays database...</b>,
-        success: (res) => {
-          onRefresh();
-          onClose();
-          return (
-            res?.message || "Bulk holiday database processed successfully!"
-          );
+        pending: <b>Uploading holidays database...</b>,
+        success: {
+          render({ data: res }) {
+            onRefresh();
+            onClose();
+            return (
+              res?.message || "Bulk holiday database processed successfully!"
+            );
+          },
+          icon: "🎉",
+          autoClose: 4000,
         },
-        error: (err) => {
-          const errorMsg =
-            err?.response?.data?.message ||
-            err?.message ||
-            "Something went wrong processing bulk file.";
-          return <b>{errorMsg}</b>;
+        error: {
+          render({ data: err }) {
+            const errorMsg =
+              err?.response?.data?.message ||
+              err?.message ||
+              "Something went wrong processing bulk file.";
+            return <b>{errorMsg}</b>;
+          },
+          autoClose: 5000,
         },
       },
-      {
-        style: { minWidth: "250px" },
-        success: { duration: 4000, icon: "🎉" },
-        error: { duration: 5000 },
-      },
+      { style: { minWidth: "250px" } },
     );
 
     try {

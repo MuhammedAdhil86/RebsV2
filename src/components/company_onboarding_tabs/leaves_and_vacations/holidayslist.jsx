@@ -9,7 +9,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { Icon } from "@iconify/react";
-import toast from "react-hot-toast";
+import { toast } from "react-toastify"; // <ToastContainer /> lives in App.jsx
 import { removeHoliday } from "../../../service/holidayservices";
 import HolidayModal from "../../../ui/addholiday";
 
@@ -28,6 +28,7 @@ const HolidayList = ({
   onYearChange,
   getBranchName,
   onRefresh,
+  onRemoved,
   onSubmitAction,
 }) => {
   const [activeMenu, setActiveMenu] = useState(null);
@@ -73,15 +74,30 @@ const HolidayList = ({
     const { id } = deleteModal;
     closeDeleteModal();
 
-    // Look, position and duration come from the global <Toaster /> in App.jsx
-    toast.promise(removeHoliday(id), {
-      loading: "Deleting holiday...",
-      success: (res) => {
+    const request = removeHoliday(id);
+
+    // Remove the row instantly, then silently re-sync with the server
+    request
+      .then(() => {
+        if (onRemoved) onRemoved(id);
         if (onRefresh) onRefresh();
-        return res?.message || "Holiday deleted successfully!";
+      })
+      .catch(() => {}); // the error toast below already reports it
+
+    // Look, position and duration come from the global <ToastContainer /> in App.jsx
+    toast.promise(request, {
+      pending: "Deleting holiday...",
+      success: {
+        render({ data: res }) {
+          return res?.message || "Holiday deleted successfully!";
+        },
       },
       // removeHoliday already throws an Error carrying the backend text
-      error: (err) => err?.message || "Failed to delete holiday.",
+      error: {
+        render({ data: err }) {
+          return err?.message || "Failed to delete holiday.";
+        },
+      },
     });
   };
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { X, Upload, ChevronDown } from "lucide-react";
 import { Icon } from "@iconify/react";
-import toast from "react-hot-toast";
+import { toast } from "react-toastify"; // <ToastContainer /> lives in App.jsx
 import { getBranchData } from "../service/companyService";
 
 const HolidayModal = ({ isOpen, onClose, onSubmitAction, editData = null }) => {

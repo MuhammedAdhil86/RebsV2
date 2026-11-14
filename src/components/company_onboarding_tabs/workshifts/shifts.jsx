@@ -10,7 +10,73 @@ import {
 import CreateShiftModal from "../../../ui/createshiftmodal";
 import { ShiftDataGet, deleteshift } from "../../../service/companyService";
 import UpdateShiftTab from "../../../ui/updateshiftmodal";
-import toast, { Toaster } from "react-hot-toast";
+import { toast } from "react-toastify"; // <ToastContainer /> lives in App.jsx
+/* ================= TOAST HELPERS ================= */
+// Flattens backend "data" (string | array | object) into readable text
+const detailsText = (data) => {
+  if (!data) return "";
+  if (typeof data === "string") return data;
+  if (Array.isArray(data))
+    return data.map(detailsText).filter(Boolean).join(", ");
+  if (typeof data === "object")
+    return Object.values(data).map(detailsText).filter(Boolean).join(", ");
+  return String(data);
+};
+
+// Builds the toast body: backend "message" (bold) and "data" (below it).
+const errorBody = (error, fallback) => {
+  const res = error?.response?.data;
+  const message =
+    res?.message || (error?.response ? fallback : error?.message || fallback);
+  const details = detailsText(res?.data);
+
+  return (
+    <div>
+      <div style={{ fontWeight: 600 }}>{message}</div>
+      {details && details !== message && (
+        <div style={{ marginTop: 4, opacity: 0.8 }}>{details}</div>
+      )}
+    </div>
+  );
+};
+
+// A loading toast turns off close/drag; switch them back on when it finishes.
+const END_LOADING = {
+  isLoading: false,
+  closeOnClick: true,
+  closeButton: true,
+  draggable: true,
+};
+
+// Shows an error toast. Pass a toastId to turn an existing loading toast
+// into the error instead of stacking a second one (also stops duplicates).
+const showApiError = (error, fallback, toastId) => {
+  const render = errorBody(error, fallback);
+  if (toastId && toast.isActive(toastId)) {
+    toast.update(toastId, {
+      ...END_LOADING,
+      render,
+      type: "error",
+      autoClose: 6000,
+    });
+  } else {
+    toast.error(render, { autoClose: 6000, toastId });
+  }
+};
+
+// Turns a loading toast into a success toast (new toast if it was dismissed).
+const finishSuccess = (toastId, message) => {
+  if (toast.isActive(toastId)) {
+    toast.update(toastId, {
+      ...END_LOADING,
+      render: message,
+      type: "success",
+      autoClose: 4000,
+    });
+  } else {
+    toast.success(message, { autoClose: 4000 });
+  }
+};
 
 // --- CUSTOM DELETE MODAL ---
 const DeleteConfirmationModal = ({ isOpen, onClose, onConfirm, itemName }) => {
@@ -141,7 +207,7 @@ const Shifts = () => {
     } catch (err) {
       console.error("Fetch error:", err);
       setError(err.message || "Unknown error");
-      toast.error("Failed to load shifts");
+      showApiError(err, "Failed to load shifts", "shift-load-error");
     } finally {
       setLoading(false);
     }
@@ -184,16 +250,11 @@ const Shifts = () => {
     const tid = toast.loading("Deleting shift...");
     try {
       await deleteshift(shiftToDelete.id);
-      toast.success("Shift deleted successfully", { id: tid });
+      finishSuccess(tid, "Shift deleted successfully");
       setIsDeleteModalOpen(false);
       fetchShiftsData();
     } catch (err) {
-      const msg =
-        err.response?.data?.message ||
-        (typeof err.response?.data?.data === "string" &&
-          err.response.data.data) ||
-        "Failed to delete shift";
-      toast.error(msg, { id: tid });
+      showApiError(err, "Failed to delete shift", tid);
     } finally {
       setDeleting(false);
     }
@@ -294,8 +355,6 @@ const Shifts = () => {
   // --- RENDER LOGIC ---
   return (
     <div className="w-full bg-white rounded-xl p-2">
-      <Toaster position="top-right" />
-
       <DeleteConfirmationModal
         isOpen={isDeleteModalOpen}
         onClose={() => setIsDeleteModalOpen(false)}
