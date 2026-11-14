@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
+import { toast } from "react-toastify"; // <ToastContainer /> lives in App.jsx
 import CommonUploadActions from "../../ui/commonupload";
 import { addContactInfo } from "../../service/employeeService";
-import toast from "react-hot-toast"; // uses the global <Toaster /> from App.jsx
 
 // Change this to the real step number in your onboarding flow
 const STEP_NUMBER = "10";
@@ -58,6 +58,76 @@ const addressFields = [
 const inputClass =
   "block w-full rounded-md border border-gray-300 bg-gray-50 p-2 text-gray-700 text-sm";
 
+/* ---------- Backend messages -> React-Toastify (no custom texts) ---------- */
+
+// backend `data` (string | array | object) -> list of text lines
+const dataToLines = (data) => {
+  if (data == null || data === "") return [];
+  if (typeof data === "string") return [data];
+  if (Array.isArray(data)) return data.flatMap(dataToLines);
+  if (typeof data === "object") {
+    return Object.entries(data).flatMap(([key, value]) =>
+      dataToLines(value).map((line) =>
+        /^\d+$/.test(key) ? line : `${key}: ${line}`,
+      ),
+    );
+  }
+  return [String(data)];
+};
+
+// find the backend's { message, data } in whatever the service returned/threw
+const findBody = (input) => {
+  const candidates = [
+    input?.response?.data, // axios error
+    input?.responseText, // XHR-style error
+    input?.response,
+    input,
+  ];
+
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+
+    let body = candidate;
+    if (typeof candidate === "string") {
+      try {
+        body = JSON.parse(candidate);
+      } catch {
+        continue;
+      }
+    }
+
+    if (body && typeof body === "object" && (body.message || body.data)) {
+      return body;
+    }
+  }
+  return null;
+};
+
+// success: show the backend's message
+const showBackendSuccess = (response) => {
+  const message = response?.message ?? response?.data?.message;
+  if (typeof message === "string" && message) toast.success(message);
+};
+
+// error: show the backend's message + the error's data
+const showBackendError = (error) => {
+  const body = findBody(error);
+  const message =
+    (typeof body?.message === "string" && body.message) || error?.message || "";
+  const lines = body ? dataToLines(body.data) : [];
+
+  toast.error(
+    <div>
+      {message && <div style={{ fontWeight: 600 }}>{message}</div>}
+      {lines.map((line, i) => (
+        <div key={i} style={{ fontSize: 12, opacity: 0.85, marginTop: 2 }}>
+          {line}
+        </div>
+      ))}
+    </div>,
+  );
+};
+
 const ContactInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
   const [formData, setFormData] = useState(emptyForm);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -83,19 +153,22 @@ const ContactInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
   };
 
   const handleSubmit = async () => {
+    if (isSubmitting) return;
+
     try {
       setIsSubmitting(true);
-      await addContactInfo(formData);
-      toast.success("Contact information saved successfully!");
+      const response = await addContactInfo(formData);
+
+      // ✅ Backend success message
+      showBackendSuccess(response);
+
       if (onStepComplete) onStepComplete();
       else if (goNextStep) goNextStep();
       setFormData(emptyForm);
       localStorage.removeItem("contactForm");
     } catch (error) {
       console.error(error);
-      toast.error(
-        error?.response?.data?.message || "Failed to save contact information.",
-      );
+      showBackendError(error); // backend message + error data
     } finally {
       setIsSubmitting(false);
     }
@@ -158,12 +231,14 @@ const ContactInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
       {/* Navigation Buttons */}
       <div className="flex justify-end mt-8 gap-3">
         <button
+          type="button"
           onClick={handlePrev}
           className="border border-gray-300 text-gray-700 text-sm px-5 py-2 rounded-md hover:bg-gray-100"
         >
           Previous
         </button>
         <button
+          type="button"
           onClick={handleSubmit}
           disabled={isSubmitting}
           className="bg-[#111827] hover:bg-black text-white text-sm px-5 py-2 rounded-md shadow disabled:opacity-60"

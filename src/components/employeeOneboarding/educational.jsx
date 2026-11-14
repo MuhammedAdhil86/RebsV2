@@ -1,9 +1,84 @@
 import React, { useRef, useState } from "react";
-import toast from "react-hot-toast";
+import { toast } from "react-toastify"; // <ToastContainer /> lives in App.jsx
 import { Plus, Trash2 } from "lucide-react";
 import { Icon } from "@iconify/react";
 import CommonUploadActions from "../../ui/commonupload";
 import { addEducationDetails } from "../../service/educationService";
+
+/* ---------- Backend messages -> React-Toastify (no custom texts) ---------- */
+
+// backend `data` (string | array | object) -> list of text lines
+const dataToLines = (data) => {
+  if (data == null || data === "") return [];
+  if (typeof data === "string") return [data];
+  if (Array.isArray(data)) return data.flatMap(dataToLines);
+  if (typeof data === "object") {
+    return Object.entries(data).flatMap(([key, value]) =>
+      dataToLines(value).map((line) =>
+        /^\d+$/.test(key) ? line : `${key}: ${line}`,
+      ),
+    );
+  }
+  return [String(data)];
+};
+
+// find the backend's { message, data } in whatever the service returned/threw
+// (this service may throw the backend's response body directly)
+const findBody = (input) => {
+  const candidates = [
+    input?.response?.data, // axios error
+    input?.responseText, // XHR-style error
+    input?.response,
+    input,
+  ];
+
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+
+    let body = candidate;
+    if (typeof candidate === "string") {
+      try {
+        body = JSON.parse(candidate);
+      } catch {
+        continue;
+      }
+    }
+
+    if (body && typeof body === "object" && (body.message || body.data)) {
+      return body;
+    }
+  }
+  return null;
+};
+
+// success: show the backend's message
+const showBackendSuccess = (response) => {
+  const message = response?.message ?? response?.data?.message;
+  if (typeof message === "string" && message) toast.success(message);
+};
+
+// error: show the backend's message + the error's data
+const showBackendError = (error) => {
+  const body = findBody(error);
+  const message =
+    (typeof body?.message === "string" && body.message) ||
+    error?.message ||
+    error?.error ||
+    error?.detail ||
+    "";
+  const lines = body ? dataToLines(body.data) : [];
+
+  toast.error(
+    <div>
+      {message && <div style={{ fontWeight: 600 }}>{message}</div>}
+      {lines.map((line, i) => (
+        <div key={i} style={{ fontSize: 12, opacity: 0.85, marginTop: 2 }}>
+          {line}
+        </div>
+      ))}
+    </div>,
+  );
+};
 
 /* ---------- HELPERS ---------- */
 
@@ -28,10 +103,6 @@ const isEntryEmpty = (entry) =>
   !entry.specialisation.trim() &&
   !entry.date_of_completion;
 
-// The service throws the backend's response body, so read it directly.
-const getErrorMessage = (err, fallback) =>
-  err?.message || err?.error || err?.detail || fallback;
-
 const EducationalDetails = ({ goNextStep, goPrevStep, onStepComplete }) => {
   const [entries, setEntries] = useState([createEntry()]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -54,40 +125,26 @@ const EducationalDetails = ({ goNextStep, goPrevStep, onStepComplete }) => {
       prev.length > 1 ? prev.filter((entry) => entry.uid !== uid) : prev,
     );
 
-  /** ✅ Handle form submission */
+  /** ✅ Handle form submission
+   *  (missing employee / institution / degree are validated by the backend
+   *   and shown via toast) */
   const handleSubmit = async () => {
+    if (isSubmitting) return;
+
     const employeeId = localStorage.getItem("employeeId");
 
-    if (!employeeId) {
-      toast.error("Employee ID missing. Please restart onboarding.");
-      return;
-    }
-
-    const alreadySaved = entries.filter((entry) => entry.saved);
     const pending = entries.filter(
       (entry) => !entry.saved && !isEntryEmpty(entry),
     );
-
-    // Validate everything before sending anything
-    if (pending.length === 0 && alreadySaved.length === 0) {
-      toast.error("Please add at least one educational detail.");
-      return;
-    }
-
-    for (const entry of pending) {
-      if (!entry.institution_name.trim() || !entry.degree.trim()) {
-        toast.error("Institution and Degree are required.");
-        return;
-      }
-    }
 
     try {
       setIsSubmitting(true);
 
       // Save one by one; mark each as saved so a retry skips it
+      let lastResponse = null;
       for (const entry of pending) {
         const { uid, saved, ...data } = entry;
-        await addEducationDetails(Number(employeeId), data);
+        lastResponse = await addEducationDetails(Number(employeeId), data);
         setEntries((prev) =>
           prev.map((item) =>
             item.uid === uid ? { ...item, saved: true } : item,
@@ -95,13 +152,14 @@ const EducationalDetails = ({ goNextStep, goPrevStep, onStepComplete }) => {
         );
       }
 
-      toast.success("Educational details saved successfully!");
+      // ✅ Backend success message (one toast, from the last saved entry)
+      showBackendSuccess(lastResponse);
       localStorage.setItem("educationInfoCompleted", "true");
 
       if (onStepComplete) onStepComplete();
       else if (goNextStep) goNextStep();
     } catch (error) {
-      toast.error(getErrorMessage(error, "Error saving educational details."));
+      showBackendError(error); // backend message + error data
     } finally {
       setIsSubmitting(false);
     }

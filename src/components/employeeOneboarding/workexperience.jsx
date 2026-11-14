@@ -1,9 +1,79 @@
 import React, { useRef, useState } from "react";
+import { toast } from "react-toastify"; // <ToastContainer /> lives in App.jsx
 import CommonUploadActions from "../../ui/commonupload";
 import { X } from "lucide-react";
 import { Icon } from "@iconify/react";
-import toast from "react-hot-toast";
 import { addWorkExperience } from "../../service/employeeService";
+
+/* ---------- Backend messages -> React-Toastify (no custom texts) ---------- */
+
+// backend `data` (string | array | object) -> list of text lines
+const dataToLines = (data) => {
+  if (data == null || data === "") return [];
+  if (typeof data === "string") return [data];
+  if (Array.isArray(data)) return data.flatMap(dataToLines);
+  if (typeof data === "object") {
+    return Object.entries(data).flatMap(([key, value]) =>
+      dataToLines(value).map((line) =>
+        /^\d+$/.test(key) ? line : `${key}: ${line}`,
+      ),
+    );
+  }
+  return [String(data)];
+};
+
+// find the backend's { message, data } in whatever the service returned/threw
+const findBody = (input) => {
+  const candidates = [
+    input?.response?.data, // axios error
+    input?.responseText, // XHR-style error
+    input?.response,
+    input,
+  ];
+
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+
+    let body = candidate;
+    if (typeof candidate === "string") {
+      try {
+        body = JSON.parse(candidate);
+      } catch {
+        continue;
+      }
+    }
+
+    if (body && typeof body === "object" && (body.message || body.data)) {
+      return body;
+    }
+  }
+  return null;
+};
+
+// success: show the backend's message
+const showBackendSuccess = (response) => {
+  const message = response?.message ?? response?.data?.message;
+  if (typeof message === "string" && message) toast.success(message);
+};
+
+// error: show the backend's message + the error's data
+const showBackendError = (error) => {
+  const body = findBody(error);
+  const message =
+    (typeof body?.message === "string" && body.message) || error?.message || "";
+  const lines = body ? dataToLines(body.data) : [];
+
+  toast.error(
+    <div>
+      {message && <div style={{ fontWeight: 600 }}>{message}</div>}
+      {lines.map((line, i) => (
+        <div key={i} style={{ fontSize: 12, opacity: 0.85, marginTop: 2 }}>
+          {line}
+        </div>
+      ))}
+    </div>,
+  );
+};
 
 // 🔹 Date input with a single custom icon that opens the native calendar
 const DateField = ({ name, value, onChange }) => {
@@ -43,15 +113,17 @@ const DateField = ({ name, value, onChange }) => {
   );
 };
 
+const emptyExperience = {
+  companyName: "",
+  jobTitle: "",
+  fromDate: "",
+  toDate: "",
+  jobDescription: "",
+};
+
 const WorkExperience = ({ goNextStep, goPrevStep, onStepComplete }) => {
   const [workExperiences, setWorkExperiences] = useState([]);
-  const [newExperience, setNewExperience] = useState({
-    companyName: "",
-    jobTitle: "",
-    fromDate: "",
-    toDate: "",
-    jobDescription: "",
-  });
+  const [newExperience, setNewExperience] = useState(emptyExperience);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // 🔹 Handle input changes
@@ -61,11 +133,9 @@ const WorkExperience = ({ goNextStep, goPrevStep, onStepComplete }) => {
   };
 
   // 🔹 Add experience & send to backend
+  // (company name / job title are validated by the backend and shown via toast)
   const handleAddExperience = async () => {
-    if (!newExperience.companyName || !newExperience.jobTitle) {
-      toast.error("Company name and job title are required!");
-      return;
-    }
+    if (isSubmitting) return;
 
     const payload = {
       company_name: newExperience.companyName,
@@ -82,25 +152,20 @@ const WorkExperience = ({ goNextStep, goPrevStep, onStepComplete }) => {
 
     try {
       setIsSubmitting(true);
-      await addWorkExperience(payload);
+      const response = await addWorkExperience(payload);
 
       setWorkExperiences((prev) => [
         ...prev,
         { ...newExperience, id: Date.now() },
       ]);
 
-      setNewExperience({
-        companyName: "",
-        jobTitle: "",
-        fromDate: "",
-        toDate: "",
-        jobDescription: "",
-      });
+      setNewExperience(emptyExperience);
 
-      toast.success("Work experience added successfully!");
+      // ✅ Backend success message
+      showBackendSuccess(response);
     } catch (err) {
       console.error("❌ Failed to add experience:", err);
-      toast.error("Failed to save work experience. Please try again.");
+      showBackendError(err); // backend message + error data
     } finally {
       setIsSubmitting(false);
     }
@@ -113,10 +178,6 @@ const WorkExperience = ({ goNextStep, goPrevStep, onStepComplete }) => {
 
   // 🔹 Move to next step — notify parent
   const handleSaveAndNext = () => {
-    if (workExperiences.length === 0) {
-      toast.error("Please add at least one work experience before continuing.");
-      return;
-    }
     if (onStepComplete) onStepComplete("workExperience");
     goNextStep();
   };
@@ -235,6 +296,7 @@ const WorkExperience = ({ goNextStep, goPrevStep, onStepComplete }) => {
                   style={{ width: "320px", height: "185px" }}
                 >
                   <button
+                    type="button"
                     onClick={() => handleDelete(exp.id)}
                     className="absolute top-2 right-2 text-gray-400 hover:text-red-500"
                   >
@@ -263,12 +325,14 @@ const WorkExperience = ({ goNextStep, goPrevStep, onStepComplete }) => {
         {/* Buttons */}
         <div className="flex justify-between gap-3 rounded-md">
           <button
+            type="button"
             onClick={goPrevStep}
             className="border border-gray-300 text-sm px-6 py-2"
           >
             Previous
           </button>
           <button
+            type="button"
             onClick={handleSaveAndNext}
             className="bg-[#111827] hover:bg-black text-white text-sm px-6 py-2 rounded-md shadow"
           >

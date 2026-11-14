@@ -1,14 +1,86 @@
 import React, { useState } from "react";
+import { toast } from "react-toastify"; // <ToastContainer /> lives in App.jsx
 import CommonUploadActions from "../../ui/commonupload";
 import { addIDInfo } from "../../service/employeeService";
-import toast, { Toaster } from "react-hot-toast";
+
+/* ---------- Backend messages -> React-Toastify (no custom texts) ---------- */
+
+// backend `data` (string | array | object) -> list of text lines
+const dataToLines = (data) => {
+  if (data == null || data === "") return [];
+  if (typeof data === "string") return [data];
+  if (Array.isArray(data)) return data.flatMap(dataToLines);
+  if (typeof data === "object") {
+    return Object.entries(data).flatMap(([key, value]) =>
+      dataToLines(value).map((line) =>
+        /^\d+$/.test(key) ? line : `${key}: ${line}`,
+      ),
+    );
+  }
+  return [String(data)];
+};
+
+// find the backend's { message, data } in whatever the service returned/threw
+const findBody = (input) => {
+  const candidates = [
+    input?.response?.data, // axios error
+    input?.responseText, // XHR-style error
+    input?.response,
+    input,
+  ];
+
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+
+    let body = candidate;
+    if (typeof candidate === "string") {
+      try {
+        body = JSON.parse(candidate);
+      } catch {
+        continue;
+      }
+    }
+
+    if (body && typeof body === "object" && (body.message || body.data)) {
+      return body;
+    }
+  }
+  return null;
+};
+
+// success: show the backend's message
+const showBackendSuccess = (response) => {
+  const message = response?.message ?? response?.data?.message;
+  if (typeof message === "string" && message) toast.success(message);
+};
+
+// error: show the backend's message + the error's data
+const showBackendError = (error) => {
+  const body = findBody(error);
+  const message =
+    (typeof body?.message === "string" && body.message) || error?.message || "";
+  const lines = body ? dataToLines(body.data) : [];
+
+  toast.error(
+    <div>
+      {message && <div style={{ fontWeight: 600 }}>{message}</div>}
+      {lines.map((line, i) => (
+        <div key={i} style={{ fontSize: 12, opacity: 0.85, marginTop: 2 }}>
+          {line}
+        </div>
+      ))}
+    </div>,
+  );
+};
+
+const emptyForm = {
+  pf_number: "",
+  pan: "",
+  aadhar: "",
+};
 
 const IDInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
-  const [formData, setFormData] = useState({
-    pf_number: "",
-    pan: "",
-    aadhar: "",
-  });
+  const [formData, setFormData] = useState(emptyForm);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -19,31 +91,26 @@ const IDInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
   };
 
   // ✅ Handle form submission
+  // (required PAN / Aadhar are validated by the backend and shown via toast)
   const handleSubmit = async () => {
-    if (!formData.pan || !formData.aadhar) {
-      toast.error("Please fill all required fields.");
-      return;
-    }
+    if (isSubmitting) return;
 
     try {
       setIsSubmitting(true);
       const response = await addIDInfo(formData);
-      toast.success("ID Information saved successfully!");
-      console.log("✅ ID Information response:", response.data);
+
+      // ✅ Backend success message
+      showBackendSuccess(response);
 
       // Tell parent to move next or update progress
       if (onStepComplete) onStepComplete();
       else if (goNextStep) goNextStep();
 
       // Reset form after success
-      setFormData({
-        pf_number: "",
-        pan: "",
-        aadhar: "",
-      });
+      setFormData(emptyForm);
     } catch (error) {
       console.error("❌ Error saving ID information:", error);
-      toast.error("Failed to save ID information. Please try again.");
+      showBackendError(error); // backend message + error data
     } finally {
       setIsSubmitting(false);
     }
@@ -54,7 +121,9 @@ const IDInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
       {/* Header */}
       <div className="flex justify-between items-center mb-4">
         <div className="flex items-center gap-2">
-          <h2 className="text-base font-medium text-gray-900">ID Information</h2>
+          <h2 className="text-base font-medium text-gray-900">
+            ID Information
+          </h2>
           <span className="text-sm text-gray-500">Step 06</span>
         </div>
         <CommonUploadActions />
@@ -115,12 +184,14 @@ const IDInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
       {/* Navigation Buttons */}
       <div className="flex justify-end mt-4 gap-3">
         <button
+          type="button"
           onClick={goPrevStep}
           className="border border-gray-300 text-gray-700 text-sm px-5 py-2 rounded-md hover:bg-gray-100"
         >
           Previous
         </button>
         <button
+          type="button"
           onClick={handleSubmit}
           disabled={isSubmitting}
           className="bg-[#111827] hover:bg-black text-white text-sm px-5 py-2 rounded-md shadow disabled:opacity-60"
@@ -128,8 +199,6 @@ const IDInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
           {isSubmitting ? "Saving..." : "Save & Complete"}
         </button>
       </div>
-
-      <Toaster />
     </div>
   );
 };

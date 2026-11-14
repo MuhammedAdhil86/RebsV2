@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import toast, { Toaster } from "react-hot-toast";
+import { toast } from "react-toastify"; // <ToastContainer /> lives in App.jsx
 import { Icon } from "@iconify/react";
 import CommonUploadActions from "../../ui/commonupload";
 import { addPersonalInfo, genderData } from "../../service/employeeService";
@@ -20,6 +20,76 @@ const emptyForm = {
   expertise: "",
 };
 
+/* ---------- Backend messages -> React-Toastify (no custom texts) ---------- */
+
+// backend `data` (string | array | object) -> list of text lines
+const dataToLines = (data) => {
+  if (data == null || data === "") return [];
+  if (typeof data === "string") return [data];
+  if (Array.isArray(data)) return data.flatMap(dataToLines);
+  if (typeof data === "object") {
+    return Object.entries(data).flatMap(([key, value]) =>
+      dataToLines(value).map((line) =>
+        /^\d+$/.test(key) ? line : `${key}: ${line}`,
+      ),
+    );
+  }
+  return [String(data)];
+};
+
+// find the backend's { message, data } in whatever the service returned/threw
+const findBody = (input) => {
+  const candidates = [
+    input?.response?.data, // axios error
+    input?.responseText, // XHR-style error
+    input?.response,
+    input,
+  ];
+
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+
+    let body = candidate;
+    if (typeof candidate === "string") {
+      try {
+        body = JSON.parse(candidate);
+      } catch {
+        continue;
+      }
+    }
+
+    if (body && typeof body === "object" && (body.message || body.data)) {
+      return body;
+    }
+  }
+  return null;
+};
+
+// success: show the backend's message
+const showBackendSuccess = (response) => {
+  const message = response?.message ?? response?.data?.message;
+  if (typeof message === "string" && message) toast.success(message);
+};
+
+// error: show the backend's message + the error's data
+const showBackendError = (error) => {
+  const body = findBody(error);
+  const message =
+    (typeof body?.message === "string" && body.message) || error?.message || "";
+  const lines = body ? dataToLines(body.data) : [];
+
+  toast.error(
+    <div>
+      {message && <div style={{ fontWeight: 600 }}>{message}</div>}
+      {lines.map((line, i) => (
+        <div key={i} style={{ fontSize: 12, opacity: 0.85, marginTop: 2 }}>
+          {line}
+        </div>
+      ))}
+    </div>,
+  );
+};
+
 const PersonalInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
   const [genders, setGenders] = useState([]);
   const [formData, setFormData] = useState(emptyForm);
@@ -33,7 +103,7 @@ const PersonalInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
         setGenders(Array.isArray(data) ? data : []);
       } catch (error) {
         console.error("Error fetching gender data:", error);
-        toast.error("Failed to load gender options.");
+        showBackendError(error);
       }
     };
     fetchGenders();
@@ -45,12 +115,10 @@ const PersonalInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  /** ✅ Handle form submission */
+  /** ✅ Handle form submission
+   *  (required fields are validated by the backend and shown via toast) */
   const handleSubmit = async () => {
-    if (!formData.gender || !formData.date_of_birth) {
-      toast.error("Please fill all required fields.");
-      return;
-    }
+    if (isSubmitting) return;
 
     // Convert gender id → name (select value is a string, so compare as strings)
     const selectedGender =
@@ -67,8 +135,9 @@ const PersonalInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
     try {
       setIsSubmitting(true);
       const response = await addPersonalInfo(payload);
-      toast.success("Personal information saved successfully!");
-      console.log("✅ Saved personal info:", response.data);
+
+      // ✅ Backend success message
+      showBackendSuccess(response);
 
       // Progress update in parent
       if (onStepComplete) onStepComplete();
@@ -78,7 +147,7 @@ const PersonalInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
       setFormData(emptyForm);
     } catch (error) {
       console.error("❌ Error saving personal info:", error);
-      toast.error("Failed to save personal information.");
+      showBackendError(error); // backend message + error data
     } finally {
       setIsSubmitting(false);
     }
@@ -171,8 +240,6 @@ const PersonalInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
           {isSubmitting ? "Saving..." : "Save & Complete"}
         </button>
       </div>
-
-      <Toaster />
     </div>
   );
 };
@@ -241,7 +308,9 @@ const InputField = ({
   );
 };
 
-/** 🔹 Atomic Select Component */
+/** 🔹 Atomic Select Component
+ *  Same size as before; custom arrow (appearance-none + chevron on the right)
+ */
 const SelectField = ({
   label,
   name,
@@ -256,20 +325,36 @@ const SelectField = ({
       {label}
       {required && <span className="text-red-500 ml-0.5">*</span>}
     </label>
-    <select
-      name={name}
-      value={value || ""}
-      onChange={onChange}
-      required={required}
-      className={controlClass}
-    >
-      <option value="">Select {label}</option>
-      {options?.map((opt) => (
-        <option key={opt.id} value={opt[valueKey] || opt.id}>
-          {opt.name || opt.title || "Unnamed Option"}
-        </option>
-      ))}
-    </select>
+    <div className="relative">
+      <select
+        name={name}
+        value={value || ""}
+        onChange={onChange}
+        required={required}
+        className={`${controlClass} appearance-none cursor-pointer pr-8`}
+      >
+        <option value="">Select {label}</option>
+        {options?.map((opt) => (
+          <option key={opt.id} value={opt[valueKey] || opt.id}>
+            {opt.name || opt.title || "Unnamed Option"}
+          </option>
+        ))}
+      </select>
+
+      <div className="pointer-events-none absolute inset-y-0 right-2 flex items-center">
+        <svg
+          className="w-3 h-3 text-gray-500"
+          viewBox="0 0 20 20"
+          fill="currentColor"
+        >
+          <path
+            fillRule="evenodd"
+            d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.08 1.04l-4.25 4.25a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z"
+            clipRule="evenodd"
+          />
+        </svg>
+      </div>
+    </div>
   </div>
 );
 

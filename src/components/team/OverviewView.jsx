@@ -6,6 +6,7 @@ import {
   AlertTriangle,
   ChevronDown,
   CheckCircle2,
+  Paperclip,
 } from "lucide-react";
 import teamService from "../../service/teamservice"; // adjust path if different
 
@@ -44,6 +45,32 @@ const formatDateTime = (iso) => {
     hour: "numeric",
     minute: "2-digit",
   });
+};
+
+/* amount + currency, e.g. ₹13,000.00 */
+const formatAmount = (amount, currency) => {
+  if (amount === null || amount === undefined || Number.isNaN(Number(amount)))
+    return "—";
+  try {
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: currency || "INR",
+    }).format(Number(amount));
+  } catch {
+    return `${currency ? `${currency} ` : ""}${Number(amount).toLocaleString(
+      "en-IN",
+    )}`;
+  }
+};
+
+/* readable file name from an attachment URL */
+const fileName = (url = "") => {
+  try {
+    const last = String(url).split("?")[0].split("/").pop() || url;
+    return decodeURIComponent(last);
+  } catch {
+    return url;
+  }
 };
 
 const initials = (name = "") =>
@@ -500,6 +527,7 @@ const STATUS_STYLES = {
 const OverviewView = () => {
   const [projects, setProjects] = useState([]);
   const [total, setTotal] = useState(null);
+  const [summary, setSummary] = useState(null); // API summary block
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
@@ -524,6 +552,7 @@ const OverviewView = () => {
         if (cancelled) return;
         setProjects(res.projects);
         setTotal(res.total);
+        setSummary(res.summary || null);
       })
       .catch((err) => {
         if (cancelled) return;
@@ -624,6 +653,12 @@ const OverviewView = () => {
     ...perProject.map((p) => p.assigned + p.unassigned),
   );
 
+  /* card values come from the API summary, with the calculated values as fallback */
+  const cardProjects = summary?.total_projects ?? total ?? projects.length;
+  const cardTasks = summary?.total_tasks ?? taskCount;
+  const cardPeople = summary?.total_people ?? members;
+  const cardUnallocated = summary?.unallocated_tasks ?? unassigned.length;
+
   return (
     <div className="space-y-6">
       {/* SUMMARY CARDS */}
@@ -631,26 +666,26 @@ const OverviewView = () => {
         <StatCard
           icon={Folder}
           label="Projects"
-          value={num(total ?? projects.length)}
+          value={num(cardProjects)}
           bg={COLORS.green}
         />
         <StatCard
           icon={ListChecks}
           label="Tasks"
-          value={num(taskCount)}
-          hint={`${assignedCount} assigned`}
+          value={num(cardTasks)}
+          hint={`${Math.max(cardTasks - cardUnallocated, 0)} assigned`}
           bg={COLORS.blue}
         />
         <StatCard
           icon={Users}
           label="Members"
-          value={num(members)}
+          value={num(cardPeople)}
           bg={COLORS.yellow}
         />
         <StatCard
           icon={AlertTriangle}
           label="Unassigned tasks"
-          value={num(unassigned.length)}
+          value={num(cardUnallocated)}
           bg={COLORS.red}
         />
       </div>
@@ -754,15 +789,23 @@ const OverviewView = () => {
                     </div>
                   </button>
 
-                  {/* Accordion body — full data */}
+                  {/* Accordion body — full data (no IDs) */}
                   {isOpen && (
                     <div className="border-t border-black/10">
                       {/* Project details */}
                       <div className="px-5 py-4 grid grid-cols-2 md:grid-cols-4 gap-4 bg-zinc-50/60">
-                        <Field label="Project ID" value={p.project_id} />
-                        <Field label="Company ID" value={p.company_id} />
+                        <Field label="Project" value={p.project} />
                         <Field label="Status" value={humanize(p.status)} />
-                        <Field label="Created by ID" value={p.created_by} />
+                        <Field label="Description" value={p.description} />
+                        <Field
+                          label="End date"
+                          value={formatDate(p.end_date)}
+                        />
+                        <Field
+                          label="Amount"
+                          value={formatAmount(p.amount, p.currency)}
+                        />
+                        <Field label="Currency" value={p.currency} />
                         <Field label="Created by" value={p.created_by_name} />
                         <Field label="Designation" value={p.designation} />
                         <Field label="Department" value={p.department} />
@@ -774,6 +817,10 @@ const OverviewView = () => {
                           label="Updated at"
                           value={formatDateTime(p.updated_at)}
                         />
+                        <Field label="Total tasks" value={tasks.length} />
+                        <Field label="Assigned tasks" value={assignedN} />
+                        <Field label="Unassigned tasks" value={unassignedN} />
+                        <Field label="Team members" value={team.length} />
                       </div>
 
                       {/* Progress */}
@@ -796,13 +843,15 @@ const OverviewView = () => {
                           Tasks ({tasks.length})
                         </p>
                         <div className="overflow-x-auto">
-                          <table className="w-full text-left text-xs min-w-[640px] mt-2">
+                          <table className="w-full text-left text-xs min-w-[860px] mt-2">
                             <thead>
                               <tr className="bg-zinc-50 text-black/50 border-y border-black/10">
-                                <th className="font-normal px-5 py-3">ID</th>
-                                <th className="font-normal px-3 py-3">Task</th>
+                                <th className="font-normal px-5 py-3">Task</th>
                                 <th className="font-normal px-3 py-3">
                                   Assigned to
+                                </th>
+                                <th className="font-normal px-3 py-3">
+                                  Comments
                                 </th>
                                 <th className="font-normal px-3 py-3">
                                   Created
@@ -828,22 +877,40 @@ const OverviewView = () => {
                                     key={t.task_id}
                                     className="hover:bg-black/[0.02] transition-colors align-top"
                                   >
-                                    <td className="px-5 py-3.5 text-black/50">
-                                      #{t.task_id}
-                                    </td>
-                                    <td className="px-3 py-3.5 text-sm text-black">
+                                    {/* Task name + description + attachment */}
+                                    <td className="px-5 py-3.5 text-sm text-black max-w-[280px]">
                                       {t.task}
+                                      {t.description && (
+                                        <p className="text-[11px] text-black/50 mt-1 break-words">
+                                          {t.description}
+                                        </p>
+                                      )}
+                                      {t.attachment && (
+                                        <a
+                                          href={encodeURI(t.attachment)}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="inline-flex items-center gap-1 mt-1.5 text-[11px] text-blue-700 hover:underline max-w-full"
+                                        >
+                                          <Paperclip
+                                            size={12}
+                                            className="shrink-0"
+                                          />
+                                          <span className="truncate">
+                                            {fileName(t.attachment)}
+                                          </span>
+                                        </a>
+                                      )}
                                     </td>
+
+                                    {/* Assigned to */}
                                     <td className="px-3 py-3.5">
                                       {t.allocations?.length ? (
                                         <ul className="space-y-2">
                                           {t.allocations.map((a) => (
                                             <li key={a.allocation_id}>
                                               <p className="text-sm text-black">
-                                                {a.employee_name}{" "}
-                                                <span className="text-[11px] text-black/40">
-                                                  (ID {a.employee_id})
-                                                </span>
+                                                {a.employee_name}
                                               </p>
                                               <p className="text-[11px] text-black/40 mt-0.5">
                                                 {[a.designation, a.department]
@@ -861,6 +928,48 @@ const OverviewView = () => {
                                         </Badge>
                                       )}
                                     </td>
+
+                                    {/* Comments */}
+                                    <td className="px-3 py-3.5 max-w-[280px]">
+                                      {t.comments?.length ? (
+                                        <ul className="space-y-2.5">
+                                          {t.comments.map((c) => (
+                                            <li
+                                              key={c.id}
+                                              className="border border-black/10 rounded-lg p-2.5"
+                                            >
+                                              <p className="text-[11px] text-black/50">
+                                                <span className="text-black">
+                                                  {c.employee_name}
+                                                </span>{" "}
+                                                · {formatDateTime(c.created_at)}
+                                              </p>
+                                              <p className="text-xs text-black mt-1 break-words">
+                                                {c.comment}
+                                              </p>
+                                              {c.tagged_employees?.length >
+                                                0 && (
+                                                <div className="flex flex-wrap gap-1.5 mt-1.5">
+                                                  {c.tagged_employees.map(
+                                                    (te) => (
+                                                      <Badge
+                                                        key={te.employee_id}
+                                                        className="bg-[#E8EFF9] text-black/70"
+                                                      >
+                                                        @{te.employee_name}
+                                                      </Badge>
+                                                    ),
+                                                  )}
+                                                </div>
+                                              )}
+                                            </li>
+                                          ))}
+                                        </ul>
+                                      ) : (
+                                        <span className="text-black/30">—</span>
+                                      )}
+                                    </td>
+
                                     <td className="px-3 py-3.5 text-black whitespace-nowrap">
                                       {formatDate(t.created_at)}
                                     </td>
@@ -902,10 +1011,9 @@ const OverviewView = () => {
                                     )}
                                   </p>
                                   <p className="text-[11px] text-black/40 truncate">
-                                    ID {m.employee_id} ·{" "}
                                     {[m.designation, m.department]
                                       .filter(Boolean)
-                                      .join(" | ")}
+                                      .join(" | ") || "—"}
                                   </p>
                                   <div className="flex flex-wrap gap-1.5 mt-1.5">
                                     {(m.roles || []).map((r) => (

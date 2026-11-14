@@ -600,3 +600,17 @@ export const editChatMessage = (id, mid) =>
 export const getAdminProjectsOverview = "/admin/projects/overview";
 export const getAdminProjectsTaskStatus = "/admin/projects/task-status";
 export const getManagerProjectStatuses = "/manager/projects/statuses";
+
+//Exit Process
+
+export const updateExitInitialStep = "/admin/exit-process/update/initial-step";
+
+// 6. PUT  /admin/exit-process/update/checklist
+export const updateExitChecklist = "/admin/exit-process/update/checklist";
+
+// 7. GET  /admin/exit-process/list-all
+export const getExitProcessList = "/admin/exit-process/list-all";
+
+// 8. GET  /admin/exit-process/get/{id}
+export const getExitProcessById = (id) =>
+  `/admin/exit-process/get/${encodeURIComponent(id)}`;

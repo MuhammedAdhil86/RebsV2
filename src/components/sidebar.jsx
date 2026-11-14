@@ -122,11 +122,11 @@ function SideBar({ isCollapsed, toggleSidebar }) {
     templates: <Icon icon="lucide:layout-template" width="20" />,
     chat: <Icon icon="lucide:messages-square" width="20" />,
     insurance: <Icon icon="solar:shield-user-outline" width="20" />,
-    timesheet: <Icon icon="lucide:calendar-clock" width="20" />,
     reports: <Icon icon="iconoir:reports" width="20" />,
     payroll: <Icon icon="fluent:payment-20-regular" width="20" />,
     onboarding: <Icon icon="clarity:employee-line" width="20" />,
     exit: <Icon icon="material-symbols:logout" width="20" />,
+
     jobPosting: <Icon icon="hugeicons:job-link" width="20" />,
     talentPool: <Icon icon="hugeicons:quill-write-02" width="20" />,
     orgSettings: <Icon icon="octicon:organization-24" width="20" />,
@@ -157,7 +157,6 @@ function SideBar({ isCollapsed, toggleSidebar }) {
           path: "/insurance",
           icon: icons.insurance,
         },
-        { title: "Timesheet", path: "/timesheet", icon: icons.timesheet },
         {
           title: "Reports & Analytics",
           path: "/reports",
@@ -183,7 +182,8 @@ function SideBar({ isCollapsed, toggleSidebar }) {
           path: "/employeeonboarding",
           icon: icons.onboarding,
         },
-        { title: "Exit & Clearance", path: "/exit", icon: icons.exit },
+        { title: "Exit & Clearance", path: "/exit-process", icon: icons.exit },
+        // NEW: Exit Process module (list + detail with the 3 steps)
       ],
     },
     {

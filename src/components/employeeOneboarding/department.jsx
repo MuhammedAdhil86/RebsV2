@@ -1,8 +1,78 @@
 import React, { useRef, useState } from "react";
 import { Icon } from "@iconify/react";
-import toast, { Toaster } from "react-hot-toast";
+import { toast } from "react-toastify"; // <ToastContainer /> lives in App.jsx
 import CommonUploadActions from "../../ui/commonupload";
 import { addDependantDetails } from "../../service/employeeService";
+
+/* ---------- Backend messages -> React-Toastify (no custom texts) ---------- */
+
+// backend `data` (string | array | object) -> list of text lines
+const dataToLines = (data) => {
+  if (data == null || data === "") return [];
+  if (typeof data === "string") return [data];
+  if (Array.isArray(data)) return data.flatMap(dataToLines);
+  if (typeof data === "object") {
+    return Object.entries(data).flatMap(([key, value]) =>
+      dataToLines(value).map((line) =>
+        /^\d+$/.test(key) ? line : `${key}: ${line}`,
+      ),
+    );
+  }
+  return [String(data)];
+};
+
+// find the backend's { message, data } in whatever the service returned/threw
+const findBody = (input) => {
+  const candidates = [
+    input?.response?.data, // axios error
+    input?.responseText, // XHR-style error
+    input?.response,
+    input,
+  ];
+
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+
+    let body = candidate;
+    if (typeof candidate === "string") {
+      try {
+        body = JSON.parse(candidate);
+      } catch {
+        continue;
+      }
+    }
+
+    if (body && typeof body === "object" && (body.message || body.data)) {
+      return body;
+    }
+  }
+  return null;
+};
+
+// success: show the backend's message
+const showBackendSuccess = (response) => {
+  const message = response?.message ?? response?.data?.message;
+  if (typeof message === "string" && message) toast.success(message);
+};
+
+// error: show the backend's message + the error's data
+const showBackendError = (error) => {
+  const body = findBody(error);
+  const message =
+    (typeof body?.message === "string" && body.message) || error?.message || "";
+  const lines = body ? dataToLines(body.data) : [];
+
+  toast.error(
+    <div>
+      {message && <div style={{ fontWeight: 600 }}>{message}</div>}
+      {lines.map((line, i) => (
+        <div key={i} style={{ fontSize: 12, opacity: 0.85, marginTop: 2 }}>
+          {line}
+        </div>
+      ))}
+    </div>,
+  );
+};
 
 // 🔹 Date input with a single custom icon that opens the native calendar
 const DateField = ({ name, value, onChange, required = false }) => {
@@ -43,12 +113,10 @@ const DateField = ({ name, value, onChange, required = false }) => {
   );
 };
 
+const emptyDependant = { name: "", relation: "", dateOfBirth: "" };
+
 const DependantDetails = ({ goNextStep, goPrevStep, onStepComplete }) => {
-  const [dependantData, setDependantData] = useState({
-    name: "",
-    relation: "",
-    dateOfBirth: "",
-  });
+  const [dependantData, setDependantData] = useState(emptyDependant);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -59,14 +127,11 @@ const DependantDetails = ({ goNextStep, goPrevStep, onStepComplete }) => {
   };
 
   // 🧠 Handle save logic
+  // (required fields are validated by the backend and shown via toast)
   const handleSave = async () => {
-    const { name, relation, dateOfBirth } = dependantData;
+    if (isSubmitting) return;
 
-    // ✅ Basic validation
-    if (!name || !relation || !dateOfBirth) {
-      toast.error("Please fill all required fields.");
-      return;
-    }
+    const { name, relation, dateOfBirth } = dependantData;
 
     try {
       setIsSubmitting(true);
@@ -75,11 +140,13 @@ const DependantDetails = ({ goNextStep, goPrevStep, onStepComplete }) => {
       const dependantPayload = {
         dependant_name: name.trim(),
         dependant_relation: relation.trim(),
-        dependant_date_of_birth: new Date(dateOfBirth).toISOString(),
+        dependant_date_of_birth: dateOfBirth
+          ? new Date(dateOfBirth).toISOString()
+          : null,
       };
 
       // ✅ Call API
-      await addDependantDetails(dependantPayload);
+      const response = await addDependantDetails(dependantPayload);
 
       // ✅ Update progress in localStorage (consistent with PersonalInformation)
       const progress =
@@ -96,27 +163,18 @@ const DependantDetails = ({ goNextStep, goPrevStep, onStepComplete }) => {
 
       localStorage.setItem("employeeProgress", JSON.stringify(updatedProgress));
 
-      // ✅ Notify success
-      toast.success("Dependant details saved successfully!");
+      // ✅ Backend success message
+      showBackendSuccess(response);
 
       // ✅ Move to next step or notify parent
       if (onStepComplete) onStepComplete();
       else if (goNextStep) goNextStep();
 
       // ✅ Reset form
-      setDependantData({ name: "", relation: "", dateOfBirth: "" });
+      setDependantData(emptyDependant);
     } catch (error) {
       console.error("❌ Error saving dependant details:", error);
-
-      if (error.response?.status === 400) {
-        toast.error("Invalid data sent to server. Please check your fields.");
-      } else if (error.response?.status === 404) {
-        toast.error(
-          "Employee ID not found. Please complete Personal Info first.",
-        );
-      } else {
-        toast.error("Failed to save dependant details. Please try again.");
-      }
+      showBackendError(error); // backend message + error data
     } finally {
       setIsSubmitting(false);
     }
@@ -195,6 +253,7 @@ const DependantDetails = ({ goNextStep, goPrevStep, onStepComplete }) => {
           Previous
         </button>
         <button
+          type="button"
           onClick={handleSave}
           disabled={isSubmitting}
           className="bg-[#111827] hover:bg-black text-white text-sm px-5 py-2 rounded-md shadow disabled:opacity-60"
@@ -202,8 +261,6 @@ const DependantDetails = ({ goNextStep, goPrevStep, onStepComplete }) => {
           {isSubmitting ? "Saving..." : "Save & Complete"}
         </button>
       </div>
-
-      <Toaster />
     </div>
   );
 };

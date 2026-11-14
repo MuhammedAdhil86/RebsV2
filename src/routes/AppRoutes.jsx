@@ -32,7 +32,7 @@ import JobEnquiry from "../page/jobenquiry";
 import manageinsurance from "../page/manageinsurance";
 import InsuranceDetails from "../page/insurancedetails";
 import Timesheet from "../page/timesheet";
-
+import ExitProcessList from "../page/ExitProcess";
 import Kpi from "../page/Kpi";
 import Chat from "../page/chat";
 import Projects from "../page/Projects";
@@ -82,6 +82,10 @@ function AppRoutes() {
       <Route
         path="/templates"
         element={<ProtectedRoute element={Templates} />}
+      />
+      <Route
+        path="/exit-process"
+        element={<ProtectedRoute element={ExitProcessList} />}
       />
       <Route path="/kpi" element={<ProtectedRoute element={Kpi} />} />
       <Route

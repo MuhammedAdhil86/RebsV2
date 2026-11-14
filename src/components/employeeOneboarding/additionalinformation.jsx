@@ -1,7 +1,77 @@
 import React, { useState, useEffect } from "react";
 import { Upload } from "lucide-react";
-import toast, { Toaster } from "react-hot-toast";
+import { toast } from "react-toastify"; // <ToastContainer /> lives in App.jsx
 import { addAdditionalInfo } from "../../service/employeeService";
+
+/* ---------- Backend messages -> React-Toastify (no custom texts) ---------- */
+
+// backend `data` (string | array | object) -> list of text lines
+const dataToLines = (data) => {
+  if (data == null || data === "") return [];
+  if (typeof data === "string") return [data];
+  if (Array.isArray(data)) return data.flatMap(dataToLines);
+  if (typeof data === "object") {
+    return Object.entries(data).flatMap(([key, value]) =>
+      dataToLines(value).map((line) =>
+        /^\d+$/.test(key) ? line : `${key}: ${line}`,
+      ),
+    );
+  }
+  return [String(data)];
+};
+
+// find the backend's { message, data } in whatever the service returned/threw
+const findBody = (input) => {
+  const candidates = [
+    input?.response?.data, // axios error
+    input?.responseText, // XHR-style error
+    input?.response,
+    input,
+  ];
+
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+
+    let body = candidate;
+    if (typeof candidate === "string") {
+      try {
+        body = JSON.parse(candidate);
+      } catch {
+        continue;
+      }
+    }
+
+    if (body && typeof body === "object" && (body.message || body.data)) {
+      return body;
+    }
+  }
+  return null;
+};
+
+// success: show the backend's message
+const showBackendSuccess = (response) => {
+  const message = response?.message ?? response?.data?.message;
+  if (typeof message === "string" && message) toast.success(message);
+};
+
+// error: show the backend's message + the error's data
+const showBackendError = (error) => {
+  const body = findBody(error);
+  const message =
+    (typeof body?.message === "string" && body.message) || error?.message || "";
+  const lines = body ? dataToLines(body.data) : [];
+
+  toast.error(
+    <div>
+      {message && <div style={{ fontWeight: 600 }}>{message}</div>}
+      {lines.map((line, i) => (
+        <div key={i} style={{ fontSize: 12, opacity: 0.85, marginTop: 2 }}>
+          {line}
+        </div>
+      ))}
+    </div>,
+  );
+};
 
 const AdditionalInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
   const [info, setInfo] = useState({
@@ -31,13 +101,11 @@ const AdditionalInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
   };
 
   // ✅ Save handler
+  // (required fields are validated by the backend and shown via toast)
   const handleSave = async () => {
-    const { bloodGroup, emergencyContact } = info;
+    if (isSubmitting) return;
 
-    if (!bloodGroup || !emergencyContact) {
-      toast.error("Please fill all required fields.");
-      return;
-    }
+    const { bloodGroup, emergencyContact } = info;
 
     try {
       setIsSubmitting(true);
@@ -47,20 +115,21 @@ const AdditionalInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
         emergency_contact_native: emergencyContact,
       };
 
-      await addAdditionalInfo(payload);
+      const response = await addAdditionalInfo(payload);
 
       // ✅ Update local progress inline (like your other steps)
       const updatedProgress = {
         ...progress,
         currentStep: "additionalInformation",
         completedSteps: Array.from(
-          new Set([...progress.completedSteps, "additionalInformation"])
+          new Set([...progress.completedSteps, "additionalInformation"]),
         ),
       };
       setProgress(updatedProgress);
       localStorage.setItem("employeeProgress", JSON.stringify(updatedProgress));
 
-      toast.success("Additional information saved successfully!");
+      // ✅ Backend success message
+      showBackendSuccess(response);
 
       // ✅ Trigger parent progress tracker if exists
       if (onStepComplete) onStepComplete("additionalInformation");
@@ -69,13 +138,7 @@ const AdditionalInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
       if (goNextStep) goNextStep();
     } catch (error) {
       console.error("❌ Error saving additional info:", error);
-      if (error.response?.status === 400) {
-        toast.error("Invalid data. Please check your input.");
-      } else if (error.response?.status === 404) {
-        toast.error("Employee ID not found. Complete previous steps first.");
-      } else {
-        toast.error("Failed to save. Please try again.");
-      }
+      showBackendError(error); // backend message + error data
     } finally {
       setIsSubmitting(false);
     }
@@ -94,6 +157,7 @@ const AdditionalInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
 
         {/* Bulk Uploads Button */}
         <button
+          type="button"
           onClick={() => console.log("Bulk Uploads clicked")}
           className="bg-[#111827] hover:bg-black text-white text-sm px-4 py-2.5 rounded-lg shadow-md transition duration-200 flex items-center gap-2 font-medium"
         >
@@ -141,6 +205,7 @@ const AdditionalInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
       {/* Navigation Buttons */}
       <div className="flex justify-end mt-8">
         <button
+          type="button"
           onClick={() => {
             setProgress((prev) => ({
               ...prev,
@@ -151,7 +216,7 @@ const AdditionalInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
               JSON.stringify({
                 ...progress,
                 currentStep: "previousStep",
-              })
+              }),
             );
             if (goPrevStep) goPrevStep();
           }}
@@ -161,6 +226,7 @@ const AdditionalInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
         </button>
 
         <button
+          type="button"
           onClick={handleSave}
           disabled={isSubmitting}
           className="bg-[#111827] hover:bg-black text-white text-sm px-6 py-2.5 rounded-lg shadow font-medium disabled:opacity-60"
@@ -168,8 +234,6 @@ const AdditionalInformation = ({ goNextStep, goPrevStep, onStepComplete }) => {
           {isSubmitting ? "Saving..." : "Save & Complete"}
         </button>
       </div>
-
-      <Toaster />
     </div>
   );
 };
