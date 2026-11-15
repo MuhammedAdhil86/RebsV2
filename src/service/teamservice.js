@@ -5,7 +5,9 @@ import {
   getManagerProjectStatuses,
 } from "../api/api";
 
-/* ---------- mappers (API shape -> UI shape) ---------- */
+/* ---------- mappers (API shape -> UI shape) ----------
+   Keys stay in the API's snake_case because the views read them that way.
+   Every field of the response is kept, so nothing is dropped on the way. */
 
 const toAllocation = (a = {}) => ({
   allocation_id: a.allocation_id,
@@ -16,6 +18,21 @@ const toAllocation = (a = {}) => ({
   allocated_at: a.allocated_at ?? null,
 });
 
+// comments: [{ id, task_id, employee_id, employee_name, comment,
+//              tagged_employees: [{ employee_id, employee_name }], created_at }]
+const toComment = (c = {}) => ({
+  id: c.id,
+  task_id: c.task_id,
+  employee_id: String(c.employee_id ?? ""),
+  employee_name: c.employee_name ?? "",
+  comment: c.comment ?? "",
+  tagged_employees: (c.tagged_employees ?? []).map((t) => ({
+    employee_id: String(t.employee_id ?? ""),
+    employee_name: t.employee_name ?? "",
+  })),
+  created_at: c.created_at ?? null,
+});
+
 // The API sends no task status yet. If it ever does, it is used as is;
 // otherwise: someone allocated -> in_progress, nobody -> pending.
 const toTask = (t = {}) => {
@@ -23,10 +40,13 @@ const toTask = (t = {}) => {
   return {
     task_id: t.task_id,
     task: t.task ?? "",
+    description: t.description ?? "", // optional
+    attachment: t.attachment ?? "", // optional (full file URL)
     status: t.status || (allocations.length ? "in_progress" : "pending"),
     created_at: t.created_at ?? null,
     updated_at: t.updated_at ?? null,
     allocations,
+    comments: (t.comments ?? []).map(toComment),
   };
 };
 
@@ -34,7 +54,7 @@ const toTask = (t = {}) => {
 const toTeamMember = (m = {}) => ({
   employee_id: String(m.employee_id ?? ""),
   name: m.name ?? "",
-  image: m.image ?? "",
+  image: m.image ?? "", // optional
   department: m.department ?? "",
   designation: m.designation ?? "",
   roles: Array.isArray(m.roles) ? m.roles : [],
@@ -46,6 +66,11 @@ const toProject = (p = {}) => ({
   project: p.project ?? "",
   company_id: p.company_id,
   status: p.status ?? "",
+  // optional project fields: null means "not set" (the UI shows a dash)
+  description: p.description ?? null,
+  end_date: p.end_date ?? null, // "2026-12-28"
+  amount: p.amount ?? null,
+  currency: p.currency ?? null,
   created_by: String(p.created_by ?? ""),
   created_by_name: p.created_by_name ?? "",
   designation: p.designation ?? "",
@@ -55,6 +80,17 @@ const toProject = (p = {}) => ({
   tasks: (p.tasks ?? []).map(toTask),
   team: (p.team ?? []).map(toTeamMember),
 });
+
+// overview summary: { total_projects, total_tasks, total_people, unallocated_tasks }
+const toOverviewSummary = (s) =>
+  s
+    ? {
+        total_projects: Number(s.total_projects ?? 0),
+        total_tasks: Number(s.total_tasks ?? 0),
+        total_people: Number(s.total_people ?? 0),
+        unallocated_tasks: Number(s.unallocated_tasks ?? 0),
+      }
+    : null;
 
 /* ---------- task-status mappers (GET /admin/projects/task-status) ---------- */
 
@@ -158,6 +194,7 @@ const teamService = {
         total: Number(d.total ?? 0),
         page: Number(d.page ?? 1),
         limit: Number(d.limit ?? 50),
+        summary: toOverviewSummary(d.summary),
         projects: (d.projects ?? []).map(toProject),
       };
     } catch (error) {
@@ -204,5 +241,12 @@ const teamService = {
 teamService.toProject = toProject;
 teamService.toTask = toTask;
 
-export { toProject, toTask, toAllocation, toTeamMember };
+export {
+  toProject,
+  toTask,
+  toAllocation,
+  toComment,
+  toTeamMember,
+  toOverviewSummary,
+};
 export default teamService;

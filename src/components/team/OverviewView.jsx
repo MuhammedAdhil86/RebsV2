@@ -6,7 +6,7 @@ import {
   AlertTriangle,
   ChevronDown,
   CheckCircle2,
-  Paperclip,
+  Eye,
 } from "lucide-react";
 import teamService from "../../service/teamservice"; // adjust path if different
 
@@ -60,16 +60,6 @@ const formatAmount = (amount, currency) => {
     return `${currency ? `${currency} ` : ""}${Number(amount).toLocaleString(
       "en-IN",
     )}`;
-  }
-};
-
-/* readable file name from an attachment URL */
-const fileName = (url = "") => {
-  try {
-    const last = String(url).split("?")[0].split("/").pop() || url;
-    return decodeURIComponent(last);
-  } catch {
-    return url;
   }
 };
 
@@ -166,7 +156,7 @@ const Donut = ({ assigned, unassigned }) => {
   const c = 2 * Math.PI * r;
   const assignedLen = total ? (assigned / total) * c : 0;
   return (
-    <div className="flex items-center gap-5">
+    <div className="flex flex-wrap items-center gap-5">
       <svg viewBox="0 0 100 100" className="w-32 h-32 -rotate-90 shrink-0">
         <circle
           cx="50"
@@ -348,9 +338,9 @@ const WorkloadPie = ({ data }) => {
         )}
       </svg>
 
-      {/* legend: scrolls to the right when there are many members */}
-      <div className="w-full overflow-x-auto pb-2">
-        <ul className="flex items-center gap-2 w-max">
+      {/* legend: wraps onto more lines, never scrolls */}
+      <div className="w-full">
+        <ul className="flex flex-wrap items-center justify-center gap-2">
           {slices.map((s) => (
             <li
               key={s.name}
@@ -494,9 +484,9 @@ const ProjectPie3D = ({ data }) => {
         ))}
       </svg>
 
-      {/* legend: scrolls to the right when there are many projects */}
-      <div className="w-full overflow-x-auto pb-2">
-        <ul className="flex items-center gap-2 w-max">
+      {/* legend: wraps onto more lines, never scrolls */}
+      <div className="w-full">
+        <ul className="flex flex-wrap items-center justify-center gap-2">
           {slices.map((sl) => (
             <li
               key={sl.id}
@@ -660,9 +650,9 @@ const OverviewView = () => {
   const cardUnallocated = summary?.unallocated_tasks ?? unassigned.length;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 min-w-0 max-w-full">
       {/* SUMMARY CARDS */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           icon={Folder}
           label="Projects"
@@ -692,7 +682,7 @@ const OverviewView = () => {
 
       {/* GRAPHS */}
       {projects.length > 0 && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
           <ChartCard title="Task assignment" subtitle="Assigned vs unassigned">
             <Donut assigned={assignedCount} unassigned={unassigned.length} />
           </ChartCard>
@@ -718,8 +708,8 @@ const OverviewView = () => {
       )}
 
       {/* PROJECTS (accordion) + UNASSIGNED */}
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_340px] gap-6 items-start">
-        <div className="space-y-4">
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_280px] 2xl:grid-cols-[minmax(0,1fr)_340px] gap-6 items-start">
+        <div className="space-y-4 min-w-0">
           {projects.length === 0 ? (
             <div className="border border-black/10 rounded-2xl bg-white shadow-sm py-16 text-center">
               <p className="text-sm text-black">No projects yet</p>
@@ -761,7 +751,7 @@ const OverviewView = () => {
                         on {formatDate(p.created_at)}
                       </p>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <Badge className="bg-[#E8EFF9] text-black/70">
                         {tasks.length} tasks
                       </Badge>
@@ -793,7 +783,7 @@ const OverviewView = () => {
                   {isOpen && (
                     <div className="border-t border-black/10">
                       {/* Project details */}
-                      <div className="px-5 py-4 grid grid-cols-2 md:grid-cols-4 gap-4 bg-zinc-50/60">
+                      <div className="px-5 py-4 grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-3 2xl:grid-cols-4 gap-4 bg-zinc-50/60">
                         <Field label="Project" value={p.project} />
                         <Field label="Status" value={humanize(p.status)} />
                         <Field label="Description" value={p.description} />
@@ -890,15 +880,10 @@ const OverviewView = () => {
                                           href={encodeURI(t.attachment)}
                                           target="_blank"
                                           rel="noopener noreferrer"
-                                          className="inline-flex items-center gap-1 mt-1.5 text-[11px] text-blue-700 hover:underline max-w-full"
+                                          className="inline-flex items-center gap-1.5 mt-2 px-3 py-1.5 text-[11px] rounded-lg border border-black/10 text-black hover:bg-black hover:text-white transition-colors"
                                         >
-                                          <Paperclip
-                                            size={12}
-                                            className="shrink-0"
-                                          />
-                                          <span className="truncate">
-                                            {fileName(t.attachment)}
-                                          </span>
+                                          <Eye size={12} className="shrink-0" />
+                                          View attachment
                                         </a>
                                       )}
                                     </td>
@@ -1040,7 +1025,7 @@ const OverviewView = () => {
         </div>
 
         {/* Unassigned tasks */}
-        <aside className="border border-black/10 rounded-2xl bg-white shadow-sm">
+        <aside className="min-w-0 border border-black/10 rounded-2xl bg-white shadow-sm">
           <div className="flex items-center justify-between px-5 py-4 border-b border-black/10">
             <div className="flex items-center gap-2">
               <AlertTriangle size={14} className="text-black" />
@@ -1063,7 +1048,7 @@ const OverviewView = () => {
               </p>
             </div>
           ) : (
-            <ul className="max-h-[320px] overflow-y-auto divide-y divide-black/5">
+            <ul className="divide-y divide-black/5">
               {unassigned.map((t) => (
                 <li key={t.task_id} className="px-5 py-3.5">
                   <p className="text-sm text-black">{t.task}</p>

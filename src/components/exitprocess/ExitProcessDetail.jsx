@@ -7,7 +7,9 @@ import React, {
 } from "react";
 import { toast } from "react-toastify"; // <ToastContainer /> lives in App.jsx
 import { ArrowLeft, Lock, Check, ChevronDown } from "lucide-react";
+import { Icon } from "@iconify/react";
 import exitService from "../../service/exitService";
+import { getActiveUsersLight } from "../../service/employeeService";
 
 /* ---------- helpers ---------- */
 
@@ -134,6 +136,30 @@ const Field = ({ label, children }) => (
 const inputClass =
   "w-full min-w-0 h-11 sm:h-10 rounded-lg border border-gray-300 bg-white px-3 text-base sm:text-sm text-gray-700 focus:ring-1 focus:ring-gray-900 focus:border-gray-900 focus:outline-none transition-all disabled:bg-gray-50 disabled:text-gray-400";
 
+/* date input with the solar calendar icon on the left.
+   the native calendar icon is stretched over the whole field and made
+   invisible, so clicking anywhere opens the picker */
+const DateInput = ({ className: _ignored, ...props }) => (
+  <div className="relative w-full min-w-0">
+    <Icon
+      icon="solar:calendar-outline"
+      className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 w-4 h-4 text-gray-500"
+    />
+    <input
+      type="date"
+      {...props}
+      onClick={(e) => {
+        try {
+          e.currentTarget.showPicker?.();
+        } catch {
+          /* some browsers block showPicker, native behaviour still works */
+        }
+      }}
+      className={`${inputClass} relative pl-9 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-0`}
+    />
+  </div>
+);
+
 const PrimaryButton = ({ children, ...props }) => (
   <button
     type="button"
@@ -194,7 +220,7 @@ const TimelineStep = ({
 
       {/* card */}
       <section
-        className={`flex-1 min-w-0 border border-black/10 rounded-2xl bg-white overflow-hidden ${
+        className={`flex-1 min-w-0 border border-black/10 rounded-2xl bg-white ${
           last ? "" : "mb-5 sm:mb-6"
         }`}
       >
@@ -216,18 +242,74 @@ const TimelineStep = ({
   );
 };
 
+/* standalone section (not a timeline step): no number, no rail */
+const QuestionnaireCard = ({
+  id,
+  title,
+  description,
+  status,
+  completion,
+  children,
+}) => (
+  <section
+    id={id}
+    className="mt-5 sm:mt-6 border border-black/10 rounded-2xl bg-white overflow-hidden scroll-mt-4"
+  >
+    <div className="px-4 py-4 sm:px-6 sm:py-5 border-b border-black/10">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <h3 className="text-sm sm:text-base text-black">{title}</h3>
+          <p className="text-xs text-black/40 mt-0.5">{description}</p>
+        </div>
+        <Badge className={statusClass(status)}>{status || "—"}</Badge>
+      </div>
+      <div className="mt-3 max-w-xs">
+        <ProgressBar value={completion} />
+      </div>
+    </div>
+    <div className="p-4 sm:p-6">{children}</div>
+  </section>
+);
+
 /* searchable interviewer dropdown: shows names only, never IDs */
-const InterviewerSelect = ({
-  value,
-  selectedName,
-  options,
-  onChange,
-  disabled,
-  loading,
-}) => {
+const InterviewerSelect = ({ value, selectedName, onChange, disabled }) => {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [options, setOptions] = useState([]);
+  const [loading, setLoading] = useState(true);
   const wrapRef = useRef(null);
+
+  // fetch the light user list here: show names, keep the uuid as the value
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const users = await getActiveUsersLight();
+        if (cancelled) return;
+        setOptions(
+          (users || []).map((u) => ({
+            id: String(u.uuid), // value sent to the API
+            name: String(u.name || "")
+              .replace(/\s+/g, " ")
+              .trim(),
+            designation: String(u.designation_name || "")
+              .replace(/\s+/g, " ")
+              .trim(),
+            department: u.department_name || "",
+          })),
+        );
+      } catch (err) {
+        if (!cancelled) {
+          toast.error(backendMessage(err, "Could not load employees."));
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const selected = options.find((o) => o.id === String(value ?? ""));
   const label = selected?.name || (value ? selectedName : "");
@@ -351,6 +433,27 @@ const CHECKLIST_ITEMS = [
   { key: "security", label: "Security clearance completed" },
   { key: "noticePeriodFollowed", label: "Notice period served" },
   { key: "managerClearance", label: "Manager clearance given" },
+];
+
+// questionnaire shown as questions (key = field on data.questionnaire)
+const QUESTIONS = [
+  {
+    key: "workAgain",
+    question: "Would you work here again?",
+    type: "boolean",
+  },
+  {
+    key: "mostLiked",
+    question: "What did you like most about working here?",
+  },
+  {
+    key: "improvementSuggestion",
+    question: "What could we improve?",
+  },
+  {
+    key: "additionalFeedback",
+    question: "Any additional feedback?",
+  },
 ];
 
 /* ---------- detail ---------- */
@@ -543,11 +646,10 @@ const ExitProcessDetail = ({ id, onBack }) => {
   const q = data.questionnaire;
   const answered = q.completion > 0 || q.workAgain;
   const checkedCount = CHECKLIST_ITEMS.filter((i) => checklist[i.key]).length;
-  const stepsDone = [
-    data.initial.completion,
-    data.questionnaire.completion,
-    data.checklist.completion,
-  ].filter((c) => c >= 100).length;
+  // questionnaire is not a step, only initial step + checklist count
+  const stepsDone = [data.initial.completion, data.checklist.completion].filter(
+    (c) => c >= 100,
+  ).length;
 
   return (
     <div className="space-y-5 sm:space-y-6">
@@ -586,7 +688,7 @@ const ExitProcessDetail = ({ id, onBack }) => {
             <div className="min-w-0">
               <p className="text-sm text-black">Overall progress</p>
               <p className="text-xs text-black/40 mt-0.5">
-                {stepsDone} of 3 steps complete
+                {stepsDone} of 2 steps complete
               </p>
               <div className="mt-2">
                 <Badge className={statusClass(data.status)}>
@@ -640,24 +742,17 @@ const ExitProcessDetail = ({ id, onBack }) => {
           >
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
               <Field label="Interviewer">
-                <input
-                  type="text"
-                  inputMode="numeric"
+                <InterviewerSelect
                   value={initialForm.interviewerId}
+                  selectedName={data.interviewerName}
                   disabled={locked}
-                  placeholder="Interviewer employee ID"
-                  onChange={(e) =>
-                    setInitialForm((f) => ({
-                      ...f,
-                      interviewerId: e.target.value,
-                    }))
+                  onChange={(uuid) =>
+                    setInitialForm((f) => ({ ...f, interviewerId: uuid }))
                   }
-                  className={inputClass}
                 />
               </Field>
               <Field label="Notice period start">
-                <input
-                  type="date"
+                <DateInput
                   value={initialForm.noticePeriodStart}
                   disabled={locked}
                   onChange={(e) =>
@@ -670,8 +765,7 @@ const ExitProcessDetail = ({ id, onBack }) => {
                 />
               </Field>
               <Field label="Separation date (last working day)">
-                <input
-                  type="date"
+                <DateInput
                   value={initialForm.separationDate}
                   min={initialForm.noticePeriodStart || undefined}
                   disabled={locked}
@@ -708,59 +802,10 @@ const ExitProcessDetail = ({ id, onBack }) => {
             )}
           </TimelineStep>
 
-          {/* STEP 2: QUESTIONNAIRE (read only) */}
+          {/* STEP 2: CHECKLIST */}
           <TimelineStep
             id="exit-step-2"
             number={2}
-            title="Exit questionnaire"
-            description="Answers submitted by the employee."
-            status={q.status}
-            completion={q.completion}
-          >
-            <dl className="divide-y divide-black/5 -my-3">
-              <div className="py-3 flex items-center justify-between gap-4">
-                <dt className="text-sm text-black">Would work here again?</dt>
-                <dd>
-                  <Badge
-                    className={
-                      !answered
-                        ? "bg-zinc-100 text-zinc-600"
-                        : q.workAgain
-                          ? "bg-emerald-50 text-emerald-700"
-                          : "bg-red-50 text-red-600"
-                    }
-                  >
-                    {!answered ? "Not answered" : q.workAgain ? "Yes" : "No"}
-                  </Badge>
-                </dd>
-              </div>
-              <div className="py-3">
-                <dt className="text-xs text-black/40">Most liked</dt>
-                <dd className="text-sm text-black mt-1 break-words">
-                  {q.mostLiked || "—"}
-                </dd>
-              </div>
-              <div className="py-3">
-                <dt className="text-xs text-black/40">
-                  Improvement suggestion
-                </dt>
-                <dd className="text-sm text-black mt-1 break-words">
-                  {q.improvementSuggestion || "—"}
-                </dd>
-              </div>
-              <div className="py-3">
-                <dt className="text-xs text-black/40">Additional feedback</dt>
-                <dd className="text-sm text-black mt-1 break-words">
-                  {q.additionalFeedback || "—"}
-                </dd>
-              </div>
-            </dl>
-          </TimelineStep>
-
-          {/* STEP 3: CHECKLIST */}
-          <TimelineStep
-            id="exit-step-3"
-            number={3}
             title="Clearance checklist"
             description={`${checkedCount} of ${CHECKLIST_ITEMS.length} items cleared.`}
             status={data.checklist.status}
@@ -833,6 +878,57 @@ const ExitProcessDetail = ({ id, onBack }) => {
               </div>
             )}
           </TimelineStep>
+
+          {/* EXIT QUESTIONNAIRE (separate from the steps, read only) */}
+          <QuestionnaireCard
+            id="exit-questionnaire"
+            title="Exit questionnaire"
+            description="Questions answered by the employee."
+            status={q.status}
+            completion={q.completion}
+          >
+            <ol className="space-y-4">
+              {QUESTIONS.map((item, i) => {
+                const value = q[item.key];
+                const isBool = item.type === "boolean";
+                const hasAnswer = isBool ? answered : Boolean(value?.trim?.());
+
+                return (
+                  <li
+                    key={item.key}
+                    className="rounded-xl border border-black/10 bg-zinc-50/50 p-4"
+                  >
+                    <p className="text-xs text-black/40">Question {i + 1}</p>
+                    <p className="text-sm text-black mt-0.5">{item.question}</p>
+
+                    <div className="mt-2.5">
+                      {isBool ? (
+                        <Badge
+                          className={
+                            !hasAnswer
+                              ? "bg-zinc-100 text-zinc-600"
+                              : value
+                                ? "bg-emerald-50 text-emerald-700"
+                                : "bg-red-50 text-red-600"
+                          }
+                        >
+                          {!hasAnswer ? "Not answered" : value ? "Yes" : "No"}
+                        </Badge>
+                      ) : (
+                        <p
+                          className={`text-sm break-words ${
+                            hasAnswer ? "text-black" : "text-black/30 italic"
+                          }`}
+                        >
+                          {hasAnswer ? value : "Not answered"}
+                        </p>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ol>
+          </QuestionnaireCard>
         </div>
       </div>
     </div>

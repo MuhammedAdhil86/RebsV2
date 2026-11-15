@@ -397,7 +397,7 @@ const EmploymentTypeConfigCard = () => {
                   </th>
 
                   <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500">
-                    Apply Without Leave Allocation
+                    Allow leave
                   </th>
 
                   <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500">
