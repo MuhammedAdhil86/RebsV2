@@ -1,346 +1,314 @@
 import React, { useEffect, useState } from "react";
-import { X } from "lucide-react";
-import { Icon } from "@iconify/react";
-import { FiPaperclip } from "react-icons/fi";
+import { FiX, FiPaperclip, FiCopy, FiCheck } from "react-icons/fi";
 
-// Helper function to match exact layout matching: 01:07:23 PM (09 Jun 2026)
-const formatExactTime12h = (isoString) => {
-  if (!isoString || isoString.startsWith("0001-01-01")) return "N/A";
-
-  try {
-    const [datePart, timePart] = isoString.split("T");
-    const [hourStr, minStr, secWithMs] = timePart.split(":");
-    const secStr = secWithMs.substring(0, 2);
-
-    const [year, month, day] = datePart.split("-");
-    let hour = parseInt(hourStr, 10);
-    const ampm = hour >= 12 ? "PM" : "AM";
-
-    hour = hour % 12;
-    hour = hour ? hour : 12;
-
-    const formattedHour = hour < 10 ? `0${hour}` : hour;
-
-    const months = [
-      "Jan",
-      "Feb",
-      "Mar",
-      "Apr",
-      "May",
-      "Jun",
-      "Jul",
-      "Aug",
-      "Sep",
-      "Oct",
-      "Nov",
-      "Dec",
-    ];
-    const formattedDate = `${day} ${months[parseInt(month, 10) - 1]} ${year}`;
-
-    return `${formattedHour}:${minStr}:${secStr} ${ampm} (${formattedDate})`;
-  } catch (e) {
-    return "N/A";
-  }
+const statusColors = {
+  Approved: "bg-green-100 text-green-600",
+  Rejected: "bg-red-100 text-red-600",
+  Pending: "bg-yellow-100 text-yellow-700",
 };
 
-const getCleanDocType = (file) => {
-  if (file.document_type?.includes("pdf")) return "PDF";
-  return "IMG";
-};
+// values sent to the backend (lowercase, as the API expects)
+const PAYOUT_OPTIONS = [
+  { value: "hand", label: "Hand" },
+  { value: "payroll", label: "Payroll" },
+  { value: "voucher", label: "Voucher" },
+];
 
-const ViewClaimModal = ({
+// Select box sizing (full width inside the modal)
+const SELECT_PLACEHOLDER = "Select payout method";
+const SELECT_MIN_WIDTH = 120;
+
+const getCleanDocType = (file) =>
+  file?.document_type?.includes("pdf") ? "PDF" : "IMG";
+
+const Field = ({ label, children }) => (
+  <div>
+    <div className="text-[11px] text-gray-400 font-normal mb-0.5">{label}</div>
+    <div className="text-[13px] text-gray-800 font-medium break-words">
+      {children || "--"}
+    </div>
+  </div>
+);
+
+export default function ViewClaimModal({
   open,
   data,
+  submitting = false,
   onClose,
   onStatusUpdate,
-  submitting = false,
-}) => {
-  const [remarks, setRemarks] = useState("");
+}) {
+  const [payoutMethod, setPayoutMethod] = useState("");
+  const [payoutError, setPayoutError] = useState("");
+  const [copied, setCopied] = useState(false);
 
+  // Reset local state every time a different claim is opened
   useEffect(() => {
-    if (open && data) {
-      setRemarks("");
-    }
-  }, [open, data]);
+    setPayoutMethod("");
+    setPayoutError("");
+    setCopied(false);
+  }, [data?.id, open]);
 
-  // Close with the Escape key (blocked while submitting)
+  // Close on Escape
   useEffect(() => {
     if (!open) return;
-    const onKeyDown = (e) => {
-      if (e.key === "Escape" && !submitting && onClose) onClose();
+    const onKey = (e) => {
+      if (e.key === "Escape" && !submitting) onClose?.();
     };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, [open, submitting, onClose]);
 
   if (!open || !data) return null;
 
-  const status = data.status ? data.status.toLowerCase() : "pending";
+  const isPending = data.status === "Pending";
+  const isApproved = data.status === "Approved";
+  const attachments = data.attachments || [];
 
-  // Button Visibility Controls
-  const showRemarksInput =
-    status === "pending" || status === "approved" || status === "rejected";
-  const showRejectButton = status === "pending" || status === "approved";
-  const showApproveButton = status === "pending" || status === "rejected";
+  const handleApprove = () => {
+    if (!payoutMethod) {
+      setPayoutError("Please select a payout method.");
+      return;
+    }
+    setPayoutError("");
+    onStatusUpdate?.(data.id, "Approved", payoutMethod);
+  };
 
-  /* ---------- Shared style classes (same as AdvanceSalaryApprovalModal) ---------- */
-  const labelCls = "block mb-1 font-medium text-gray-700";
-  const inputCls =
-    "w-full border p-3 rounded-2xl bg-gray-50 text-gray-600 truncate";
+  const handleReject = () => {
+    onStatusUpdate?.(data.id, "Rejected");
+  };
 
-  const spinner = (
-    <span className="inline-block w-3.5 h-3.5 mr-2 align-middle border-2 border-white/30 border-t-white rounded-full animate-spin" />
-  );
-
-  const expenseDateText =
-    data.date ||
-    (data.expense_date
-      ? new Date(data.expense_date).toLocaleDateString("en-US", {
-          year: "numeric",
-          month: "short",
-          day: "numeric",
-        })
-      : "N/A");
-
-  const amountText = data.amountDisplay
-    ? data.amountDisplay
-    : `₹ ${(data.amount || 0).toLocaleString("en-IN")}`;
-
-  const handleClose = () => {
-    if (!submitting && onClose) onClose();
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(data.voucher_code);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* clipboard not available */
+    }
   };
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm font-poppins text-[12px]"
-      onClick={handleClose}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 font-['Poppins']"
+      onClick={() => !submitting && onClose?.()}
     >
       <div
-        className="bg-white w-[95%] max-w-[820px] rounded-[2rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] border border-white/20"
+        className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         {/* HEADER */}
-        <div className="px-8 py-4 flex items-center justify-between border-b border-gray-50 bg-white">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
           <div className="flex items-center gap-3">
-            <Icon
-              icon="solar:shield-check-outline"
-              className="w-5 h-5 text-black"
-            />
-            <div>
-              <h2 className="text-gray-900 text-[16px] font-medium uppercase">
-                {status === "pending"
-                  ? "Review Claims Request"
-                  : "Request Details"}
-              </h2>
-              <p className="text-gray-400 text-[10px]">
-                Review and update the staff claim
-              </p>
-            </div>
+            <h3 className="text-sm font-semibold text-gray-800">
+              Claim Details
+            </h3>
+            <span
+              className={`px-3 py-1 rounded-full text-[10px] font-semibold uppercase tracking-wider ${
+                statusColors[data.status] || statusColors.Pending
+              }`}
+            >
+              {data.status}
+            </span>
           </div>
           <button
             type="button"
-            onClick={handleClose}
-            aria-label="Close"
+            onClick={onClose}
             disabled={submitting}
+            className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 disabled:opacity-40"
+            aria-label="Close"
           >
-            <X size={20} />
+            <FiX size={16} />
           </button>
         </div>
 
         {/* BODY */}
-        <div className="px-8 py-5 space-y-4 overflow-y-auto">
-          {/* GRID: 3 columns on desktop, 2 on tablet, 1 on mobile */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-3">
-            <div>
-              <label className={labelCls}>Employee Name</label>
-              <input
-                readOnly
-                value={data.employee_name || data.name || ""}
-                className={inputCls}
-              />
-            </div>
-
-            <div>
-              <label className={labelCls}>Designation</label>
-              <input
-                readOnly
-                value={data.employee_designation || data.designation || "N/A"}
-                className={inputCls}
-              />
-            </div>
-
-            {data.employee_phno && (
-              <div>
-                <label className={labelCls}>Phone</label>
-                <input
-                  readOnly
-                  value={data.employee_phno}
-                  className={`${inputCls} font-mono select-all`}
-                />
-              </div>
-            )}
-
-            <div>
-              <label className={labelCls}>Expense Type</label>
-              <input
-                readOnly
-                title={data.expense_type || data.expenseType}
-                value={
-                  data.expense_type || data.expenseType || "General Expense"
-                }
-                className={`${inputCls} font-medium`}
-              />
-            </div>
-
-            <div>
-              <label className={labelCls}>Claimed Amount</label>
-              <input
-                readOnly
-                value={amountText}
-                className={`${inputCls} font-medium`}
-              />
-            </div>
-
-            <div>
-              <label className={labelCls}>Expense Date</label>
-              <div className="relative">
-                <input
-                  readOnly
-                  value={expenseDateText}
-                  className={`${inputCls} pr-10`}
-                />
-                <Icon
-                  icon="solar:calendar-outline"
-                  className="w-4 h-4 text-black absolute right-4 top-1/2 -translate-y-1/2"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className={labelCls}>Status</label>
-              <input readOnly value={data.status || ""} className={inputCls} />
-            </div>
+        <div className="px-5 py-4 space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Employee">{data.name}</Field>
+            <Field label="Designation">{data.designation}</Field>
+            <Field label="Phone">{data.employee_phno}</Field>
+            <Field label="Expense Type">{data.expenseType}</Field>
+            <Field label="Amount">{data.amountDisplay}</Field>
+            <Field label="Expense Date">{data.date}</Field>
           </div>
 
-          {/* DESCRIPTION + ATTACHMENTS side by side */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-3">
-            <div>
-              <label className={labelCls}>Description Notes</label>
-              <textarea
-                rows="3"
-                readOnly
-                value={data.description || "No descriptions given."}
-                className="w-full border p-3 rounded-2xl bg-gray-50 text-gray-600 resize-none"
-              />
-            </div>
+          <Field label="Description">{data.description}</Field>
 
-            <div>
-              <label className={labelCls}>Uploaded Attachments</label>
-              {!data.attachments || data.attachments.length === 0 ? (
-                <div className="w-full border p-3 rounded-2xl bg-gray-50 text-gray-400 text-[11px]">
-                  No documents attached to this claim.
-                </div>
-              ) : (
-                <div className="flex flex-wrap gap-2">
-                  {data.attachments.map((file) => (
-                    <a
-                      key={file.id}
-                      href={file.path}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1.5 border bg-gray-50 text-gray-600 hover:bg-gray-100 px-3 py-2 rounded-2xl font-medium transition-colors"
-                    >
-                      <FiPaperclip className="shrink-0 text-black" />
-                      <span>{getCleanDocType(file)} File</span>
-                    </a>
-                  ))}
+          {/* ALREADY APPROVED: approval details */}
+          {isApproved && (
+            <div className="rounded-lg border border-green-100 bg-green-50/50 p-3 space-y-2">
+              {data.approved_by && (
+                <div className="text-[12px] text-gray-700">
+                  Approved by:{" "}
+                  <span className="font-medium">{data.approved_by}</span>
                 </div>
               )}
-            </div>
-          </div>
-
-          {/* REMARKS */}
-          {showRemarksInput && status === "pending" && (
-            <div>
-              <label className={labelCls}>Action Remarks</label>
-              <textarea
-                rows="2"
-                value={remarks}
-                onChange={(e) => setRemarks(e.target.value)}
-                placeholder="Provide operation review log audit notes here..."
-                className="w-full border p-3 rounded-2xl bg-white text-gray-700 focus:outline-none focus:border-gray-900 resize-none"
-              />
+              {data.approved_at && (
+                <div className="text-[12px] text-gray-700">
+                  Approved on:{" "}
+                  <span className="font-medium">
+                    {new Date(data.approved_at).toLocaleString("en-IN", {
+                      day: "numeric",
+                      month: "short",
+                      year: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </span>
+                </div>
+              )}
+              {data.payout_method && (
+                <div className="text-[12px] text-gray-700">
+                  Payout method:{" "}
+                  <span className="font-medium">{data.payout_method}</span>
+                </div>
+              )}
+              {data.voucher_code && (
+                <div className="flex items-center gap-2 text-[12px] text-gray-700">
+                  Voucher code:
+                  <span className="font-mono font-semibold text-gray-900">
+                    {data.voucher_code}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleCopy}
+                    className="inline-flex items-center gap-1 text-blue-600 hover:underline text-[11px]"
+                  >
+                    {copied ? <FiCheck /> : <FiCopy />}
+                    {copied ? "Copied" : "Copy"}
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
-          {/* FOOTER */}
-          <div className="flex justify-between items-center border-t border-gray-50 pt-4 gap-3">
-            <div className="flex flex-col gap-0.5 text-gray-600">
-              {(data.approved_by || data.approved_at) && (
-                <>
-                  {data.approved_by && (
-                    <div>
-                      <span>Processed By: </span>
-                      <span className="font-semibold text-gray-900">
-                        {data.approved_by}
-                      </span>
-                    </div>
-                  )}
-                  {data.approved_at && (
-                    <div>
-                      <span>Processed At: </span>
-                      <span className="font-semibold text-gray-900">
-                        {formatExactTime12h(data.approved_at)}
-                      </span>
-                    </div>
-                  )}
-                </>
+          {/* PENDING: payout method selector */}
+          {isPending && (
+            <div>
+              <label
+                htmlFor="payout-method"
+                className="block text-[11px] text-gray-400 font-normal mb-1"
+              >
+                Payout method (required to approve)
+              </label>
+              <div className="relative w-full">
+                <select
+                  id="payout-method"
+                  value={payoutMethod}
+                  onChange={(e) => {
+                    setPayoutMethod(e.target.value);
+                    setPayoutError("");
+                  }}
+                  disabled={submitting}
+                  className="appearance-none w-full border px-3 py-2.5 text-xs cursor-pointer bg-white focus:outline-none focus:ring-1 focus:ring-black disabled:opacity-60 disabled:cursor-not-allowed"
+                  style={{
+                    width: "100%",
+                    minWidth: `${SELECT_MIN_WIDTH}px`,
+                    borderRadius: "6px",
+                  }}
+                >
+                  <option
+                    value=""
+                    style={{
+                      borderBottom: "1px solid #e5e7eb",
+                      padding: "8px",
+                    }}
+                  >
+                    {SELECT_PLACEHOLDER}
+                  </option>
+                  {PAYOUT_OPTIONS.map((opt) => (
+                    <option
+                      key={opt.value}
+                      value={opt.value}
+                      style={{
+                        borderBottom: "1px solid #e5e7eb",
+                        padding: "8px",
+                      }}
+                    >
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+
+                <div className="pointer-events-none absolute inset-y-0 right-2 flex items-center">
+                  <svg
+                    className="w-3 h-3 text-gray-500"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.08 1.04l-4.25 4.25a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                </div>
+              </div>
+              {payoutError && (
+                <p className="text-[11px] text-red-500 mt-1">{payoutError}</p>
               )}
             </div>
+          )}
 
-            <div className="flex gap-3">
+          {/* ATTACHMENTS */}
+          <div>
+            <div className="text-[11px] text-gray-400 font-normal mb-1.5">
+              Attachments
+            </div>
+            {attachments.length === 0 ? (
+              <span className="text-[12px] text-gray-400">None</span>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {attachments.map((file, i) => (
+                  <a
+                    key={file.id}
+                    href={file.path}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 text-blue-600 hover:underline bg-blue-50/70 border border-blue-100 px-2.5 py-1 rounded text-[11px] font-semibold tracking-wider whitespace-nowrap"
+                  >
+                    <FiPaperclip className="text-xs text-blue-500" />
+                    {getCleanDocType(file)} {i + 1}
+                  </a>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* FOOTER */}
+        <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-100">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={submitting}
+            className="px-4 py-2 text-[12px] font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+          >
+            Close
+          </button>
+
+          {isPending && (
+            <>
               <button
                 type="button"
-                onClick={handleClose}
+                onClick={handleReject}
                 disabled={submitting}
-                className="px-6 py-2.5 border border-gray-200 text-gray-600 hover:bg-gray-50 rounded-2xl disabled:opacity-60 transition-colors"
+                className="px-4 py-2 text-[12px] font-medium text-red-600 bg-red-50 border border-red-100 rounded-lg hover:bg-red-100 disabled:opacity-50"
               >
-                Cancel
+                {submitting ? "Please wait..." : "Reject"}
               </button>
-
-              {showRejectButton && (
-                <button
-                  type="button"
-                  disabled={submitting}
-                  onClick={() =>
-                    onStatusUpdate(data.id, "Rejected", remarks.trim())
-                  }
-                  className="px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-2xl disabled:opacity-60 transition-colors"
-                >
-                  {submitting && spinner}
-                  Reject
-                </button>
-              )}
-
-              {showApproveButton && (
-                <button
-                  type="button"
-                  disabled={submitting}
-                  onClick={() =>
-                    onStatusUpdate(data.id, "Approved", remarks.trim())
-                  }
-                  className="px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-2xl disabled:opacity-60 transition-colors"
-                >
-                  {submitting && spinner}
-                  Approve
-                </button>
-              )}
-            </div>
-          </div>
+              <button
+                type="button"
+                onClick={handleApprove}
+                disabled={submitting}
+                className="px-4 py-2 text-[12px] font-medium text-white bg-black rounded-lg hover:bg-gray-800 disabled:opacity-50"
+              >
+                {submitting ? "Please wait..." : "Approve"}
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>
   );
-};
-
-export default ViewClaimModal;
+}

@@ -718,23 +718,27 @@ export const fetchCompanyClaims = async () => {
   try {
     const response = await axiosInstance.get(getCompantClaims);
     console.log("Company claims response:", response);
-    return response.data.data;
+    return response.data.data; // unchanged: backend still returns { data: [...] }
   } catch (error) {
     console.error("Error fetching company claims:", error);
     throw error;
   }
 };
-export const updateCompanyClaimStatus = async (id, action) => {
-  try {
-    // Convert "Approved" -> "approved" or "Rejected" -> "rejected" to match backend expectations
-    const backendStatus = action.toLowerCase();
 
-    const response = await axiosInstance.put(approveCompanyClaim(id), {
-      status: backendStatus,
-    });
+export const updateCompanyClaimStatus = async (id, action, payoutMethod) => {
+  try {
+    // New API allowed values: "Approved" | "Rejected" (capitalized, no lowercasing)
+    const body = { status: action };
+
+    // payout_method is required only when approving: hand | payroll | voucher
+    if (action === "Approved") {
+      body.payout_method = payoutMethod;
+    }
+
+    const response = await axiosInstance.put(approveCompanyClaim(id), body);
 
     console.log("Approve/Reject claim response:", response);
-    return response.data;
+    return response.data; // { status_code, message, data: { voucher_code } }
   } catch (error) {
     console.error(`Error updating status for claim ID ${id}:`, error);
     throw error;

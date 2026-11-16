@@ -3,6 +3,50 @@ import { X, ChevronDown } from "lucide-react";
 import { Icon } from "@iconify/react";
 import { toast } from "react-toastify";
 import axiosInstance from "../service/axiosinstance";
+import ModalButton from "./button/modalbutton";
+
+// ---------- TOAST HELPERS (backend message + data in one toast) ----------
+const formatDetail = (detail) => {
+  if (detail === null || detail === undefined || detail === "") return "";
+  if (Array.isArray(detail)) return detail.map(formatDetail).join(", ");
+  if (typeof detail === "object") {
+    return Object.entries(detail)
+      .map(([k, v]) => `${k}: ${formatDetail(v)}`)
+      .join(" | ");
+  }
+  return String(detail);
+};
+
+const showApiToast = (type, message, detail) => {
+  const detailText = formatDetail(detail);
+
+  toast[type](
+    <div>
+      <div>{message}</div>
+      {detailText && (
+        <div className="mt-1 text-[12px] font-normal text-gray-600 break-words">
+          {detailText}
+        </div>
+      )}
+    </div>,
+    { autoClose: 5000 },
+  );
+};
+
+// Works whether the service returns the axios response, the body, or nothing
+const getApiBody = (res) =>
+  res?.data?.message !== undefined || res?.data?.status_code !== undefined
+    ? res.data
+    : res;
+
+const showApiError = (error, fallback) => {
+  const errBody = error?.response?.data;
+  showApiToast(
+    "error",
+    errBody?.message || errBody?.error || error?.message || fallback,
+    errBody?.data ?? (errBody?.message ? errBody?.error : undefined),
+  );
+};
 
 const RegularizationApprovalModal = ({
   open,
@@ -14,6 +58,7 @@ const RegularizationApprovalModal = ({
 }) => {
   const [remarks, setRemarks] = useState("");
   const [loading, setLoading] = useState(false);
+  const [action, setAction] = useState(""); // "approved" | "rejected" (which button shows the spinner)
 
   useEffect(() => {
     setRemarks(data?.remarks || "");
@@ -37,6 +82,10 @@ const RegularizationApprovalModal = ({
   const showApprove = currentStatus !== "approved";
   const showReject = currentStatus !== "rejected";
 
+  const handleClose = () => {
+    if (!loading && onClose) onClose();
+  };
+
   const handleAction = async (status) => {
     if (loading) return;
 
@@ -44,27 +93,35 @@ const RegularizationApprovalModal = ({
 
     try {
       setLoading(true);
+      setAction(status);
       onOptimisticUpdate?.(data.id, status);
 
-      await axiosInstance.put("/admin/attendance/regularize/approval", {
-        request_id: data.id,
-        status,
-        remarks,
-      });
+      const res = await axiosInstance.put(
+        "/admin/attendance/regularize/approval",
+        {
+          request_id: data.id,
+          status,
+          remarks,
+        },
+      );
+      const body = getApiBody(res);
 
-      toast.success(
-        status === "approved"
-          ? "Regularization approved successfully"
-          : "Regularization rejected successfully",
+      showApiToast(
+        "success",
+        body?.message ||
+          (status === "approved"
+            ? "Regularization approved successfully"
+            : "Regularization rejected successfully"),
       );
 
       onClose();
       onSuccess?.();
     } catch (error) {
       onOptimisticUpdate?.(data.id, previousStatus);
-      toast.error("Failed to update regularization");
+      showApiError(error, "Failed to update regularization");
     } finally {
       setLoading(false);
+      setAction("");
     }
   };
 
@@ -87,7 +144,7 @@ const RegularizationApprovalModal = ({
               </p>
             </div>
           </div>
-          <button type="button" onClick={onClose}>
+          <button type="button" onClick={handleClose} disabled={loading}>
             <X size={20} />
           </button>
         </div>
@@ -228,27 +285,36 @@ const RegularizationApprovalModal = ({
               </div>
             </div>
 
-            <div className="flex gap-3">
+            {/* Same buttons as the Leave Request modal */}
+            <div className="flex gap-2">
+              <ModalButton
+                variant="secondary"
+                onClick={handleClose}
+                disabled={loading}
+              >
+                Cancel
+              </ModalButton>
+
               {showReject && (
-                <button
-                  type="button"
-                  disabled={loading}
+                <ModalButton
+                  variant="danger"
                   onClick={() => handleAction("rejected")}
-                  className="px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-2xl disabled:opacity-60 transition-colors"
+                  disabled={loading}
+                  loading={loading && action === "rejected"}
                 >
                   Reject
-                </button>
+                </ModalButton>
               )}
 
               {showApprove && (
-                <button
-                  type="button"
-                  disabled={loading}
+                <ModalButton
+                  variant="primary"
                   onClick={() => handleAction("approved")}
-                  className="px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-2xl disabled:opacity-60 transition-colors"
+                  disabled={loading}
+                  loading={loading && action === "approved"}
                 >
                   Approve
-                </button>
+                </ModalButton>
               )}
             </div>
           </div>

@@ -4,23 +4,30 @@ import { AiOutlinePlus } from "react-icons/ai";
 import { Icon } from "@iconify/react";
 import { toast } from "react-toastify";
 import useLeaveStore from "../store/useleaveStore";
+import ModalButton from "./button/modalbutton";
 
-// ---------- TOAST HELPERS (backend message + reason in one toast) ----------
+// ---------- TOAST HELPERS (backend message + data in one toast) ----------
+const formatDetail = (detail) => {
+  if (detail === null || detail === undefined || detail === "") return "";
+  if (Array.isArray(detail)) return detail.map(formatDetail).join(", ");
+  if (typeof detail === "object") {
+    return Object.entries(detail)
+      .map(([k, v]) => `${k}: ${formatDetail(v)}`)
+      .join(" | ");
+  }
+  return String(detail);
+};
+
 // If an id is passed (from toast.loading), that loading toast is updated in
 // place. Otherwise a new toast of the given type is shown.
 const showApiToast = (type, message, detail, id) => {
-  const detailText =
-    detail === null || detail === undefined || detail === ""
-      ? ""
-      : typeof detail === "object"
-        ? JSON.stringify(detail)
-        : String(detail);
+  const detailText = formatDetail(detail);
 
   const content = (
     <div>
       <div>{message}</div>
       {detailText && (
-        <div className="mt-1 text-[12px] font-normal text-gray-600">
+        <div className="mt-1 text-[12px] font-normal text-gray-600 break-words">
           {detailText}
         </div>
       )}
@@ -28,7 +35,6 @@ const showApiToast = (type, message, detail, id) => {
   );
 
   if (id !== undefined && id !== null) {
-    // turn the loading toast into a success / error toast
     toast.update(id, {
       render: content,
       type,
@@ -67,6 +73,7 @@ const LeaveRequestApprove = ({ user, onClose }) => {
   const [currentUser, setCurrentUser] = useState(null);
   const [selectedDates, setSelectedDates] = useState([]);
   const [submitting, setSubmitting] = useState(false);
+  const [action, setAction] = useState(""); // "Approved" | "Rejected" (which button shows the spinner)
 
   useEffect(() => {
     try {
@@ -112,7 +119,7 @@ const LeaveRequestApprove = ({ user, onClose }) => {
     const leave = leaveDates.find((l) =>
       dayjs(l.date).isSame(dayjs(date), "day"),
     );
-    return leave && (leave.half_day === "true" || leave.half_day === true);
+    return !!leave && (leave.half_day === "true" || leave.half_day === true);
   };
 
   const toggleDateSelection = (date) => {
@@ -135,6 +142,7 @@ const LeaveRequestApprove = ({ user, onClose }) => {
     }
 
     setSubmitting(true);
+    setAction(nextStatus);
     const loadingToast = toast.loading("Updating status...");
     try {
       const res = await updateLeaveStatus({
@@ -152,16 +160,21 @@ const LeaveRequestApprove = ({ user, onClose }) => {
         loadingToast,
       );
       setSubmitting(false);
+      setAction("");
       if (onClose) onClose(); // close modal on success
     } catch (err) {
       const errBody = err.response?.data;
       showApiToast(
         "error",
-        errBody?.message || err.message || `Error trying to ${verb} leave`,
-        errBody?.data,
+        errBody?.message ||
+          errBody?.error ||
+          err.message ||
+          `Error trying to ${verb} leave`,
+        errBody?.data ?? (errBody?.message ? errBody?.error : undefined),
         loadingToast,
       );
       setSubmitting(false);
+      setAction("");
     }
   };
 
@@ -178,10 +191,15 @@ const LeaveRequestApprove = ({ user, onClose }) => {
     setNoteOpen(false);
   };
 
-  // Approved -> only Reject; Rejected -> only Approve; anything else (pending) -> both
+  // Pending  -> Reject + Approve
+  // Approved -> only Reject
+  // Rejected -> only Approve
   const leaveStatus = String(user.status ?? "").toLowerCase();
-  const showApproveButton = leaveStatus !== "approved";
-  const showRejectButton = leaveStatus !== "rejected";
+  const isPending = leaveStatus === "pending" || leaveStatus === "";
+  const isApproved = leaveStatus === "approved";
+  const isRejected = leaveStatus === "rejected";
+  const showRejectButton = isPending || isApproved;
+  const showApproveButton = isPending || isRejected;
 
   const isSuperAdmin = currentUser && currentUser.user_type === "Super admin";
   const managerApproval = String(user.manager_approval_status ?? "")
@@ -194,6 +212,10 @@ const LeaveRequestApprove = ({ user, onClose }) => {
     managerApproval === "approved" ||
     managerApproval === "pending" ||
     currentUser?.user_type === "Manager";
+
+  // Footer is shown only when at least one button will appear
+  const showFooter =
+    shouldShowApprovalButtons && (showRejectButton || showApproveButton);
 
   const formatDate = (date) => {
     const d = new Date(date);
@@ -223,17 +245,13 @@ const LeaveRequestApprove = ({ user, onClose }) => {
   const labelCls = "text-[11px] text-gray-500 mb-1";
   const boxCls = "bg-slate-50 border border-gray-200 px-4 py-3 rounded-lg";
 
-  const spinner = (
-    <span className="inline-block w-3.5 h-3.5 mr-2 align-middle border-2 border-white/30 border-t-white rounded-full animate-spin" />
-  );
-
   return (
     <div
       className="fixed inset-0 z-[100] flex items-center justify-center px-4 bg-black/50 backdrop-blur-[2px] font-poppins text-[12px]"
       onClick={handleClose}
     >
       <div
-        className="bg-white w-full max-w-[640px] max-h-[90vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in duration-200"
+        className="bg-white w-full max-w-[960px] max-h-[90vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in duration-200"
         onClick={(e) => e.stopPropagation()}
       >
         {/* HEADER */}
@@ -265,93 +283,156 @@ const LeaveRequestApprove = ({ user, onClose }) => {
           </button>
         </div>
 
-        {/* BODY */}
-        <div className="px-6 py-5 space-y-4 overflow-y-auto">
-          {/* User Info */}
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 bg-slate-100 border border-gray-200 rounded-full flex items-center justify-center text-[15px] text-gray-700 uppercase">
-              {user.name && user.name.charAt(0)}
-            </div>
-            <div>
-              <h3 className="text-[14px] font-medium text-gray-800 leading-tight">
-                {user.name}
-              </h3>
-              <p className="text-[12px] text-gray-500">
-                {user.type} | {totalDays} day(s)
-              </p>
-            </div>
-          </div>
-
-          {/* Dates */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className={boxCls}>
-              <p className={labelCls}>Start Date</p>
-              <p className="text-[13px] text-gray-800 tabular-nums">
-                {firstLeaveDate ? formatDate(firstLeaveDate) : "N/A"}
-              </p>
-            </div>
-            <div className={boxCls}>
-              <p className={labelCls}>End Date</p>
-              <p className="text-[13px] text-gray-800 tabular-nums">
-                {endLeaveDate ? formatDate(endLeaveDate) : "N/A"}
-              </p>
-            </div>
-          </div>
-
-          {/* Reason */}
-          <div className={boxCls}>
-            <p className={labelCls}>Reason</p>
-            <p className="text-[13px] text-gray-800 break-words">
-              {user.reason}
-            </p>
-          </div>
-
-          {/* Manager approval info */}
-          {managerApproval && (
-            <>
-              {managerApproval === "pending" && (
-                <div className="flex items-start gap-3 bg-slate-50 border border-gray-200 px-4 py-3 rounded-lg">
-                  <span className="mt-1.5 w-2 h-2 rounded-full bg-gray-500 shrink-0" />
-                  <div>
-                    <p className="text-[13px] text-gray-800">
-                      Pending for manager approval
-                    </p>
-                    <p className="text-[11px] text-gray-500">
-                      The manager has not yet responded to this leave request.
-                    </p>
-                  </div>
+        {/* BODY: details on the left, calendar on the right */}
+        <div className="px-6 py-5 overflow-y-auto">
+          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)] gap-5">
+            {/* ---------- LEFT: DETAILS ---------- */}
+            <div className="space-y-4 min-w-0">
+              {/* User Info */}
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 shrink-0 bg-slate-100 border border-gray-200 rounded-full flex items-center justify-center text-[15px] text-gray-700 uppercase">
+                  {user.name && user.name.charAt(0)}
                 </div>
-              )}
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className={boxCls}>
-                  <p className={labelCls}>Manager Approval</p>
-                  <span
-                    className={`px-3 py-1 rounded-full text-[11px] inline-block capitalize ${getApprovalBadge(managerApproval)}`}
-                  >
-                    {managerApproval}
-                  </span>
-                </div>
-                <div className={boxCls}>
-                  <p className={labelCls}>Leave Status</p>
-                  <span
-                    className={`px-3 py-1 rounded-full text-[11px] inline-block capitalize ${getApprovalBadge(leaveStatus)}`}
-                  >
-                    {leaveStatus || "pending"}
-                  </span>
+                <div className="min-w-0">
+                  <h3 className="text-[14px] font-medium text-gray-800 leading-tight truncate">
+                    {user.name}
+                  </h3>
+                  <p className="text-[12px] text-gray-500">
+                    {user.type} | {totalDays} day(s)
+                  </p>
                 </div>
               </div>
-            </>
-          )}
 
-          {/* Calendar */}
-          <div className="border border-gray-200 rounded-lg p-4 flex gap-4">
-            <div className="flex-1 min-w-0">
-              {firstLeaveDate && (
-                <p className="text-[13px] font-medium text-gray-800 mb-2">
-                  {dayjs(firstLeaveDate).format("MMMM YYYY")}
+              {/* Dates */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className={boxCls}>
+                  <p className={labelCls}>Start Date</p>
+                  <p className="text-[13px] text-gray-800 tabular-nums">
+                    {firstLeaveDate ? formatDate(firstLeaveDate) : "N/A"}
+                  </p>
+                </div>
+                <div className={boxCls}>
+                  <p className={labelCls}>End Date</p>
+                  <p className="text-[13px] text-gray-800 tabular-nums">
+                    {endLeaveDate ? formatDate(endLeaveDate) : "N/A"}
+                  </p>
+                </div>
+              </div>
+
+              {/* Reason */}
+              <div className={boxCls}>
+                <p className={labelCls}>Reason</p>
+                <p className="text-[13px] text-gray-800 break-words">
+                  {user.reason}
                 </p>
+              </div>
+
+              {/* Manager approval info */}
+              {managerApproval && (
+                <>
+                  {managerApproval === "pending" && (
+                    <div className="flex items-start gap-3 bg-slate-50 border border-gray-200 px-4 py-3 rounded-lg">
+                      <span className="mt-1.5 w-2 h-2 rounded-full bg-gray-500 shrink-0" />
+                      <div>
+                        <p className="text-[13px] text-gray-800">
+                          Pending for manager approval
+                        </p>
+                        <p className="text-[11px] text-gray-500">
+                          The manager has not yet responded to this leave
+                          request.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className={boxCls}>
+                      <p className={labelCls}>Manager Approval</p>
+                      <span
+                        className={`px-3 py-1 rounded-full text-[11px] inline-block capitalize ${getApprovalBadge(managerApproval)}`}
+                      >
+                        {managerApproval}
+                      </span>
+                    </div>
+                    <div className={boxCls}>
+                      <p className={labelCls}>Leave Status</p>
+                      <span
+                        className={`px-3 py-1 rounded-full text-[11px] inline-block capitalize ${getApprovalBadge(leaveStatus)}`}
+                      >
+                        {leaveStatus || "pending"}
+                      </span>
+                    </div>
+                  </div>
+                </>
               )}
+
+              {/* Note */}
+              {shouldShowApprovalButtons && (
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNoteDraft(note);
+                      setNoteOpen((o) => !o);
+                    }}
+                    className="w-full py-2 px-4 text-[12px] bg-white border border-gray-300 text-gray-700 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors"
+                  >
+                    <AiOutlinePlus className="mr-2" /> Add a Note
+                  </button>
+
+                  {noteOpen && (
+                    <div className="mt-3">
+                      <textarea
+                        className="w-full h-24 px-3 py-2.5 text-[13px] text-gray-800 placeholder-gray-400 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-black focus:border-black resize-none"
+                        placeholder="Type your note here..."
+                        value={noteDraft}
+                        onChange={(e) => setNoteDraft(e.target.value)}
+                      />
+                      <div className="flex justify-end gap-2 mt-2">
+                        <ModalButton
+                          variant="secondary"
+                          onClick={() => setNoteOpen(false)}
+                        >
+                          Close
+                        </ModalButton>
+                        <ModalButton
+                          variant="primary"
+                          onClick={handleNoteSubmit}
+                        >
+                          Submit
+                        </ModalButton>
+                      </div>
+                    </div>
+                  )}
+
+                  {!noteOpen && note && (
+                    <div className={`mt-3 ${boxCls}`}>
+                      <p className={labelCls}>Note</p>
+                      <p className="text-[13px] text-gray-800 break-words">
+                        {note}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* ---------- RIGHT: CALENDAR ---------- */}
+            <div className="border border-gray-200 rounded-lg p-4 self-start min-w-0">
+              {/* Month + total days */}
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <p className="text-[13px] font-medium text-gray-800">
+                  {firstLeaveDate
+                    ? dayjs(firstLeaveDate).format("MMMM YYYY")
+                    : "No leave dates"}
+                </p>
+                <div className="flex items-center gap-2 bg-slate-50 border border-gray-200 px-3 py-1.5 rounded-lg">
+                  <p className="text-[14px] font-medium text-gray-800 tabular-nums">
+                    {totalDays}
+                  </p>
+                  <p className="text-[11px] text-gray-500">Total Days</p>
+                </div>
+              </div>
 
               <div className="grid grid-cols-7 mb-1">
                 {WEEKDAYS.map((d, i) => (
@@ -366,7 +447,7 @@ const LeaveRequestApprove = ({ user, onClose }) => {
                 ))}
               </div>
 
-              <div className="grid grid-cols-7 gap-y-1">
+              <div className="grid grid-cols-7 gap-y-1.5">
                 {Array.from({ length: leadingBlanks }).map((_, i) => (
                   <div key={`blank-${i}`} />
                 ))}
@@ -379,7 +460,7 @@ const LeaveRequestApprove = ({ user, onClose }) => {
                     <div
                       key={idx}
                       onClick={() => toggleDateSelection(date)}
-                      className={`relative mx-auto h-8 w-8 flex items-center justify-center rounded-full cursor-pointer text-[12px] tabular-nums transition-colors
+                      className={`relative mx-auto h-9 w-9 flex items-center justify-center rounded-full cursor-pointer text-[12px] tabular-nums transition-colors
                         ${
                           isSelected
                             ? "bg-black text-white"
@@ -403,120 +484,56 @@ const LeaveRequestApprove = ({ user, onClose }) => {
                 })}
               </div>
 
-              {/* Legend */}
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-3 text-[10px] text-gray-500">
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-gray-200" />
-                  Leave day
+              {/* Legend + selected count */}
+              <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 mt-4 pt-3 border-t border-gray-100 text-[10px] text-gray-500">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-gray-200" />
+                    Leave day
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-gray-100 ring-1 ring-gray-400" />
+                    Half day
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-black" />
+                    Selected
+                  </span>
+                </div>
+                <span className="text-gray-700 tabular-nums">
+                  {selectedDates.length} selected
                 </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-gray-100 ring-1 ring-gray-400" />
-                  Half day
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-black" />
-                  Selected
-                </span>
-              </div>
-            </div>
-
-            <div className="w-24 shrink-0 flex flex-col">
-              <div className="bg-slate-50 border border-gray-200 px-3 py-3 rounded-lg text-center">
-                <p className="text-[18px] font-medium text-gray-800 tabular-nums">
-                  {totalDays}
-                </p>
-                <p className="text-[11px] text-gray-500">Total Days</p>
               </div>
             </div>
           </div>
+        </div>
 
-          {/* Note */}
-          {shouldShowApprovalButtons && (
-            <div>
-              <button
-                type="button"
-                onClick={() => {
-                  setNoteDraft(note);
-                  setNoteOpen((o) => !o);
-                }}
-                className="w-full py-2 px-4 text-[12px] bg-white border border-gray-300 text-gray-700 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors"
+        {/* FOOTER: Reject + Approve only */}
+        {showFooter && (
+          <div className="px-6 py-4 border-t border-gray-100 bg-slate-50/60 flex justify-end gap-2">
+            {showRejectButton && (
+              <ModalButton
+                variant="danger"
+                onClick={handleReject}
+                disabled={submitting}
+                loading={submitting && action === "Rejected"}
               >
-                <AiOutlinePlus className="mr-2" /> Add a Note
-              </button>
+                Reject
+              </ModalButton>
+            )}
 
-              {noteOpen && (
-                <div className="mt-3">
-                  <textarea
-                    className="w-full h-24 px-3 py-2.5 text-[13px] text-gray-800 placeholder-gray-400 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-black focus:border-black resize-none"
-                    placeholder="Type your note here..."
-                    value={noteDraft}
-                    onChange={(e) => setNoteDraft(e.target.value)}
-                  />
-                  <div className="flex justify-end gap-2 mt-2">
-                    <button
-                      type="button"
-                      onClick={() => setNoteOpen(false)}
-                      className="py-2 px-4 text-[12px] border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
-                    >
-                      Close
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleNoteSubmit}
-                      className="py-2 px-4 text-[12px] bg-black text-white rounded-lg hover:bg-gray-900 transition-colors"
-                    >
-                      Submit
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {!noteOpen && note && (
-                <div className={`mt-3 ${boxCls}`}>
-                  <p className={labelCls}>Note</p>
-                  <p className="text-[13px] text-gray-800 break-words">
-                    {note}
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* FOOTER */}
-        <div className="px-6 py-4 border-t border-gray-100 bg-slate-50/60 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={handleClose}
-            disabled={submitting}
-            className="px-4 py-2 border border-gray-300 text-gray-700 text-[12px] rounded-lg hover:bg-gray-100 disabled:opacity-60 transition-colors"
-          >
-            {shouldShowApprovalButtons ? "Cancel" : "Close"}
-          </button>
-
-          {shouldShowApprovalButtons && showRejectButton && (
-            <button
-              type="button"
-              onClick={handleReject}
-              disabled={submitting}
-              className="px-4 py-2 bg-red-600 text-white text-[12px] rounded-lg hover:bg-red-700 disabled:opacity-60 transition-colors"
-            >
-              Reject
-            </button>
-          )}
-
-          {shouldShowApprovalButtons && showApproveButton && (
-            <button
-              type="button"
-              onClick={handleApprove}
-              disabled={submitting}
-              className="px-4 py-2 bg-black text-white text-[12px] rounded-lg hover:bg-gray-900 shadow-sm disabled:opacity-60 transition-all"
-            >
-              {submitting && spinner}
-              Approve
-            </button>
-          )}
-        </div>
+            {showApproveButton && (
+              <ModalButton
+                variant="primary"
+                onClick={handleApprove}
+                disabled={submitting}
+                loading={submitting && action === "Approved"}
+              >
+                Approve
+              </ModalButton>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

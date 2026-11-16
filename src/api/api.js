@@ -163,13 +163,12 @@ export const updateCompanyDet = "/company/update";
 export const getOrgType = "/admin/organization-type/get";
 export const getCountry = "/master/country";
 export const updateCompany = "/company/update";
-export const getCompantClaims = "/claims/company";
-export const approveCompanyClaim = (id) => `/claims/${id}/approve`;
 
 export const getCompanyLayouts = "/admin/company/layouts";
 export const companyLayoutByType = (layoutType) =>
   `/admin/company/layout/${layoutType}`; // layoutType = "email" | "letter"
-
+export const getCompantClaims = "/admin/list-all-claims"; // GET
+export const approveCompanyClaim = (id) => `/admin/${id}/update-status`; // PUT
 // DELETE /admin/company/delete-layout/{id}/{layout_type}
 export const deleteCompanyLayout = (id, layoutType) =>
   `/admin/company/delete-layout/${id}/${layoutType}`;
@@ -508,19 +507,7 @@ export const userLocationDeviceUrl = (uuid) =>
   `/master/location-device/${uuid}`;
 export const getEmployeeLeavePolicy = (uuid) =>
   `/leave-policy/employees/${uuid}`;
-// ---------------- LEAVE CONFIGURATION: REQUEST SETTINGS ----------------
-export const getLeaveRequestConfig = "/leave-policy/company/request-config";
-export const putLeaveRequestConfig = "/leave-policy/company/request-config";
-export const deleteLeaveRequestConfig = "/leave-policy/company/request-config";
 
-// ---------------- LEAVE CONFIGURATION: EMPLOYMENT TYPE SETTINGS ----------------
-export const getEmploymentTypeLeaveConfig =
-  "/leave-policy/company/employement-type-config";
-export const putEmploymentTypeLeaveConfig =
-  "/leave-policy/company/employement-type-config";
-// usage: `${deleteEmploymentTypeLeaveConfig}/${employment_type_id}`
-export const deleteEmploymentTypeLeaveConfig =
-  "/leave-policy/company/employement-type-config";
 export const fetchEffectiveAllocations = "/shifts/effective-allocations";
 export const postSwapShift = "/shifts/admin/swap";
 
@@ -614,3 +601,15 @@ export const getExitProcessList = "/admin/exit-process/list-all";
 // 8. GET  /admin/exit-process/get/{id}
 export const getExitProcessById = (id) =>
   `/admin/exit-process/get/${encodeURIComponent(id)}`;
+// ---------------- LEAVE CONFIGURATION: REQUEST SETTINGS ----------------
+export const getLeaveRequestConfig = "/leave-policy/company/request-config";
+export const putLeaveRequestConfig = "/leave-policy/company/request-config";
+export const deleteLeaveRequestConfig = "/leave-policy/company/request-config"; // + /{settings_id}
+
+// ---------------- LEAVE CONFIGURATION: EMPLOYMENT TYPE SETTINGS ----------------
+export const getEmploymentTypeLeaveConfig =
+  "/leave-policy/company/employement-type-config";
+export const putEmploymentTypeLeaveConfig =
+  "/leave-policy/company/employement-type-config";
+export const deleteEmploymentTypeLeaveConfig =
+  "/leave-policy/company/employement-type-config"; // + /{settings_id}

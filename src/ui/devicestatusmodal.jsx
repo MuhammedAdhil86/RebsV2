@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
-import { X } from "lucide-react";
 import { Icon } from "@iconify/react";
-import { toast } from "react-toastify";
 import { fetchUpdateDeviceStatus } from "../service/deviceService";
+import { showApiSuccess, showApiError } from "../utils/apiToast";
+import ModalButton from "./button/modalbutton";
 
 // Helper function to extract exact API time segments into 12-hour AM/PM format
 const formatExactTime12h = (isoString) => {
@@ -47,6 +47,14 @@ const formatExactTime12h = (isoString) => {
   }
 };
 
+// Badge colours for request status (lowercase input)
+const getStatusBadge = (status) => {
+  if (status.includes("approved")) return "bg-green-100 text-green-700";
+  if (status.includes("rejected"))
+    return "bg-red-50 text-red-600 border border-red-200";
+  return "bg-gray-100 text-gray-700"; // pending / anything else
+};
+
 const DeviceApprovalModal = ({
   open,
   data,
@@ -64,6 +72,20 @@ const DeviceApprovalModal = ({
       setActionType(null);
     }
   }, [open, data]);
+
+  const handleClose = () => {
+    if (!submitting && onClose) onClose();
+  };
+
+  // Close with the Escape key
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e) => {
+      if (e.key === "Escape" && !submitting && onClose) onClose();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open, onClose, submitting]);
 
   if (!open || !data) return null;
 
@@ -93,6 +115,7 @@ const DeviceApprovalModal = ({
     : null;
 
   const handleStatusAction = async (targetStatus) => {
+    if (submitting) return;
     setSubmitting(true);
     setActionType(targetStatus);
 
@@ -106,13 +129,20 @@ const DeviceApprovalModal = ({
         onOptimisticUpdate(data.id, targetStatus);
       }
 
-      await fetchUpdateDeviceStatus(data.user_uuid, targetStatus, payloadBody);
+      const res = await fetchUpdateDeviceStatus(
+        data.user_uuid,
+        targetStatus,
+        payloadBody,
+      );
 
-      toast.success(`Device request ${targetStatus} successfully!`);
+      // Backend message (falls back to the old text)
+      showApiSuccess(res, `Device request ${targetStatus} successfully!`);
+
       if (onSuccess) onSuccess();
       onClose();
     } catch (error) {
-      toast.error(error.message || "Failed to update device request status.");
+      // Backend message + data (or error) in one toast
+      showApiError(error, "Failed to update device request status.");
 
       if (onOptimisticUpdate) {
         onOptimisticUpdate(data.id, data.status);
@@ -123,215 +153,219 @@ const DeviceApprovalModal = ({
     }
   };
 
-  const inputCls =
-    "w-full border p-3 rounded-2xl bg-gray-50 text-gray-600 truncate";
-  const labelCls = "block mb-1 font-medium text-gray-700";
-
   const detectedText =
     data.change_detected_date?.Valid &&
     data.change_detected_date.Time !== "0001-01-01T00:00:00Z"
       ? formatExactTime12h(data.change_detected_date.Time)
       : data.date || "N/A";
 
-  const spinner = (
-    <span className="inline-block w-3.5 h-3.5 mr-2 align-middle border-2 border-white/30 border-t-white rounded-full animate-spin" />
-  );
+  // ---------- Theme styles (same as Leave Request modal) ----------
+  const labelCls = "text-[11px] text-gray-500 mb-1";
+  const boxCls = "bg-slate-50 border border-gray-200 px-4 py-3 rounded-lg";
+  const valueCls = "text-[13px] text-gray-800 break-words";
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm font-poppins text-[12px]"
-      onClick={onClose}
+      className="fixed inset-0 z-[100] flex items-center justify-center px-4 bg-black/50 backdrop-blur-[2px] font-poppins text-[12px]"
+      onClick={handleClose}
     >
       <div
-        className="bg-white w-[95%] max-w-[500px] rounded-[2rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] border border-white/20"
+        className="bg-white w-full max-w-[960px] max-h-[90vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in duration-200"
         onClick={(e) => e.stopPropagation()}
       >
         {/* HEADER */}
-        <div className="px-8 py-5 flex items-center justify-between border-b border-gray-50 bg-white">
-          <div className="flex items-center gap-3">
-            <Icon icon="solar:laptop-outline" className="w-5 h-5 text-black" />
+        <div className="flex items-start justify-between gap-3 px-6 pt-5 pb-4 border-b border-gray-100">
+          <div className="flex items-start gap-3">
+            <span className="p-2 bg-slate-100 rounded-lg">
+              <Icon
+                icon="solar:laptop-outline"
+                className="w-5 h-5 text-black"
+              />
+            </span>
             <div>
-              <h2 className="text-gray-900 text-[16px] font-medium uppercase">
-                Device Request
-              </h2>
-              <p className="text-gray-400 text-[10px]">
+              <h2 className="text-[16px] text-gray-900">Device Request</h2>
+              <p className="text-[11px] text-gray-500 mt-0.5">
                 Review and update the device change request
               </p>
             </div>
           </div>
-          <button type="button" onClick={onClose}>
-            <X size={20} />
+          <button
+            type="button"
+            onClick={handleClose}
+            aria-label="Close"
+            disabled={submitting}
+            className="text-gray-400 hover:text-black transition-colors disabled:opacity-50"
+          >
+            <Icon icon="material-symbols:close" className="w-6 h-6" />
           </button>
         </div>
 
-        {/* BODY */}
-        <div className="p-8 space-y-5 overflow-y-auto">
-          {/* GRID */}
-          <div className="grid grid-cols-2 gap-x-4 gap-y-4">
-            <div>
-              <label className={labelCls}>Employee Name</label>
-              <input readOnly value={data.name || ""} className={inputCls} />
-            </div>
+        {/* BODY: employee + devices on the left, request info on the right */}
+        <div className="px-6 py-5 overflow-y-auto">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            {/* ---------- LEFT: EMPLOYEE + DEVICES ---------- */}
+            <div className="space-y-4 min-w-0">
+              {/* Employee info */}
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 shrink-0 bg-slate-100 border border-gray-200 rounded-full flex items-center justify-center text-[15px] text-gray-700 uppercase">
+                  {data.name && data.name.charAt(0)}
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-[14px] font-medium text-gray-800 leading-tight truncate">
+                    {data.name}
+                  </h3>
+                  <p className="text-[12px] text-gray-500 truncate">
+                    {data.designation}
+                  </p>
+                </div>
+              </div>
 
-            <div>
-              <label className={labelCls}>Designation</label>
-              <input
-                readOnly
-                value={data.designation || ""}
-                className={inputCls}
-              />
-            </div>
-
-            <div>
-              <label className={labelCls}>User UUID</label>
-              <input
-                readOnly
-                value={`#${data.user_uuid ?? ""}`}
-                className={`${inputCls} font-mono`}
-              />
-            </div>
-
-            <div>
-              <label className={labelCls}>Device Type</label>
-              <input
-                readOnly
-                value={
-                  data.is_first_device
+              {/* Device type */}
+              <div className={boxCls}>
+                <p className={labelCls}>Device Type</p>
+                <p className={valueCls}>
+                  {data.is_first_device
                     ? "This is first device"
-                    : "This is not first device"
-                }
-                className={inputCls}
-              />
-            </div>
-
-            <div>
-              <label className={labelCls}>Current Device</label>
-              <input
-                readOnly
-                title={data.oldDevice || data.device}
-                value={data.oldDevice || data.device || "None"}
-                className={`${inputCls} font-medium`}
-              />
-            </div>
-
-            <div>
-              <label className={labelCls}>Requested Device</label>
-              <input
-                readOnly
-                title={data.newDevice}
-                value={data.newDevice || "None"}
-                className={`${inputCls} font-medium`}
-              />
-            </div>
-
-            {resolvedCurrentDeviceId && (
-              <div>
-                <label className={labelCls}>Current Device ID</label>
-                <input
-                  readOnly
-                  value={resolvedCurrentDeviceId}
-                  className={`${inputCls} font-mono select-all`}
-                />
+                    : "This is not first device"}
+                </p>
               </div>
-            )}
 
-            {resolvedNewDeviceId && (
-              <div>
-                <label className={labelCls}>Requested Device ID</label>
-                <input
-                  readOnly
-                  value={resolvedNewDeviceId}
-                  className={`${inputCls} font-mono select-all`}
-                />
+              {/* Current / Requested device */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className={boxCls}>
+                  <p className={labelCls}>Current Device</p>
+                  <p
+                    className={`${valueCls} font-medium`}
+                    title={data.oldDevice || data.device}
+                  >
+                    {data.oldDevice || data.device || "None"}
+                  </p>
+                </div>
+                <div className={boxCls}>
+                  <p className={labelCls}>Requested Device</p>
+                  <p
+                    className={`${valueCls} font-medium`}
+                    title={data.newDevice}
+                  >
+                    {data.newDevice || "None"}
+                  </p>
+                </div>
               </div>
-            )}
 
-            <div>
-              <label className={labelCls}>Detected</label>
-              <input readOnly value={detectedText} className={inputCls} />
+              {/* Device IDs */}
+              {(resolvedCurrentDeviceId || resolvedNewDeviceId) && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {resolvedCurrentDeviceId && (
+                    <div className={boxCls}>
+                      <p className={labelCls}>Current Device ID</p>
+                      <p className={`${valueCls} font-mono select-all`}>
+                        {resolvedCurrentDeviceId}
+                      </p>
+                    </div>
+                  )}
+                  {resolvedNewDeviceId && (
+                    <div className={boxCls}>
+                      <p className={labelCls}>Requested Device ID</p>
+                      <p className={`${valueCls} font-mono select-all`}>
+                        {resolvedNewDeviceId}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
-            <div>
-              <label className={labelCls}>Status</label>
-              <input readOnly value={data.status || ""} className={inputCls} />
-            </div>
-          </div>
+            {/* ---------- RIGHT: REQUEST INFO ---------- */}
+            <div className="border border-gray-200 rounded-lg p-4 self-start min-w-0 space-y-4">
+              {/* Title + status */}
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-[13px] font-medium text-gray-800">
+                  Request Details
+                </p>
+                <span
+                  className={`px-3 py-1 rounded-full text-[11px] capitalize whitespace-nowrap ${getStatusBadge(status)}`}
+                >
+                  {status}
+                </span>
+              </div>
 
-          {/* REMARKS */}
-          {status === "pending" && (
-            <div>
-              <label className={labelCls}>Action Remarks</label>
-              <textarea
-                rows="3"
-                value={remarks}
-                onChange={(e) => setRemarks(e.target.value)}
-                placeholder="Provide operation review log audit notes here..."
-                className="w-full border p-3 rounded-2xl bg-white text-gray-700 focus:outline-none focus:border-gray-900 resize-none"
-                required
-              />
-            </div>
-          )}
+              <div className={boxCls}>
+                <p className={labelCls}>Detected</p>
+                <p className={`${valueCls} tabular-nums`}>{detectedText}</p>
+              </div>
 
-          {/* FOOTER */}
-          <div className="flex justify-between items-center border-t border-gray-50 pt-4 gap-3">
-            <div className="flex flex-col gap-0.5 text-gray-600">
+              <div className={boxCls}>
+                <p className={labelCls}>User UUID</p>
+                <p className={`${valueCls} font-mono`}>
+                  #{data.user_uuid ?? ""}
+                </p>
+              </div>
+
+              {/* Approved info */}
               {status === "approved" &&
-                (resolvedApprovedAt || resolvedApprovedByName) && (
-                  <>
+                (resolvedApprovedByName || resolvedApprovedAt) && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {resolvedApprovedByName && (
-                      <div>
-                        <span>Approved By: </span>
-                        <span className="font-semibold text-gray-900">
-                          {resolvedApprovedByName}
-                        </span>
+                      <div className={boxCls}>
+                        <p className={labelCls}>Approved By</p>
+                        <p className={valueCls}>{resolvedApprovedByName}</p>
                       </div>
                     )}
                     {resolvedApprovedAt && (
-                      <div>
-                        <span>Approved At: </span>
-                        <span className="font-semibold text-gray-900">
+                      <div className={boxCls}>
+                        <p className={labelCls}>Approved At</p>
+                        <p className={`${valueCls} tabular-nums`}>
                           {resolvedApprovedAt}
-                        </span>
+                        </p>
                       </div>
                     )}
-                  </>
+                  </div>
                 )}
-            </div>
 
-            <div className="flex gap-3">
-              {status === "pending" ? (
-                <>
-                  <button
-                    type="button"
-                    disabled={submitting}
-                    onClick={() => handleStatusAction("rejected")}
-                    className="px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-2xl disabled:opacity-60 transition-colors"
-                  >
-                    {submitting && actionType === "rejected" && spinner}
-                    Reject
-                  </button>
-
-                  <button
-                    type="button"
-                    disabled={submitting}
-                    onClick={() => handleStatusAction("approved")}
-                    className="px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-2xl disabled:opacity-60 transition-colors"
-                  >
-                    {submitting && actionType === "approved" && spinner}
-                    Approve
-                  </button>
-                </>
-              ) : (
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="px-6 py-2.5 border border-gray-200 text-gray-600 hover:bg-gray-50 rounded-2xl transition-colors"
-                >
-                  Close
-                </button>
+              {/* Remarks (pending only) */}
+              {status === "pending" && (
+                <div>
+                  <p className={labelCls}>Action Remarks</p>
+                  <textarea
+                    className="w-full h-24 px-3 py-2.5 text-[13px] text-gray-800 placeholder-gray-400 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-black focus:border-black resize-none"
+                    placeholder="Provide operation review log audit notes here..."
+                    value={remarks}
+                    onChange={(e) => setRemarks(e.target.value)}
+                    required
+                  />
+                </div>
               )}
             </div>
           </div>
+        </div>
+
+        {/* FOOTER */}
+        <div className="px-6 py-4 border-t border-gray-100 bg-slate-50/60 flex justify-end gap-2">
+          {status === "pending" ? (
+            <>
+              <ModalButton
+                variant="danger"
+                onClick={() => handleStatusAction("rejected")}
+                disabled={submitting}
+                loading={submitting && actionType === "rejected"}
+              >
+                Reject
+              </ModalButton>
+
+              <ModalButton
+                variant="primary"
+                onClick={() => handleStatusAction("approved")}
+                disabled={submitting}
+                loading={submitting && actionType === "approved"}
+              >
+                Approve
+              </ModalButton>
+            </>
+          ) : (
+            <ModalButton variant="secondary" onClick={handleClose}>
+              Close
+            </ModalButton>
+          )}
         </div>
       </div>
     </div>

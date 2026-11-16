@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import toast, { Toaster } from "react-hot-toast";
 
 // Components
 import DeviceApprovalModal from "../../ui/devicestatusmodal";
@@ -9,19 +8,14 @@ import DeviceApprovalModal from "../../ui/devicestatusmodal";
 // Services
 import { fetchDeviceChangeRequests } from "../../service/deviceService";
 
+// Toast helpers (backend message + data)
+import { showApiError } from "../../utils/apiToast";
+
 const statusColors = {
   Pending: "bg-yellow-100 text-yellow-700",
   Approved: "bg-green-100 text-green-600",
   Rejected: "bg-red-100 text-red-600",
 };
-
-/* ================= TOAST HELPER (all backend messages go through here) ================= */
-const getErrorMessage = (err, fallback) =>
-  err?.response?.data?.message ||
-  err?.response?.data?.error ||
-  (typeof err?.response?.data?.data === "string" && err.response.data.data) ||
-  err?.message ||
-  fallback;
 
 /* ================= HELPERS ================= */
 // "2026-10-20T09:00:00Z" -> "20/10/2026" (UTC, so the date never shifts)
@@ -149,7 +143,8 @@ export default function DeviceRequestTab() {
 
       setData(transformed);
     } catch (err) {
-      toast.error(getErrorMessage(err, "Failed to load device requests"));
+      // Backend message + data (or error) in one toast
+      showApiError(err, "Failed to load device requests");
     } finally {
       setLoading(false);
     }
@@ -193,8 +188,6 @@ export default function DeviceRequestTab() {
 
   return (
     <div className="bg-[#f9fafb] rounded-xl p-4 border border-gray-100 shadow-sm w-full">
-      <Toaster position="top-right" />
-
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-sm font-semibold text-gray-800">
           Device Change Requests

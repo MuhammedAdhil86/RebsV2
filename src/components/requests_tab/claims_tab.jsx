@@ -7,38 +7,12 @@ import {
 } from "../../service/companyService";
 import { FiPaperclip, FiChevronDown, FiChevronUp } from "react-icons/fi";
 import ViewClaimModal from "../../ui/claimapprovemodal";
+import { showApiToast, showApiError, getApiBody } from "../../utils/apiToast";
 
 const statusColors = {
   Approved: "bg-green-100 text-green-600",
   Rejected: "bg-red-100 text-red-600",
   Pending: "bg-yellow-100 text-yellow-700",
-};
-
-/* ================= TOAST HELPERS (all backend messages go through here) ================= */
-const getErrorMessage = (err, fallback) =>
-  err?.response?.data?.message ||
-  err?.response?.data?.error ||
-  (typeof err?.response?.data?.data === "string" && err.response.data.data) ||
-  err?.message ||
-  fallback;
-
-// Success message from the backend response (works for plain or axios-style responses)
-const getSuccessMessage = (res, fallback) =>
-  (typeof res?.message === "string" && res.message) ||
-  (typeof res?.data?.message === "string" && res.data.message) ||
-  fallback;
-
-// Turns a loading toast into a success / error toast (react-toastify way)
-const finishToast = (id, type, message) => {
-  toast.update(id, {
-    render: message,
-    type,
-    isLoading: false,
-    autoClose: 4000,
-    closeOnClick: true,
-    closeButton: true,
-    draggable: true,
-  });
 };
 
 /* ================= SHARED ALIGNMENT (used by BOTH <th> and <td>) ================= */
@@ -128,9 +102,8 @@ export default function ClaimsRequestTab() {
 
       setData(transformed);
     } catch (err) {
-      toast.error(getErrorMessage(err, "Failed to load company claims data."), {
-        toastId: "claims-load-error",
-      });
+      // Backend message + data (or error) in one toast
+      showApiError(err, "Failed to load company claims data.");
     } finally {
       setLoading(false);
     }
@@ -145,28 +118,39 @@ export default function ClaimsRequestTab() {
   };
 
   // --- TRIGGERED FROM MODAL SUBMIT BUTTONS ---
-  const handleStatusUpdate = async (id, action) => {
+  // action: "Approved" | "Rejected"
+  // payoutMethod: "hand" | "payroll" | "voucher" (required only when approving)
+  const handleStatusUpdate = async (id, action, payoutMethod) => {
     if (submittingModal) return;
+
+    if (action === "Approved" && !payoutMethod) {
+      toast.error("Please select a payout method before approving.");
+      return;
+    }
+
     setSubmittingModal(true);
     const tid = toast.loading("Updating claim...");
     try {
-      const res = await updateCompanyClaimStatus(id, action);
-      finishToast(
-        tid,
+      const res = await updateCompanyClaimStatus(id, action, payoutMethod);
+      const body = getApiBody(res);
+
+      const voucher = body?.data?.voucher_code ?? res?.data?.voucher_code;
+
+      // Backend message as title; voucher code shown underneath
+      showApiToast(
         "success",
-        getSuccessMessage(
-          res,
+        body?.message ||
           `Claim #${id} has been successfully ${action.toLowerCase()}!`,
-        ),
+        voucher ? `Voucher code: ${voucher}` : undefined,
+        tid,
+        voucher ? 15000 : 5000, // keep voucher code on screen longer
       );
+
       setSelectedClaim(null);
       fetchData(); // Reload table data with fresh backend values
     } catch (err) {
-      finishToast(
-        tid,
-        "error",
-        getErrorMessage(err, `Failed to update status to ${action}`),
-      );
+      // Backend message + data (or error) in the same loading toast
+      showApiError(err, `Failed to update status to ${action}`, tid);
     } finally {
       setSubmittingModal(false);
     }

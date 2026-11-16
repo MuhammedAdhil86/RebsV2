@@ -1,8 +1,54 @@
 import React, { useState, useEffect } from "react";
-import { X, Clock, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Icon } from "@iconify/react";
 import { toast } from "react-toastify";
 
 import { addregularize } from "../service/employeeService";
+import axiosInstance from "../service/axiosinstance";
+import ModalButton from "./button/modalbutton";
+
+// ---------- TOAST HELPERS (backend message + data in one toast) ----------
+const formatDetail = (detail) => {
+  if (detail === null || detail === undefined || detail === "") return "";
+  if (Array.isArray(detail)) return detail.map(formatDetail).join(", ");
+  if (typeof detail === "object") {
+    return Object.entries(detail)
+      .map(([k, v]) => `${k}: ${formatDetail(v)}`)
+      .join(" | ");
+  }
+  return String(detail);
+};
+
+const showApiToast = (type, message, detail) => {
+  const detailText = formatDetail(detail);
+
+  toast[type](
+    <div>
+      <div>{message}</div>
+      {detailText && (
+        <div className="mt-1 text-[12px] font-normal text-gray-600 break-words">
+          {detailText}
+        </div>
+      )}
+    </div>,
+    { autoClose: 5000 },
+  );
+};
+
+// Works whether the service returns the axios response, the body, or nothing
+const getApiBody = (res) =>
+  res?.data?.message !== undefined || res?.data?.status_code !== undefined
+    ? res.data
+    : res;
+
+// Pulls message + data out of an error (backend response first)
+const showApiError = (error, fallback) => {
+  const errBody = error?.response?.data;
+  showApiToast(
+    "error",
+    errBody?.message || errBody?.error || error?.message || fallback,
+    errBody?.data ?? (errBody?.message ? errBody?.error : undefined),
+  );
+};
 
 /* Read "HH:MM" straight from the ISO string (same approach as the table).
    No Date object, so no timezone shift. */
@@ -27,6 +73,7 @@ const ViewRegularizationModal = ({
   const [outTime, setOutTime] = useState("");
   const [remarks, setRemarks] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [action, setAction] = useState(""); // "approve" | "reject" (which button shows the spinner)
 
   // Initialize form fields from the selected row
   useEffect(() => {
@@ -43,6 +90,20 @@ const ViewRegularizationModal = ({
     }
   }, [open, data]);
 
+  const handleClose = () => {
+    if (!submitting && onClose) onClose();
+  };
+
+  // Close with the Escape key
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e) => {
+      if (e.key === "Escape" && !submitting && onClose) onClose();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open, onClose, submitting]);
+
   if (!open || !data) return null;
 
   // Show the Punch OUT field only when the fetched data actually has an out time
@@ -57,9 +118,16 @@ const ViewRegularizationModal = ({
     ? data.raw_data.in_date.Time.split("T")[0]
     : new Date().toISOString().split("T")[0];
 
+  // Already rejected -> no Reject button
+  const currentStatus = String(data.status || "").toLowerCase();
+  const showReject = currentStatus !== "rejected";
+
+  // ---------- APPROVE (Apply) ----------
   const handleSubmitApproval = async (e) => {
     e.preventDefault();
+    if (submitting) return;
     setSubmitting(true);
+    setAction("approve");
 
     try {
       const apiItem = data.raw_data || {};
@@ -91,21 +159,23 @@ const ViewRegularizationModal = ({
         onOptimisticUpdate(data.id, "approved");
       }
 
-      await addregularize(trackingIdentifier, targetDateStr, payloadBody);
+      const res = await addregularize(
+        trackingIdentifier,
+        targetDateStr,
+        payloadBody,
+      );
+      const body = getApiBody(res);
 
-      toast.success("Attendance successfully regularized!");
+      showApiToast(
+        "success",
+        body?.message || "Attendance successfully regularized!",
+      );
       if (onSuccess) onSuccess();
       if (onClose) onClose(); // close the modal after a successful save
     } catch (error) {
       console.error("Submission action caught error failure:", error);
 
-      const backendMessage =
-        error.response?.data?.message ||
-        error.response?.data?.error ||
-        error.message ||
-        "Failed to update record regularization.";
-
-      toast.error(backendMessage);
+      showApiError(error, "Failed to update record regularization.");
 
       // Revert optimistic state
       if (onOptimisticUpdate) {
@@ -113,51 +183,128 @@ const ViewRegularizationModal = ({
       }
     } finally {
       setSubmitting(false);
+      setAction("");
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-[999999] flex items-center justify-center p-4">
-      {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-        onClick={onClose}
-      />
+  // ---------- REJECT ----------
+  const handleReject = async () => {
+    if (submitting) return;
+    setSubmitting(true);
+    setAction("reject");
 
-      {/* Modal card */}
+    const previousStatus = data.status || "pending";
+
+    try {
+      onOptimisticUpdate?.(data.id, "rejected");
+
+      const res = await axiosInstance.put(
+        "/admin/attendance/regularize/approval",
+        {
+          request_id: data.raw_data?.id ?? data.id,
+          status: "rejected",
+          remarks: remarks || "Admin rejected regularization",
+        },
+      );
+      const body = getApiBody(res);
+
+      showApiToast(
+        "success",
+        body?.message || "Regularization rejected successfully",
+      );
+      if (onSuccess) onSuccess();
+      if (onClose) onClose();
+    } catch (error) {
+      console.error("Reject action failed:", error);
+
+      showApiError(error, "Failed to reject regularization.");
+
+      // Revert optimistic state
+      onOptimisticUpdate?.(data.id, previousStatus);
+    } finally {
+      setSubmitting(false);
+      setAction("");
+    }
+  };
+
+  // ---------- Theme styles (same as Leave Request / Regularization modals) ----------
+  const labelCls = "text-[11px] text-gray-500 mb-1";
+  const boxCls = "bg-slate-50 border border-gray-200 px-4 py-3 rounded-lg";
+  const valueCls = "text-[13px] text-gray-800 break-words";
+  const inputCls =
+    "w-full px-3 py-2.5 text-[13px] text-gray-800 placeholder-gray-400 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-black focus:border-black tabular-nums";
+
+  return (
+    <div
+      className="fixed inset-0 z-[999999] flex items-center justify-center px-4 bg-black/50 backdrop-blur-[2px] font-poppins text-[12px]"
+      onClick={handleClose}
+    >
       <form
         onSubmit={handleSubmitApproval}
-        className="relative w-full max-w-md transform overflow-hidden rounded-xl bg-white p-6 shadow-2xl transition-all border border-gray-100 animate-in fade-in zoom-in-95 duration-200"
+        onClick={(e) => e.stopPropagation()}
+        className="bg-white w-full max-w-[640px] max-h-[90vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in duration-200"
       >
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-gray-100 pb-3 mb-4">
-          <div className="flex items-center gap-2">
-            <div className="p-1.5 bg-gray-50 rounded-lg text-gray-800">
-              <Clock className="w-4 h-4" />
+        {/* HEADER */}
+        <div className="flex items-start justify-between gap-3 px-6 pt-5 pb-4 border-b border-gray-100">
+          <div className="flex items-start gap-3">
+            <span className="p-2 bg-slate-100 rounded-lg">
+              <Icon
+                icon="solar:clock-circle-outline"
+                className="w-5 h-5 text-black"
+              />
+            </span>
+            <div>
+              <h2 className="text-[16px] text-gray-900">
+                Approve Regularization
+              </h2>
+              <p className="text-[11px] text-gray-500 mt-0.5">
+                Review the punch times and apply the regularization
+              </p>
             </div>
-            <h3 className="text-base font-semibold text-gray-900">
-              Approve Regularization
-            </h3>
           </div>
           <button
             type="button"
-            onClick={onClose}
-            className="rounded-lg p-1 text-gray-400 hover:bg-gray-50 hover:text-gray-600"
+            onClick={handleClose}
+            aria-label="Close"
+            disabled={submitting}
+            className="text-gray-400 hover:text-black transition-colors disabled:opacity-50"
           >
-            <X className="w-5 h-5" />
+            <Icon icon="material-symbols:close" className="w-6 h-6" />
           </button>
         </div>
 
-        <div className="space-y-4">
+        {/* BODY */}
+        <div className="px-6 py-5 space-y-4 overflow-y-auto">
           {/* Employee info */}
-          <div className="p-3 bg-gray-50 rounded-lg border border-gray-100 flex justify-between items-center text-xs">
-            <div>
-              <p className="font-medium text-gray-900">{data.name}</p>
-              <p className="text-gray-500 text-[11px]">{data.designation}</p>
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 bg-slate-100 border border-gray-200 rounded-full flex items-center justify-center text-[15px] text-gray-700 uppercase">
+                {data.name && data.name.charAt(0)}
+              </div>
+              <div>
+                <h3 className="text-[14px] font-medium text-gray-800 leading-tight">
+                  {data.name}
+                </h3>
+                <p className="text-[12px] text-gray-500">{data.designation}</p>
+              </div>
             </div>
-            <span className="font-mono bg-gray-200/80 px-2 py-0.5 rounded text-gray-700">
+            <span className="px-3 py-1 rounded-full text-[11px] bg-gray-100 text-gray-700 tabular-nums whitespace-nowrap">
               REQ #{data.raw_data?.id || data.id}
             </span>
+          </div>
+
+          {/* Date / Shift */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className={boxCls}>
+              <p className={labelCls}>Target Date</p>
+              <p className={`${valueCls} tabular-nums`}>{data.date}</p>
+            </div>
+            <div className={boxCls}>
+              <p className={labelCls}>Shift</p>
+              <p className={valueCls}>
+                {shiftData?.shift_name || "Standard Shift"}
+              </p>
+            </div>
           </div>
 
           {/* Time inputs */}
@@ -165,79 +312,69 @@ const ViewRegularizationModal = ({
             className={`grid gap-3 ${hasOutTime ? "grid-cols-2" : "grid-cols-1"}`}
           >
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">
-                Modify Punch IN
-              </label>
+              <p className={labelCls}>Modify Punch IN</p>
               <input
                 type="time"
                 value={inTime}
                 onChange={(e) => setInTime(e.target.value)}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-gray-900 font-mono"
+                className={inputCls}
               />
             </div>
             {hasOutTime && (
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">
-                  Modify Punch OUT
-                </label>
+                <p className={labelCls}>Modify Punch OUT</p>
                 <input
                   type="time"
                   value={outTime}
                   onChange={(e) => setOutTime(e.target.value)}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-gray-900 font-mono"
+                  className={inputCls}
                 />
               </div>
             )}
           </div>
 
-          {/* Date / shift info */}
-          <div className="bg-gray-50/50 p-2.5 rounded-lg border border-gray-100 flex items-center gap-2 text-xs text-gray-600">
-            <AlertCircle className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-            <span>
-              Target Date Scope:{" "}
-              <strong className="text-gray-800">{data.date}</strong> (
-              {shiftData?.shift_name || "Standard Shift"})
-            </span>
-          </div>
-
           {/* Remarks */}
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">
-              Approval Remarks
-            </label>
+            <p className={labelCls}>Approval Remarks</p>
             <textarea
-              rows={2}
+              className="w-full h-24 px-3 py-2.5 text-[13px] text-gray-800 placeholder-gray-400 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-black focus:border-black resize-none"
+              placeholder="Type your remarks here..."
               value={remarks}
               onChange={(e) => setRemarks(e.target.value)}
-              placeholder="Provide comments logged to transaction log audits..."
-              className="w-full border border-gray-200 rounded-lg p-2.5 text-xs bg-white focus:outline-none focus:border-gray-900 resize-none"
               required
             />
           </div>
         </div>
 
-        {/* Actions */}
-        <div className="mt-6 pt-3 border-t border-gray-100 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
+        {/* FOOTER */}
+        <div className="px-6 py-4 border-t border-gray-100 bg-slate-50/60 flex justify-end gap-2">
+          <ModalButton
+            variant="secondary"
+            onClick={handleClose}
             disabled={submitting}
-            className="px-4 py-2 bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 rounded-lg text-xs font-medium transition-colors"
           >
             Cancel
-          </button>
-          <button
+          </ModalButton>
+
+          {showReject && (
+            <ModalButton
+              variant="danger"
+              onClick={handleReject}
+              disabled={submitting}
+              loading={submitting && action === "reject"}
+            >
+              Reject
+            </ModalButton>
+          )}
+
+          <ModalButton
+            variant="primary"
             type="submit"
             disabled={submitting}
-            className="flex items-center gap-1.5 px-4 py-2 bg-black hover:bg-gray-800 disabled:bg-gray-400 text-white rounded-lg text-xs font-medium transition-colors"
+            loading={submitting && action === "approve"}
           >
-            {submitting ? (
-              <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-            ) : (
-              <CheckCircle2 className="w-3.5 h-3.5" />
-            )}
             Apply
-          </button>
+          </ModalButton>
         </div>
       </form>
     </div>
