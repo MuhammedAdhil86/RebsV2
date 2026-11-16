@@ -6,16 +6,14 @@ import {
   verifyForgotPasswordOTP,
   finalizeForgotPassword,
 } from "../service/authservice";
-import toast, { Toaster } from "react-hot-toast";
+import { toast } from "react-toastify";
 
 export default function OtpUi() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // --- Background Context ---
   const emailFromProps = location.state?.email || "";
 
-  // --- UI States ---
   const [otp, setOtp] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -43,7 +41,11 @@ export default function OtpUi() {
     },
   ];
 
-  // --- Auto Slide Logic ---
+  // If the page is opened directly (refresh / no email), go back to step 1
+  useEffect(() => {
+    if (!emailFromProps) navigate("/forgetpass", { replace: true });
+  }, [emailFromProps, navigate]);
+
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentSlide((prev) => (prev === slides.length - 1 ? 0 : prev + 1));
@@ -51,24 +53,19 @@ export default function OtpUi() {
     return () => clearInterval(timer);
   }, [slides.length]);
 
-  // --- OTP Input Handler (Numeric 4-Digit Only) ---
   const handleOtpChange = (e) => {
     const val = e.target.value.replace(/\D/g, "");
-    if (val.length <= 4) {
-      setOtp(val);
-    }
+    if (val.length <= 4) setOtp(val);
   };
 
-  // --- Step 1: Verify OTP ---
   const handleVerifyOtp = async () => {
     if (otp.length !== 4) return toast.error("Please enter the 4-digit OTP");
     setLoading(true);
     try {
-      const payload = { username: emailFromProps, otp: otp };
+      const payload = { username: emailFromProps, otp };
       const response = await verifyForgotPasswordOTP(payload);
 
       if (response.status_code === 200) {
-        // ✅ SAVE TOKEN: This is used by the finalize service
         if (response.data?.token) {
           localStorage.setItem("resetToken", response.data.token);
         }
@@ -84,19 +81,18 @@ export default function OtpUi() {
     }
   };
 
-  // --- Step 2: Finalize Password ---
   const handleFinalReset = async () => {
     if (!newPassword) return toast.error("Please enter a new password");
     setLoading(true);
     try {
-      // Body matches Postman: { "password": "..." }
-      const payload = { password: newPassword };
-      const response = await finalizeForgotPassword(payload);
+      const response = await finalizeForgotPassword({ password: newPassword });
 
       if (response.status_code === 200) {
         toast.success("Password updated successfully!");
-        localStorage.removeItem("resetToken"); // Cleanup
+        localStorage.removeItem("resetToken");
         setTimeout(() => navigate("/"), 2000);
+      } else {
+        toast.error(response.message || "Reset failed.");
       }
     } catch (error) {
       toast.error(
@@ -110,14 +106,14 @@ export default function OtpUi() {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    isOtpVerified ? handleFinalReset() : handleVerifyOtp();
+    if (isOtpVerified) handleFinalReset();
+    else handleVerifyOtp();
   };
 
   return (
     <div className="w-full h-screen bg-black flex justify-center items-center p-4 font-poppins text-[12px]">
-      <Toaster position="top-right" />
       <div className="flex h-full w-full rounded-2xl overflow-hidden shadow-2xl">
-        {/* ---------- Left Panel (Slideshow) ---------- */}
+        {/* Left Panel */}
         <div className="relative w-[55%] overflow-hidden rounded-l-2xl">
           <img
             src={mainImage}
@@ -156,14 +152,14 @@ export default function OtpUi() {
 
         <div className="w-2 bg-black"></div>
 
-        {/* ---------- Right Panel (Form) ---------- */}
+        {/* Right Panel */}
         <div className="w-[45%] bg-white rounded-r-2xl flex flex-col justify-between p-12">
           <div className="flex-grow flex items-center justify-center">
             <div className="w-full max-w-sm">
               <div className="flex items-center mb-8">
                 <div
                   className="flex items-center cursor-pointer group"
-                  onClick={() => navigate("/forgot-password")}
+                  onClick={() => navigate("/forgetpass")}
                 >
                   <HiChevronLeft
                     className="text-slate-400 group-hover:text-black transition-colors"
@@ -177,7 +173,7 @@ export default function OtpUi() {
               </div>
 
               <p className="text-slate-500 mb-10 leading-relaxed font-normal">
-                <span className="font-bold text-slate-900 italic ">
+                <span className="font-bold text-slate-900 italic">
                   Target Account:
                 </span>{" "}
                 {emailFromProps || "User"}
@@ -207,7 +203,7 @@ export default function OtpUi() {
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
                       placeholder="New Password"
-                      className="w-full text-slate-900 border-b border-slate-200 focus:outline-none focus:border-black bg-transparent py-2 font-medium animate-in fade-in"
+                      className="w-full text-slate-900 border-b border-slate-200 focus:outline-none focus:border-black bg-transparent py-2 font-medium"
                       required
                       disabled={loading}
                       autoFocus

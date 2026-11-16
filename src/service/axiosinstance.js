@@ -18,6 +18,12 @@ const stripJsonContentTypeForFormData = (config) => {
   return config;
 };
 
+// Login / password-reset endpoints: never auto-logout or redirect on these.
+// These words must appear in the URLs used in service/authservice.js.
+const PUBLIC_URL_PARTS = ["login", "forgot", "otp", "reset"];
+const isPublicUrl = (url = "") =>
+  PUBLIC_URL_PARTS.some((part) => url.toLowerCase().includes(part));
+
 const axiosInstance = axios.create({
   // Using the proxy prefix from vite.config.js
   baseURL: "/api_v1",
@@ -28,8 +34,12 @@ const axiosInstance = axios.create({
 // -------------------- Request Interceptor --------------------
 axiosInstance.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem("authToken");
-    // Automatically inject Bearer token if it exists
+    const authToken = localStorage.getItem("authToken");
+    const resetToken = localStorage.getItem("resetToken");
+
+    // During the reset flow, use the temporary reset token
+    const token = isPublicUrl(config.url) ? resetToken || authToken : authToken;
+
     if (token) {
       config.headers["Authorization"] = `Bearer ${token}`;
     }
@@ -43,19 +53,24 @@ axiosInstance.interceptors.request.use(
 // -------------------- Response Interceptor --------------------
 axiosInstance.interceptors.response.use(
   (response) => {
-    // Optional: Auto-update token if backend sends a refreshed one
+    // Auto-update token if backend sends a refreshed one,
+    // but never let a reset-flow token overwrite the real login token
     const newToken = response.data?.token;
-    if (newToken) {
+    if (newToken && !isPublicUrl(response.config?.url)) {
       localStorage.setItem("authToken", newToken);
     }
     return response;
   },
   (error) => {
     const requestUrl = error.config?.url || "";
+    const hadSession = !!localStorage.getItem("authToken");
 
-    // 401 Unauthorized Handling
-    if (error.response?.status === 401) {
-      /* Logic: If we get a 401, clear storage and redirect to login. */
+    // 401 handling: only for a logged-in user on a private endpoint
+    if (
+      error.response?.status === 401 &&
+      hadSession &&
+      !isPublicUrl(requestUrl)
+    ) {
       console.error(
         "Unauthorized request. Redirecting to login...",
         requestUrl,
@@ -68,6 +83,7 @@ axiosInstance.interceptors.response.use(
       }
     }
 
+    // Always let the component's catch block show the toast
     return Promise.reject(error);
   },
 );

@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
 import { Link, useNavigate } from "react-router-dom";
-import toast, { Toaster } from "react-hot-toast";
+import { toast } from "react-toastify";
 import mainImage from "../assets/img/rebs_login.png";
-import logoImage from "../assets/img/Picture1.png"; // <-- Add your logo here
+import logoImage from "../assets/img/Picture1.png";
 import { useAuthStore } from "../store/authStore";
 import { UserLogin } from "../repos/userRepo";
 
@@ -46,50 +46,38 @@ export default function LoginUI() {
     },
   ];
 
-  // Slide auto-change
   useEffect(() => {
     const interval = setInterval(() => {
       setCurrentSlide((prev) => (prev + 1) % slides.length);
     }, 5000);
     return () => clearInterval(interval);
-  }, []);
+  }, [slides.length]);
 
-  // Remember email
   useEffect(() => {
     const savedEmail = localStorage.getItem("rememberEmail");
     if (savedEmail) setEmail(savedEmail);
   }, []);
 
-  // Handle login
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
     try {
-      // Correct payload: username instead of email
-      console.log("Logging in with:", { username: email, password });
+      // (password is no longer logged to the console)
       const data = await UserLogin({ username: email, password });
 
-      // Save auth in store
       login(data.data.token, data.data.user);
 
-      // Remember email
       if (rememberMe) {
         localStorage.setItem("rememberEmail", email);
       } else {
         localStorage.removeItem("rememberEmail");
       }
 
-      toast.success("Login Successful!", { duration: 3000 });
+      toast.success("Login Successful!");
       navigate("/dashboard");
     } catch (err) {
-      console.error("Full Axios error:", err);
       const backendMessage = err.response?.data?.message;
-      if (backendMessage) {
-        toast.error(backendMessage);
-        console.log("Backend message:", backendMessage);
-      } else {
-        toast.error(err.message);
-      }
+      toast.error(backendMessage || err.message);
     } finally {
       setLoading(false);
     }
@@ -128,7 +116,9 @@ export default function LoginUI() {
                   <span
                     key={index}
                     onClick={() => setCurrentSlide(index)}
-                    className={`w-2 h-2 rounded-full cursor-pointer ${currentSlide === index ? "bg-white" : "bg-gray-400"}`}
+                    className={`w-2 h-2 rounded-full cursor-pointer ${
+                      currentSlide === index ? "bg-white" : "bg-gray-400"
+                    }`}
                   ></span>
                 ))}
               </div>
@@ -144,7 +134,6 @@ export default function LoginUI() {
           <div className="bg-white w-full h-full flex flex-col">
             <div className="flex-grow flex justify-center items-center px-6 md:px-8 lg:px-12">
               <div className="w-full max-w-md transform scale-90 p-6">
-                {/* Logo - Adjusted to move 5px to the left */}
                 <div className="mb-4 flex justify-start relative -left-[5px]">
                   <img
                     src={logoImage}
@@ -201,12 +190,16 @@ export default function LoginUI() {
                   <div className="flex items-center justify-between text-sm">
                     <div className="flex items-center">
                       <input
+                        id="rememberMe"
                         type="checkbox"
                         checked={rememberMe}
                         onChange={() => setRememberMe(!rememberMe)}
                         className="h-4 w-4 bg-white text-black border-gray-300 rounded accent-black focus:ring-black"
                       />
-                      <label className="ml-2 block text-gray-700 font-sans">
+                      <label
+                        htmlFor="rememberMe"
+                        className="ml-2 block text-gray-700 font-sans"
+                      >
                         Remember me
                       </label>
                     </div>

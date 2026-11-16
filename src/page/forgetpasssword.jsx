@@ -3,7 +3,7 @@ import { HiChevronLeft } from "react-icons/hi";
 import mainImage from "../assets/img/rebs_login.png";
 import { useNavigate } from "react-router-dom";
 import { requestPasswordResetEmail } from "../service/authservice";
-import toast from "react-hot-toast";
+import { toast } from "react-toastify";
 
 export default function ForgotPasswordUI() {
   const navigate = useNavigate();
@@ -39,7 +39,6 @@ export default function ForgotPasswordUI() {
     },
   ];
 
-  // ✅ Auto-slide logic for left panel
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentSlide((prev) => (prev === slides.length - 1 ? 0 : prev + 1));
@@ -54,21 +53,19 @@ export default function ForgotPasswordUI() {
     submittingRef.current = true;
     setLoading(true);
     try {
-      // payload: { email: "user@example.com" }
       const response = await requestPasswordResetEmail({ email });
 
       if (response.status_code === 200 || response.success) {
-        toast.success(response.message, { id: "forgot-password-toast" });
-        // ✅ Navigate to OTP page, passing the email in state for the next step
+        toast.success(response.message, { toastId: "forgot-password-toast" });
         setTimeout(() => {
           navigate("/otp", { state: { email } });
         }, 1000);
       } else {
-        toast.error(response.message, { id: "forgot-password-toast" });
+        toast.error(response.message, { toastId: "forgot-password-toast" });
       }
     } catch (error) {
       toast.error(error.response?.data?.message || error.message, {
-        id: "forgot-password-toast",
+        toastId: "forgot-password-toast",
       });
     } finally {
       setLoading(false);
@@ -78,9 +75,8 @@ export default function ForgotPasswordUI() {
 
   return (
     <div className="w-full h-screen bg-black flex justify-center items-center p-4 font-sans">
-      {/* Toaster removed: the global one in App.jsx is used */}
       <div className="flex h-full w-full rounded-2xl overflow-hidden">
-        {/* ---------- Left panel ---------- */}
+        {/* Left panel */}
         <div className="relative w-[55%] overflow-hidden rounded-l-2xl">
           <img
             src={mainImage}
@@ -106,7 +102,6 @@ export default function ForgotPasswordUI() {
                 </div>
               ))}
 
-              {/* Dots */}
               <div className="absolute bottom-16 left-1/2 transform -translate-x-1/2 flex gap-2">
                 {slides.map((_, index) => (
                   <span
@@ -121,7 +116,6 @@ export default function ForgotPasswordUI() {
                 ))}
               </div>
 
-              {/* Website */}
               <div className="absolute bottom-2 left-2 text-white text-sm opacity-60">
                 www.rebs.in
               </div>
@@ -129,7 +123,7 @@ export default function ForgotPasswordUI() {
           </div>
         </div>
 
-        {/* ---------- Right panel ---------- */}
+        {/* Right panel */}
         <div className="w-[45%] bg-white rounded-r-2xl flex flex-col justify-between">
           <div className="flex-grow flex justify-center items-center px-6 md:px-8 lg:px-12">
             <div className="w-full max-w-md transform scale-90 p-6">
