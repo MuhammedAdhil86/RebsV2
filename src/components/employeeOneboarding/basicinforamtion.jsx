@@ -18,16 +18,6 @@ const initialFormData = {
   image: null,
 };
 
-// The 6 text fields that must be filled before the payroll area appears
-const REQUIRED_FOR_PAYROLL = [
-  "first_name",
-  "last_name",
-  "nick_name",
-  "email",
-  "ph_no",
-  "basic_salary",
-];
-
 // Profile photo: only these image types are accepted, then converted to WebP
 const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
@@ -40,6 +30,56 @@ const formatCalcType = (type) =>
   String(type || "-")
     .replace(/_/g, " ")
     .replace(/^\w/, (c) => c.toUpperCase());
+
+/* ---------- Data helpers ---------- */
+
+// Templates may come back as [], {data: []}, {data:{data: []}} or {templates: []}
+const toList = (res) => {
+  if (Array.isArray(res)) return res;
+  if (Array.isArray(res?.data)) return res.data;
+  if (Array.isArray(res?.data?.data)) return res.data.data;
+  if (Array.isArray(res?.templates)) return res.templates;
+  return [];
+};
+
+// Payroll result may be wrapped in one or more { data: ... } layers
+const unwrapPayroll = (res) => {
+  let d = res;
+  for (let i = 0; i < 3; i++) {
+    const isResult =
+      d &&
+      typeof d === "object" &&
+      ("mappings" in d || "total_annual_ctc" in d);
+    if (!isResult && d?.data && typeof d.data === "object") d = d.data;
+    else break;
+  }
+  return d;
+};
+
+// Keep only digits and one decimal point ("12,00,000" -> "1200000")
+const sanitizeAmount = (v) => {
+  const c = String(v ?? "").replace(/[^\d.]/g, "");
+  const [intPart, ...rest] = c.split(".");
+  return rest.length ? `${intPart}.${rest.join("")}` : intPart;
+};
+
+// Read the saved draft once, synchronously, on first render
+const loadDraft = () => {
+  try {
+    const saved = localStorage.getItem("basicInfoForm");
+    if (!saved) return initialFormData;
+    const parsed = JSON.parse(saved);
+    return {
+      ...initialFormData,
+      ...parsed,
+      basic_salary: sanitizeAmount(parsed.basic_salary),
+      image: null,
+    };
+  } catch {
+    console.error("Failed to parse saved form data");
+    return initialFormData;
+  }
+};
 
 /* ---------- Backend messages -> React-Toastify (no custom texts) ---------- */
 
@@ -112,8 +152,8 @@ const showBackendError = (error) => {
 };
 
 const BasicInformation = ({ goNextStep, onStepComplete }) => {
-  // 🧠 Local form state
-  const [formData, setFormData] = useState(initialFormData);
+  // 🧠 Local form state (draft restored once, no extra effect needed)
+  const [formData, setFormData] = useState(loadDraft);
 
   const [imagePreview, setImagePreview] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -125,22 +165,8 @@ const BasicInformation = ({ goNextStep, onStepComplete }) => {
   const [showPayrollModal, setShowPayrollModal] = useState(false);
   const [isCalculating, setIsCalculating] = useState(false);
 
-  // ✅ Payroll area shows only when all 6 fields have a value
-  const isBasicComplete = REQUIRED_FOR_PAYROLL.every(
-    (key) => String(formData[key] ?? "").trim() !== "",
-  );
-
-  // 🧩 Load saved form (restore from localStorage)
-  useEffect(() => {
-    const saved = localStorage.getItem("basicInfoForm");
-    if (saved) {
-      try {
-        setFormData((prev) => ({ ...prev, ...JSON.parse(saved) }));
-      } catch {
-        console.error("Failed to parse saved form data");
-      }
-    }
-  }, []);
+  // ✅ Payroll area shows as soon as a valid Annual Salary is entered
+  const hasSalary = Number(formData.basic_salary) > 0;
 
   // 💾 Auto-save form data to localStorage
   // (a File object can't be serialized, so the image is left out of the draft)
@@ -163,8 +189,8 @@ const BasicInformation = ({ goNextStep, onStepComplete }) => {
   useEffect(() => {
     const fetchTemplates = async () => {
       try {
-        const data = await payrollService.getSalaryTemplates();
-        setTemplates(data || []);
+        const res = await payrollService.getSalaryTemplates();
+        setTemplates(toList(res));
       } catch (err) {
         showBackendError(err);
       }
@@ -174,7 +200,9 @@ const BasicInformation = ({ goNextStep, onStepComplete }) => {
 
   // 🧩 Handle input changes
   const handleInputChange = (e) => {
-    const { name, value } = e.target;
+    const { name } = e.target;
+    const value =
+      name === "basic_salary" ? sanitizeAmount(e.target.value) : e.target.value;
     setFormData((prev) => ({ ...prev, [name]: value }));
 
     // The old calculation no longer matches the new salary: clear it so
@@ -209,25 +237,25 @@ const BasicInformation = ({ goNextStep, onStepComplete }) => {
   // 💰 Template picked: calculate straight away and show the result in a modal
   // (annual_ctc = Annual Salary field, strict is fixed to false in the service)
   const handleTemplateChange = async (e) => {
-    const templateId = e.target.value ? Number(e.target.value) : "";
-    setSelectedTemplateId(templateId);
+    const raw = e.target.value;
+    setSelectedTemplateId(raw);
     setPayrollResult(null);
+    if (!raw) return;
 
-    if (!templateId) return;
-
-    if (!(Number(formData.basic_salary) > 0)) {
+    const annualCtc = Number(formData.basic_salary);
+    if (!(annualCtc > 0)) {
       setSelectedTemplateId("");
+      toast.error("Enter a valid Annual Salary first.");
       return;
     }
 
     try {
       setIsCalculating(true);
       const result = await calculatePayroll({
-        annual_ctc: formData.basic_salary,
-        template_id: templateId,
+        annual_ctc: annualCtc,
+        template_id: Number(raw),
       });
-      // Accept either { ok, data: {...} } or the inner data object itself
-      const data = result?.data ?? result;
+      const data = unwrapPayroll(result);
       if (!data || typeof data !== "object") {
         throw new Error("No payroll data returned.");
       }
@@ -265,6 +293,10 @@ const BasicInformation = ({ goNextStep, onStepComplete }) => {
         formDataToSend.append(key, value);
       }
     });
+
+    // Optional: send the chosen salary template with the employee
+    // (uncomment if your backend accepts it)
+    // if (selectedTemplateId) formDataToSend.append("template_id", selectedTemplateId);
 
     try {
       setIsSubmitting(true);
@@ -443,6 +475,7 @@ const BasicInformation = ({ goNextStep, onStepComplete }) => {
             </label>
             <input
               type="text"
+              inputMode="decimal"
               name="basic_salary"
               value={formData.basic_salary}
               onChange={handleInputChange}
@@ -453,8 +486,8 @@ const BasicInformation = ({ goNextStep, onStepComplete }) => {
         </div>
       </div>
 
-      {/* 💰 Salary Template (appears after the 6 fields are filled) */}
-      {isBasicComplete && (
+      {/* 💰 Salary Template (appears as soon as Annual Salary is entered) */}
+      {hasSalary && (
         <div className="bg-white rounded-lg shadow-sm p-6 mt-4">
           <h3 className="text-base font-medium text-gray-900 mb-3">
             Payroll Calculation
@@ -502,7 +535,7 @@ const BasicInformation = ({ goNextStep, onStepComplete }) => {
                 >
                   <option value="">Choose Payroll Template</option>
                   {templates.map((t) => (
-                    <option key={t.id} value={t.id}>
+                    <option key={t.id} value={String(t.id)}>
                       {t.name}
                     </option>
                   ))}
@@ -534,7 +567,8 @@ const BasicInformation = ({ goNextStep, onStepComplete }) => {
         <PayrollResultModal
           result={payrollResult}
           templateName={
-            templates.find((t) => t.id === selectedTemplateId)?.name || ""
+            templates.find((t) => String(t.id) === String(selectedTemplateId))
+              ?.name || ""
           }
           onClose={() => setShowPayrollModal(false)}
         />
@@ -618,10 +652,15 @@ function PayrollResultModal({ result, templateName, onClose }) {
                     </td>
                   </tr>
                 )}
-                {mappings.map((m) => (
-                  <tr key={m.id} className="border-t border-gray-100">
+                {mappings.map((m, idx) => (
+                  <tr
+                    key={m.id ?? `${m.component_id}-${idx}`}
+                    className="border-t border-gray-100"
+                  >
                     <td className="px-3 py-2 text-gray-800">
-                      Component #{m.component_id}
+                      {m.component_name ||
+                        m.name ||
+                        `Component #${m.component_id}`}
                       {m.is_balancing_component && (
                         <span className="ml-2 text-[10px] text-gray-600 bg-slate-100 border border-gray-200 rounded-full px-2 py-0.5">
                           Balancing

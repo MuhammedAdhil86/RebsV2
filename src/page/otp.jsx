@@ -8,6 +8,26 @@ import {
 } from "../service/authservice";
 import { toast } from "react-toastify";
 
+// At least 8 chars, uppercase, lowercase, number, special character
+const STRONG_PASSWORD =
+  /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
+
+// Shows backend `message` as the title and `data` (if it is a string) as detail
+const showApiError = (res, fallback = "Something went wrong") => {
+  const message = res?.message || fallback;
+  const detail = typeof res?.data === "string" ? res.data : "";
+
+  toast.error(
+    <div>
+      <div style={{ fontWeight: 600 }}>{message}</div>
+      {detail && (
+        <div style={{ fontSize: 12, opacity: 0.8, marginTop: 2 }}>{detail}</div>
+      )}
+    </div>,
+    { toastId: "reset-error" },
+  );
+};
+
 export default function OtpUi() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -41,7 +61,7 @@ export default function OtpUi() {
     },
   ];
 
-  // If the page is opened directly (refresh / no email), go back to step 1
+  // Opened directly without an email (refresh): go back to step 1
   useEffect(() => {
     if (!emailFromProps) navigate("/forgetpass", { replace: true });
   }, [emailFromProps, navigate]);
@@ -58,47 +78,71 @@ export default function OtpUi() {
     if (val.length <= 4) setOtp(val);
   };
 
+  // Step 1: Verify OTP
   const handleVerifyOtp = async () => {
     if (otp.length !== 4) return toast.error("Please enter the 4-digit OTP");
     setLoading(true);
     try {
-      const payload = { username: emailFromProps, otp };
-      const response = await verifyForgotPasswordOTP(payload);
+      const response = await verifyForgotPasswordOTP({
+        username: emailFromProps,
+        otp,
+      });
 
       if (response.status_code === 200) {
         if (response.data?.token) {
           localStorage.setItem("resetToken", response.data.token);
         }
-        toast.success("OTP Verified Successfully!");
+        toast.success(response.message || "OTP Verified Successfully!");
         setIsOtpVerified(true);
       } else {
-        toast.error(response.message || "Invalid OTP code.");
+        showApiError(response, "Invalid OTP code.");
       }
     } catch (error) {
-      toast.error(error.response?.data?.message || "Verification failed");
+      showApiError(
+        error.response?.data,
+        error.message || "Verification failed",
+      );
     } finally {
       setLoading(false);
     }
   };
 
+  // Step 2: Set new password
   const handleFinalReset = async () => {
     if (!newPassword) return toast.error("Please enter a new password");
+
+    if (!STRONG_PASSWORD.test(newPassword)) {
+      return toast.error(
+        "Password must be at least 8 characters and include uppercase, lowercase, number and special character",
+        { toastId: "weak-password" },
+      );
+    }
+
     setLoading(true);
     try {
       const response = await finalizeForgotPassword({ password: newPassword });
 
       if (response.status_code === 200) {
-        toast.success("Password updated successfully!");
+        toast.success(response.message || "Password updated successfully!");
         localStorage.removeItem("resetToken");
         setTimeout(() => navigate("/"), 2000);
       } else {
-        toast.error(response.message || "Reset failed.");
+        // HTTP 200 but error status_code in the body
+        showApiError(response, "Reset failed.");
       }
     } catch (error) {
-      toast.error(
-        error.response?.data?.message ||
-          "Reset failed. Session may have expired.",
-      );
+      const res = error.response?.data;
+
+      if (error.response?.status === 401) {
+        // reset token expired or rejected: back to the OTP step
+        localStorage.removeItem("resetToken");
+        setIsOtpVerified(false);
+        setOtp("");
+        toast.error("Session expired. Please verify the OTP again.");
+      } else {
+        // e.g. "Weak password" + rule text in data
+        showApiError(res, error.message || "Reset failed.");
+      }
     } finally {
       setLoading(false);
     }
@@ -113,7 +157,7 @@ export default function OtpUi() {
   return (
     <div className="w-full h-screen bg-black flex justify-center items-center p-4 font-poppins text-[12px]">
       <div className="flex h-full w-full rounded-2xl overflow-hidden shadow-2xl">
-        {/* Left Panel */}
+        {/* ---------- Left Panel ---------- */}
         <div className="relative w-[55%] overflow-hidden rounded-l-2xl">
           <img
             src={mainImage}
@@ -152,7 +196,7 @@ export default function OtpUi() {
 
         <div className="w-2 bg-black"></div>
 
-        {/* Right Panel */}
+        {/* ---------- Right Panel ---------- */}
         <div className="w-[45%] bg-white rounded-r-2xl flex flex-col justify-between p-12">
           <div className="flex-grow flex items-center justify-center">
             <div className="w-full max-w-sm">
@@ -203,6 +247,7 @@ export default function OtpUi() {
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
                       placeholder="New Password"
+                      autoComplete="new-password"
                       className="w-full text-slate-900 border-b border-slate-200 focus:outline-none focus:border-black bg-transparent py-2 font-medium"
                       required
                       disabled={loading}
