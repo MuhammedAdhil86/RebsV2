@@ -5,7 +5,7 @@ import {
   sendResetPasswordEmail,
   forgotPassword,
   confirmForgotPassword,
-  staffLogout, // NEW: add `export const staffLogout = "/staff/logout";` in ../api/api
+  staffLogout, // add `export const staffLogout = "/staff/logout";` in ../api/api
 } from "../api/api";
 
 // Same prefix as axiosInstance (proxied by vite.config.js)
@@ -17,7 +17,6 @@ const BASE_URL = "/api_v1";
 export const resetUserPassword = async (payload) => {
   try {
     const response = await axiosInstance.post(postResetPassword, payload);
-    console.log("✅ Reset Password Response:", response.data);
     return response.data;
   } catch (error) {
     console.error(
@@ -30,11 +29,12 @@ export const resetUserPassword = async (payload) => {
 
 /**
  * 2. Send Reset Password Email (Forgot Password Step 1)
+ * Clears any stale reset token from a previous attempt.
  */
 export const requestPasswordResetEmail = async (payload) => {
   try {
+    localStorage.removeItem("resetToken");
     const response = await axiosInstance.post(sendResetPasswordEmail, payload);
-    console.log("✅ Send OTP Response:", response.data);
     return response.data;
   } catch (error) {
     console.error("❌ Send OTP Error:", error.response?.data || error.message);
@@ -48,7 +48,6 @@ export const requestPasswordResetEmail = async (payload) => {
 export const verifyForgotPasswordOTP = async (payload) => {
   try {
     const response = await axiosInstance.post(forgotPassword, payload);
-    console.log("✅ Verify OTP Response:", response.data);
     return response.data;
   } catch (error) {
     console.error(
@@ -64,9 +63,16 @@ export const verifyForgotPasswordOTP = async (payload) => {
  * Uses raw axios so axiosInstance can't overwrite the resetToken header.
  */
 export const finalizeForgotPassword = async (payload) => {
-  try {
-    const resetToken = localStorage.getItem("resetToken");
+  const resetToken = (localStorage.getItem("resetToken") || "").trim();
 
+  // No token saved: fail clearly instead of sending "Bearer null"
+  if (!resetToken) {
+    const err = new Error("Reset session not found. Please verify OTP again.");
+    err.response = { status: 401, data: { message: err.message } };
+    throw err;
+  }
+
+  try {
     const response = await axios.post(
       `${BASE_URL}${confirmForgotPassword}`,
       payload,
@@ -81,7 +87,8 @@ export const finalizeForgotPassword = async (payload) => {
     return response.data; // OtpUi checks response.status_code
   } catch (error) {
     console.error(
-      "finalizeForgotPassword failed:",
+      "❌ Finalize Reset Error:",
+      error.response?.status,
       error.response?.data || error.message,
     );
     throw error; // OtpUi's catch shows the toast
@@ -89,15 +96,12 @@ export const finalizeForgotPassword = async (payload) => {
 };
 
 /**
- * 5. Staff Logout  ->  POST /api_v1/staff/logout
- * The Bearer token is added automatically by the axiosInstance interceptor.
- * Local session is always cleared, even if the request fails
- * (expired token, network error), so the user is never stuck logged in.
+ * 5. Staff Logout -> POST /api_v1/staff/logout
+ * Local session is always cleared, even if the request fails.
  */
 export const logoutStaff = async () => {
   try {
     const response = await axiosInstance.post(staffLogout);
-    console.log("✅ Logout Response:", response.data);
     return response.data;
   } catch (error) {
     console.error("❌ Logout Error:", error.response?.data || error.message);
