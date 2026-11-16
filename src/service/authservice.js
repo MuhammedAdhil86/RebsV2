@@ -20,7 +20,10 @@ export const resetUserPassword = async (payload) => {
     console.log("✅ Reset Password Response:", response.data);
     return response.data;
   } catch (error) {
-    console.error("❌ Reset Password Error:", error.response?.data || error.message);
+    console.error(
+      "❌ Reset Password Error:",
+      error.response?.data || error.message,
+    );
     throw error;
   }
 };
@@ -48,7 +51,10 @@ export const verifyForgotPasswordOTP = async (payload) => {
     console.log("✅ Verify OTP Response:", response.data);
     return response.data;
   } catch (error) {
-    console.error("❌ Verify OTP Error:", error.response?.data || error.message);
+    console.error(
+      "❌ Verify OTP Error:",
+      error.response?.data || error.message,
+    );
     throw error;
   }
 };
@@ -61,17 +67,24 @@ export const finalizeForgotPassword = async (payload) => {
   try {
     const resetToken = localStorage.getItem("resetToken");
 
-    const response = await axios.post(`${BASE_URL}${confirmForgotPassword}`, payload, {
-      headers: {
-        Authorization: `Bearer ${resetToken}`,
+    const response = await axios.post(
+      `${BASE_URL}${confirmForgotPassword}`,
+      payload,
+      {
+        headers: {
+          Authorization: `Bearer ${resetToken}`,
+          "Content-Type": "application/json",
+        },
       },
-    });
+    );
 
-    console.log("✅ Final Reset Response:", response.data);
-    return response.data;
+    return response.data; // OtpUi checks response.status_code
   } catch (error) {
-    console.error("❌ Final Reset Error:", error.response?.data || error.message);
-    throw error;
+    console.error(
+      "finalizeForgotPassword failed:",
+      error.response?.data || error.message,
+    );
+    throw error; // OtpUi's catch shows the toast
   }
 };
 
