@@ -425,6 +425,8 @@ export const postPayrollAttendance = "/api/payroll/calculate/attendance";
 export const getEmployeeBankInfo = "/staff/employees/bank-info";
 
 export const getPayrollAnalyticsRun = "/api/payroll/analytics/run";
+export const getPayrollConfiguration = "/api/payroll/analytics/payroll/config";
+
 export const getPayrollAnalyticsResult =
   " /api/payroll/analytics/list/all-runs";
 export const postBulkAllocatePayroll = "/api/payroll/template-allocations";

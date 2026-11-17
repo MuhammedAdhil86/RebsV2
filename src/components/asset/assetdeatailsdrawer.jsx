@@ -15,7 +15,11 @@ import {
   TimelineConnector,
   TimelineContent,
 } from "@mui/lab";
-import toast from "react-hot-toast";
+import {
+  showApiToast,
+  showApiSuccess,
+  showApiError,
+} from "../../utils/apiToast";
 
 import EmployeeAsset from "./employeeasset";
 import {
@@ -23,6 +27,7 @@ import {
   returnAsset,
 } from "../../service/assetservice";
 import axiosInstance from "../../service/axiosinstance";
+import GlowButton from "../../components/helpers/glowbutton"; // adjust path to where you saved GlowButton.jsx
 
 const AssetDetailDrawer = ({ asset, onRefresh, onClose }) => {
   const [activeSubTab, setActiveSubTab] = useState("details");
@@ -56,9 +61,7 @@ const AssetDetailDrawer = ({ asset, onRefresh, onClose }) => {
         setCurrentStatus(latestStatus);
       }
     } catch (err) {
-      toast.error(
-        err.response?.data?.message || "Failed to load asset history",
-      );
+      showApiError(err, "Failed to load asset history");
     } finally {
       setIsLoading(false);
     }
@@ -75,18 +78,18 @@ const AssetDetailDrawer = ({ asset, onRefresh, onClose }) => {
       .find((a) => a.status.toLowerCase() === "allocated");
 
     if (!activeEntry) {
-      toast.error("No active allocation found to return");
+      showApiToast("error", "No active allocation found to return");
       return;
     }
 
     setIsActionLoading(true);
     try {
       const res = await returnAsset(asset.id, activeEntry.staff_id);
-      toast.success(res?.data?.message || "Asset returned successfully");
+      showApiSuccess(res, "Asset returned successfully");
       onRefresh();
       onClose();
     } catch (err) {
-      toast.error(err.response?.data?.message || "Failed to return asset");
+      showApiError(err, "Failed to return asset");
     } finally {
       setIsActionLoading(false);
     }
@@ -94,7 +97,7 @@ const AssetDetailDrawer = ({ asset, onRefresh, onClose }) => {
 
   const handleAllocate = async () => {
     if (!selectedEmployee) {
-      toast.error("Please select a staff member");
+      showApiToast("error", "Please select a staff member");
       return;
     }
 
@@ -104,11 +107,11 @@ const AssetDetailDrawer = ({ asset, onRefresh, onClose }) => {
         asset_id: asset.id,
         staff_id: selectedEmployee.uuid,
       });
-      toast.success(res?.data?.message || "Asset allocated successfully");
+      showApiSuccess(res, "Asset allocated successfully");
       onRefresh();
       onClose();
     } catch (err) {
-      toast.error(err.response?.data?.message || "Allocation failed");
+      showApiError(err, "Allocation failed");
     } finally {
       setIsActionLoading(false);
     }
@@ -138,6 +141,7 @@ const AssetDetailDrawer = ({ asset, onRefresh, onClose }) => {
             </p>
           </div>
           <button
+            type="button"
             onClick={onClose}
             className="p-2 rounded-full text-gray-400 transition-all duration-300 hover:bg-white hover:text-gray-700 hover:shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
           >
@@ -150,6 +154,7 @@ const AssetDetailDrawer = ({ asset, onRefresh, onClose }) => {
           {["details", "history"].map((tab) => (
             <button
               key={tab}
+              type="button"
               onClick={() => setActiveSubTab(tab)}
               className={`relative px-4 pt-2 pb-3 rounded-t-lg text-[13px] font-normal capitalize tracking-wide flex items-center gap-2 transition-all duration-300 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200 ${
                 activeSubTab === tab
@@ -273,22 +278,18 @@ const AssetDetailDrawer = ({ asset, onRefresh, onClose }) => {
         {/* FOOTER ACTIONS */}
         <div className="px-8 py-6 border-t border-gray-100 bg-white sticky bottom-0">
           {isCurrentlyAllocated ? (
-            <button
+            <GlowButton
               onClick={handleReturn}
-              disabled={isActionLoading}
-              className="w-full flex items-center justify-center gap-2.5 bg-black text-white py-3.5 rounded-xl text-[13px] font-normal tracking-wide shadow-md shadow-gray-300 hover:bg-gray-800 transition-all duration-300 active:scale-95 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400"
+              loading={isActionLoading}
+              fullWidth
+              icon={<FiArrowLeftCircle size={18} />}
             >
-              {isActionLoading ? (
-                "Processing..."
-              ) : (
-                <>
-                  <FiArrowLeftCircle size={18} /> Return Asset
-                </>
-              )}
-            </button>
+              {isActionLoading ? "Processing..." : "Return Asset"}
+            </GlowButton>
           ) : (
             <div className="flex gap-4">
               <button
+                type="button"
                 onClick={() => setIsEmployeeDrawerOpen(true)}
                 className="flex-[1.5] bg-white border border-gray-200 text-gray-600 py-3.5 rounded-xl flex items-center justify-center gap-2.5 text-[13px] font-normal tracking-wide hover:bg-gray-50 hover:text-gray-900 hover:border-gray-300 transition-all duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
               >
@@ -298,13 +299,14 @@ const AssetDetailDrawer = ({ asset, onRefresh, onClose }) => {
                 </span>
               </button>
 
-              <button
-                disabled={!selectedEmployee || isActionLoading}
+              <GlowButton
                 onClick={handleAllocate}
-                className="flex-1 bg-black text-white py-3.5 rounded-xl text-[13px] font-normal tracking-wide shadow-md shadow-gray-300 hover:bg-gray-800 transition-all duration-300 active:scale-95 disabled:opacity-30 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400"
+                loading={isActionLoading}
+                disabled={!selectedEmployee}
+                className="flex-1"
               >
-                {isActionLoading ? "..." : "Allocate"}
-              </button>
+                Allocate
+              </GlowButton>
             </div>
           )}
         </div>

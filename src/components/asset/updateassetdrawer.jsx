@@ -2,8 +2,13 @@ import React, { useState, useEffect, useRef } from "react";
 import { Drawer } from "@mui/material";
 import { FiX, FiCamera, FiCheck, FiTool, FiEdit2 } from "react-icons/fi";
 import { Icon } from "@iconify/react";
-import toast from "react-hot-toast";
+import {
+  showApiToast,
+  showApiSuccess,
+  showApiError,
+} from "../../utils/apiToast";
 import { updateAsset, assetType } from "../../service/assetservice";
+import GlowButton from "../../components/helpers/glowbutton"; // adjust path to where you saved GlowButton.jsx
 
 const UpdateAssetDrawer = ({ open, onClose, asset, onAssetUpdated }) => {
   const fileInputRef = useRef(null);
@@ -60,7 +65,7 @@ const UpdateAssetDrawer = ({ open, onClose, asset, onAssetUpdated }) => {
           const res = await assetType();
           setAssetTypes(res || []);
         } catch (err) {
-          toast.error("Failed to load asset types");
+          showApiError(err, "Failed to load asset types");
         }
       };
       loadMetadata();
@@ -100,7 +105,7 @@ const UpdateAssetDrawer = ({ open, onClose, asset, onAssetUpdated }) => {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
     setIsSubmitting(true);
     setErrors({});
 
@@ -127,19 +132,22 @@ const UpdateAssetDrawer = ({ open, onClose, asset, onAssetUpdated }) => {
     }
 
     try {
-      await updateAsset(asset.id, payload);
-      toast.success("Asset updated successfully");
+      const res = await updateAsset(asset.id, payload);
+      showApiSuccess(res, "Asset updated successfully");
       onAssetUpdated();
       onClose();
     } catch (err) {
       const errorData = err.response?.data;
       if (errorData?.errors) {
+        // Highlight the fields, and show the field errors as the toast detail
         setErrors(errorData.errors);
-        Object.values(errorData.errors)
-          .flat()
-          .forEach((msg) => toast.error(msg));
+        showApiToast(
+          "error",
+          errorData.message || "Validation failed",
+          errorData.errors,
+        );
       } else {
-        toast.error(errorData?.message || "Internal Server Error");
+        showApiError(err, "Internal Server Error");
       }
     } finally {
       setIsSubmitting(false);
@@ -165,6 +173,7 @@ const UpdateAssetDrawer = ({ open, onClose, asset, onAssetUpdated }) => {
             </p>
           </div>
           <button
+            type="button"
             onClick={onClose}
             className="p-2 rounded-full text-gray-400 transition-all duration-300 hover:bg-white hover:text-gray-700 hover:shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
           >
@@ -348,13 +357,14 @@ const UpdateAssetDrawer = ({ open, onClose, asset, onAssetUpdated }) => {
           >
             Cancel
           </button>
-          <button
+
+          <GlowButton
             onClick={handleSubmit}
-            disabled={isSubmitting}
-            className="flex items-center gap-2.5 bg-black text-white px-8 py-3.5 rounded-xl text-[13px] font-normal tracking-wide hover:bg-gray-800 transition-all duration-300 shadow-md shadow-gray-300 active:scale-95 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400"
+            loading={isSubmitting}
+            icon={<FiCheck />}
           >
-            {isSubmitting ? "Updating..." : "Save Changes"} <FiCheck />
-          </button>
+            {isSubmitting ? "Updating..." : "Save Changes"}
+          </GlowButton>
         </div>
       </div>
     </Drawer>

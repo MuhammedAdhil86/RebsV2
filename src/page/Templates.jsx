@@ -1,5 +1,7 @@
 import React, { useState } from "react";
-import { Toaster } from "react-hot-toast";
+import { ToastContainer } from "react-toastify";
+// Remove the next line if you are on react-toastify v11+ (CSS is auto-injected)
+import "react-toastify/dist/ReactToastify.css";
 import DashboardLayout from "../ui/pagelayout";
 import HeaderGlobal from "../ui/headerglobal";
 
@@ -17,7 +19,8 @@ const Templates = () => {
 
   return (
     <DashboardLayout>
-      <Toaster position="top-right" />
+      {/* Remove this if a ToastContainer is already mounted at your app root */}
+      <ToastContainer position="top-right" />
       <div className="w-full space-y-4">
         <HeaderGlobal userName="Admin" />
 
@@ -41,7 +44,7 @@ const Templates = () => {
           </div>
         </div>
 
-        {/* Active tab content (no layout/header inside these anymore) */}
+        {/* Active tab content */}
         {activeMenu === "email" ? <EmailTemplates /> : <Letter />}
       </div>
     </DashboardLayout>

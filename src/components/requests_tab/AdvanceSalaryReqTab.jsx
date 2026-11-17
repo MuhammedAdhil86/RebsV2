@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import toast, { Toaster } from "react-hot-toast";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 // Components
@@ -9,19 +8,14 @@ import AdvanceSalaryApprovalModal from "../../ui/advancesalarystatusmodal";
 // Services
 import { fetchAdvanceSalaries } from "../../service/advanceSalaryService";
 
+// Toast helpers (backend message + data)
+import { showApiError } from "../../utils/apiToast";
+
 const statusColors = {
   Pending: "bg-yellow-100 text-yellow-700",
   Approved: "bg-green-100 text-green-600",
   Rejected: "bg-red-100 text-red-600",
 };
-
-/* ================= TOAST HELPER (all backend messages go through here) ================= */
-const getErrorMessage = (err, fallback) =>
-  err?.response?.data?.message ||
-  err?.response?.data?.error ||
-  (typeof err?.response?.data?.data === "string" && err.response.data.data) ||
-  err?.message ||
-  fallback;
 
 /* ================= DATE / AMOUNT HELPERS ================= */
 // "2026-10-20T10:10:44Z" -> "20/10/2026" (UTC, so the date never shifts)
@@ -162,7 +156,8 @@ export default function AdvanceSalaryReqTab() {
       setData(transformed);
     } catch (err) {
       console.error("LOAD ERROR:", err);
-      toast.error(getErrorMessage(err, "Failed to load requests"));
+      // Backend message + data (or error) in one toast
+      showApiError(err, "Failed to load requests");
     } finally {
       setLoading(false);
     }
@@ -204,8 +199,6 @@ export default function AdvanceSalaryReqTab() {
 
   return (
     <div className="bg-[#f9fafb] rounded-xl p-4 border border-gray-100 shadow-sm w-full">
-      <Toaster position="top-right" />
-
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-sm font-semibold text-gray-800">
           Advance Salary Requests

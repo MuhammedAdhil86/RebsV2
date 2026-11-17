@@ -13,6 +13,8 @@ import { getActiveUsersLight } from "../../service/employeeService";
 
 /* ---------- helpers ---------- */
 
+const TOTAL_STEPS = 2; // initial step + checklist (questionnaire is not a step)
+
 const formatDate = (iso) => {
   if (!iso) return "—";
   const d = new Date(iso);
@@ -30,8 +32,14 @@ const toDateInput = (iso) => (iso ? String(iso).slice(0, 10) : "");
 const backendMessage = (err, fallback) =>
   err?.response?.data?.message || err?.message || fallback;
 
-const initials = (name = "") =>
-  name
+// axios timeout (ECONNABORTED / ETIMEDOUT) or a "timeout" message
+const isTimeout = (err) =>
+  err?.code === "ECONNABORTED" ||
+  err?.code === "ETIMEDOUT" ||
+  /timeout/i.test(err?.message || "");
+
+const initials = (name) =>
+  String(name ?? "")
     .split(" ")
     .filter(Boolean)
     .map((n) => n[0])
@@ -70,26 +78,29 @@ const Badge = ({ children, className = "bg-zinc-100 text-zinc-600" }) => (
   </span>
 );
 
-const ProgressBar = ({ value }) => (
-  <div className="flex items-center gap-2 w-full">
-    <div className="h-1.5 flex-1 rounded-full bg-black/10 overflow-hidden">
-      <div
-        className="h-full rounded-full bg-black transition-all duration-500"
-        style={{ width: `${Math.min(100, Math.max(0, value))}%` }}
-      />
+const ProgressBar = ({ value }) => {
+  const v = Number(value) || 0;
+  return (
+    <div className="flex items-center gap-2 w-full">
+      <div className="h-1.5 flex-1 rounded-full bg-black/10 overflow-hidden">
+        <div
+          className="h-full rounded-full bg-black transition-all duration-500"
+          style={{ width: `${Math.min(100, Math.max(0, v))}%` }}
+        />
+      </div>
+      <span className="text-[11px] text-black/50 w-8 text-right shrink-0">
+        {v}%
+      </span>
     </div>
-    <span className="text-[11px] text-black/50 w-8 text-right shrink-0">
-      {value}%
-    </span>
-  </div>
-);
+  );
+};
 
 /* circular progress for the summary panel */
 const Ring = ({ value, size = 84 }) => {
   const stroke = 6;
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
-  const pct = Math.min(100, Math.max(0, value));
+  const pct = Math.min(100, Math.max(0, Number(value) || 0));
   return (
     <div className="relative shrink-0" style={{ width: size, height: size }}>
       <svg width={size} height={size} className="-rotate-90">
@@ -125,9 +136,11 @@ const Skeleton = ({ className = "" }) => (
   <div className={`animate-pulse rounded-lg bg-black/5 ${className}`} />
 );
 
-const Field = ({ label, children }) => (
+const Field = ({ label, htmlFor, children }) => (
   <div className="flex flex-col min-w-0">
-    <label className="text-sm text-gray-700 mb-1.5">{label}</label>
+    <label htmlFor={htmlFor} className="text-sm text-gray-700 mb-1.5">
+      {label}
+    </label>
     {children}
   </div>
 );
@@ -181,8 +194,10 @@ const GhostButton = ({ children, ...props }) => (
 );
 
 /* one row of the details list: label left, value right (stacked on phones) */
-const DetailRow = ({ label, value }) => (
-  <div className="flex flex-col gap-0.5 py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4 2xl:flex-col 2xl:gap-0.5">
+const DetailRow = ({ label, value, className = "" }) => (
+  <div
+    className={`flex flex-col gap-0.5 py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4 2xl:flex-col 2xl:gap-0.5 ${className}`}
+  >
     <dt className="text-xs text-black/40 shrink-0">{label}</dt>
     <dd className="text-sm text-black break-words sm:text-right 2xl:text-left">
       {value || "—"}
@@ -272,12 +287,14 @@ const QuestionnaireCard = ({
 );
 
 /* searchable interviewer dropdown: shows names only, never IDs */
-const InterviewerSelect = ({ value, selectedName, onChange, disabled }) => {
+const InterviewerSelect = ({ id, value, selectedName, onChange, disabled }) => {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [options, setOptions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [activeIdx, setActiveIdx] = useState(0);
   const wrapRef = useRef(null);
+  const listRef = useRef(null);
 
   // fetch the light user list here: show names, keep the uuid as the value
   useEffect(() => {
@@ -339,18 +356,44 @@ const InterviewerSelect = ({ value, selectedName, onChange, disabled }) => {
     };
   }, [open]);
 
-  const choose = (id) => {
-    onChange(id);
+  // keep the keyboard-highlighted row in view
+  useEffect(() => {
+    if (!open) return;
+    listRef.current?.children?.[activeIdx]?.scrollIntoView?.({
+      block: "nearest",
+    });
+  }, [activeIdx, open]);
+
+  const choose = (optionId) => {
+    onChange(optionId);
     setOpen(false);
     setQuery("");
+  };
+
+  // arrow keys + Enter inside the search box
+  const onSearchKeyDown = (e) => {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setActiveIdx((i) => Math.min(i + 1, Math.max(filtered.length - 1, 0)));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setActiveIdx((i) => Math.max(i - 1, 0));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (filtered[activeIdx]) choose(filtered[activeIdx].id);
+    }
   };
 
   return (
     <div ref={wrapRef} className="relative w-full min-w-0">
       <button
+        id={id}
         type="button"
         disabled={disabled}
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => {
+          setActiveIdx(0);
+          setOpen((o) => !o);
+        }}
         aria-haspopup="listbox"
         aria-expanded={open}
         className={`flex w-full min-w-0 h-11 sm:h-10 items-center justify-between gap-2 rounded-lg border bg-white px-3 text-left text-base sm:text-sm focus:outline-none transition-all disabled:bg-gray-50 disabled:text-gray-400 ${
@@ -379,18 +422,27 @@ const InterviewerSelect = ({ value, selectedName, onChange, disabled }) => {
               type="text"
               autoFocus
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setActiveIdx(0);
+              }}
+              onKeyDown={onSearchKeyDown}
               placeholder="Search by name"
+              aria-label="Search interviewer by name"
               className="w-full h-10 rounded-md border border-gray-200 px-3 text-base sm:text-sm text-gray-700 focus:outline-none focus:border-gray-900"
             />
           </div>
-          <ul role="listbox" className="max-h-60 overflow-y-auto py-1">
+          <ul
+            ref={listRef}
+            role="listbox"
+            className="max-h-60 overflow-y-auto py-1"
+          >
             {filtered.length === 0 ? (
               <li className="px-3 py-3 text-sm text-gray-400">
                 {loading ? "Loading…" : "No employees found"}
               </li>
             ) : (
-              filtered.map((o) => {
+              filtered.map((o, idx) => {
                 const active = o.id === String(value ?? "");
                 return (
                   <li
@@ -398,8 +450,13 @@ const InterviewerSelect = ({ value, selectedName, onChange, disabled }) => {
                     role="option"
                     aria-selected={active}
                     onClick={() => choose(o.id)}
+                    onMouseEnter={() => setActiveIdx(idx)}
                     className={`flex cursor-pointer items-center justify-between gap-3 px-3 py-2.5 hover:bg-gray-100 transition-colors ${
-                      active ? "bg-gray-50" : ""
+                      idx === activeIdx
+                        ? "bg-gray-100"
+                        : active
+                          ? "bg-gray-50"
+                          : ""
                     }`}
                   >
                     <div className="min-w-0">
@@ -474,31 +531,37 @@ const ExitProcessDetail = ({ id, onBack }) => {
   const [savingInitial, setSavingInitial] = useState(false);
   const [savingChecklist, setSavingChecklist] = useState(false);
 
+  // counts requests so a slow, older response can never overwrite a newer one
+  const requestRef = useRef(0);
+
   // GET /admin/exit-process/get/{id}
   // `quiet` = refresh after a save without blanking the page
   const load = useCallback(
     async (quiet = false) => {
+      const reqId = ++requestRef.current;
       if (!quiet) {
         setLoading(true);
         setError("");
       }
       try {
         const d = await exitService.fetchExitProcess(id);
+        if (reqId !== requestRef.current) return; // stale response
         setData(d);
         setInitialForm({
-          interviewerId: d.interviewerId,
+          interviewerId: String(d.interviewerId ?? ""),
           noticePeriodStart: toDateInput(d.noticePeriodStart),
           separationDate: toDateInput(d.separationDate),
         });
-        setChecklist({ ...d.checklist });
+        setChecklist({ ...(d.checklist ?? {}) });
       } catch (err) {
+        if (reqId !== requestRef.current) return;
         if (!quiet) {
           setError(backendMessage(err, "Could not load this exit process."));
         } else {
           toast.error(backendMessage(err, "Could not refresh."));
         }
       } finally {
-        if (!quiet) setLoading(false);
+        if (!quiet && reqId === requestRef.current) setLoading(false);
       }
     },
     [id],
@@ -512,7 +575,8 @@ const ExitProcessDetail = ({ id, onBack }) => {
   const initialDirty = useMemo(
     () =>
       !!data &&
-      (initialForm.interviewerId.trim() !== data.interviewerId ||
+      (String(initialForm.interviewerId ?? "").trim() !==
+        String(data.interviewerId ?? "") ||
         initialForm.noticePeriodStart !== toDateInput(data.noticePeriodStart) ||
         initialForm.separationDate !== toDateInput(data.separationDate)),
     [data, initialForm],
@@ -522,25 +586,38 @@ const ExitProcessDetail = ({ id, onBack }) => {
     () =>
       !!data &&
       CHECKLIST_ITEMS.some(
-        (i) => Boolean(checklist[i.key]) !== Boolean(data.checklist[i.key]),
+        (i) =>
+          Boolean(checklist[i.key]) !== Boolean((data.checklist ?? {})[i.key]),
       ),
     [data, checklist],
   );
 
   const resetInitial = () =>
     setInitialForm({
-      interviewerId: data.interviewerId,
+      interviewerId: String(data.interviewerId ?? ""),
       noticePeriodStart: toDateInput(data.noticePeriodStart),
       separationDate: toDateInput(data.separationDate),
     });
 
-  const resetChecklist = () => setChecklist({ ...data.checklist });
+  const resetChecklist = () => setChecklist({ ...(data.checklist ?? {}) });
+
+  const handleBack = () => {
+    if (
+      (initialDirty || checklistDirty) &&
+      !window.confirm("You have unsaved changes. Leave without saving?")
+    ) {
+      return;
+    }
+    onBack?.();
+  };
 
   /* ---- step 1: initial step ---- */
   const saveInitial = async () => {
     if (savingInitial) return;
 
-    if (!initialForm.interviewerId.trim()) {
+    const interviewerId = String(initialForm.interviewerId ?? "").trim();
+
+    if (!interviewerId) {
       toast.error("Select the interviewer");
       return;
     }
@@ -557,15 +634,21 @@ const ExitProcessDetail = ({ id, onBack }) => {
       setSavingInitial(true);
       const res = await exitService.updateInitialStep({
         id,
-        interviewerId: initialForm.interviewerId.trim(),
+        interviewerId,
         separationDate: initialForm.separationDate,
         noticePeriodStart: initialForm.noticePeriodStart,
       });
-      if (res.message) toast.success(res.message);
+      if (res?.message) toast.success(res.message);
       await load(true);
     } catch (err) {
-      toast.error(backendMessage(err, "Could not save the initial step."));
-      if (exitService.isConflict(err)) await load(true); // now locked
+      if (isTimeout(err)) {
+        // the server may have saved it anyway, so refresh instead of a false error
+        toast.info("Taking longer than usual. Checking if it was saved…");
+        await load(true);
+      } else {
+        toast.error(backendMessage(err, "Could not save the initial step."));
+        if (exitService.isConflict(err)) await load(true); // now locked
+      }
     } finally {
       setSavingInitial(false);
     }
@@ -575,14 +658,24 @@ const ExitProcessDetail = ({ id, onBack }) => {
   const saveChecklist = async () => {
     if (savingChecklist) return;
 
+    // send only the checklist flags, not completion/status from the response
+    const payload = Object.fromEntries(
+      CHECKLIST_ITEMS.map((i) => [i.key, Boolean(checklist[i.key])]),
+    );
+
     try {
       setSavingChecklist(true);
-      const res = await exitService.updateChecklist({ id, ...checklist });
-      if (res.message) toast.success(res.message);
+      const res = await exitService.updateChecklist({ id, ...payload });
+      if (res?.message) toast.success(res.message);
       await load(true);
     } catch (err) {
-      toast.error(backendMessage(err, "Could not save the checklist."));
-      if (exitService.isConflict(err)) await load(true); // now locked
+      if (isTimeout(err)) {
+        toast.info("Taking longer than usual. Checking if it was saved…");
+        await load(true);
+      } else {
+        toast.error(backendMessage(err, "Could not save the checklist."));
+        if (exitService.isConflict(err)) await load(true); // now locked
+      }
     } finally {
       setSavingChecklist(false);
     }
@@ -593,7 +686,7 @@ const ExitProcessDetail = ({ id, onBack }) => {
   const backButton = (
     <button
       type="button"
-      onClick={onBack}
+      onClick={handleBack}
       className="inline-flex items-center gap-1.5 min-h-[44px] sm:min-h-0 text-xs text-black/60 hover:text-black transition-colors self-start"
     >
       <ArrowLeft size={14} />
@@ -643,12 +736,14 @@ const ExitProcessDetail = ({ id, onBack }) => {
   }
 
   const locked = data.isLocked;
-  const q = data.questionnaire;
-  const answered = q.completion > 0 || q.workAgain;
+  const q = data.questionnaire ?? {};
+  const initial = data.initial ?? {};
+  const checklistData = data.checklist ?? {};
+  const answered = (q.completion ?? 0) > 0 || q.workAgain;
   const checkedCount = CHECKLIST_ITEMS.filter((i) => checklist[i.key]).length;
   // questionnaire is not a step, only initial step + checklist count
-  const stepsDone = [data.initial.completion, data.checklist.completion].filter(
-    (c) => c >= 100,
+  const stepsDone = [initial.completion, checklistData.completion].filter(
+    (c) => (c ?? 0) >= 100,
   ).length;
 
   return (
@@ -674,8 +769,8 @@ const ExitProcessDetail = ({ id, onBack }) => {
         <div className="flex items-start gap-2 rounded-xl border border-black/10 bg-zinc-50 px-4 py-3 text-xs text-black/70">
           <Lock size={14} className="mt-0.5 shrink-0" />
           <span>
-            This exit process is {data.status.toLowerCase()} and can no longer
-            be edited.
+            This exit process is {String(data.status ?? "").toLowerCase()} and
+            can no longer be edited.
           </span>
         </div>
       )}
@@ -688,7 +783,7 @@ const ExitProcessDetail = ({ id, onBack }) => {
             <div className="min-w-0">
               <p className="text-sm text-black">Overall progress</p>
               <p className="text-xs text-black/40 mt-0.5">
-                {stepsDone} of 2 steps complete
+                {stepsDone} of {TOTAL_STEPS} steps complete
               </p>
               <div className="mt-2">
                 <Badge className={statusClass(data.status)}>
@@ -716,16 +811,16 @@ const ExitProcessDetail = ({ id, onBack }) => {
               label="Last working day"
               value={formatDate(data.separationDate)}
             />
-            <div className="sm:col-span-2 lg:col-span-3 2xl:col-span-1 divide-y divide-black/5 sm:divide-y-0 2xl:divide-y">
-              <DetailRow
-                label="Reason for leaving"
-                value={data.reasonForLeaving}
-              />
-              <DetailRow
-                label="Attachment"
-                value={data.attachment ? fileName(data.attachment) : "None"}
-              />
-            </div>
+            <DetailRow
+              label="Reason for leaving"
+              value={data.reasonForLeaving}
+              className="sm:col-span-2 lg:col-span-3 2xl:col-span-1"
+            />
+            <DetailRow
+              label="Attachment"
+              value={data.attachment ? fileName(data.attachment) : "None"}
+              className="sm:col-span-2 lg:col-span-3 2xl:col-span-1"
+            />
           </dl>
         </aside>
 
@@ -737,12 +832,13 @@ const ExitProcessDetail = ({ id, onBack }) => {
             number={1}
             title="Initial step"
             description="Assign the interviewer and set the notice and separation dates."
-            status={data.initial.status}
-            completion={data.initial.completion}
+            status={initial.status}
+            completion={initial.completion ?? 0}
           >
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
-              <Field label="Interviewer">
+              <Field label="Interviewer" htmlFor="exit-interviewer">
                 <InterviewerSelect
+                  id="exit-interviewer"
                   value={initialForm.interviewerId}
                   selectedName={data.interviewerName}
                   disabled={locked}
@@ -751,8 +847,9 @@ const ExitProcessDetail = ({ id, onBack }) => {
                   }
                 />
               </Field>
-              <Field label="Notice period start">
+              <Field label="Notice period start" htmlFor="exit-notice-start">
                 <DateInput
+                  id="exit-notice-start"
                   value={initialForm.noticePeriodStart}
                   disabled={locked}
                   onChange={(e) =>
@@ -761,11 +858,14 @@ const ExitProcessDetail = ({ id, onBack }) => {
                       noticePeriodStart: e.target.value,
                     }))
                   }
-                  className={inputClass}
                 />
               </Field>
-              <Field label="Separation date (last working day)">
+              <Field
+                label="Separation date (last working day)"
+                htmlFor="exit-separation-date"
+              >
                 <DateInput
+                  id="exit-separation-date"
                   value={initialForm.separationDate}
                   min={initialForm.noticePeriodStart || undefined}
                   disabled={locked}
@@ -775,7 +875,6 @@ const ExitProcessDetail = ({ id, onBack }) => {
                       separationDate: e.target.value,
                     }))
                   }
-                  className={inputClass}
                 />
               </Field>
             </div>
@@ -808,8 +907,8 @@ const ExitProcessDetail = ({ id, onBack }) => {
             number={2}
             title="Clearance checklist"
             description={`${checkedCount} of ${CHECKLIST_ITEMS.length} items cleared.`}
-            status={data.checklist.status}
-            completion={data.checklist.completion}
+            status={checklistData.status}
+            completion={checklistData.completion ?? 0}
             last
           >
             <ul className="rounded-xl border border-black/10 divide-y divide-black/5 overflow-hidden">
@@ -885,7 +984,7 @@ const ExitProcessDetail = ({ id, onBack }) => {
             title="Exit questionnaire"
             description="Questions answered by the employee."
             status={q.status}
-            completion={q.completion}
+            completion={q.completion ?? 0}
           >
             <ol className="space-y-4">
               {QUESTIONS.map((item, i) => {

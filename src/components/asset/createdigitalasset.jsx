@@ -1,12 +1,17 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Drawer } from "@mui/material";
 import { FiX, FiPlus, FiCamera, FiLink } from "react-icons/fi";
-import toast from "react-hot-toast";
+import {
+  showApiToast,
+  showApiSuccess,
+  showApiError,
+} from "../../utils/apiToast";
 import {
   createDigitalAsset,
   fetchAccountTypes,
   fetchAuthenticators,
 } from "../../service/assetservice";
+import GlowButton from "../../components/helpers/glowbutton"; // adjust path to where you saved GlowButton.jsx
 
 const CreateDigitalAssetDrawer = ({ open, onClose, onAssetCreated }) => {
   const fileInputRef = useRef(null);
@@ -14,6 +19,7 @@ const CreateDigitalAssetDrawer = ({ open, onClose, onAssetCreated }) => {
   const [accountTypes, setAccountTypes] = useState([]);
   const [authenticators, setAuthenticators] = useState([]);
   const [imagePreview, setImagePreview] = useState(null);
+  const [errors, setErrors] = useState({});
 
   const [formData, setFormData] = useState({
     account_name: "",
@@ -48,51 +54,6 @@ const CreateDigitalAssetDrawer = ({ open, onClose, onAssetCreated }) => {
 
   const arrowIcon = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%239ca3af' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7' /%3E%3C/svg%3E")`;
 
-  const parseBackendError = (err) => {
-    if (!err) return "An unknown error occurred";
-
-    // Direct error thrown from service
-    if (err.message && !err.response) {
-      return err.message;
-    }
-
-    let raw =
-      err.response?.data ||
-      err.responseText ||
-      err.response?.request?.responseText ||
-      err.message ||
-      err;
-
-    if (typeof raw === "string") {
-      const trimmed = raw.trim();
-      if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
-        try {
-          raw = JSON.parse(trimmed);
-        } catch (e) {
-          return trimmed;
-        }
-      } else {
-        return trimmed;
-      }
-    }
-
-    if (typeof raw === "object" && raw !== null) {
-      const msg = raw.message || raw.error || "";
-      const detail = raw.data;
-
-      if (msg && detail) {
-        const formattedDetail =
-          typeof detail === "object" ? JSON.stringify(detail) : detail;
-        return `${msg}: ${formattedDetail}`;
-      }
-      if (msg) return msg;
-      if (detail)
-        return typeof detail === "object" ? JSON.stringify(detail) : detail;
-    }
-
-    return String(raw);
-  };
-
   useEffect(() => {
     if (open) {
       const loadMetadata = async () => {
@@ -104,7 +65,7 @@ const CreateDigitalAssetDrawer = ({ open, onClose, onAssetCreated }) => {
           setAccountTypes(types || []);
           setAuthenticators(auths || []);
         } catch (err) {
-          toast.error(parseBackendError(err));
+          showApiError(err, "Failed to load account types");
         }
       };
       loadMetadata();
@@ -115,6 +76,7 @@ const CreateDigitalAssetDrawer = ({ open, onClose, onAssetCreated }) => {
     const { name, value } = e.target;
     const finalValue = name === "account_status" ? value.toLowerCase() : value;
     setFormData((prev) => ({ ...prev, [name]: finalValue }));
+    if (errors[name]) setErrors((prev) => ({ ...prev, [name]: null }));
   };
 
   const handleFileChange = (e) => {
@@ -126,7 +88,7 @@ const CreateDigitalAssetDrawer = ({ open, onClose, onAssetCreated }) => {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
     setIsSubmitting(true);
 
     const payload = new FormData();
@@ -145,13 +107,33 @@ const CreateDigitalAssetDrawer = ({ open, onClose, onAssetCreated }) => {
     }
 
     try {
-      await createDigitalAsset(payload);
-      toast.success("Successfully added digital Asset");
+      const res = await createDigitalAsset(payload);
+
+      if (res && (res.status_code >= 400 || res.status >= 400)) {
+        showApiToast(
+          "error",
+          res.message || "Failed to add digital asset",
+          res.data,
+        );
+        return;
+      }
+
+      showApiSuccess(res, "Digital Asset added successfully");
       onAssetCreated();
       handleClose();
     } catch (err) {
-      const errorMessage = parseBackendError(err);
-      toast.error(errorMessage, { duration: 6000 });
+      const errorData = err.response?.data;
+      if (errorData?.errors) {
+        // Highlight the fields, and show the field errors as the toast detail
+        setErrors(errorData.errors);
+        showApiToast(
+          "error",
+          errorData.message || "Validation failed",
+          errorData.errors,
+        );
+      } else {
+        showApiError(err, "Failed to add digital asset");
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -169,6 +151,7 @@ const CreateDigitalAssetDrawer = ({ open, onClose, onAssetCreated }) => {
       account_status: "available",
       image: null,
     });
+    setErrors({});
     setImagePreview(null);
     onClose();
   };
@@ -178,6 +161,7 @@ const CreateDigitalAssetDrawer = ({ open, onClose, onAssetCreated }) => {
       anchor="right"
       open={open}
       onClose={handleClose}
+      disableEnforceFocus
       PaperProps={{ className: "w-full max-w-[500px] border-none shadow-2xl" }}
     >
       <div className="h-full flex flex-col bg-white font-['Poppins',sans-serif] font-normal text-[12px]">
@@ -250,7 +234,7 @@ const CreateDigitalAssetDrawer = ({ open, onClose, onAssetCreated }) => {
               value={formData.account_name}
               onChange={handleChange}
               placeholder="e.g. AWS Root Account"
-              className={inputStyle}
+              className={`${inputStyle} ${errors.account_name ? "!border-red-400" : ""}`}
             />
           </div>
 
@@ -266,7 +250,7 @@ const CreateDigitalAssetDrawer = ({ open, onClose, onAssetCreated }) => {
                 value={formData.account_type}
                 onChange={handleChange}
                 style={{ backgroundImage: arrowIcon }}
-                className={selectStyle}
+                className={`${selectStyle} ${errors.account_type ? "!border-red-400" : ""}`}
               >
                 <option value="">Select Type</option>
                 {accountTypes.map((t) => (
@@ -286,7 +270,7 @@ const CreateDigitalAssetDrawer = ({ open, onClose, onAssetCreated }) => {
                 value={formData.authentication_mode}
                 onChange={handleChange}
                 style={{ backgroundImage: arrowIcon }}
-                className={selectStyle}
+                className={`${selectStyle} ${errors.authentication_mode ? "!border-red-400" : ""}`}
               >
                 <option value="">Select Mode</option>
                 {authenticators.map((a) => (
@@ -342,7 +326,7 @@ const CreateDigitalAssetDrawer = ({ open, onClose, onAssetCreated }) => {
                 name="username"
                 value={formData.username}
                 onChange={handleChange}
-                className={inputStyle}
+                className={`${inputStyle} ${errors.username ? "!border-red-400" : ""}`}
               />
             </div>
             <div className="space-y-2">
@@ -353,7 +337,7 @@ const CreateDigitalAssetDrawer = ({ open, onClose, onAssetCreated }) => {
                 name="passkey"
                 value={formData.passkey}
                 onChange={handleChange}
-                className={inputStyle}
+                className={`${inputStyle} ${errors.passkey ? "!border-red-400" : ""}`}
               />
             </div>
           </div>
@@ -367,7 +351,7 @@ const CreateDigitalAssetDrawer = ({ open, onClose, onAssetCreated }) => {
               name="password"
               value={formData.password}
               onChange={handleChange}
-              className={inputStyle}
+              className={`${inputStyle} ${errors.password ? "!border-red-400" : ""}`}
             />
           </div>
         </form>
@@ -381,13 +365,14 @@ const CreateDigitalAssetDrawer = ({ open, onClose, onAssetCreated }) => {
           >
             Cancel
           </button>
-          <button
+
+          <GlowButton
             onClick={handleSubmit}
-            disabled={isSubmitting}
-            className="flex items-center gap-2.5 bg-black text-white px-8 py-3.5 rounded-xl text-[13px] font-normal tracking-wide hover:bg-gray-800 transition-all duration-300 shadow-md shadow-gray-300 active:scale-95 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400"
+            loading={isSubmitting}
+            icon={<FiPlus />}
           >
-            {isSubmitting ? "Adding..." : "Add Asset"} <FiPlus />
-          </button>
+            {isSubmitting ? "Adding..." : "Add Asset"}
+          </GlowButton>
         </div>
       </div>
     </Drawer>

@@ -1,11 +1,12 @@
 import React, { useEffect, useState, useMemo, useCallback } from "react";
-import { FiBell, FiSearch, FiPlus, FiTrash2, FiEdit3 } from "react-icons/fi";
+import { FiSearch, FiPlus, FiTrash2, FiEdit3 } from "react-icons/fi";
 import {
   fetchDashboard,
   fetchAssets,
   removeAsset,
 } from "../../service/assetservice";
-import toast from "react-hot-toast";
+import { toast } from "react-toastify";
+import { showApiSuccess, showApiError } from "../../utils/apiToast";
 import { Icon } from "@iconify/react";
 
 import AssetTable from "./assettable";
@@ -15,60 +16,24 @@ import UpdateAssetDrawer from "./updateassetdrawer";
 import UniversalActionMenu from "./universalmenu";
 import DeleteConfirmationModal from "../../ui/deletemodal";
 
-// --- GLOW BUTTON COMPONENT ---
-function GlowButton({ children = "Edit in Chat", onClick }) {
+// --- GLOW BUTTON COMPONENT (same as dashboard) ---
+function GlowButton({ children, onClick }) {
   return (
-    <>
-      <button className="chat-btn" onClick={onClick}>
-        <span className="label">{children}</span>
-        <span className="glow" />
-      </button>
-
+    <button
+      type="button"
+      className="chat-btn relative overflow-visible rounded-lg px-5 py-3 text-xs font-poppins font-normal bg-black text-white flex items-center gap-2"
+      onClick={onClick}
+    >
+      {children}
+      <span className="glow" />
       <style>{`
-        .chat-btn {
-          position: relative;
-          padding: 10px 20px;
-          border: none;
-          border-radius: 8px;
-          font-weight: 400;
-          font-family: "Poppins", sans-serif;
-          font-size: 12px;
-          letter-spacing: 0.02em;
-          background: linear-gradient(180deg, #14161c, #0d0f14);
-          color: white;
-          overflow: visible;
-          cursor: pointer;
-          transition: transform 180ms cubic-bezier(.22, .61, .36, 1);
-        }
-        .chat-btn::before {
-          content: "";
-          position: absolute;
-          inset: 0;
-          padding: 0px 0px 3px 0px;
-          border-radius: inherit;
-          background: linear-gradient(90deg, #6d7cff, #a855f7, #ec4899, #6d7cff);
-          background-size: 300% 100%;
-          animation: slide 3s linear infinite;
-          transition: padding 180ms cubic-bezier(.22, .61, .36, 1);
-          -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-          -webkit-mask-composite: xor;
-          mask-composite: exclude;
-        }
+        .chat-btn { position: relative; overflow: visible; cursor: pointer; transition: transform 180ms cubic-bezier(.22, .61, .36, 1); }
+        .chat-btn::before { content: ""; position: absolute; inset: 0; padding: 0px 0px 3px 0px; border-radius: 8px; background: linear-gradient(90deg, #6d7cff, #a855f7, #ec4899, #6d7cff); background-size: 300% 100%; animation: slide 3s linear infinite; transition: padding 180ms cubic-bezier(.22, .61, .36, 1); -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; }
         .chat-btn:hover::before { padding: 1px 1px 5px 1px; }
-        .chat-btn:hover .glow { opacity: 0.8; filter: blur(18px); }
-        .glow {
-          position: absolute; left: 12%; right: 12%; bottom: -8px; height: 10px;
-          border-radius: 9999px;
-          background: linear-gradient(90deg, #6d7cff, #a855f7, #ec4899, #6d7cff);
-          background-size: 300% 100%;
-          animation: slide 3s linear infinite;
-          filter: blur(16px); opacity: 0.55;
-          transition: opacity 180ms ease, filter 180ms ease;
-        }
+        .glow { position: absolute; left: 12%; right: 12%; bottom: -8px; height: 10px; border-radius: 9999px; background: linear-gradient(90deg, #6d7cff, #a855f7, #ec4899, #6d7cff); background-size: 300% 100%; animation: slide 3s linear infinite; filter: blur(16px); opacity: 0.55; transition: opacity 180ms ease; }
         @keyframes slide { from { background-position: 0% 0; } to { background-position: 300% 0; } }
-        .label { position: relative; z-index: 2; display: flex; align-items: center; gap: 8px; }
       `}</style>
-    </>
+    </button>
   );
 }
 
@@ -118,7 +83,7 @@ function PhysicalAssetTab() {
       setDashboardData(stats);
     } catch (e) {
       console.error(e);
-      toast.error("Failed to load inventory data");
+      showApiError(e, "Failed to load inventory data");
     } finally {
       setIsLoading(false);
     }
@@ -136,11 +101,13 @@ function PhysicalAssetTab() {
     const loadingToast = toast.loading("Deleting asset...");
 
     try {
-      await removeAsset(row.id);
-      toast.success("Asset deleted successfully", { id: loadingToast });
+      const res = await removeAsset(row.id);
+      toast.dismiss(loadingToast);
+      showApiSuccess(res, "Asset deleted successfully");
       loadData();
     } catch (err) {
-      toast.error("Deletion failed", { id: loadingToast });
+      toast.dismiss(loadingToast);
+      showApiError(err, "Deletion failed");
     }
   };
 
@@ -195,7 +162,7 @@ function PhysicalAssetTab() {
           const isAllocated = val?.toLowerCase() === "allocated";
           return (
             <span
-              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[12px] font-normal border ${
+              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-normal border ${
                 isAllocated
                   ? "bg-emerald-50 text-emerald-700 border-emerald-100"
                   : "bg-sky-50 text-sky-700 border-sky-100"
@@ -274,6 +241,43 @@ function PhysicalAssetTab() {
     return filtered;
   }, [assets, activeStatus, searchQuery, sortConfig]);
 
+  const damagedCount = assets.filter(
+    (a) => a.condition?.toLowerCase() === "damaged",
+  ).length;
+
+  const statCards = [
+    {
+      label: "Total Assets",
+      value: dashboardData?.total_assets,
+      bg: "#EBFDEF",
+      icon: "mdi:package-variant-closed",
+    },
+    {
+      label: "Allocated",
+      value: dashboardData?.allocated_assets,
+      bg: "#E8EFF9",
+      icon: "mdi:account-tick-outline",
+    },
+    {
+      label: "Available",
+      value: dashboardData?.unallocated_assets,
+      bg: "#FFEFE7",
+      icon: "mdi:cube-outline",
+    },
+    {
+      label: "Maintenance",
+      value: dashboardData?.assets_under_maintanance,
+      bg: "#FFFBDB",
+      icon: "mdi:wrench-outline",
+    },
+    {
+      label: "Damaged",
+      value: damagedCount,
+      bg: "#FFDADA",
+      icon: "mdi:alert-circle-outline",
+    },
+  ];
+
   return (
     <div className="font-['Poppins',sans-serif] font-normal">
       <DeleteConfirmationModal
@@ -283,83 +287,57 @@ function PhysicalAssetTab() {
         itemName={deleteModal.data?.asset_name || "this asset"}
       />
 
-      {/* Page title bar */}
-      <div className="bg-white flex justify-between items-center px-5 py-4 mb-4 shadow-sm rounded-xl border border-gray-100">
-        <h1 className="text-[17px] text-gray-800 font-normal tracking-wide">
-          Physical Asset Inventory
-        </h1>
-        <div className="flex items-center gap-3">
+      {/* Page header (same as dashboard) */}
+      <div className="w-full mt-4 px-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <p className="text-lg sm:text-2xl font-medium">
+            Physical Asset Inventory
+          </p>
+          <p className="text-xs text-gray-400 font-normal">
+            Track and manage all physical assets here
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
           <GlowButton onClick={() => setIsCreateOpen(true)}>
-            <FiPlus /> Add Physical Asset
+            <FiPlus className="w-4 h-4" /> Add Physical Asset
           </GlowButton>
         </div>
       </div>
 
-      {/* Stat cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
-        {[
-          {
-            label: "Total",
-            value: dashboardData?.total_assets,
-            color: "text-blue-600",
-            bar: "bg-blue-500",
-            tint: "bg-blue-50/60",
-          },
-          {
-            label: "Allocated",
-            value: dashboardData?.allocated_assets,
-            color: "text-emerald-600",
-            bar: "bg-emerald-500",
-            tint: "bg-emerald-50/60",
-          },
-          {
-            label: "Available",
-            value: dashboardData?.unallocated_assets,
-            color: "text-sky-600",
-            bar: "bg-sky-500",
-            tint: "bg-sky-50/60",
-          },
-          {
-            label: "Maintenance",
-            value: dashboardData?.assets_under_maintanance,
-            color: "text-red-600",
-            bar: "bg-red-500",
-            tint: "bg-red-50/60",
-          },
-        ].map((stat, i) => (
+      {/* KPI cards (same as dashboard) */}
+      <section className="grid px-4 grid-cols-2 sm:grid-cols-5 gap-4 w-full mt-4">
+        {statCards.map((stat, i) => (
           <div
             key={i}
-            className="relative overflow-hidden bg-white px-5 py-4 rounded-2xl border border-gray-100 shadow-sm transition-all duration-300 hover:shadow-md hover:-translate-y-0.5"
+            className="shadow-sm rounded-lg p-3 flex items-center gap-3 transition-all relative cursor-default"
+            style={{ backgroundColor: stat.bg }}
           >
-            <span
-              className={`absolute left-0 top-0 h-full w-[3px] ${stat.bar}`}
-            />
-            <div
-              className={`absolute -right-6 -top-6 w-20 h-20 rounded-full ${stat.tint}`}
-            />
-            <p className="relative text-[13px] text-gray-400 mb-1 font-normal tracking-wide">
-              {stat.label}
-            </p>
-            <p
-              className={`relative text-[28px] leading-tight font-normal ${stat.color}`}
-            >
-              {isLoading ? "..." : stat.value || 0}
-            </p>
+            <div className="flex items-center justify-center min-w-10 h-10 rounded-full bg-black text-white">
+              <Icon icon={stat.icon} className="w-5 h-5" />
+            </div>
+            <div className="overflow-hidden">
+              <p className="text-gray-500 text-xs truncate uppercase font-medium">
+                {stat.label}
+              </p>
+              <h2 className="text-lg sm:text-xl font-medium text-gray-800">
+                {isLoading ? "..." : (stat.value ?? 0)}
+              </h2>
+            </div>
           </div>
         ))}
-      </div>
+      </section>
 
       {/* Table card */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-visible">
+      <div className="mt-4 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-visible">
         <div className="px-5 pt-4 pb-3 border-b border-gray-100 flex justify-between items-center bg-white rounded-t-2xl">
-          <div className="flex gap-2 text-[13px]">
+          <div className="flex gap-2 text-sm">
             {["all", "Allocated", "available"].map((status) => (
               <button
                 key={status}
                 onClick={() => setActiveStatus(status)}
-                className={`relative px-4 py-2 capitalize font-normal tracking-wide rounded-lg transition-all duration-300 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200 ${
+                className={`relative px-4 py-2 capitalize font-normal tracking-wide rounded-lg transition-all duration-300 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-300 ${
                   activeStatus === status
-                    ? "text-indigo-600 bg-indigo-50/70 after:content-[''] after:absolute after:bottom-0 after:left-3 after:right-3 after:h-[2px] after:rounded-full after:bg-indigo-600"
+                    ? "text-black bg-gray-50/70 after:content-[''] after:absolute after:bottom-0 after:left-3 after:right-3 after:h-[2px] after:rounded-full after:bg-black"
                     : "text-gray-500 hover:text-gray-800 hover:bg-gray-50"
                 }`}
               >
@@ -369,12 +347,12 @@ function PhysicalAssetTab() {
           </div>
 
           <div className="relative group">
-            <FiSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 transition-colors duration-300 group-focus-within:text-indigo-500" />
+            <FiSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 transition-colors duration-300 group-focus-within:text-gray-700" />
             <input
               type="text"
               placeholder="Search assets..."
               value={searchQuery}
-              className="pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-[13px] font-normal outline-none transition-all duration-300 placeholder:text-gray-400 hover:border-gray-300 focus:bg-white focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100 w-64"
+              className="pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-normal outline-none transition-all duration-300 placeholder:text-gray-400 hover:border-gray-300 focus:bg-white focus:border-gray-400 focus:ring-2 focus:ring-gray-200 w-64"
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>

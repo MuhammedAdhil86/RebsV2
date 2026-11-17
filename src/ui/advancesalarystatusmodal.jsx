@@ -1,12 +1,21 @@
-import React, { useState } from "react";
-import { X, Trash2 } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { Trash2 } from "lucide-react";
 import { Icon } from "@iconify/react";
-import toast from "react-hot-toast";
 import {
   updateAdvanceSalaryStatus,
   removeAdvanceSalary,
 } from "../service/advanceSalaryService"; // <- adjust path
 import DeleteConfirmationModal from "./deletemodal"; // <- adjust path/file name
+import { showApiSuccess, showApiError } from "../utils/apiToast";
+import ModalButton from "./button/modalbutton";
+
+// Badge colours for request status (lowercase input)
+const getStatusBadge = (status) => {
+  if (status.includes("approved")) return "bg-green-100 text-green-700";
+  if (status.includes("rejected"))
+    return "bg-red-50 text-red-600 border border-red-200";
+  return "bg-gray-100 text-gray-700"; // pending / anything else
+};
 
 const AdvanceSalaryApprovalModal = ({
   open,
@@ -16,7 +25,23 @@ const AdvanceSalaryApprovalModal = ({
   onOptimisticUpdate,
 }) => {
   const [loading, setLoading] = useState(false);
+  const [action, setAction] = useState(""); // "Approved" | "Rejected" (which button shows the spinner)
   const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const handleClose = () => {
+    if (!loading && onClose) onClose();
+  };
+
+  // Close with the Escape key (not while the delete confirmation is open)
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e) => {
+      if (e.key === "Escape" && !loading && !confirmDelete && onClose)
+        onClose();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open, onClose, loading, confirmDelete]);
 
   if (!open || !data) return null;
 
@@ -28,6 +53,8 @@ const AdvanceSalaryApprovalModal = ({
       ? ((amount / basic) * 100).toFixed(1)
       : "--";
 
+  const statusLower = String(data.status || "pending").toLowerCase();
+
   const handleAction = async (status) => {
     if (loading) return;
 
@@ -35,22 +62,28 @@ const AdvanceSalaryApprovalModal = ({
 
     try {
       setLoading(true);
+      setAction(status);
       onOptimisticUpdate?.(data.id, status);
 
       // status: "Approved" | "Rejected"
       const body = await updateAdvanceSalaryStatus(data.id, status);
 
-      // message comes from the backend
-      if (body?.message) toast.success(body.message);
+      // Backend message (falls back to a default text)
+      showApiSuccess(
+        body,
+        `Advance request ${status.toLowerCase()} successfully`,
+      );
 
       onClose();
       onSuccess?.();
     } catch (error) {
       onOptimisticUpdate?.(data.id, previousStatus);
       console.error("STATUS ERROR:", error);
-      if (error?.message) toast.error(error.message);
+      // Backend message + data (or error) in one toast
+      showApiError(error, "Failed to update advance request");
     } finally {
       setLoading(false);
+      setAction("");
     }
   };
 
@@ -59,194 +92,193 @@ const AdvanceSalaryApprovalModal = ({
 
     try {
       setLoading(true);
+      setAction("Delete");
       const body = await removeAdvanceSalary(data.id);
 
-      // message comes from the backend
-      if (body?.message) toast.success(body.message);
+      showApiSuccess(body, "Advance request deleted successfully");
 
       onClose();
       onSuccess?.(); // table reloads, so the deleted row disappears
     } catch (error) {
       console.error("DELETE ERROR:", error);
-      if (error?.message) toast.error(error.message);
+      showApiError(error, "Failed to delete advance request");
       setConfirmDelete(false);
     } finally {
       setLoading(false);
+      setAction("");
     }
   };
 
+  // ---------- Theme styles (same as Leave Request modal) ----------
+  const labelCls = "text-[11px] text-gray-500 mb-1";
+  const boxCls = "bg-slate-50 border border-gray-200 px-4 py-3 rounded-lg";
+  const valueCls = "text-[13px] text-gray-800 break-words";
+
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm font-poppins text-[12px]">
-      <div className="bg-white w-[95%] max-w-[500px] rounded-[2rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] border border-white/20">
-        {/* HEADER */}
-        <div className="px-8 py-5 flex items-center justify-between border-b border-gray-50 bg-white">
-          <div className="flex items-center gap-3">
-            <Icon icon="solar:wallet-outline" className="w-5 h-5 text-black" />
-            <div>
-              <h2 className="text-gray-900 text-[16px] font-medium uppercase">
-                Advance Salary
-              </h2>
-              <p className="text-gray-400 text-[10px]">
-                Review and update the staff request
-              </p>
-            </div>
-          </div>
-          <button onClick={onClose}>
-            <X size={20} />
-          </button>
-        </div>
-
-        {/* BODY */}
-        <div className="p-8 space-y-5 overflow-y-auto">
-          {/* GRID */}
-          <div className="grid grid-cols-2 gap-x-4 gap-y-4">
-            <div>
-              <label className="block mb-1 font-medium text-gray-700">
-                Staff Name
-              </label>
-              <input
-                readOnly
-                value={data.name}
-                className="w-full border p-3 rounded-2xl bg-gray-50 text-gray-600"
-              />
-            </div>
-
-            <div>
-              <label className="block mb-1 font-medium text-gray-700">
-                Requested On
-              </label>
-              <div className="relative">
-                <input
-                  readOnly
-                  value={data.requestedOn}
-                  className="w-full border p-3 pr-10 rounded-2xl bg-gray-50 text-gray-600"
-                />
+    <>
+      <div
+        className="fixed inset-0 z-[100] flex items-center justify-center px-4 bg-black/50 backdrop-blur-[2px] font-poppins text-[12px]"
+        onClick={handleClose}
+      >
+        <div
+          className="bg-white w-full max-w-[960px] max-h-[90vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in duration-200"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* HEADER */}
+          <div className="flex items-start justify-between gap-3 px-6 pt-5 pb-4 border-b border-gray-100">
+            <div className="flex items-start gap-3">
+              <span className="p-2 bg-slate-100 rounded-lg">
                 <Icon
-                  icon="solar:calendar-outline"
-                  className="w-4 h-4 text-black absolute right-4 top-1/2 -translate-y-1/2"
+                  icon="solar:wallet-outline"
+                  className="w-5 h-5 text-black"
                 />
+              </span>
+              <div>
+                <h2 className="text-[16px] text-gray-900">Advance Salary</h2>
+                <p className="text-[11px] text-gray-500 mt-0.5">
+                  Review and update the staff request
+                </p>
               </div>
             </div>
-
-            <div>
-              <label className="block mb-1 font-medium text-gray-700">
-                Advance Amount
-              </label>
-              <input
-                readOnly
-                value={data.amount}
-                className="w-full border p-3 rounded-2xl bg-gray-50 text-gray-600 font-medium"
-              />
-            </div>
-
-            <div>
-              <label className="block mb-1 font-medium text-gray-700">
-                Basic Salary
-              </label>
-              <input
-                readOnly
-                value={data.basicSalary}
-                className="w-full border p-3 rounded-2xl bg-gray-50 text-gray-600"
-              />
-            </div>
-
-            <div>
-              <label className="block mb-1 font-medium text-gray-700">
-                Advance Date
-              </label>
-              <div className="relative">
-                <input
-                  readOnly
-                  value={data.advanceDate}
-                  className="w-full border p-3 pr-10 rounded-2xl bg-gray-50 text-gray-600"
-                />
-                <Icon
-                  icon="solar:calendar-outline"
-                  className="w-4 h-4 text-black absolute right-4 top-1/2 -translate-y-1/2"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block mb-1 font-medium text-gray-700">
-                Status
-              </label>
-              <input
-                readOnly
-                value={data.status}
-                className="w-full border p-3 rounded-2xl bg-gray-50 text-gray-600"
-              />
-            </div>
+            <button
+              type="button"
+              onClick={handleClose}
+              aria-label="Close"
+              disabled={loading}
+              className="text-gray-400 hover:text-black transition-colors disabled:opacity-50"
+            >
+              <Icon icon="material-symbols:close" className="w-6 h-6" />
+            </button>
           </div>
 
-          {/* REASON */}
-          <div>
-            <label className="block mb-1 font-medium text-gray-700">
-              Reason
-            </label>
-            <textarea
-              rows="3"
-              readOnly
-              value={data.reason}
-              className="w-full border p-3 rounded-2xl bg-gray-50 text-gray-600"
-            />
+          {/* BODY: staff + amounts on the left, request info on the right */}
+          <div className="px-6 py-5 overflow-y-auto">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+              {/* ---------- LEFT: STAFF + AMOUNTS ---------- */}
+              <div className="space-y-4 min-w-0">
+                {/* Staff info */}
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 shrink-0 bg-slate-100 border border-gray-200 rounded-full flex items-center justify-center text-[15px] text-gray-700 uppercase">
+                    {data.name && data.name.charAt(0)}
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="text-[14px] font-medium text-gray-800 leading-tight truncate">
+                      {data.name}
+                    </h3>
+                    <p className="text-[12px] text-gray-500">Staff</p>
+                  </div>
+                </div>
+
+                {/* Amounts */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className={boxCls}>
+                    <p className={labelCls}>Advance Amount</p>
+                    <p className={`${valueCls} font-medium tabular-nums`}>
+                      {data.amount}
+                    </p>
+                  </div>
+                  <div className={boxCls}>
+                    <p className={labelCls}>Basic Salary</p>
+                    <p className={`${valueCls} tabular-nums`}>
+                      {data.basicSalary}
+                    </p>
+                  </div>
+                </div>
+
+                <div className={boxCls}>
+                  <p className={labelCls}>Advance vs Basic</p>
+                  <p className={`${valueCls} font-medium tabular-nums`}>
+                    {percent === "--" ? "--" : `${percent}%`}
+                  </p>
+                </div>
+              </div>
+
+              {/* ---------- RIGHT: REQUEST INFO ---------- */}
+              <div className="border border-gray-200 rounded-lg p-4 self-start min-w-0 space-y-4">
+                {/* Title + status */}
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-[13px] font-medium text-gray-800">
+                    Request Details
+                  </p>
+                  <span
+                    className={`px-3 py-1 rounded-full text-[11px] capitalize whitespace-nowrap ${getStatusBadge(statusLower)}`}
+                  >
+                    {statusLower}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className={boxCls}>
+                    <p className={labelCls}>Requested On</p>
+                    <p className={`${valueCls} tabular-nums`}>
+                      {data.requestedOn}
+                    </p>
+                  </div>
+                  <div className={boxCls}>
+                    <p className={labelCls}>Advance Date</p>
+                    <p className={`${valueCls} tabular-nums`}>
+                      {data.advanceDate}
+                    </p>
+                  </div>
+                </div>
+
+                <div className={boxCls}>
+                  <p className={labelCls}>Approved By</p>
+                  <p className={valueCls}>{data.approvedBy}</p>
+                </div>
+
+                <div className={boxCls}>
+                  <p className={labelCls}>Reason</p>
+                  <p className={valueCls}>{data.reason}</p>
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* FOOTER */}
-          <div className="flex justify-between items-center border-t border-gray-50 pt-4 gap-3">
-            <div className="flex flex-col gap-0.5 text-gray-600">
-              <div>
-                <span>Advance vs Basic: </span>
-                <span className="font-semibold text-gray-900">
-                  {percent === "--" ? "--" : `${percent}%`}
-                </span>
-              </div>
-              <div>
-                <span>Approved By: </span>
-                <span className="font-semibold text-gray-900">
-                  {data.approvedBy}
-                </span>
-              </div>
-            </div>
+          <div className="px-6 py-4 border-t border-gray-100 bg-slate-50/60 flex items-center justify-between gap-2">
+            <button
+              type="button"
+              disabled={loading}
+              onClick={() => setConfirmDelete(true)}
+              title="Delete"
+              aria-label="Delete"
+              className="px-3 py-2 border border-red-200 text-red-600 text-[12px] rounded-lg hover:bg-red-50 disabled:opacity-60 transition-colors"
+            >
+              <Trash2 size={16} />
+            </button>
 
-            <div className="flex gap-3">
-              <button
-                disabled={loading}
-                onClick={() => setConfirmDelete(true)}
-                title="Delete"
-                className="px-3 py-2.5 border border-red-200 text-red-600 hover:bg-red-50 rounded-2xl disabled:opacity-60 transition-colors"
-              >
-                <Trash2 size={16} />
-              </button>
-
-              <button
-                disabled={loading || data.status === "Rejected"}
+            <div className="flex gap-2">
+              <ModalButton
+                variant="danger"
                 onClick={() => handleAction("Rejected")}
-                className="px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-2xl disabled:opacity-60 transition-colors"
+                disabled={loading || data.status === "Rejected"}
+                loading={loading && action === "Rejected"}
               >
                 Reject
-              </button>
+              </ModalButton>
 
-              <button
-                disabled={loading || data.status === "Approved"}
+              <ModalButton
+                variant="primary"
                 onClick={() => handleAction("Approved")}
-                className="px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-2xl disabled:opacity-60 transition-colors"
+                disabled={loading || data.status === "Approved"}
+                loading={loading && action === "Approved"}
               >
                 Approve
-              </button>
+              </ModalButton>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Shared delete confirmation */}
+      {/* Shared delete confirmation (outside the overlay so clicks don't close the main modal) */}
       <DeleteConfirmationModal
         isOpen={confirmDelete}
         onClose={() => setConfirmDelete(false)}
         onConfirm={handleDelete}
         itemName={`${data.name}'s advance request (${data.amount})`}
       />
-    </div>
+    </>
   );
 };
 

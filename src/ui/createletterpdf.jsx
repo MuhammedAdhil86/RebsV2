@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
-import ReactQuill from "react-quill";
+import ReactQuill, { Quill } from "react-quill";
 import "react-quill/dist/quill.snow.css";
 import {
   ChevronDown,
@@ -13,10 +13,81 @@ import {
   Loader2,
   ShieldCheck,
 } from "lucide-react";
-import toast from "react-hot-toast";
+import { toast } from "react-toastify";
+import {
+  showApiError,
+  resolveApiSuccess,
+  resolveApiError,
+} from "../utils/apiToast"; // adjust path to where apiToast.jsx lives
 import GlowButton from "../components/helpers/glowbutton";
 import { createLetterPdfTemplate } from "../service/companyService";
 import { fetchEmailPlaceholders } from "../service/mainServices";
+
+// ---------------------------------------------------------------------------
+// Quill image format that KEEPS alt / width / height / style
+// (Quill's default image format drops "style", which would lose the logo size)
+// ---------------------------------------------------------------------------
+const BaseImage = Quill.import("formats/image");
+const IMAGE_ATTRS = ["alt", "height", "width", "style"];
+
+class StyledImage extends BaseImage {
+  static formats(domNode) {
+    return IMAGE_ATTRS.reduce((formats, attr) => {
+      if (domNode.hasAttribute(attr)) {
+        formats[attr] = domNode.getAttribute(attr);
+      }
+      return formats;
+    }, {});
+  }
+
+  format(name, value) {
+    if (IMAGE_ATTRS.includes(name)) {
+      if (value) this.domNode.setAttribute(name, value);
+      else this.domNode.removeAttribute(name);
+    } else {
+      super.format(name, value);
+    }
+  }
+}
+Quill.register(StyledImage, true);
+
+// Static logo size used for Sender / Receiver logo (and any "logo" placeholder)
+const LOGO_STYLE =
+  "height:48px; max-width:160px; width:auto; object-fit:contain;";
+
+// Forces the static logo size on every logo <img> before saving
+// (SenderLogoURL, ReceiverLogoURL, any placeholder with "logo" in src/alt)
+const applyLogoSize = (html) => {
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  doc.querySelectorAll("img").forEach((img) => {
+    const src = (img.getAttribute("src") || "").toLowerCase();
+    const alt = (img.getAttribute("alt") || "").toLowerCase();
+    if (src.includes("logo") || alt.includes("logo")) {
+      img.removeAttribute("width");
+      img.removeAttribute("height");
+      img.setAttribute("style", LOGO_STYLE);
+    }
+  });
+  return html.trim().startsWith("<html")
+    ? doc.documentElement.outerHTML
+    : doc.body.innerHTML;
+};
+
+// Handles: [..], { data: [..] }, { data: { data: [..] } }
+const parsePlaceholders = (res) => {
+  const list = Array.isArray(res)
+    ? res
+    : Array.isArray(res?.data)
+      ? res.data
+      : Array.isArray(res?.data?.data)
+        ? res.data.data
+        : [];
+  return list
+    .map((item) =>
+      typeof item === "string" ? item : item?.placeholder || item?.label || "",
+    )
+    .filter(Boolean);
+};
 
 // Color palette with leading empty string for default color reset
 const COLOR_PALETTE = [
@@ -103,21 +174,24 @@ export default function CreateLetterPdfTemplateForm({
 
   /* ---------------- Fetch Dynamic Placeholders ---------------- */
   useEffect(() => {
+    let isMounted = true;
+
     const loadPlaceholders = async () => {
       setLoadingPlaceholders(true);
       try {
         const data = await fetchEmailPlaceholders();
-        const placeholderList = (data || []).map(
-          (item) => item.placeholder || item.label || item,
-        );
-        setPlaceholders(placeholderList);
+        if (isMounted) setPlaceholders(parsePlaceholders(data));
       } catch (err) {
-        console.error("Failed to load placeholders:", err);
+        if (isMounted) showApiError(err, "Failed to load placeholders");
       } finally {
-        setLoadingPlaceholders(false);
+        if (isMounted) setLoadingPlaceholders(false);
       }
     };
     loadPlaceholders();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   /* ---------------- Input Handlers ---------------- */
@@ -151,13 +225,11 @@ export default function CreateLetterPdfTemplateForm({
     const range = editor.getSelection(true);
     const insertIndex = range ? range.index : editor.getLength();
 
-    const isLogo =
-      placeholderKey.toLowerCase().includes("logo") ||
-      (placeholderKey.toLowerCase().endsWith("url") &&
-        placeholderKey.toLowerCase().includes("logo"));
+    // SenderLogoURL / ReceiverLogoURL (any placeholder with "logo" in its name)
+    const isLogo = placeholderKey.toLowerCase().includes("logo");
 
     if (isLogo) {
-      const logoHtml = `<p><img src="{{.${placeholderKey}}}" alt="${placeholderKey}" style="height:48px; max-width:160px; width:auto; object-fit:contain;" /></p>`;
+      const logoHtml = `<p><img src="{{.${placeholderKey}}}" alt="${placeholderKey}" style="${LOGO_STYLE}" /></p>`;
       editor.clipboard.dangerouslyPasteHTML(insertIndex, logoHtml, "user");
       editor.setSelection(insertIndex + 1);
       toast.success(`Inserted ${placeholderKey}`);
@@ -183,9 +255,11 @@ export default function CreateLetterPdfTemplateForm({
     }
 
     setIsSubmitting(true);
+    const tid = toast.loading("Creating PDF template...");
 
-    const content = formData.body_html.trim();
-    const finalHtml = content.startsWith("<html>")
+    // Enforce static logo size (48px height, 160px max width) before saving
+    const content = applyLogoSize(formData.body_html.trim());
+    const finalHtml = content.startsWith("<html")
       ? content
       : `<html><body>${content}</body></html>`;
 
@@ -203,7 +277,7 @@ export default function CreateLetterPdfTemplateForm({
 
     try {
       const response = await createLetterPdfTemplate(payload);
-      toast.success(response?.message || "PDF template created successfully");
+      resolveApiSuccess(tid, response, "PDF template created successfully");
 
       if (onSuccess) {
         onSuccess(response);
@@ -213,12 +287,7 @@ export default function CreateLetterPdfTemplateForm({
         setFormData(INITIAL_FORM);
       }
     } catch (err) {
-      toast.error(
-        err?.message ||
-          err?.error ||
-          err?.detail ||
-          "Failed to create PDF template",
-      );
+      resolveApiError(tid, err, "Failed to create PDF template");
     } finally {
       setIsSubmitting(false);
     }
@@ -278,7 +347,7 @@ export default function CreateLetterPdfTemplateForm({
   ];
 
   const filteredPlaceholders = placeholders.filter((p) =>
-    p.toLowerCase().includes(searchTerm.toLowerCase()),
+    String(p).toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
   return (
@@ -309,6 +378,11 @@ export default function CreateLetterPdfTemplateForm({
               min-height: 380px;
               line-height: 1.6;
               padding: 18px;
+            }
+            .ql-editor img {
+              display: inline-block;
+              vertical-align: middle;
+              border-radius: 4px;
             }
             .ql-snow .ql-color, 
             .ql-snow .ql-background {
@@ -513,6 +587,7 @@ export default function CreateLetterPdfTemplateForm({
               className="w-full px-5 py-3 bg-white border border-gray-200 rounded-xl text-[12px] focus:ring-1 focus:ring-black outline-none transition-all"
               value={formData.name}
               onChange={handleChange}
+              disabled={isSubmitting}
             />
           </div>
 
@@ -528,6 +603,7 @@ export default function CreateLetterPdfTemplateForm({
               className="w-full px-5 py-3 bg-white border border-gray-200 rounded-xl text-[12px] focus:ring-1 focus:ring-black outline-none transition-all"
               value={formData.purpose}
               onChange={handlePurposeChange}
+              disabled={isSubmitting}
             />
           </div>
 
@@ -543,6 +619,7 @@ export default function CreateLetterPdfTemplateForm({
                   name="is_default"
                   checked={Boolean(formData.is_default)}
                   onChange={handleChange}
+                  disabled={isSubmitting}
                   className="w-4 h-4 rounded text-black border-gray-300 focus:ring-black cursor-pointer"
                 />
                 <span className="text-[12px] text-gray-700 font-medium">
@@ -566,6 +643,7 @@ export default function CreateLetterPdfTemplateForm({
             className="w-full px-5 py-3 bg-white border border-gray-200 rounded-xl text-[12px] focus:ring-1 focus:ring-black outline-none transition-all"
             value={formData.subject}
             onChange={handleChange}
+            disabled={isSubmitting}
           />
         </div>
 

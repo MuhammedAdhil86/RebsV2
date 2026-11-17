@@ -6,6 +6,31 @@ import {
 } from "../../service/policiesService";
 import { getDepartmentData } from "../../service/staffservice";
 
+// ✅ toast: react-toastify helpers (backend message + data/error)
+import {
+  showApiToast,
+  showApiSuccess,
+  showApiError,
+  getApiBody,
+} from "../../utils/apiToast";
+
+// ✅ badge: full class names so Tailwind can detect them
+const SHIFT_BADGE_COLORS = [
+  "bg-blue-100 text-blue-800 border-blue-200",
+  "bg-green-100 text-green-800 border-green-200",
+  "bg-orange-100 text-orange-800 border-orange-200",
+  "bg-purple-100 text-purple-800 border-purple-200",
+  "bg-pink-100 text-pink-800 border-pink-200",
+  "bg-teal-100 text-teal-800 border-teal-200",
+  "bg-yellow-100 text-yellow-800 border-yellow-200",
+  "bg-indigo-100 text-indigo-800 border-indigo-200",
+  "bg-red-100 text-red-800 border-red-200",
+  "bg-cyan-100 text-cyan-800 border-cyan-200",
+  "bg-lime-100 text-lime-800 border-lime-200",
+  "bg-fuchsia-100 text-fuchsia-800 border-fuchsia-200",
+];
+const OFF_BADGE = "bg-gray-100 text-gray-600 border-gray-200";
+
 export default function SwapShift() {
   const [currentMonth] = useState(() => {
     const now = new Date();
@@ -73,6 +98,21 @@ export default function SwapShift() {
     [allRows],
   );
 
+  // ✅ badge: each distinct shift name gets its own color (stable, sorted by name)
+  const shiftColorMap = useMemo(() => {
+    const names = Array.from(
+      new Set(allRows.map((r) => r.shift_name?.trim()).filter(Boolean)),
+    ).sort();
+    return Object.fromEntries(
+      names.map((n, i) => [
+        n,
+        SHIFT_BADGE_COLORS[i % SHIFT_BADGE_COLORS.length],
+      ]),
+    );
+  }, [allRows]);
+
+  const getShiftBadgeClass = (name) => shiftColorMap[name?.trim()] || OFF_BADGE;
+
   // Shift of an employee on a specific date
   const getShiftForDate = (empId, isoDate) => {
     if (!empId) return "";
@@ -110,6 +150,7 @@ export default function SwapShift() {
         if (!ignore) setDepartments(Array.isArray(list) ? list : []);
       } catch (err) {
         console.error("Department load error:", err);
+        if (!ignore) showApiError(err, "Failed to load departments"); // ✅ toast
       }
     })();
     return () => {
@@ -139,6 +180,12 @@ export default function SwapShift() {
               resData?.message ||
               "Failed to fetch effective shifts parameters.",
           });
+          // ✅ toast
+          showApiToast(
+            "error",
+            resData?.message || "Failed to fetch effective shifts parameters.",
+            resData?.data,
+          );
         }
       } catch (err) {
         if (ignore) return;
@@ -148,6 +195,7 @@ export default function SwapShift() {
           type: "error",
           message: err.message || "Something went wrong while loading shifts.",
         });
+        showApiError(err, "Something went wrong while loading shifts."); // ✅ toast
       } finally {
         if (!ignore) {
           setLoading(false);
@@ -239,6 +287,10 @@ export default function SwapShift() {
         message:
           "Validation Error: Please select an initiator, target employee, and swap date.",
       });
+      showApiToast(
+        "error",
+        "Please select an initiator, target employee, and swap date.",
+      ); // ✅ toast
       return;
     }
 
@@ -247,6 +299,7 @@ export default function SwapShift() {
         type: "error",
         message: "Validation Error: Can't swap with same user.",
       });
+      showApiToast("error", "Can't swap with same user."); // ✅ toast
       return;
     }
 
@@ -257,6 +310,10 @@ export default function SwapShift() {
         message:
           "Validation Error: Both employees already have the same shift on this date.",
       });
+      showApiToast(
+        "error",
+        "Both employees already have the same shift on this date.",
+      ); // ✅ toast
       return;
     }
 
@@ -277,6 +334,7 @@ export default function SwapShift() {
           type: "success",
           message: result.message || "Shift swapped successfully!",
         });
+        showApiSuccess(result, "Shift swapped successfully!"); // ✅ toast
 
         const freshData = await loadAllocations();
         if (freshData?.status_code === 200 && Array.isArray(freshData.data))
@@ -289,6 +347,9 @@ export default function SwapShift() {
           type: "error",
           message: combinedErr,
         });
+        // ✅ toast
+        const body = getApiBody(result);
+        showApiToast("error", body?.message || "Shift swap failed", body?.data);
       }
     } catch (err) {
       let rawString =
@@ -328,6 +389,8 @@ export default function SwapShift() {
           err.message ||
           "shift swap failed: Network pipeline exception occurred.";
       }
+
+      showApiError(err, "Shift swap failed"); // ✅ toast
 
       setNotification({
         type: "error",
@@ -433,13 +496,22 @@ export default function SwapShift() {
                 <label className="block text-[10px] uppercase font-normal text-gray-500 mb-1">
                   Assigned Shift
                 </label>
-                <input
-                  type="text"
-                  value={formData.fromShift}
-                  readOnly
-                  placeholder="No employee selected"
-                  className="w-full text-xs border border-gray-200 rounded-md p-2 bg-gray-100 text-gray-600 cursor-not-allowed font-normal"
-                />
+                {/* ✅ badge */}
+                <div className="w-full min-h-[34px] flex items-center border border-gray-200 rounded-md p-2 bg-gray-100">
+                  {formData.fromShift ? (
+                    <span
+                      className={`text-[11px] px-2 py-0.5 rounded border ${getShiftBadgeClass(
+                        formData.fromShift,
+                      )}`}
+                    >
+                      {formData.fromShift}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-gray-400">
+                      No employee selected
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -474,13 +546,22 @@ export default function SwapShift() {
                 <label className="block text-[10px] uppercase font-normal text-gray-500 mb-1">
                   Target Shift
                 </label>
-                <input
-                  type="text"
-                  value={formData.toShift}
-                  readOnly
-                  placeholder="No employee selected"
-                  className="w-full text-xs border border-gray-200 rounded-md p-2 bg-gray-100 text-gray-600 cursor-not-allowed font-normal"
-                />
+                {/* ✅ badge */}
+                <div className="w-full min-h-[34px] flex items-center border border-gray-200 rounded-md p-2 bg-gray-100">
+                  {formData.toShift ? (
+                    <span
+                      className={`text-[11px] px-2 py-0.5 rounded border ${getShiftBadgeClass(
+                        formData.toShift,
+                      )}`}
+                    >
+                      {formData.toShift}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-gray-400">
+                      No employee selected
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -626,11 +707,16 @@ export default function SwapShift() {
                         {shiftDetails && (
                           <div className="mt-1 flex-grow flex flex-col justify-between font-normal">
                             <div>
-                              <p className="text-[10px] font-normal text-gray-800 leading-tight line-clamp-2">
+                              {/* ✅ badge */}
+                              <span
+                                className={`inline-block max-w-full truncate text-[10px] px-1.5 py-0.5 rounded border ${getShiftBadgeClass(
+                                  shiftDetails.shift_name,
+                                )}`}
+                              >
                                 {shiftDetails.shift_name
                                   ? shiftDetails.shift_name.trim()
                                   : "Unassigned / Off"}
-                              </p>
+                              </span>
                               <p className="text-[9px] text-gray-500 font-normal truncate mt-0.5">
                                 {shiftDetails.employee_name}
                               </p>

@@ -6,10 +6,9 @@ import AttendancePolicy from "./workshifts/attendancepolicy";
 import LeavesAndVacations from "./leaves_and_vacations/leavepolicy";
 import LeaveConfiguration from "./leaves_and_vacations/leaveconfiguration";
 import WeekendsAndOffDays from "./leaves_and_vacations/weeklyoff";
-
 import Holidays from "./leaves_and_vacations/holidays";
 
-/* Imported Employee Code Sub-Component */
+/* Employee Code Sub-Component */
 import EmployeeCodeConfig from "./leaves_and_vacations/employeecodeconfig";
 
 /* Layout Setup Sub-Component */
@@ -18,11 +17,14 @@ import LayoutSetup from "./email_layout/layoutsetup";
 /* KPI Configuration Sub-Component */
 import KpiConfiguration from "./kpi/kpiconfiguration";
 
+/* Payroll Configuration Sub-Component */
+import PayrollConfiguration from "./payrollpolicy_tabs/payrollconfiguration";
+
 /* Reusable TabsSwitch Component */
 import TabsSwitch from "../../ui/tabswitch";
 
 const OrganizationalPolicy = () => {
-  /* API Data Payload */
+  /* ----------------- API Data Payload ----------------- */
   const employeeCodeData = {
     id: 6,
     rule_name: "Employee Code",
@@ -43,7 +45,8 @@ const OrganizationalPolicy = () => {
     { id: "employee-code", label: "Employee Code" },
     { id: "layout-setup", label: "Layout Setup" },
     { id: "kpi-configuration", label: "KPI Configuration" },
-    { id: "leave-configuration", label: "Leave Configuration" }, // NEW
+    { id: "leave-configuration", label: "Leave Configuration" },
+    { id: "payroll-configuration", label: "Payroll Configuration" },
   ];
 
   /* ----------------- Sub-Tabs States ----------------- */
@@ -70,12 +73,14 @@ const OrganizationalPolicy = () => {
                 }`}
               >
                 {subTab}
+
                 {activeWorkShiftTab === subTab && (
                   <div className="absolute bottom-0 left-0 w-full h-[2px] bg-red-500" />
                 )}
               </button>
             ))}
           </div>
+
           <div>
             {activeWorkShiftTab === "Shifts" && <Shifts />}
             {activeWorkShiftTab === "Attendance Policy" && <AttendancePolicy />}
@@ -98,12 +103,14 @@ const OrganizationalPolicy = () => {
                 }`}
               >
                 {subTab}
+
                 {activeLeaveTab === subTab && (
                   <div className="absolute bottom-0 left-0 w-full h-[2px] bg-red-500" />
                 )}
               </button>
             ))}
           </div>
+
           <div>
             {activeLeaveTab === "Leave Policy" && <LeavesAndVacations />}
             {activeLeaveTab === "WeeklyOff" && <WeekendsAndOffDays />}
@@ -119,9 +126,7 @@ const OrganizationalPolicy = () => {
 
       {/* ===== LAYOUT SETUP ===== */}
       {activeTab === "layout-setup" && (
-        <>
-          <LayoutSetup activeSubTab={activeLayoutTab} />
-        </>
+        <LayoutSetup activeSubTab={activeLayoutTab} />
       )}
 
       {/* ===== KPI CONFIGURATION ===== */}
@@ -129,6 +134,9 @@ const OrganizationalPolicy = () => {
 
       {/* ===== LEAVE CONFIGURATION ===== */}
       {activeTab === "leave-configuration" && <LeaveConfiguration />}
+
+      {/* ===== PAYROLL CONFIGURATION ===== */}
+      {activeTab === "payroll-configuration" && <PayrollConfiguration />}
 
       {/* ===== OTHER PLACEHOLDERS ===== */}
       {![
@@ -138,6 +146,7 @@ const OrganizationalPolicy = () => {
         "layout-setup",
         "kpi-configuration",
         "leave-configuration",
+        "payroll-configuration",
       ].includes(activeTab) && (
         <div className="py-10 text-center text-gray-400 italic">
           {tabs.find((t) => t.id === activeTab)?.label} content is under
@@ -147,6 +156,7 @@ const OrganizationalPolicy = () => {
     </div>
   );
 
+  /* ----------------- Main Render ----------------- */
   return (
     <div className="w-full bg-[#fcfcfc] min-h-screen p-2">
       <TabsSwitch

@@ -14,6 +14,7 @@ import {
   FiKey,
   FiHash,
   FiActivity,
+  FiArrowLeftCircle,
 } from "react-icons/fi";
 import {
   Timeline,
@@ -23,19 +24,25 @@ import {
   TimelineConnector,
   TimelineContent,
 } from "@mui/lab";
-import toast from "react-hot-toast";
+import {
+  showApiToast,
+  showApiSuccess,
+  showApiError,
+} from "../../utils/apiToast";
 import EmployeeAsset from "./employeeasset";
 import {
   fetchDigitalTimelineById,
   returnDigitalAsset,
   allocateDigitalAsset,
 } from "../../service/assetservice";
+import GlowButton from "../../components/helpers/glowbutton"; // adjust path to where you saved GlowButton.jsx
 
 const DigitalAssetDetailDrawer = ({ asset, onRefresh, onClose }) => {
   const [activeSubTab, setActiveSubTab] = useState("details");
   const [history, setHistory] = useState([]);
   const [currentStatus, setCurrentStatus] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isActionLoading, setIsActionLoading] = useState(false);
   const [isEmployeeDrawerOpen, setIsEmployeeDrawerOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
 
@@ -73,51 +80,58 @@ const DigitalAssetDetailDrawer = ({ asset, onRefresh, onClose }) => {
 
   const handleAction = async (type) => {
     const isReturn = type === "return";
-    const toastId = toast.loading(
-      isReturn ? "Revoking access..." : "Granting access...",
-    );
 
-    try {
-      if (isReturn) {
-        const activeStaffId =
-          history.find((h) => h.status === "Allocated")?.staff_id ||
-          asset.staff_id;
-        if (!activeStaffId)
-          throw new Error("Could not identify the assigned staff member.");
+    if (isReturn) {
+      const activeStaffId =
+        history.find((h) => h.status === "Allocated")?.staff_id ||
+        asset.staff_id;
+      if (!activeStaffId) {
+        showApiToast("error", "No active allocation found to revoke");
+        return;
+      }
 
-        await returnDigitalAsset({
+      setIsActionLoading(true);
+      try {
+        const res = await returnDigitalAsset({
           asset_id: asset.id,
           staff_id: activeStaffId,
         });
-        toast.success("Access revoked successfully", { id: toastId });
-      } else {
-        if (!selectedEmployee) {
-          toast.error("Please select a staff member first", { id: toastId });
-          return;
-        }
-        await allocateDigitalAsset({
-          asset_id: asset.id,
-          staff_id: selectedEmployee.uuid,
-        });
-        toast.success(`Access granted to ${selectedEmployee.name}`, {
-          id: toastId,
-        });
+        showApiSuccess(res, "Access revoked successfully");
+        onRefresh();
+        onClose();
+      } catch (err) {
+        showApiError(err, "Failed to revoke access");
+      } finally {
+        setIsActionLoading(false);
       }
+      return;
+    }
+
+    if (!selectedEmployee) {
+      showApiToast("error", "Please select a staff member");
+      return;
+    }
+
+    setIsActionLoading(true);
+    try {
+      const res = await allocateDigitalAsset({
+        asset_id: asset.id,
+        staff_id: selectedEmployee.uuid,
+      });
+      showApiSuccess(res, "Access granted successfully");
       onRefresh();
-      setTimeout(() => onClose(), 500);
-    } catch (e) {
-      const msg = e.response?.data?.message || e.message || "Action failed";
-      toast.error(msg, { id: toastId });
+      onClose();
+    } catch (err) {
+      showApiError(err, "Allocation failed");
+    } finally {
+      setIsActionLoading(false);
     }
   };
 
   const copyToClipboard = (text, label) => {
     if (!text) return;
     navigator.clipboard.writeText(text);
-    toast.success(`${label} copied!`, {
-      style: { fontSize: "12px", borderRadius: "8px", fontFamily: "Poppins" },
-      icon: "📋",
-    });
+    showApiToast("success", `${label} copied!`);
   };
 
   if (!asset) return null;
@@ -151,6 +165,7 @@ const DigitalAssetDetailDrawer = ({ asset, onRefresh, onClose }) => {
             </p>
           </div>
           <button
+            type="button"
             onClick={onClose}
             className="p-2 rounded-full text-gray-400 transition-all duration-300 hover:bg-white hover:text-gray-700 hover:shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
           >
@@ -166,6 +181,7 @@ const DigitalAssetDetailDrawer = ({ asset, onRefresh, onClose }) => {
           ].map((tab) => (
             <button
               key={tab.id}
+              type="button"
               onClick={() => setActiveSubTab(tab.id)}
               className={`relative px-4 pt-2 pb-3 rounded-t-lg text-[13px] tracking-wide flex items-center gap-2 transition-all duration-300 ease-in-out font-normal focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200 ${
                 activeSubTab === tab.id
@@ -291,6 +307,7 @@ const DigitalAssetDetailDrawer = ({ asset, onRefresh, onClose }) => {
                     </div>
                     {item.copy && item.val && (
                       <button
+                        type="button"
                         onClick={() => copyToClipboard(item.val, item.label)}
                         className="p-2 text-gray-400 hover:text-black hover:bg-gray-100 rounded-lg transition-all duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
                       >
@@ -371,28 +388,33 @@ const DigitalAssetDetailDrawer = ({ asset, onRefresh, onClose }) => {
         {/* Footer Actions Area */}
         <div className="px-8 py-6 border-t border-gray-100 bg-white">
           {currentStatus === "Allocated" ? (
-            <button
+            <GlowButton
               onClick={() => handleAction("return")}
-              className="w-full bg-black text-white py-3.5 rounded-xl text-[13px] tracking-wide shadow-md shadow-gray-300 hover:bg-gray-800 transition-all duration-300 active:scale-95 font-normal focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400"
+              loading={isActionLoading}
+              fullWidth
+              icon={<FiArrowLeftCircle size={18} />}
             >
-              Revoke Account Access
-            </button>
+              {isActionLoading ? "Processing..." : "Revoke Account Access"}
+            </GlowButton>
           ) : (
             <div className="flex gap-4">
               <button
+                type="button"
                 onClick={() => setIsEmployeeDrawerOpen(true)}
                 className="flex-[1.5] bg-white border border-gray-200 text-gray-600 py-3.5 rounded-xl text-[13px] tracking-wide flex items-center justify-center gap-2.5 hover:bg-gray-50 hover:text-gray-900 hover:border-gray-300 transition-all duration-300 font-normal focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
               >
                 <FiUser />{" "}
                 {selectedEmployee ? selectedEmployee.name : "Select Employee"}
               </button>
-              <button
-                disabled={!selectedEmployee}
+
+              <GlowButton
                 onClick={() => handleAction("allocate")}
-                className="flex-1 bg-black text-white py-3.5 rounded-xl text-[13px] tracking-wide shadow-md shadow-gray-300 hover:bg-gray-800 active:scale-95 disabled:opacity-30 transition-all duration-300 font-normal focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400"
+                loading={isActionLoading}
+                disabled={!selectedEmployee}
+                className="flex-1"
               >
                 Grant Access
-              </button>
+              </GlowButton>
             </div>
           )}
         </div>

@@ -14,6 +14,7 @@ import {
   getPayrollDataAnalyticsList,
   getptslabs,
   getTDS,
+  getPayrollConfiguration,
   getTdsOpeningBalance,
   postPopulateTdsOpeningBalance,
   getFinancialYears,
@@ -821,6 +822,17 @@ const payrollService = {
         "Error in deleteEmploymentTypeLeaveConfig:",
         err.response || err,
       );
+      throw err;
+    }
+  },
+  // ---------------- PAYROLL CONFIGURATION ----------------
+  getPayrollConfiguration: async () => {
+    try {
+      const res = await axiosInstance.get(getPayrollConfiguration);
+      console.log("Payroll Configuration API Response:", res);
+      return res.data?.data || res.data || {};
+    } catch (err) {
+      console.error("Error in getPayrollConfiguration:", err.response || err);
       throw err;
     }
   },

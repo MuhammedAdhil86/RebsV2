@@ -16,7 +16,6 @@ const EmployeeTableWrapper = () => {
 
   useEffect(() => {
     if (data) {
-
       setEmployees(data);
     }
   }, [data, setEmployees]);

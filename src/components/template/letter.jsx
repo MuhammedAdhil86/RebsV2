@@ -19,8 +19,6 @@ import {
   FiFileText,
   FiPlus,
   FiList,
-  FiExternalLink,
-  FiSearch,
 } from "react-icons/fi";
 
 // Standard Backend Services
@@ -35,7 +33,12 @@ import {
 // Cloudflare Dedicated Service (Letter Generation)
 import { generateLetterService } from "../../service/cloudflareLetterServices";
 
-import toast from "react-hot-toast";
+import { toast } from "react-toastify";
+import {
+  showApiError,
+  resolveApiSuccess,
+  resolveApiError,
+} from "../../utils/apiToast"; // adjust path to where apiToast.jsx lives
 
 const Letter = () => {
   // --- Navigation & View States ---
@@ -50,7 +53,6 @@ const Letter = () => {
 
   // --- Generated Letters State ---
   const [generatedLetters, setGeneratedLetters] = useState([]);
-  const [generatedSearch, setGeneratedSearch] = useState("");
 
   // --- UI Component States ---
   const [initialData, setInitialData] = useState(null);
@@ -78,17 +80,6 @@ const Letter = () => {
   }, []);
 
   const isCompany8 = currentCompanyId === 8;
-
-  // Helper to extract detailed backend error messages
-  const extractErrorMessage = (error, defaultMsg) => {
-    return (
-      error?.response?.data?.message ||
-      error?.response?.data?.error ||
-      error?.data?.message ||
-      error?.message ||
-      defaultMsg
-    );
-  };
 
   // Display only: "offer_letter_pdf" -> "Offer Letter PDF"
   // The backend value stays snake_case everywhere else.
@@ -129,7 +120,7 @@ const Letter = () => {
       setCustomTemplates(parsedCustom);
       setPresetTemplates(parsedPresets);
     } catch (error) {
-      toast.error(extractErrorMessage(error, "Failed to load templates"));
+      showApiError(error, "Failed to load templates");
     } finally {
       setLoading(false);
     }
@@ -159,7 +150,7 @@ const Letter = () => {
       return;
     }
 
-    const loader = toast.loading(
+    const tid = toast.loading(
       activeTab === "pdf" ? "Generating PDF..." : "Sending Email...",
     );
 
@@ -170,11 +161,11 @@ const Letter = () => {
           resolvedPurpose,
         );
 
-        toast.success(res?.message || "Successfully generated letter", {
-          id: loader,
-        });
+        resolveApiSuccess(tid, res, "Successfully generated letter");
 
-        const fileUrl = res?.data?.file_url;
+        // generateLetterService may return the axios response or the body
+        const body = res?.data?.data !== undefined ? res.data : res;
+        const fileUrl = body?.data?.file_url;
         if (fileUrl) {
           // Track generated letter entry in list
           const newEntry = {
@@ -195,15 +186,11 @@ const Letter = () => {
           payload?.cc || [],
           payload?.bcc || [],
         );
-        toast.success(res?.message || "Email Letter Sent Successfully!", {
-          id: loader,
-        });
+        resolveApiSuccess(tid, res, "Email Letter Sent Successfully!");
       }
       setIsActionModalOpen(false);
     } catch (error) {
-      toast.error(extractErrorMessage(error, "Failed to process request"), {
-        id: loader,
-      });
+      resolveApiError(tid, error, "Failed to process request");
     }
   };
 
@@ -222,17 +209,15 @@ const Letter = () => {
 
   const handleClonePreset = async (id) => {
     setOpenMenuId(null);
-    const loadingToast = toast.loading("Cloning preset...");
+    const tid = toast.loading("Cloning preset...");
     try {
-      await cloneDefaultEmailTemplate(id);
-      toast.success("Cloned to My Templates!", { id: loadingToast });
+      const res = await cloneDefaultEmailTemplate(id);
+      resolveApiSuccess(tid, res, "Cloned to My Templates!");
       setSubTab("my-templates");
       await loadTemplatesData();
       setViewMode("table");
     } catch (error) {
-      toast.error(extractErrorMessage(error, "Clone failed"), {
-        id: loadingToast,
-      });
+      resolveApiError(tid, error, "Clone failed");
     }
   };
 
@@ -240,9 +225,9 @@ const Letter = () => {
     const templateId = deleteModal.id;
     if (!templateId) return;
 
-    const loadingToast = toast.loading("Deleting template...");
+    const tid = toast.loading("Deleting template...");
     try {
-      await deleteEmailTemplateService(templateId);
+      const res = await deleteEmailTemplateService(templateId);
 
       setCustomTemplates((prev) =>
         prev.filter((item) => item.id !== templateId),
@@ -252,11 +237,9 @@ const Letter = () => {
       );
 
       setDeleteModal({ show: false, id: null, name: "" });
-      toast.success("Deleted successfully!", { id: loadingToast });
+      resolveApiSuccess(tid, res, "Deleted successfully!");
     } catch (error) {
-      toast.error(extractErrorMessage(error, "Failed to delete template"), {
-        id: loadingToast,
-      });
+      resolveApiError(tid, error, "Failed to delete template");
     }
   };
 

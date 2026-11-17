@@ -1,22 +1,16 @@
 import React, { useEffect, useMemo, useState } from "react";
-import toast, { Toaster } from "react-hot-toast";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import InsuranceApprovalModal from "../../ui/insurancestatusmodal";
 import { fetchInsuranceClaimList } from "../../service/insuranceservice";
+
+// Toast helpers (backend message + data)
+import { showApiError } from "../../utils/apiToast";
 
 const statusColors = {
   Pending: "bg-yellow-100 text-yellow-700",
   Approved: "bg-green-100 text-green-600",
   Rejected: "bg-red-100 text-red-600",
 };
-
-/* ================= TOAST HELPER (all backend messages go through here) ================= */
-const getErrorMessage = (err, fallback) =>
-  err?.response?.data?.message ||
-  err?.response?.data?.error ||
-  (typeof err?.response?.data?.data === "string" && err.response.data.data) ||
-  err?.message ||
-  fallback;
 
 // Helper function to format numeric values to local currency format
 const formatCurrency = (amount) => {
@@ -173,7 +167,8 @@ export default function InsuranceClaimTab({ onRowClick }) {
 
       setData(transformed);
     } catch (err) {
-      toast.error(getErrorMessage(err, "Failed to load insurance claims"));
+      // Backend message + data (or error) in one toast
+      showApiError(err, "Failed to load insurance claims");
     } finally {
       setLoading(false);
     }
@@ -235,8 +230,6 @@ export default function InsuranceClaimTab({ onRowClick }) {
 
   return (
     <div className="bg-[#f9fafb] rounded-xl p-4 border border-gray-100 shadow-sm w-full">
-      <Toaster position="top-right" />
-
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-sm font-semibold text-gray-800">
           Insurance Claim Requests

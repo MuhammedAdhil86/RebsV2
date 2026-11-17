@@ -10,12 +10,17 @@ import {
   FiShield,
   FiEdit2,
 } from "react-icons/fi";
-import toast from "react-hot-toast";
+import {
+  showApiToast,
+  showApiSuccess,
+  showApiError,
+} from "../../utils/apiToast";
 import {
   editDigitalAsset,
   fetchAccountTypes,
   fetchAuthenticators,
 } from "../../service/assetservice";
+import GlowButton from "../../components/helpers/glowbutton"; // adjust path to where you saved GlowButton.jsx
 
 const UpdateDigitalAssetDrawer = ({ open, onClose, asset, onAssetUpdated }) => {
   const fileInputRef = useRef(null);
@@ -47,14 +52,6 @@ const UpdateDigitalAssetDrawer = ({ open, onClose, asset, onAssetUpdated }) => {
     outline-none transition-all duration-300 hover:border-gray-300
     focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100
     text-gray-700 font-['Poppins',sans-serif] font-normal
-  `;
-
-  // Plain input look (no left icon)
-  const inputStyle = `
-    w-full bg-white border border-gray-200 rounded-xl px-4 py-3.5 text-[13px]
-    outline-none transition-all duration-300 hover:border-gray-300
-    focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100
-    placeholder:text-gray-300 text-gray-700 font-normal
   `;
 
   // Input look when a left icon is present
@@ -111,7 +108,7 @@ const UpdateDigitalAssetDrawer = ({ open, onClose, asset, onAssetUpdated }) => {
             image: null,
           });
         } catch (err) {
-          toast.error("Failed to load metadata");
+          showApiError(err, "Failed to load metadata");
         }
       };
       loadMetadata();
@@ -134,7 +131,7 @@ const UpdateDigitalAssetDrawer = ({ open, onClose, asset, onAssetUpdated }) => {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
     setIsSubmitting(true);
     setErrors({});
 
@@ -154,23 +151,22 @@ const UpdateDigitalAssetDrawer = ({ open, onClose, asset, onAssetUpdated }) => {
     }
 
     try {
-      await editDigitalAsset(asset.id, payload);
-      toast.success("Asset updated successfully");
+      const res = await editDigitalAsset(asset.id, payload);
+      showApiSuccess(res, "Digital asset updated successfully");
       onAssetUpdated();
       onClose();
     } catch (err) {
       const errorData = err.response?.data;
-      // Show the actual DB error message so we know if it's still a type error
-      const backendError =
-        errorData?.data || errorData?.message || "Internal Server Error";
-
       if (errorData?.errors) {
+        // Highlight the fields, and show the field errors as the toast detail
         setErrors(errorData.errors);
-        Object.values(errorData.errors)
-          .flat()
-          .forEach((msg) => toast.error(msg));
+        showApiToast(
+          "error",
+          errorData.message || "Validation failed",
+          errorData.errors,
+        );
       } else {
-        toast.error(`Push Failed: ${backendError}`);
+        showApiError(err, "Internal Server Error");
       }
     } finally {
       setIsSubmitting(false);
@@ -196,6 +192,7 @@ const UpdateDigitalAssetDrawer = ({ open, onClose, asset, onAssetUpdated }) => {
             </p>
           </div>
           <button
+            type="button"
             onClick={onClose}
             className="p-2 rounded-full text-gray-400 transition-all duration-300 hover:bg-white hover:text-gray-700 hover:shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
           >
@@ -277,7 +274,7 @@ const UpdateDigitalAssetDrawer = ({ open, onClose, asset, onAssetUpdated }) => {
                 value={formData.account_type}
                 onChange={handleChange}
                 style={{ backgroundImage: arrowIcon }}
-                className={selectStyle}
+                className={`${selectStyle} ${errors.account_type ? "!border-red-400" : ""}`}
               >
                 <option value="">Select Type</option>
                 {accountTypes.map((t) => (
@@ -297,7 +294,7 @@ const UpdateDigitalAssetDrawer = ({ open, onClose, asset, onAssetUpdated }) => {
                 value={formData.authentication_mode}
                 onChange={handleChange}
                 style={{ backgroundImage: arrowIcon }}
-                className={selectStyle}
+                className={`${selectStyle} ${errors.authentication_mode ? "!border-red-400" : ""}`}
               >
                 <option value="">Select Mode</option>
                 {authenticators.map((a) => (
@@ -397,13 +394,14 @@ const UpdateDigitalAssetDrawer = ({ open, onClose, asset, onAssetUpdated }) => {
           >
             Cancel
           </button>
-          <button
+
+          <GlowButton
             onClick={handleSubmit}
-            disabled={isSubmitting}
-            className="flex items-center gap-2.5 bg-black text-white px-8 py-3.5 rounded-xl text-[13px] font-normal tracking-wide hover:bg-gray-800 disabled:opacity-50 transition-all duration-300 shadow-md shadow-gray-300 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400"
+            loading={isSubmitting}
+            icon={<FiCheck />}
           >
-            {isSubmitting ? "Updating..." : "Save Changes"} <FiCheck />
-          </button>
+            {isSubmitting ? "Updating..." : "Save Changes"}
+          </GlowButton>
         </div>
       </div>
     </Drawer>

@@ -1,5 +1,4 @@
 import React, { useEffect, useRef, useState } from "react";
-import toast, { Toaster } from "react-hot-toast";
 import {
   FiSearch,
   FiCheckCircle,
@@ -28,6 +27,13 @@ import {
   fetchShiftMappedPolicies,
 } from "../../service/companyService";
 import axiosInstance from "../../service/axiosinstance";
+
+// ✅ toast: the only toast helpers used in this file
+import {
+  showApiToast,
+  showApiSuccess,
+  showApiError,
+} from "../../utils/apiToast";
 
 // Decoupled Sub-View Component Import
 import ShiftCalendarView from "./shiftoverview/shiftcalenderview";
@@ -141,7 +147,7 @@ const ShiftBulkAllocation = () => {
       );
     } catch (error) {
       console.error("Initialization error:", error);
-      toast.error("Failed to load initial data");
+      showApiError(error, "Failed to load initial data"); // ✅ toast
     } finally {
       setLoading(false);
     }
@@ -170,10 +176,10 @@ const ShiftBulkAllocation = () => {
         // All mapped policies are selected by default
         setSelectedPolicyIds(policies.map((p) => p.id));
       })
-      .catch(() => {
+      .catch((err) => {
         if (cancelled) return;
         setMappedPolicies([]);
-        toast.error("Failed to load shift policies");
+        showApiError(err, "Failed to load shift policies"); // ✅ toast
       })
       .finally(() => {
         if (!cancelled) setPoliciesLoading(false);
@@ -236,7 +242,7 @@ const ShiftBulkAllocation = () => {
 
       setCalendarAllocations(Object.values(userGroups));
     } catch (err) {
-      toast.error("Failed to load shift allocations");
+      showApiError(err, "Failed to load shift allocations"); // ✅ toast
     } finally {
       setCalendarLoading(false);
     }
@@ -262,7 +268,7 @@ const ShiftBulkAllocation = () => {
 
     if (type === "all") {
       setSelectedUsers(users.map((u) => u.uuid));
-      toast.success(`Selected all ${users.length} employees`);
+      showApiToast("success", `Selected all ${users.length} employees`); // ✅ toast
       return;
     }
 
@@ -275,7 +281,7 @@ const ShiftBulkAllocation = () => {
       setFilterOptions(Array.isArray(data) ? data : data?.data || []);
     } catch (error) {
       console.error("Failed to load filter options:", error);
-      toast.error(`Failed to load ${type} list`);
+      showApiError(error, `Failed to load ${type} list`); // ✅ toast
     }
   };
 
@@ -295,7 +301,7 @@ const ShiftBulkAllocation = () => {
       setSelectedUsers(filteredList.map((u) => u.uuid));
     } catch (error) {
       console.error("Failed to filter staff:", error);
-      toast.error("Failed to filter staff");
+      showApiError(error, "Failed to filter staff"); // ✅ toast
     } finally {
       setLoading(false);
     }
@@ -303,13 +309,13 @@ const ShiftBulkAllocation = () => {
 
   const handleAllocate = async () => {
     if (!selectedShift || selectedUsers.length === 0 || !fromDate || !toDate) {
-      return toast.error("Please select shift, staff, and dates");
+      return showApiToast("error", "Please select shift, staff, and dates"); // ✅ toast
     }
     if (toDate < fromDate) {
-      return toast.error("To Date cannot be before From Date");
+      return showApiToast("error", "To Date cannot be before From Date"); // ✅ toast
     }
     if (mappedPolicies.length > 0 && selectedPolicyIds.length === 0) {
-      return toast.error("Select at least one policy");
+      return showApiToast("error", "Select at least one policy"); // ✅ toast
     }
 
     const payload = {
@@ -321,14 +327,11 @@ const ShiftBulkAllocation = () => {
     };
 
     try {
-      await toast.promise(allocateShiftBulkUpsert(payload), {
-        loading: "Allocating shifts...",
-        success: "Shifts allocated successfully!",
-        error: (err) => `Error: ${err.response?.data?.message || "Failed"}`,
-      });
+      const res = await allocateShiftBulkUpsert(payload);
+      showApiSuccess(res, "Shifts allocated successfully!"); // ✅ toast
       fetchInitialData();
-    } catch {
-      /* error already shown by toast.promise */
+    } catch (err) {
+      showApiError(err, "Failed to allocate shifts"); // ✅ toast
     }
   };
 
@@ -355,8 +358,6 @@ const ShiftBulkAllocation = () => {
 
   return (
     <div className="w-full bg-slate-50/70 p-6 font-poppins text-gray-800 antialiased font-normal">
-      <Toaster position="top-right" />
-
       {viewCalendarMode ? (
         <ShiftCalendarView
           onBack={() => setViewCalendarMode(false)}

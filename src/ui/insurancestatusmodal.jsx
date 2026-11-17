@@ -1,14 +1,8 @@
 import React, { useEffect, useState } from "react";
-import {
-  X,
-  ShieldCheck,
-  AlertCircle,
-  CheckCircle2,
-  XCircle,
-  UserCheck,
-} from "lucide-react";
-import { toast } from "react-toastify";
+import { Icon } from "@iconify/react";
 import { patchInsuranceClaimDecision } from "../service/insuranceservice";
+import { showApiToast, showApiSuccess, showApiError } from "../utils/apiToast";
+import ModalButton from "./button/modalbutton";
 
 const formatExactTime12h = (isoString) => {
   if (
@@ -77,6 +71,14 @@ const formatCurrency = (amount) => {
   }).format(numericValue);
 };
 
+// Badge colours for claim status (lowercase input)
+const getStatusBadge = (status) => {
+  if (status.includes("approved")) return "bg-green-100 text-green-700";
+  if (status.includes("rejected"))
+    return "bg-red-50 text-red-600 border border-red-200";
+  return "bg-gray-100 text-gray-700"; // pending / anything else
+};
+
 const InsuranceApprovalModal = ({
   open,
   data,
@@ -97,12 +99,30 @@ const InsuranceApprovalModal = ({
       );
       setActionType(null);
     }
-  }, [open, data]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, data?.id]);
+
+  const handleClose = () => {
+    if (!submitting && onClose) onClose();
+  };
+
+  // Close with the Escape key
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e) => {
+      if (e.key === "Escape" && !submitting && onClose) onClose();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open, onClose, submitting]);
 
   if (!open || !data) return null;
 
   const rawStatus = data.claim_status || data.status || "Pending";
   const status = String(rawStatus).toLowerCase();
+  // Keep the pending layout while a request is running (the optimistic
+  // update changes the status before the API answers)
+  const isPending = status === "pending" || submitting;
 
   const resolvedId = data.id ?? "N/A";
   const resolvedInsuranceId = data.insurance_id ?? "N/A";
@@ -123,9 +143,11 @@ const InsuranceApprovalModal = ({
     : null;
 
   const handleStatusAction = async (targetStatus) => {
+    if (submitting) return;
+
     // Front-end safeguard check
     if (status !== "pending") {
-      toast.error("Only pending claims can be processed.");
+      showApiToast("error", "Only pending claims can be processed.");
       return;
     }
 
@@ -151,18 +173,17 @@ const InsuranceApprovalModal = ({
         remarks: remarks || `Status set to ${formattedTargetStatus}`,
       };
 
-      await patchInsuranceClaimDecision(data.id, payload);
+      const res = await patchInsuranceClaimDecision(data.id, payload);
 
-      toast.success(`Insurance claim ${targetStatus} successfully!`);
+      // Backend message (falls back to the old text)
+      showApiSuccess(res, `Insurance claim ${targetStatus} successfully!`);
+
       if (onSuccess) onSuccess();
       onClose();
     } catch (error) {
       console.error("❌ Failed to update claim decision:", error);
-      toast.error(
-        error?.response?.data?.message ||
-          error?.message ||
-          "Failed to update claim decision.",
-      );
+      // Backend message + data (or error) in one toast
+      showApiError(error, "Failed to update claim decision.");
 
       if (onOptimisticUpdate) {
         onOptimisticUpdate(data.id, rawStatus);
@@ -173,225 +194,216 @@ const InsuranceApprovalModal = ({
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-[999999] flex items-center justify-center p-4">
-      <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-        onClick={onClose}
-      />
+  // ---------- Theme styles (same as Leave Request modal) ----------
+  const labelCls = "text-[11px] text-gray-500 mb-1";
+  const boxCls = "bg-slate-50 border border-gray-200 px-4 py-3 rounded-lg";
+  const valueCls = "text-[13px] text-gray-800 break-words";
+  const inputCls =
+    "w-full px-3 py-2.5 text-[13px] text-gray-800 placeholder-gray-400 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-black focus:border-black tabular-nums";
 
-      <div className="relative w-full max-w-md transform overflow-hidden rounded-xl bg-white p-6 shadow-2xl transition-all border border-gray-100 animate-in fade-in zoom-in-95 duration-200">
-        <div className="flex items-center justify-between border-b border-gray-100 pb-3 mb-4">
-          <div className="flex items-center gap-2">
-            <div className="p-1.5 bg-gray-50 rounded-lg text-gray-800">
-              <ShieldCheck className="w-4 h-4 text-emerald-600" />
+  return (
+    <div
+      className="fixed inset-0 z-[999999] flex items-center justify-center px-4 bg-black/50 backdrop-blur-[2px] font-poppins text-[12px]"
+      onClick={handleClose}
+    >
+      <div
+        className="bg-white w-full max-w-[960px] max-h-[90vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in duration-200"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* HEADER */}
+        <div className="flex items-start justify-between gap-3 px-6 pt-5 pb-4 border-b border-gray-100">
+          <div className="flex items-start gap-3">
+            <span className="p-2 bg-slate-100 rounded-lg">
+              <Icon
+                icon="solar:shield-check-outline"
+                className="w-5 h-5 text-black"
+              />
+            </span>
+            <div>
+              <h2 className="text-[16px] text-gray-900">
+                Review Insurance Claim
+              </h2>
+              <p className="text-[11px] text-gray-500 mt-0.5">
+                Review the claim details and update the decision
+              </p>
             </div>
-            <h3 className="text-base font-semibold text-gray-900">
-              Review Insurance Claim
-            </h3>
           </div>
           <button
             type="button"
-            onClick={onClose}
-            className="rounded-lg p-1 text-gray-400 hover:bg-gray-50 hover:text-gray-600 transition-colors"
+            onClick={handleClose}
+            aria-label="Close"
+            disabled={submitting}
+            className="text-gray-400 hover:text-black transition-colors disabled:opacity-50"
           >
-            <X className="w-5 h-5" />
+            <Icon icon="material-symbols:close" className="w-6 h-6" />
           </button>
         </div>
 
-        <div className="space-y-4">
-          <div className="p-3 bg-gray-50 rounded-lg border border-gray-100 flex justify-between items-center text-xs">
-            <div>
-              <p className="font-medium text-gray-900">
-                {resolvedEmployeeName}
-              </p>
-              <p className="text-gray-500 text-[11px] font-mono">
-                Insurance ID: #{resolvedInsuranceId}
-              </p>
-            </div>
-            <div className="flex flex-col items-end gap-1.5">
-              <span className="font-mono bg-gray-200/80 px-2 py-0.5 rounded text-gray-700 font-medium">
-                ID #{resolvedEmployeeId}
-              </span>
-              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-blue-50 text-blue-700 border-blue-100 font-mono">
-                {resolvedClaimNumber}
-              </span>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="bg-gray-50/50 p-2.5 rounded-lg border border-gray-100 flex flex-col justify-between">
-              <div>
-                <label className="block text-[11px] font-medium text-gray-400 mb-0.5">
-                  Claim Amount
-                </label>
-                <p
-                  className="text-xs font-semibold text-gray-800 truncate"
-                  title={resolvedClaimAmount}
-                >
-                  {resolvedClaimAmount}
-                </p>
-              </div>
-              <div className="text-[10px] border-t border-gray-200/60 pt-1.5 mt-2 text-gray-400 font-mono truncate">
-                Claim ID:{" "}
-                <span className="text-gray-700 select-all">{resolvedId}</span>
-              </div>
-            </div>
-
-            <div className="bg-blue-50/30 p-2.5 rounded-lg border border-blue-100/50 flex flex-col justify-between">
-              <div>
-                <label className="block text-[11px] font-medium text-blue-500 mb-0.5">
-                  Settlement Amount
-                </label>
-                <p
-                  className="text-xs font-semibold text-emerald-700 truncate"
-                  title={resolvedSettlementAmount || "Pending Settlement"}
-                >
-                  {resolvedSettlementAmount || "Pending"}
-                </p>
-              </div>
-              <div className="text-[10px] border-t border-blue-200/30 pt-1.5 mt-2 text-blue-400 font-mono truncate">
-                Ref:{" "}
-                <span className="text-gray-700 select-all">
+        {/* BODY: employee + amounts on the left, decision on the right */}
+        <div className="px-6 py-5 overflow-y-auto">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            {/* ---------- LEFT: EMPLOYEE + CLAIM ---------- */}
+            <div className="space-y-4 min-w-0">
+              {/* Employee info */}
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-11 h-11 shrink-0 bg-slate-100 border border-gray-200 rounded-full flex items-center justify-center text-[15px] text-gray-700 uppercase">
+                    {resolvedEmployeeName.charAt(0)}
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="text-[14px] font-medium text-gray-800 leading-tight truncate">
+                      {resolvedEmployeeName}
+                    </h3>
+                    <p className="text-[12px] text-gray-500 truncate">
+                      Employee ID #{resolvedEmployeeId}
+                    </p>
+                  </div>
+                </div>
+                <span className="px-3 py-1 rounded-full text-[11px] bg-gray-100 text-gray-700 whitespace-nowrap font-mono">
                   {resolvedClaimNumber}
                 </span>
               </div>
-            </div>
-          </div>
 
-          <div className="bg-gray-50/50 p-2.5 rounded-lg border border-gray-100 flex items-center justify-between text-xs text-gray-600">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-              <span>
-                Submitted:{" "}
-                <strong className="text-gray-800">
+              {/* Amounts */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className={boxCls}>
+                  <p className={labelCls}>Claim Amount</p>
+                  <p className={`${valueCls} font-medium tabular-nums`}>
+                    {resolvedClaimAmount}
+                  </p>
+                </div>
+                <div className={boxCls}>
+                  <p className={labelCls}>Settlement Amount</p>
+                  <p
+                    className={`${valueCls} font-medium tabular-nums text-emerald-700`}
+                  >
+                    {resolvedSettlementAmount || "Pending"}
+                  </p>
+                </div>
+              </div>
+
+              {/* IDs */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className={boxCls}>
+                  <p className={labelCls}>Claim ID</p>
+                  <p className={`${valueCls} font-mono select-all`}>
+                    {resolvedId}
+                  </p>
+                </div>
+                <div className={boxCls}>
+                  <p className={labelCls}>Insurance ID</p>
+                  <p className={`${valueCls} font-mono select-all`}>
+                    #{resolvedInsuranceId}
+                  </p>
+                </div>
+              </div>
+
+              <div className={boxCls}>
+                <p className={labelCls}>Submitted</p>
+                <p className={`${valueCls} tabular-nums`}>
                   {formatExactTime12h(resolvedCreatedDate)}
-                </strong>
-              </span>
+                </p>
+              </div>
             </div>
-            <span className="text-[11px] font-medium">
-              Current Status:{" "}
-              <span
-                className={`capitalize font-bold ${
-                  status === "approved"
-                    ? "text-emerald-600"
-                    : status === "rejected"
-                      ? "text-red-600"
-                      : "text-amber-600"
-                }`}
-              >
-                {rawStatus}
-              </span>
-            </span>
+
+            {/* ---------- RIGHT: DECISION ---------- */}
+            <div className="border border-gray-200 rounded-lg p-4 self-start min-w-0 space-y-4">
+              {/* Title + status */}
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-[13px] font-medium text-gray-800">
+                  Claim Decision
+                </p>
+                <span
+                  className={`px-3 py-1 rounded-full text-[11px] capitalize whitespace-nowrap ${getStatusBadge(status)}`}
+                >
+                  {rawStatus}
+                </span>
+              </div>
+
+              {/* Approved logs */}
+              {status === "approved" && !submitting && (
+                <>
+                  {resolvedSettlementDate && (
+                    <div className={boxCls}>
+                      <p className={labelCls}>Settlement Date</p>
+                      <p className={`${valueCls} tabular-nums`}>
+                        {resolvedSettlementDate}
+                      </p>
+                    </div>
+                  )}
+                  {data.remarks && (
+                    <div className={boxCls}>
+                      <p className={labelCls}>Verification Note</p>
+                      <p className={valueCls}>{data.remarks}</p>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Rejected note */}
+              {status === "rejected" && !submitting && data.remarks && (
+                <div className={boxCls}>
+                  <p className={labelCls}>Rejection Note</p>
+                  <p className={valueCls}>{data.remarks}</p>
+                </div>
+              )}
+
+              {/* Inputs only while pending */}
+              {isPending && (
+                <>
+                  <div>
+                    <p className={labelCls}>Settlement Amount (₹)</p>
+                    <input
+                      type="number"
+                      value={settlementAmountInput}
+                      onChange={(e) => setSettlementAmountInput(e.target.value)}
+                      placeholder="Enter settlement amount"
+                      className={inputCls}
+                    />
+                  </div>
+
+                  <div>
+                    <p className={labelCls}>Action Remarks</p>
+                    <textarea
+                      className="w-full h-24 px-3 py-2.5 text-[13px] text-gray-800 placeholder-gray-400 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-black focus:border-black resize-none"
+                      placeholder="Provide operation review log audit notes here..."
+                      value={remarks}
+                      onChange={(e) => setRemarks(e.target.value)}
+                      required
+                    />
+                  </div>
+                </>
+              )}
+            </div>
           </div>
-
-          {/* Read-only logs display for already processed claims */}
-          {status === "approved" && (
-            <div className="p-3 bg-emerald-50/40 rounded-lg border border-emerald-100/70 text-xs text-gray-600 space-y-1">
-              <div className="flex items-center gap-1.5 font-medium text-emerald-800 mb-1">
-                <UserCheck className="w-3.5 h-3.5" />
-                <span>Approval & Settlement Logs</span>
-              </div>
-              {resolvedSettlementDate && (
-                <p className="text-[11px]">
-                  Settlement Date:{" "}
-                  <span className="text-gray-700 font-medium">
-                    {resolvedSettlementDate}
-                  </span>
-                </p>
-              )}
-              {data.remarks && (
-                <p className="text-[11px]">
-                  Verification Note:{" "}
-                  <strong className="text-gray-800">{data.remarks}</strong>
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* Form inputs available ONLY when status is PENDING */}
-          {status === "pending" ? (
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">
-                  Settlement Amount (₹)
-                </label>
-                <input
-                  type="number"
-                  value={settlementAmountInput}
-                  onChange={(e) => setSettlementAmountInput(e.target.value)}
-                  placeholder="Enter settlement amount"
-                  className="w-full border border-gray-200 rounded-lg p-2 text-xs bg-white focus:outline-none focus:border-gray-900"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">
-                  Action Remarks
-                </label>
-                <textarea
-                  rows={2}
-                  value={remarks}
-                  onChange={(e) => setRemarks(e.target.value)}
-                  placeholder="Provide operation review log audit notes here..."
-                  className="w-full border border-gray-200 rounded-lg p-2.5 text-xs bg-white focus:outline-none focus:border-gray-900 resize-none"
-                  required
-                />
-              </div>
-            </div>
-          ) : (
-            data.remarks &&
-            status !== "approved" && (
-              <div className="p-3 bg-red-50/40 rounded-lg border border-red-100/70 text-xs text-gray-600">
-                <p className="text-[11px]">
-                  Rejection Note:{" "}
-                  <strong className="text-gray-800">{data.remarks}</strong>
-                </p>
-              </div>
-            )
-          )}
         </div>
 
-        {/* Action Buttons ONLY when Pending */}
-        <div className="mt-6 pt-3 border-t border-gray-100 flex justify-end gap-2">
-          {status === "pending" ? (
+        {/* FOOTER */}
+        <div className="px-6 py-4 border-t border-gray-100 bg-slate-50/60 flex justify-end gap-2">
+          {isPending ? (
             <>
-              <button
-                type="button"
-                disabled={submitting}
+              <ModalButton
+                variant="danger"
                 onClick={() => handleStatusAction("rejected")}
-                className="flex items-center gap-1.5 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-300 text-white rounded-lg text-xs font-medium transition-colors"
-              >
-                {submitting && actionType === "rejected" ? (
-                  <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                ) : (
-                  <XCircle className="w-3.5 h-3.5" />
-                )}
-                Reject
-              </button>
-
-              <button
-                type="button"
                 disabled={submitting}
-                onClick={() => handleStatusAction("approved")}
-                className="flex items-center gap-1.5 px-4 py-2 bg-black hover:bg-gray-800 disabled:bg-gray-300 text-white rounded-lg text-xs font-medium transition-colors"
+                loading={submitting && actionType === "rejected"}
               >
-                {submitting && actionType === "approved" ? (
-                  <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                ) : (
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                )}
+                Reject
+              </ModalButton>
+
+              <ModalButton
+                variant="primary"
+                onClick={() => handleStatusAction("approved")}
+                disabled={submitting}
+                loading={submitting && actionType === "approved"}
+              >
                 Approve
-              </button>
+              </ModalButton>
             </>
           ) : (
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 bg-gray-900 hover:bg-gray-800 text-white rounded-lg text-xs font-medium transition-colors"
-            >
+            <ModalButton variant="secondary" onClick={handleClose}>
               Close
-            </button>
+            </ModalButton>
           )}
         </div>
       </div>

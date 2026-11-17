@@ -1,30 +1,52 @@
 import React, { useState, useEffect } from "react";
 import { Icon } from "@iconify/react";
-import UpsertESI from "./upsertesi"; // adjust path if needed
+import { toast } from "react-toastify";
+import UpsertESI from "./upsertesi";
 
-/**
- * Props:
- * - esiData:   current ESI config from API
- * - onDisable: disable handler
- * - onUpdated: (optional) called after a successful update, use it to refetch data.
- *              If not passed, the page reloads.
- */
 const EsiTab = ({ esiData: esiDataProp = {}, onDisable, onUpdated }) => {
   const [isEditing, setIsEditing] = useState(false);
-
-  // Keep a local copy so the view updates right after saving (no page reload)
+  const [isDisabling, setIsDisabling] = useState(false);
   const [esiData, setEsiData] = useState(esiDataProp);
 
-  // Stay in sync if the parent sends fresh data
   useEffect(() => {
-    setEsiData(esiDataProp);
+    setEsiData(esiDataProp || {});
   }, [esiDataProp]);
 
-  // Fallback values for numeric fields
   const employeeContribution = esiData.employee_contribution ?? 0;
+
   const employerContribution = esiData.employer_contribution ?? 0;
 
-  // Edit mode: same form as create, pre-filled with existing data
+  // Disable ESI
+  const handleDisable = async () => {
+    if (!onDisable || isDisabling) return;
+
+    try {
+      setIsDisabling(true);
+
+      await onDisable();
+
+      toast.success("ESI configuration disabled successfully!");
+
+      setEsiData((prev) => ({
+        ...prev,
+        enabled: false,
+      }));
+
+      if (onUpdated) {
+        onUpdated();
+      }
+    } catch (error) {
+      console.error("ESI disable error:", error);
+
+      toast.error(
+        error?.response?.data?.message || "Failed to disable ESI configuration",
+      );
+    } finally {
+      setIsDisabling(false);
+    }
+  };
+
+  // Edit mode
   if (isEditing) {
     return (
       <div className="bg-white rounded-lg border border-gray-200 p-6 font-[Poppins]">
@@ -32,10 +54,16 @@ const EsiTab = ({ esiData: esiDataProp = {}, onDisable, onUpdated }) => {
           initialData={esiData}
           onCancel={() => setIsEditing(false)}
           onSuccess={(saved) => {
-            // show the updated values immediately, no reload needed
-            setEsiData((prev) => ({ ...prev, ...saved }));
+            setEsiData((prev) => ({
+              ...prev,
+              ...saved,
+            }));
+
             setIsEditing(false);
-            if (onUpdated) onUpdated();
+
+            if (onUpdated) {
+              onUpdated();
+            }
           }}
         />
       </div>
@@ -49,13 +77,11 @@ const EsiTab = ({ esiData: esiDataProp = {}, onDisable, onUpdated }) => {
       </h2>
 
       <div className="space-y-3">
-        {/* ESI Number */}
         <div className="flex gap-16">
           <span className="font-medium min-w-[150px]">ESI Number</span>
           <span className="text-gray-600">{esiData.esi_number || "--"}</span>
         </div>
 
-        {/* Deduction Cycle */}
         <div className="flex gap-16">
           <span className="font-medium min-w-[150px]">Deduction Cycle</span>
           <span className="text-gray-600">
@@ -63,7 +89,6 @@ const EsiTab = ({ esiData: esiDataProp = {}, onDisable, onUpdated }) => {
           </span>
         </div>
 
-        {/* Employee Contribution */}
         <div className="flex gap-16">
           <span className="font-medium min-w-[150px]">
             Employee Contribution
@@ -73,7 +98,6 @@ const EsiTab = ({ esiData: esiDataProp = {}, onDisable, onUpdated }) => {
           </span>
         </div>
 
-        {/* Employer Contribution */}
         <div className="flex gap-16">
           <span className="font-medium min-w-[150px]">
             Employer Contribution
@@ -83,7 +107,33 @@ const EsiTab = ({ esiData: esiDataProp = {}, onDisable, onUpdated }) => {
           </span>
         </div>
 
-        {/* Other Details */}
+        <div className="flex gap-16">
+          <span className="font-medium min-w-[150px]">
+            Consider Applicable Salary
+          </span>
+          <span className="text-gray-600">
+            {esiData.consider_applicable_salary ? "Yes" : "No"}
+          </span>
+        </div>
+
+        {esiData.consider_applicable_salary && (
+          <div className="flex gap-16">
+            <span className="font-medium min-w-[150px]">
+              Applicable Salary Threshold
+            </span>
+            <span className="text-gray-600">
+              ₹{esiData.applicable_salary_threshold ?? 21000}
+            </span>
+          </div>
+        )}
+
+        <div className="flex gap-16">
+          <span className="font-medium min-w-[150px]">Wage Ceiling</span>
+          <span className="text-gray-600">
+            ₹{esiData.wage_ceiling ?? 21000}
+          </span>
+        </div>
+
         <div className="flex gap-16 pb-3 border-b border-gray-200">
           <span className="font-medium min-w-[150px]">Other Details</span>
           <span className="text-gray-600">
@@ -95,9 +145,9 @@ const EsiTab = ({ esiData: esiDataProp = {}, onDisable, onUpdated }) => {
         </div>
       </div>
 
-      {/* Action Buttons */}
       <div className="flex gap-3 mt-8">
         <button
+          type="button"
           onClick={() => setIsEditing(true)}
           className="flex items-center gap-2 text-xs text-black px-4 py-1.5 border border-gray-300 rounded-md hover:bg-gray-100 transition font-medium"
         >
@@ -107,11 +157,13 @@ const EsiTab = ({ esiData: esiDataProp = {}, onDisable, onUpdated }) => {
 
         {onDisable && (
           <button
-            onClick={onDisable}
-            className="flex items-center gap-2 text-xs px-4 py-1.5 border border-red-300 text-red-600 rounded-md hover:bg-red-50 transition font-medium"
+            type="button"
+            onClick={handleDisable}
+            disabled={isDisabling}
+            className="flex items-center gap-2 text-xs px-4 py-1.5 border border-red-300 text-red-600 rounded-md hover:bg-red-50 transition font-medium disabled:opacity-60"
           >
             <Icon icon="proicons:delete" className="w-4 h-4" />
-            Disable ESI
+            {isDisabling ? "Disabling..." : "Disable ESI"}
           </button>
         )}
       </div>

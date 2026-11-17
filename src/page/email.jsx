@@ -28,7 +28,12 @@ import {
   sendCustomEmailService,
 } from "../service/mainServices";
 
-import toast from "react-hot-toast";
+import { toast } from "react-toastify";
+import {
+  showApiError,
+  resolveApiSuccess,
+  resolveApiError,
+} from "../utils/apiToast"; // adjust path to where apiToast.jsx lives
 
 // ---------------------------------------------------------------------------
 // Display helpers: backend keeps snake_case, the UI never shows it.
@@ -119,17 +124,6 @@ const EmailTemplates = () => {
   // "Send Custom Mail" only on My Templates
   const showSendCustomMail = !isPresetsTab;
 
-  // Helper to extract detailed backend error messages
-  const extractErrorMessage = (error, defaultMsg) => {
-    return (
-      error?.response?.data?.message ||
-      error?.response?.data?.error ||
-      error?.data?.message ||
-      error?.message ||
-      defaultMsg
-    );
-  };
-
   // --- Data Fetching ---
   const loadTemplatesData = async () => {
     setLoading(true);
@@ -155,7 +149,7 @@ const EmailTemplates = () => {
       setCustomTemplates(parsedCustom);
       setPresetTemplates(parsedPresets);
     } catch (error) {
-      toast.error(extractErrorMessage(error, "Failed to load templates"));
+      showApiError(error, "Failed to load templates");
     } finally {
       setLoading(false);
     }
@@ -190,17 +184,15 @@ const EmailTemplates = () => {
 
   const handleClonePreset = async (id) => {
     setOpenMenuId(null);
-    const loadingToast = toast.loading("Cloning preset...");
+    const tid = toast.loading("Cloning preset...");
     try {
-      await cloneDefaultEmailTemplate(id);
-      toast.success("Cloned to My Templates!", { id: loadingToast });
+      const res = await cloneDefaultEmailTemplate(id);
+      resolveApiSuccess(tid, res, "Cloned to My Templates!");
       setSubTab("my-templates");
       await loadTemplatesData();
       setViewMode("table");
     } catch (error) {
-      toast.error(extractErrorMessage(error, "Clone failed"), {
-        id: loadingToast,
-      });
+      resolveApiError(tid, error, "Clone failed");
     }
   };
 
@@ -215,6 +207,7 @@ const EmailTemplates = () => {
     // payload: { continue_with_custom_mail: false, purpose, to, cc, bcc,
     //            subject, body_html, attachments, scheduled_at }
     setSendingMail(true);
+    const tid = toast.loading("Sending mail...");
     try {
       // POST /admin/send/custom-email
       const res = await sendCustomEmailService({
@@ -226,10 +219,10 @@ const EmailTemplates = () => {
         attachments: payload.attachments,
         use_manual_templates: false,
       });
-      toast.success(res?.message || "Mail sent successfully");
+      resolveApiSuccess(tid, res, "Mail sent successfully");
       setSendMailOpen(false);
     } catch (error) {
-      toast.error(extractErrorMessage(error, "Failed to send custom mail"));
+      resolveApiError(tid, error, "Failed to send custom mail");
     } finally {
       setSendingMail(false);
     }
@@ -239,9 +232,9 @@ const EmailTemplates = () => {
     const templateId = deleteModal.id;
     if (!templateId) return;
 
-    const loadingToast = toast.loading("Deleting template...");
+    const tid = toast.loading("Deleting template...");
     try {
-      await deleteEmailTemplateService(templateId);
+      const res = await deleteEmailTemplateService(templateId);
 
       setCustomTemplates((prev) =>
         prev.filter((item) => item.id !== templateId),
@@ -251,11 +244,9 @@ const EmailTemplates = () => {
       );
 
       setDeleteModal({ show: false, id: null, name: "" });
-      toast.success("Deleted successfully!", { id: loadingToast });
+      resolveApiSuccess(tid, res, "Deleted successfully!");
     } catch (error) {
-      toast.error(extractErrorMessage(error, "Failed to delete template"), {
-        id: loadingToast,
-      });
+      resolveApiError(tid, error, "Failed to delete template");
     }
   };
 

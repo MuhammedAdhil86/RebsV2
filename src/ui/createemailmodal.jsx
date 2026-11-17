@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
-import ReactQuill from "react-quill";
+import ReactQuill, { Quill } from "react-quill";
 import "react-quill/dist/quill.snow.css";
 import {
   ArrowLeft,
@@ -13,13 +13,50 @@ import {
   ShieldCheck,
   Save,
 } from "lucide-react";
-import toast from "react-hot-toast";
+import { toast } from "react-toastify";
+import {
+  showApiError,
+  resolveApiSuccess,
+  resolveApiError,
+} from "../utils/apiToast"; // adjust path to where apiToast.jsx lives
 import GlowButton from "../components/helpers/glowbutton";
 import {
   fetchEmailPurposes,
   fetchEmailPlaceholders,
   createEmailTemplate,
 } from "../service/mainServices";
+
+// ---------------------------------------------------------------------------
+// Quill image format that KEEPS alt / width / height / style
+// (Quill's default image format drops "style", which would lose the logo size)
+// ---------------------------------------------------------------------------
+const BaseImage = Quill.import("formats/image");
+const IMAGE_ATTRS = ["alt", "height", "width", "style"];
+
+class StyledImage extends BaseImage {
+  static formats(domNode) {
+    return IMAGE_ATTRS.reduce((formats, attr) => {
+      if (domNode.hasAttribute(attr)) {
+        formats[attr] = domNode.getAttribute(attr);
+      }
+      return formats;
+    }, {});
+  }
+
+  format(name, value) {
+    if (IMAGE_ATTRS.includes(name)) {
+      if (value) this.domNode.setAttribute(name, value);
+      else this.domNode.removeAttribute(name);
+    } else {
+      super.format(name, value);
+    }
+  }
+}
+Quill.register(StyledImage, true);
+
+// Static logo size used for Sender / Receiver logo (and any "logo" placeholder)
+const LOGO_STYLE =
+  "height:48px; max-width:160px; width:auto; object-fit:contain;";
 
 // Universal color palette
 const COLOR_PALETTE = [
@@ -61,7 +98,7 @@ const COLOR_PALETTE = [
   "#3d1466",
 ];
 
-const INITIAL_BODY = `<p><img src="{{.SenderLogoURL}}" style="height:48px; max-width:160px; width:auto; object-fit:contain;" /></p>
+const INITIAL_BODY = `<p><img src="{{.SenderLogoURL}}" alt="SenderLogoURL" style="${LOGO_STYLE}" /></p>
 <h2>Offer Letter</h2>
 <p>Dear {{.EmployeeName}},</p>
 <p>We are pleased to welcome you to the team!</p>`;
@@ -160,7 +197,9 @@ const CreateEmailTemplateView = ({
           setPlaceholders(placeholderList);
         }
       } catch (error) {
-        console.error("Failed to load initial template data:", error);
+        if (isMounted) {
+          showApiError(error, "Failed to load template data");
+        }
       } finally {
         if (isMounted) {
           setPurposesLoading(false);
@@ -192,13 +231,11 @@ const CreateEmailTemplateView = ({
     const range = editor.getSelection(true);
     const insertIndex = range ? range.index : editor.getLength();
 
-    const isLogo =
-      placeholderKey.toLowerCase().includes("logo") ||
-      (placeholderKey.toLowerCase().endsWith("url") &&
-        placeholderKey.toLowerCase().includes("logo"));
+    // Sender / Receiver logo (any placeholder with "logo" in its name)
+    const isLogo = placeholderKey.toLowerCase().includes("logo");
 
     if (isLogo) {
-      const logoHtml = `<p><img src="{{.${placeholderKey}}}" alt="${placeholderKey}" style="height:48px; max-width:160px; width:auto; object-fit:contain;" /></p>`;
+      const logoHtml = `<p><img src="{{.${placeholderKey}}}" alt="${placeholderKey}" style="${LOGO_STYLE}" /></p>`;
       editor.clipboard.dangerouslyPasteHTML(insertIndex, logoHtml, "user");
       editor.setSelection(insertIndex + 1);
       toast.success(`Inserted ${placeholderKey}`);
@@ -227,7 +264,7 @@ const CreateEmailTemplateView = ({
     }
 
     setLoading(true);
-    const loadingToast = toast.loading("Creating email template...");
+    const tid = toast.loading("Creating email template...");
 
     const trimmedContent = content.trim();
     const finalHtml = trimmedContent.startsWith("<html>")
@@ -245,10 +282,7 @@ const CreateEmailTemplateView = ({
 
     try {
       const response = await createEmailTemplate(payload);
-      toast.success(
-        response?.message || "Email template created successfully!",
-        { id: loadingToast },
-      );
+      resolveApiSuccess(tid, response, "Email template created successfully!");
 
       if (onSuccess) {
         onSuccess(response);
@@ -256,14 +290,7 @@ const CreateEmailTemplateView = ({
         onBack();
       }
     } catch (error) {
-      console.error("Error creating email template:", error);
-      toast.error(
-        error?.response?.data?.error ||
-          error?.response?.data?.message ||
-          error?.message ||
-          "Failed to create email template.",
-        { id: loadingToast },
-      );
+      resolveApiError(tid, error, "Failed to create email template.");
     } finally {
       setLoading(false);
     }
