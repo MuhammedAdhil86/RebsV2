@@ -39,6 +39,7 @@ import {
   postEnableEsi,
   postDisableEsi,
   getPtStatus,
+  upsertPayrollConfiguration,
   getLwfStatus,
   getLwfRulesByState,
   postEnableLwf,
@@ -53,6 +54,20 @@ import {
   putEmploymentTypeLeaveConfig,
   deleteEmploymentTypeLeaveConfig as deleteEmploymentTypeLeaveConfigUrl,
 } from "../api/api";
+
+/* ---------------- PAYLOAD BUILDERS ---------------- */
+
+// Builds the request body for the payroll configuration upsert.
+// The start date is only sent for fixed_* period types.
+const buildConfigPayload = (values) => {
+  const payload = { salary_period_type: values.salary_period_type };
+
+  if (values.salary_period_type?.startsWith("fixed_")) {
+    payload.salary_period_start_date = values.salary_period_start_date;
+  }
+
+  return payload;
+};
 
 const payrollService = {
   // ---------------- POLICY LOOKUPS ----------------
@@ -181,11 +196,12 @@ const payrollService = {
       throw err;
     }
   },
-  // Add this new method to fetch the active financial year
+
+  // Fetch the active financial year
   getActiveFinancialYear: async () => {
     try {
       const res = await axiosInstance.get(getFinancialYears);
-      // Based on your response: { "ok": true, "data": { ... } }
+      // Response shape: { "ok": true, "data": { ... } }
       return res.data.data;
     } catch (err) {
       console.error("Error in getActiveFinancialYear:", err.response || err);
@@ -193,15 +209,15 @@ const payrollService = {
     }
   },
 
-  // Update getTDS to accept the financialYearId
+  // getTDS accepts the financialYearId
   getTDS: async (financialYearId) => {
     try {
-      // If no ID is provided, this will throw an error to prevent the 400
+      // If no ID is provided, throw to prevent a 400 from the backend
       if (!financialYearId) {
         throw new Error("financial_year_id is required");
       }
 
-      // This constructs the URL correctly: /api/payroll/tds/tds-settings?financial_year_id=1
+      // e.g. /api/payroll/tds/tds-settings?financial_year_id=1
       const url = `${getTDS}?financial_year_id=${financialYearId}`;
       const res = await axiosInstance.get(url);
       return res.data?.data || {};
@@ -210,6 +226,7 @@ const payrollService = {
       throw err;
     }
   },
+
   getTaxRegimes: async () => {
     try {
       const res = await axiosInstance.get(getTaxRegimes);
@@ -219,11 +236,10 @@ const payrollService = {
       throw err;
     }
   },
+
   /**
-  
-     * @param {string} stateName - Name of the state (e.g., 'west bengal')
-  
-     */
+   * @param {string} stateName - Name of the state (e.g., 'west bengal')
+   */
   getLWFRulesByState: async (stateName) => {
     if (!stateName)
       throw new Error("State name is required to fetch LWF rules.");
@@ -234,7 +250,7 @@ const payrollService = {
         `${getLwfRulesByState}?state=${sanitizedState}`,
       );
 
-      // ✅ FIX: Check if data is an array, and extract the first object element directly
+      // If data is an array, return the first object element directly
       if (
         res.data?.data &&
         Array.isArray(res.data.data) &&
@@ -243,7 +259,7 @@ const payrollService = {
         return res.data.data[0];
       }
 
-      // Fallback in case the backend payload structure changes to an object in the future
+      // Fallback in case the backend payload structure changes to an object
       return res.data?.data || res.data || null;
     } catch (err) {
       console.error(
@@ -253,6 +269,7 @@ const payrollService = {
       throw err;
     }
   },
+
   enableLWF: async ({ state, deduction_cycle }) => {
     if (!state) throw new Error("State is required to enable LWF");
     if (!deduction_cycle) throw new Error("Deduction cycle is required");
@@ -292,17 +309,18 @@ const payrollService = {
       throw err;
     }
   },
+
   // ---------------- TAX DEDUCTED AT SOURCE (TDS) ----------------
   upsertTDS: async (payload) => {
     try {
       const res = await axiosInstance.put(putUpsertTDS, payload);
 
-      // ✅ CRITICAL FIX: If the API returns 200 OK but "ok" is false, force an error!
+      // If the API returns 200 OK but "ok" is false, force an error
       if (res.data && res.data.ok === false) {
         throw {
           success: false,
           message: res.data?.message || "Failed to update TDS settings",
-          backendError: res.data?.error || null, // Captures "invalid or non-default tax regime selected"
+          backendError: res.data?.error || null, // e.g. "invalid or non-default tax regime selected"
           errors: res.data?.errors || null,
           status: 200,
         };
@@ -315,7 +333,7 @@ const payrollService = {
         data: res.data?.data || res.data,
       };
     } catch (err) {
-      // This handles standard non-200 errors (400, 404, 500, etc.)
+      // Handles standard non-200 errors (400, 404, 500, etc.)
       console.error(
         "Error inside upsertTDS execution row:",
         err.response || err,
@@ -334,10 +352,10 @@ const payrollService = {
       };
     }
   },
+
   getDeclarationList: async (queryParams = {}) => {
     try {
-      // If you need to pass filters like status or fiscal year,
-      // you can append them as query parameters
+      // Filters like status or fiscal year can be passed as query parameters
       const res = await axiosInstance.get(getDeclarationList, {
         params: queryParams,
       });
@@ -348,9 +366,9 @@ const payrollService = {
       throw err;
     }
   },
+
   approveOrRejectDeclaration: async (payload) => {
     try {
-      // Remove the extra { declaration: ... } wrapper here
       const res = await axiosInstance.put(approveOrRejectDeclaration, payload);
       return res.data;
     } catch (err) {
@@ -361,6 +379,7 @@ const payrollService = {
       throw err;
     }
   },
+
   getTdsDeductionSections: async () => {
     try {
       const res = await axiosInstance.get(getTdsDeductionSections);
@@ -370,28 +389,30 @@ const payrollService = {
       throw err;
     }
   },
+
   getLWFStateRules: async () => {
     try {
       const res = await axiosInstance.get(getLwfStateRules);
-      // Returns res.data.data or falls back to res.data, otherwise returns an empty array
+      // Returns res.data.data, falls back to res.data, otherwise an empty array
       return res.data?.data || res.data || [];
     } catch (err) {
       console.error("Error in getLWFStateRules:", err.response || err);
       throw err;
     }
   },
+
   getActivePTSlabs: async (stateName) => {
     if (!stateName)
       throw new Error("State name parameter is required for lookup.");
 
     try {
-      // Normalizes naming spaces and converts characters to lowercase automatically
+      // Normalizes spacing and lowercases the state name
       const sanitizedState = encodeURIComponent(stateName.trim().toLowerCase());
       const res = await axiosInstance.get(
         `${getptslabs}?state=${sanitizedState}`,
       );
 
-      // Flexible unpacking structure to safely forward either nested array payloads or fallbacks
+      // Flexible unpacking for nested array payloads or fallbacks
       return res.data?.data || res.data || [];
     } catch (err) {
       console.error(
@@ -401,6 +422,7 @@ const payrollService = {
       throw err;
     }
   },
+
   // ---------------- SALARY COMPONENTS ----------------
   createSalaryComponent: async (payload) => {
     try {
@@ -413,6 +435,7 @@ const payrollService = {
       throw err;
     }
   },
+
   upsertPT: async (payload) => {
     try {
       const res = await axiosInstance.put(putUpsertPT, payload);
@@ -659,6 +682,7 @@ const payrollService = {
       throw new Error(errorMsg);
     }
   },
+
   populateTdsOpeningBalance: async (financialYearId, file) => {
     if (!financialYearId) throw new Error("financial_year_id is required");
     if (!file) throw new Error("A CSV file is required");
@@ -698,6 +722,7 @@ const payrollService = {
       throw customError;
     }
   },
+
   getTdsOpeningBalance: async (financialYearId) => {
     if (!financialYearId) throw new Error("financial_year_id is required");
 
@@ -744,6 +769,7 @@ const payrollService = {
       throw new Error(serverMessage || "Failed to load TDS opening balances");
     }
   },
+
   // ---------------- LEAVE CONFIGURATION ----------------
   getLeaveRequestConfig: async () => {
     try {
@@ -825,16 +851,25 @@ const payrollService = {
       throw err;
     }
   },
+
   // ---------------- PAYROLL CONFIGURATION ----------------
   getPayrollConfiguration: async () => {
     try {
       const res = await axiosInstance.get(getPayrollConfiguration);
-      console.log("Payroll Configuration API Response:", res);
       return res.data?.data || res.data || {};
     } catch (err) {
       console.error("Error in getPayrollConfiguration:", err.response || err);
       throw err;
     }
+  },
+
+  upsertPayrollConfiguration: async (values) => {
+    const payload = buildConfigPayload(values);
+    const response = await axiosInstance.post(
+      upsertPayrollConfiguration,
+      payload,
+    );
+    return response.data;
   },
 };
 

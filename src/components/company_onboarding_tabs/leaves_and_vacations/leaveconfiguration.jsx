@@ -14,6 +14,8 @@ import {
 } from "../../../service/leaveService";
 import { fetchEmployeeType } from "../../../service/employeeService";
 import DeleteConfirmationModal from "../../../ui/deletemodal";
+// ADJUST the path if you save apiToast.jsx somewhere else
+import { showApiSuccess, showApiError } from "../../../utils/apiToast";
 
 /* -------------------- CONSTANTS -------------------- */
 
@@ -26,11 +28,11 @@ const REQUEST_NUMBER_FIELDS = [
   { key: "max_requests_per_period", label: "Maximum Requests Per Period" },
 ];
 
-/* ADJUST: only "month" appears in the API docs, confirm the other values */
+/* value = what the backend expects (lowercase), label = what the user sees */
 const REQUEST_LIMIT_PERIODS = [
-  { value: "week", label: "Week" },
   { value: "month", label: "Month" },
   { value: "year", label: "Year" },
+  { value: "service", label: "Service" },
 ];
 
 const DEFAULT_REQUEST_CONFIG = {
@@ -262,7 +264,7 @@ const LeaveRequestConfigCard = ({ leavePolicies, branches }) => {
       setSavedConfigs(toArray(response));
     } catch (error) {
       console.error("Error fetching leave request config:", error);
-      toast.error("Failed to load leave request configuration");
+      showApiError(error, "Failed to load leave request configuration");
     } finally {
       setLoading(false);
     }
@@ -363,14 +365,17 @@ const LeaveRequestConfigCard = ({ leavePolicies, branches }) => {
           : null,
       };
 
-      await saveLeaveRequestConfig(payload);
+      const response = await saveLeaveRequestConfig(payload);
 
-      toast.success("Leave request configuration saved successfully");
+      showApiSuccess(
+        response,
+        "Leave request configuration saved successfully",
+      );
 
       await fetchConfig();
     } catch (error) {
       console.error("Error saving leave request config:", error);
-      toast.error("Failed to save leave request configuration");
+      showApiError(error, "Failed to save leave request configuration");
     } finally {
       setSaving(false);
     }
@@ -384,16 +389,19 @@ const LeaveRequestConfigCard = ({ leavePolicies, branches }) => {
     try {
       setDeleting(true);
 
-      await removeLeaveRequestConfig(savedConfig.id);
+      const response = await removeLeaveRequestConfig(savedConfig.id);
 
-      toast.success("Leave request configuration deleted successfully");
+      showApiSuccess(
+        response,
+        "Leave request configuration deleted successfully",
+      );
 
       setShowDelete(false);
 
       await fetchConfig();
     } catch (error) {
       console.error("Error deleting leave request config:", error);
-      toast.error("Failed to delete leave request configuration");
+      showApiError(error, "Failed to delete leave request configuration");
     } finally {
       setDeleting(false);
     }
@@ -633,7 +641,7 @@ const EmploymentTypeConfigCard = ({ leavePolicies, branches }) => {
       setSavedConfigs(toArray(configsResponse));
     } catch (error) {
       console.error("Error fetching employment type configuration:", error);
-      toast.error("Failed to load employment type configuration");
+      showApiError(error, "Failed to load employment type configuration");
     } finally {
       setLoading(false);
     }
@@ -694,14 +702,14 @@ const EmploymentTypeConfigCard = ({ leavePolicies, branches }) => {
         can_apply_leave: checked,
       };
 
-      await saveEmploymentTypeLeaveConfig(payload);
+      const response = await saveEmploymentTypeLeaveConfig(payload);
 
-      toast.success("Employment type configuration updated");
+      showApiSuccess(response, "Employment type configuration updated");
 
       await fetchData();
     } catch (error) {
       console.error("Error updating employment type config:", error);
-      toast.error("Failed to update employment type configuration");
+      showApiError(error, "Failed to update employment type configuration");
     } finally {
       setSavingId(null);
     }
@@ -716,16 +724,16 @@ const EmploymentTypeConfigCard = ({ leavePolicies, branches }) => {
       setDeleting(true);
 
       /* deleteTarget.id is the saved settings row id */
-      await removeEmploymentTypeLeaveConfig(deleteTarget.id);
+      const response = await removeEmploymentTypeLeaveConfig(deleteTarget.id);
 
-      toast.success("Employment type configuration deleted");
+      showApiSuccess(response, "Employment type configuration deleted");
 
       setDeleteTarget(null);
 
       await fetchData();
     } catch (error) {
       console.error("Error deleting employment type config:", error);
-      toast.error("Failed to delete employment type configuration");
+      showApiError(error, "Failed to delete employment type configuration");
     } finally {
       setDeleting(false);
     }
@@ -895,7 +903,7 @@ const LeaveConfiguration = () => {
         setBranches(toArray(branchesResponse));
       } catch (error) {
         console.error("Error fetching leave policies / branches:", error);
-        toast.error("Failed to load leave policies or branches");
+        showApiError(error, "Failed to load leave policies or branches");
       }
     };
 

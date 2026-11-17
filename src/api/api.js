@@ -426,6 +426,8 @@ export const getEmployeeBankInfo = "/staff/employees/bank-info";
 
 export const getPayrollAnalyticsRun = "/api/payroll/analytics/run";
 export const getPayrollConfiguration = "/api/payroll/analytics/payroll/config";
+export const upsertPayrollConfiguration =
+  "/api/payroll/analytics/payroll/config";
 
 export const getPayrollAnalyticsResult =
   " /api/payroll/analytics/list/all-runs";
