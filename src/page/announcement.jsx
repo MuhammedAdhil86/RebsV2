@@ -11,7 +11,7 @@ import {
   FiLayout,
   FiBell,
 } from "react-icons/fi";
-import toast from "react-hot-toast";
+import { toast } from "react-toastify"; // uses the global <ToastContainer /> from App.jsx
 
 import DashboardLayout from "../ui/pagelayout";
 import HeaderGlobal from "../ui/headerglobal";
@@ -29,6 +29,39 @@ const PRIORITY_OPTIONS = [
   { value: "2", label: "Medium" },
   { value: "3", label: "Low" },
 ];
+
+/* ================= BACKEND MESSAGE HELPERS ================= */
+
+// Pull readable text out of any backend payload shape:
+// "text", { message }, { error }, { detail }, { errors: {...} }, [ ... ]
+const extractMessage = (payload) => {
+  if (!payload) return "";
+
+  if (typeof payload === "string") return payload;
+
+  if (Array.isArray(payload)) {
+    return payload.map(extractMessage).filter(Boolean).join(", ");
+  }
+
+  if (typeof payload === "object") {
+    const direct =
+      payload.message || payload.error || payload.detail || payload.msg;
+
+    if (direct) return extractMessage(direct);
+
+    if (payload.errors) return extractMessage(Object.values(payload.errors));
+  }
+
+  return "";
+};
+
+// Error text from an axios error: backend message first, then network/JS error, then fallback.
+const getErrorMessage = (error, fallback) =>
+  extractMessage(error?.response?.data) || error?.message || fallback;
+
+// Success text from the API result: backend message first, then fallback.
+const getSuccessMessage = (result, fallback) =>
+  extractMessage(result?.message ?? result?.data?.message) || fallback;
 
 // Get attachment type from API or filename.
 const getAttachmentType = (item) => {
@@ -97,6 +130,7 @@ const Announcement = () => {
       setAnnouncements(Array.isArray(rawData) ? rawData : []);
     } catch (error) {
       console.error("Failed to load announcements:", error);
+      toast.error(getErrorMessage(error, "Failed to load announcements"));
     } finally {
       setLoading(false);
     }
@@ -177,6 +211,7 @@ const Announcement = () => {
     } catch (error) {
       console.error("Failed to toggle like:", error);
       setAnnouncements(previous);
+      toast.error(getErrorMessage(error, "Failed to update like"));
     } finally {
       setLikingIds((prev) => {
         const next = new Set(prev);
@@ -196,12 +231,15 @@ const Announcement = () => {
     }
 
     try {
-      await announceService.postComment(id, text);
+      const result = await announceService.postComment(id, text);
+
+      toast.success(getSuccessMessage(result, "Comment posted"));
 
       handleInputChange(id, "");
       await loadAnnouncements();
     } catch (error) {
       console.error("Failed to post comment:", error);
+      toast.error(getErrorMessage(error, "Failed to post comment"));
     }
   };
 
@@ -212,6 +250,7 @@ const Announcement = () => {
       await loadAnnouncements();
     } catch (error) {
       console.error("Failed to add emoji:", error);
+      toast.error(getErrorMessage(error, "Failed to add reaction"));
     }
   };
 
@@ -264,14 +303,19 @@ const Announcement = () => {
     setIsUpdating(true);
 
     try {
-      await announceService.updateAnnouncement(editingAnnouncement.id, {
-        title: editForm.title.trim(),
-        description: editForm.description.trim(),
-        priority: editForm.priority,
-        attachment: editForm.attachment, // null => file fields are not sent
-      });
+      const result = await announceService.updateAnnouncement(
+        editingAnnouncement.id,
+        {
+          title: editForm.title.trim(),
+          description: editForm.description.trim(),
+          priority: editForm.priority,
+          attachment: editForm.attachment, // null => file fields are not sent
+        },
+      );
 
-      toast.success("Announcement updated successfully");
+      toast.success(
+        getSuccessMessage(result, "Announcement updated successfully"),
+      );
 
       setIsEditModalOpen(false);
       setEditingAnnouncement(null);
@@ -280,10 +324,7 @@ const Announcement = () => {
       await loadAnnouncements(); // refresh with the latest server values
     } catch (error) {
       console.error("Failed to update announcement:", error);
-
-      toast.error(
-        error.response?.data?.message || "Failed to update announcement",
-      );
+      toast.error(getErrorMessage(error, "Failed to update announcement"));
     } finally {
       setIsUpdating(false);
     }
@@ -314,7 +355,7 @@ const Announcement = () => {
     setIsDeleting(true);
 
     try {
-      await announceService.deleteAnnouncement(announcementId);
+      const result = await announceService.deleteAnnouncement(announcementId);
 
       // Remove the deleted announcement immediately.
       setAnnouncements((prev) =>
@@ -337,13 +378,12 @@ const Announcement = () => {
       setIsDeleteModalOpen(false);
       setSelectedAnnouncement(null);
 
-      toast.success("Announcement deleted successfully");
+      toast.success(
+        getSuccessMessage(result, "Announcement deleted successfully"),
+      );
     } catch (error) {
       console.error("Failed to delete announcement:", error);
-
-      toast.error(
-        error.response?.data?.message || "Failed to delete announcement",
-      );
+      toast.error(getErrorMessage(error, "Failed to delete announcement"));
     } finally {
       setIsDeleting(false);
     }

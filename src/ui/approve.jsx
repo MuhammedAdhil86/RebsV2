@@ -71,7 +71,13 @@ const LeaveRequestApprove = ({ user, onClose }) => {
   const [noteDraft, setNoteDraft] = useState("");
   const [noteOpen, setNoteOpen] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
-  const [selectedDates, setSelectedDates] = useState([]);
+
+  // FIX 1: all leave dates are pre-selected, so Approve / Reject works
+  // straight away. The user can still deselect dates.
+  const [selectedDates, setSelectedDates] = useState(() =>
+    (user.leave_date || []).map((l) => dayjs(l.date).format("YYYY-MM-DD")),
+  );
+
   const [submitting, setSubmitting] = useState(false);
   const [action, setAction] = useState(""); // "Approved" | "Rejected" (which button shows the spinner)
 
@@ -122,7 +128,9 @@ const LeaveRequestApprove = ({ user, onClose }) => {
     return !!leave && (leave.half_day === "true" || leave.half_day === true);
   };
 
+  // FIX 2: only real leave days can be selected / deselected
   const toggleDateSelection = (date) => {
+    if (!isLeaveDay(date)) return;
     const dateStr = dayjs(date).format("YYYY-MM-DD");
     setSelectedDates((prev) =>
       prev.includes(dateStr)
@@ -131,12 +139,28 @@ const LeaveRequestApprove = ({ user, onClose }) => {
     );
   };
 
+  // ---------- Role helpers ----------
+  // Normalised so "Manager" / "manager" / " MANAGER " all match
+  const userType = String(currentUser?.user_type ?? "")
+    .trim()
+    .toLowerCase();
+  const isManagerRole = userType === "manager";
+  const isSuperAdmin = userType === "super admin";
+  const isAdminRole = userType === "super admin" || userType === "admin";
+
+  // Which API gets called:
+  //   manager        -> /manager/leave/change-status/:ref
+  //   admin / others -> /admin/leave/change-status/:ref
+  const approvalRole = isManagerRole ? "manager" : "admin";
+
   // Shared approve / reject flow
   const submitStatus = async (nextStatus) => {
     if (submitting) return;
     const verb = nextStatus === "Approved" ? "approve" : "reject";
 
-    if (selectedDates.length === 0) {
+    // FIX 3: managers don't send dates (the store only sends them for admins),
+    // so only admins need a date selection.
+    if (!isManagerRole && selectedDates.length === 0) {
       toast.error(`Please select at least one date to ${verb}.`);
       return;
     }
@@ -149,7 +173,7 @@ const LeaveRequestApprove = ({ user, onClose }) => {
         leaveRefNo: user.leave_ref_no,
         status: nextStatus,
         remarks: note,
-        role: currentUser?.user_type === "Manager" ? "manager" : "admin",
+        role: approvalRole,
         dates: selectedDates,
       });
       const body = getApiBody(res);
@@ -194,24 +218,29 @@ const LeaveRequestApprove = ({ user, onClose }) => {
   // Pending  -> Reject + Approve
   // Approved -> only Reject
   // Rejected -> only Approve
+  // Anything else (e.g. "partially approved") -> both buttons, so the request
+  // is never stuck without actions.
   const leaveStatus = String(user.status ?? "").toLowerCase();
-  const isPending = leaveStatus === "pending" || leaveStatus === "";
   const isApproved = leaveStatus === "approved";
   const isRejected = leaveStatus === "rejected";
-  const showRejectButton = isPending || isApproved;
-  const showApproveButton = isPending || isRejected;
-
-  const isSuperAdmin = currentUser && currentUser.user_type === "Super admin";
   const managerApproval = String(user.manager_approval_status ?? "")
     .trim()
     .toLowerCase();
-  // Buttons show when the manager has approved OR the request is still pending
-  // with the manager, plus the super admin / manager roles as before.
+
+  // A manager who has already approved can only reject afterwards
+  const managerAlreadyApproved =
+    isManagerRole && managerApproval === "approved";
+
+  const showRejectButton = !isRejected;
+  const showApproveButton = !isApproved && !managerAlreadyApproved;
+
+  // FIX 4: plain "Admin" users are included as well
   const shouldShowApprovalButtons =
+    isAdminRole ||
     isSuperAdmin ||
+    isManagerRole ||
     managerApproval === "approved" ||
-    managerApproval === "pending" ||
-    currentUser?.user_type === "Manager";
+    managerApproval === "pending";
 
   // Footer is shown only when at least one button will appear
   const showFooter =
@@ -222,24 +251,16 @@ const LeaveRequestApprove = ({ user, onClose }) => {
     return `${String(d.getDate()).padStart(2, "0")}-${String(d.getMonth() + 1).padStart(2, "0")}-${d.getFullYear()}`;
   };
 
-  const calendarDates = firstLeaveDate
-    ? (function (date) {
-        const d = new Date(date);
-        const firstDay = new Date(d.getFullYear(), d.getMonth(), 1);
-        const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0);
-        const dates = [];
-        let curr = new Date(firstDay);
-        while (curr <= lastDay) {
-          dates.push(new Date(curr));
-          curr.setDate(curr.getDate() + 1);
-        }
-        return dates;
-      })(firstLeaveDate)
-    : [];
-
-  // Blank cells so day 1 sits under the right weekday
-  const leadingBlanks =
-    calendarDates.length > 0 ? calendarDates[0].getDay() : 0;
+  // FIX 5: build one calendar per month, from the first leave month to the last
+  const calendarMonths = [];
+  if (firstLeaveDate && endLeaveDate) {
+    let m = dayjs(firstLeaveDate).startOf("month");
+    const last = dayjs(endLeaveDate).startOf("month");
+    while (!m.isAfter(last, "month")) {
+      calendarMonths.push(m);
+      m = m.add(1, "month");
+    }
+  }
 
   // ---------- Theme styles ----------
   const labelCls = "text-[11px] text-gray-500 mb-1";
@@ -419,12 +440,16 @@ const LeaveRequestApprove = ({ user, onClose }) => {
 
             {/* ---------- RIGHT: CALENDAR ---------- */}
             <div className="border border-gray-200 rounded-lg p-4 self-start min-w-0">
-              {/* Month + total days */}
+              {/* Total days */}
               <div className="flex items-center justify-between gap-3 mb-3">
                 <p className="text-[13px] font-medium text-gray-800">
-                  {firstLeaveDate
-                    ? dayjs(firstLeaveDate).format("MMMM YYYY")
-                    : "No leave dates"}
+                  {calendarMonths.length === 0
+                    ? "No leave dates"
+                    : calendarMonths.length === 1
+                      ? calendarMonths[0].format("MMMM YYYY")
+                      : `${calendarMonths[0].format("MMM YYYY")} - ${calendarMonths[
+                          calendarMonths.length - 1
+                        ].format("MMM YYYY")}`}
                 </p>
                 <div className="flex items-center gap-2 bg-slate-50 border border-gray-200 px-3 py-1.5 rounded-lg">
                   <p className="text-[14px] font-medium text-gray-800 tabular-nums">
@@ -434,51 +459,72 @@ const LeaveRequestApprove = ({ user, onClose }) => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-7 mb-1">
-                {WEEKDAYS.map((d, i) => (
-                  <div
-                    key={d}
-                    className={`text-center text-[10px] py-1 ${
-                      i === 0 || i === 6 ? "text-gray-900" : "text-gray-400"
-                    }`}
-                  >
-                    {d}
-                  </div>
-                ))}
-              </div>
-
-              <div className="grid grid-cols-7 gap-y-1.5">
-                {Array.from({ length: leadingBlanks }).map((_, i) => (
-                  <div key={`blank-${i}`} />
-                ))}
-                {calendarDates.map((date, idx) => {
-                  const dateStr = dayjs(date).format("YYYY-MM-DD");
-                  const isSelected = selectedDates.includes(dateStr);
-                  const half = isHalfDay(date);
-                  const leave = isLeaveDay(date);
+              {/* One grid per month */}
+              <div className="space-y-4">
+                {calendarMonths.map((m) => {
+                  const leadingBlanks = m.day();
+                  const daysInMonth = m.daysInMonth();
                   return (
-                    <div
-                      key={idx}
-                      onClick={() => toggleDateSelection(date)}
-                      className={`relative mx-auto h-9 w-9 flex items-center justify-center rounded-full cursor-pointer text-[12px] tabular-nums transition-colors
-                        ${
-                          isSelected
-                            ? "bg-black text-white"
-                            : half
-                              ? "bg-gray-100 text-gray-900 ring-1 ring-gray-400"
-                              : leave
-                                ? "bg-gray-200 text-gray-900"
-                                : "text-gray-700 hover:bg-gray-100"
-                        }`}
-                    >
-                      {date.getDate()}
-                      {half && (
-                        <span
-                          className={`absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full ${
-                            isSelected ? "bg-white" : "bg-gray-600"
-                          }`}
-                        />
+                    <div key={m.format("YYYY-MM")}>
+                      {calendarMonths.length > 1 && (
+                        <p className="text-[12px] font-medium text-gray-800 mb-1">
+                          {m.format("MMMM YYYY")}
+                        </p>
                       )}
+
+                      <div className="grid grid-cols-7 mb-1">
+                        {WEEKDAYS.map((d, i) => (
+                          <div
+                            key={d}
+                            className={`text-center text-[10px] py-1 ${
+                              i === 0 || i === 6
+                                ? "text-gray-900"
+                                : "text-gray-400"
+                            }`}
+                          >
+                            {d}
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="grid grid-cols-7 gap-y-1.5">
+                        {Array.from({ length: leadingBlanks }).map((_, i) => (
+                          <div key={`blank-${i}`} />
+                        ))}
+                        {Array.from({ length: daysInMonth }).map((_, idx) => {
+                          const date = m.date(idx + 1).toDate();
+                          const dateStr = dayjs(date).format("YYYY-MM-DD");
+                          const isSelected = selectedDates.includes(dateStr);
+                          const half = isHalfDay(date);
+                          const leave = isLeaveDay(date);
+                          return (
+                            <div
+                              key={dateStr}
+                              onClick={() => toggleDateSelection(date)}
+                              className={`relative mx-auto h-9 w-9 flex items-center justify-center rounded-full text-[12px] tabular-nums transition-colors
+                                ${leave ? "cursor-pointer" : "cursor-default"}
+                                ${
+                                  isSelected
+                                    ? "bg-black text-white"
+                                    : half
+                                      ? "bg-gray-100 text-gray-900 ring-1 ring-gray-400"
+                                      : leave
+                                        ? "bg-gray-200 text-gray-900"
+                                        : "text-gray-400"
+                                }`}
+                            >
+                              {date.getDate()}
+                              {half && (
+                                <span
+                                  className={`absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full ${
+                                    isSelected ? "bg-white" : "bg-gray-600"
+                                  }`}
+                                />
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   );
                 })}
@@ -510,7 +556,14 @@ const LeaveRequestApprove = ({ user, onClose }) => {
 
         {/* FOOTER: Reject + Approve only */}
         {showFooter && (
-          <div className="px-6 py-4 border-t border-gray-100 bg-slate-50/60 flex justify-end gap-2">
+          <div className="px-6 py-4 border-t border-gray-100 bg-slate-50/60 flex items-center justify-end gap-2">
+            {managerAlreadyApproved && (
+              <span className="mr-auto flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] bg-green-100 text-green-700">
+                <Icon icon="solar:check-circle-outline" className="w-4 h-4" />
+                Manager approval already done
+              </span>
+            )}
+
             {showRejectButton && (
               <ModalButton
                 variant="danger"

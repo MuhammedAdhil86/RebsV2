@@ -12,7 +12,7 @@ const initialFormData = {
   content: "",
   priority: 1, // 1: High, 2: Medium, 3: Low
   audienceType: "All",
-  selectedEmployees: [],
+  selectedEmployees: [], // holds user UUIDs
   selectedDepartmentId: "",
   attachment: null,
 };
@@ -72,17 +72,18 @@ const AnnouncementModal = ({ isOpen, onClose }) => {
     const term = searchTerm.toLowerCase();
     return users.filter((user) => {
       const name = (user.name || "").toLowerCase();
-      const uuid = (user.uuid || "").toLowerCase();
+      const uuid = String(user.uuid || "").toLowerCase();
       return name.includes(term) || uuid.includes(term);
     });
   }, [users, searchTerm]);
 
-  const toggleEmployee = (id) => {
+  // Toggle employee selection by UUID
+  const toggleEmployee = (uuid) => {
     setFormData((prev) => ({
       ...prev,
-      selectedEmployees: prev.selectedEmployees.includes(id)
-        ? prev.selectedEmployees.filter((e) => e !== id)
-        : [...prev.selectedEmployees, id],
+      selectedEmployees: prev.selectedEmployees.includes(uuid)
+        ? prev.selectedEmployees.filter((e) => e !== uuid)
+        : [...prev.selectedEmployees, uuid],
     }));
   };
 
@@ -142,6 +143,7 @@ const AnnouncementModal = ({ isOpen, onClose }) => {
     payload.append("audience_type", formData.audienceType);
 
     if (formData.audienceType === "Specific employees") {
+      // Sends UUIDs, e.g. ["100557","100558"]
       payload.append("send_to", JSON.stringify(formData.selectedEmployees));
     }
 
@@ -306,7 +308,7 @@ const AnnouncementModal = ({ isOpen, onClose }) => {
             </select>
           )}
 
-          {/* Active Users Selection */}
+          {/* Active Users Selection (by UUID) */}
           {formData.audienceType === "Specific employees" && (
             <div className="space-y-2">
               <div className="relative">
@@ -336,7 +338,7 @@ const AnnouncementModal = ({ isOpen, onClose }) => {
                 ) : (
                   filteredUsers.map((user) => (
                     <label
-                      key={user.id}
+                      key={user.uuid}
                       className="flex justify-between items-center p-2 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors"
                     >
                       <div className="flex items-center gap-3">
@@ -363,8 +365,8 @@ const AnnouncementModal = ({ isOpen, onClose }) => {
 
                       <input
                         type="checkbox"
-                        checked={formData.selectedEmployees.includes(user.id)}
-                        onChange={() => toggleEmployee(user.id)}
+                        checked={formData.selectedEmployees.includes(user.uuid)}
+                        onChange={() => toggleEmployee(user.uuid)}
                         className="rounded border-gray-300"
                       />
                     </label>
