@@ -23,6 +23,9 @@ import PayrollConfiguration from "./payrollpolicy_tabs/payrollconfiguration";
 /* Reusable TabsSwitch Component */
 import TabsSwitch from "../../ui/tabswitch";
 
+/* Reusable Tab Button Group */
+import TabButtonGroup from "../../ui/button/tab_button";
+
 const OrganizationalPolicy = () => {
   /* ----------------- API Data Payload ----------------- */
   const employeeCodeData = {
@@ -52,7 +55,6 @@ const OrganizationalPolicy = () => {
   /* ----------------- Sub-Tabs States ----------------- */
   const [activeWorkShiftTab, setActiveWorkShiftTab] = useState("Shifts");
   const [activeLeaveTab, setActiveLeaveTab] = useState("Leave Policy");
-  const [activeEmailTab, setActiveEmailTab] = useState("Email Template");
   const [activeLayoutTab, setActiveLayoutTab] = useState("Email Layout");
 
   /* ----------------- Render Content for Active Tab ----------------- */
@@ -61,25 +63,11 @@ const OrganizationalPolicy = () => {
       {/* ===== WORK SHIFT ===== */}
       {activeTab === "work-shift" && (
         <>
-          <div className="flex gap-4 border-b border-gray-200 mb-4">
-            {["Shifts", "Attendance Policy"].map((subTab) => (
-              <button
-                key={subTab}
-                onClick={() => setActiveWorkShiftTab(subTab)}
-                className={`pb-2 text-sm font-medium transition-all relative ${
-                  activeWorkShiftTab === subTab
-                    ? "text-gray-900"
-                    : "text-gray-400 hover:text-gray-600"
-                }`}
-              >
-                {subTab}
-
-                {activeWorkShiftTab === subTab && (
-                  <div className="absolute bottom-0 left-0 w-full h-[2px] bg-red-500" />
-                )}
-              </button>
-            ))}
-          </div>
+          <TabButtonGroup
+            tabs={["Shifts", "Attendance Policy"]}
+            activeTab={activeWorkShiftTab}
+            onChange={setActiveWorkShiftTab}
+          />
 
           <div>
             {activeWorkShiftTab === "Shifts" && <Shifts />}
@@ -91,25 +79,11 @@ const OrganizationalPolicy = () => {
       {/* ===== LEAVES & HOLIDAYS ===== */}
       {activeTab === "leaves-holidays" && (
         <>
-          <div className="flex gap-4 border-b border-gray-200 mb-4">
-            {["Leave Policy", "WeeklyOff", "Holidays"].map((subTab) => (
-              <button
-                key={subTab}
-                onClick={() => setActiveLeaveTab(subTab)}
-                className={`pb-2 text-sm font-medium transition-all relative ${
-                  activeLeaveTab === subTab
-                    ? "text-gray-900"
-                    : "text-gray-400 hover:text-gray-600"
-                }`}
-              >
-                {subTab}
-
-                {activeLeaveTab === subTab && (
-                  <div className="absolute bottom-0 left-0 w-full h-[2px] bg-red-500" />
-                )}
-              </button>
-            ))}
-          </div>
+          <TabButtonGroup
+            tabs={["Leave Policy", "WeeklyOff", "Holidays"]}
+            activeTab={activeLeaveTab}
+            onChange={setActiveLeaveTab}
+          />
 
           <div>
             {activeLeaveTab === "Leave Policy" && <LeavesAndVacations />}

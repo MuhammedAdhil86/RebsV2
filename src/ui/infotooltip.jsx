@@ -44,6 +44,17 @@ export const SALARY_TEMPLATE_INFO = [
   },
 ];
 
+// Help text for the Payroll Run screen (period selection)
+export const PAYROLL_PERIOD_INFO = [
+  {
+    title: "Selecting a payroll period",
+    body: "Your company pays salary in fixed 28-day cycles. Each cycle is assigned to the month in which it ends. For example, selecting November 2026 runs payroll for 17 Oct to 13 Nov.",
+  },
+  {
+    body: "Occasionally, two cycles end in the same month. When that happens, you’ll be asked to choose which cycle to run. Each cycle is run separately.",
+  },
+];
+
 const MARGIN = 16; // minimum gap from the viewport edges
 const GAP = 8; // gap between the icon and the tooltip
 const MAX_WIDTH = 500;
