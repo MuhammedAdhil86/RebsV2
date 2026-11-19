@@ -10,7 +10,7 @@ import {
   Loader2,
   RefreshCw,
 } from "lucide-react";
-import toast from "react-hot-toast";
+import { showApiSuccess, showApiError } from "../utils/apiToast"; // adjust path to your toast helper
 import {
   getGeneratedLettersService,
   deleteGeneratedLetterService,
@@ -34,9 +34,7 @@ export default function GeneratedLetterListView({ onBack }) {
       const list = Array.isArray(res) ? res : res?.data || [];
       setLetters(list);
     } catch (error) {
-      toast.error(
-        error?.response?.data?.message || "Failed to load generated letters",
-      );
+      showApiError(error, "Failed to load generated letters");
     } finally {
       setLoading(false);
     }
@@ -66,17 +64,14 @@ export default function GeneratedLetterListView({ onBack }) {
     handleCloseDeleteModal();
 
     setDeletingId(idToDelete);
-    const toastId = toast.loading("Deleting letter...");
 
     try {
-      await deleteGeneratedLetterService(idToDelete);
-      toast.success("Letter deleted successfully", { id: toastId });
+      const res = await deleteGeneratedLetterService(idToDelete);
+      showApiSuccess(res, "Letter deleted successfully");
       // Optimistically update list
       setLetters((prev) => prev.filter((item) => item.id !== idToDelete));
     } catch (error) {
-      toast.error(error?.response?.data?.message || "Failed to delete letter", {
-        id: toastId,
-      });
+      showApiError(error, "Failed to delete letter");
     } finally {
       setDeletingId(null);
     }

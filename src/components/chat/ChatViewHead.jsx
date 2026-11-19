@@ -184,11 +184,10 @@ export default function ChatViewHead({
             >
               <FiMoreVertical size={19} />
             </button>
-
             {menuOpen && (
               <div
                 role="menu"
-                className="absolute right-0 top-full z-40 mt-2 w-48 origin-top-right overflow-hidden rounded-xl border bg-white p-1.5 shadow-[0_8px_24px_rgba(0,0,0,0.12)] animate-in fade-in zoom-in-95 duration-150"
+                className="absolute right-0 top-full z-40 mt-2 w-56 origin-top-right overflow-hidden rounded-xl border bg-white p-1.5 shadow-[0_8px_24px_rgba(0,0,0,0.12)] animate-in fade-in zoom-in-95 duration-150"
                 style={{ borderColor: COLORS.line }}
               >
                 <button
@@ -197,7 +196,7 @@ export default function ChatViewHead({
                     setMenuOpen(false);
                     setConfirmOpen(true);
                   }}
-                  className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-[14px] font-medium transition-colors hover:bg-[#fbe8ea]"
+                  className="flex w-full items-center gap-2.5 whitespace-nowrap rounded-lg px-3 py-2 text-left text-[14px] font-medium transition-colors hover:bg-[#fbe8ea]"
                   style={{ color: COLORS.link }}
                 >
                   <FiTrash2 size={16} />

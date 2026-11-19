@@ -5,6 +5,7 @@ import {
   fetchPurposePlaceholders,
   sendCustomEmailByPurposeService,
 } from "../service/mainServices";
+import { showApiSuccess, showApiError } from "../utils/apiToast"; // adjust path to your toast helper
 import GmailComposeWindow from "../ui/GmailComposeWindow";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -130,7 +131,6 @@ const SendCustomMailModal = ({
   const [attachment, setAttachment] = useState(null);
 
   const [sending, setSending] = useState(false);
-  const [sendError, setSendError] = useState("");
   const [step, setStep] = useState(1); // 1 = form, 2 = Gmail-style compose
   const [continueCustom, setContinueCustom] = useState(true);
   const [purpose, setPurpose] = useState("");
@@ -147,7 +147,6 @@ const SendCustomMailModal = ({
     if (!isOpen) return;
 
     setStep(1);
-    setSendError("");
     setSending(false);
     setPlaceholders([]);
     setPlaceholderValues({});
@@ -177,6 +176,9 @@ const SendCustomMailModal = ({
         }
       } catch (error) {
         console.error("Failed to load manual mail purposes:", error);
+        showApiError(error, "Failed to load purposes", {
+          toastId: "mail-purposes",
+        });
       } finally {
         if (isMounted) setPurposesLoading(false);
       }
@@ -211,6 +213,9 @@ const SendCustomMailModal = ({
         );
       } catch (error) {
         console.error("Failed to load placeholders:", error);
+        showApiError(error, "Failed to load template data fields", {
+          toastId: "mail-placeholders",
+        });
         if (isMounted) {
           setPlaceholders([]);
           setPlaceholderValues({});
@@ -251,7 +256,6 @@ const SendCustomMailModal = ({
       // Toggle ON -> POST /admin/send/custom-email/by-purpose/{purpose}
       try {
         setSending(true);
-        setSendError("");
 
         const res = await sendCustomEmailByPurposeService({
           purpose,
@@ -268,10 +272,11 @@ const SendCustomMailModal = ({
           attachment,
         });
 
+        showApiSuccess(res, "Email sent successfully");
         onSuccess?.(res);
         onClose?.();
       } catch (err) {
-        setSendError(err?.message || "Failed to send email");
+        showApiError(err, "Failed to send email");
       } finally {
         setSending(false);
       }
@@ -513,9 +518,6 @@ const SendCustomMailModal = ({
 
         {/* --- Footer --- */}
         <div className="p-6 border-t border-zinc-100 bg-zinc-50 flex justify-end items-center gap-4 shrink-0">
-          {sendError && (
-            <p className="mr-auto text-[11px] text-red-500">{sendError}</p>
-          )}
           <button
             type="button"
             onClick={onClose}

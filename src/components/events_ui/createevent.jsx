@@ -7,7 +7,7 @@ import {
   fetchTimeZone,
 } from "../../service/eventservices";
 import announceService from "../../service/announceService";
-import toast from "react-hot-toast";
+import { showApiSuccess, showApiError } from "../../utils/apiToast";
 
 /* ---------- Shared style tokens (match EmployeeModal) ---------- */
 const labelCls =
@@ -20,17 +20,10 @@ const errorCls = "text-red-500 text-[10px] mt-1 tracking-wide";
 const DEFAULT_AVATAR = "/person_img.jpg";
 
 const ChevronDownIcon = () => (
-  <svg
-    className="w-3.5 h-3.5 text-gray-400 pointer-events-none"
-    viewBox="0 0 20 20"
-    fill="currentColor"
-  >
-    <path
-      fillRule="evenodd"
-      d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.08 1.04l-4.25 4.25a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z"
-      clipRule="evenodd"
-    />
-  </svg>
+  <Icon
+    icon="solar:alt-arrow-down-linear"
+    className="w-3.5 h-3.5 text-gray-400"
+  />
 );
 
 const Field = ({ label, error, children, className = "" }) => (
@@ -98,16 +91,16 @@ const Section = ({
 // One row of the live summary card
 const SummaryRow = ({ icon, label, value }) => (
   <div className="flex items-start gap-3">
-    <div className="w-8 h-8 rounded-lg bg-[#F8F9FA] flex items-center justify-center shrink-0">
-      <Icon icon={icon} className="w-4 h-4 text-gray-500" />
+    <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center shrink-0">
+      <Icon icon={icon} className="w-4 h-4 text-white/70" />
     </div>
     <div className="min-w-0">
-      <p className="text-[9px] text-gray-300 uppercase tracking-widest leading-none mb-1">
+      <p className="text-[9px] text-white/40 uppercase tracking-widest leading-none mb-1">
         {label}
       </p>
       <p
         className={`text-xs leading-snug break-words ${
-          value ? "text-gray-800" : "text-gray-300"
+          value ? "text-white" : "text-white/30"
         }`}
       >
         {value || "Not set"}
@@ -422,18 +415,19 @@ export default function EventCreate({
 
     try {
       if (isEdit) {
-        await updateEventApi(event.id, eventPayload);
-        toast.success("Event updated successfully");
+        const res = await updateEventApi(event.id, eventPayload);
+        showApiSuccess(res, "Event updated successfully");
       } else {
-        await createEvent(eventPayload);
-        toast.success("Event created successfully");
+        const res = await createEvent(eventPayload);
+        showApiSuccess(res, "Event created successfully");
       }
 
       if (typeof onCreateSuccess === "function") await onCreateSuccess();
       setFormData(EMPTY_FORM);
       if (typeof onClose === "function") onClose();
-    } catch {
-      toast.error(
+    } catch (error) {
+      showApiError(
+        error,
         isEdit
           ? "Error updating event. Please Try Again"
           : "Error creating event. Please Try Again",
@@ -481,54 +475,71 @@ export default function EventCreate({
   return (
     <div className="flex flex-col w-full h-full min-h-0 font-poppins font-normal text-black">
       {/* ---------- Header (fixed) ---------- */}
-      <div className="shrink-0 flex items-center gap-4 pb-5 mb-5 border-b border-gray-100 relative pr-10">
-        <div className="w-14 h-14 rounded-2xl bg-black flex items-center justify-center shadow-lg shrink-0">
-          <Icon
-            icon={
-              isEdit
-                ? "solar:pen-new-square-outline"
-                : "solar:calendar-add-outline"
-            }
-            className="w-6 h-6 text-white"
-          />
+      <div className="shrink-0 relative overflow-hidden rounded-3xl bg-gradient-to-br from-zinc-800 via-zinc-900 to-black text-white p-5 sm:p-6 mb-5 shadow-lg">
+        <span className="absolute -right-10 -top-12 w-40 h-40 rounded-full bg-white/5" />
+        <span className="absolute right-10 top-14 w-20 h-20 rounded-full bg-white/5" />
+
+        <div className="relative flex items-center gap-4 pr-12">
+          <div className="w-12 h-12 rounded-2xl bg-white/10 border border-white/10 flex items-center justify-center shrink-0">
+            <Icon
+              icon={
+                isEdit
+                  ? "solar:pen-new-square-outline"
+                  : "solar:calendar-add-outline"
+              }
+              className="w-6 h-6 text-white"
+            />
+          </div>
+          <div className="min-w-0">
+            <h2 className="text-lg sm:text-xl font-normal leading-tight">
+              {isEdit ? "Edit Event" : "Create Event"}
+            </h2>
+            <p className="text-xs font-normal text-white/60 mt-0.5">
+              {isEdit
+                ? "Update the event details below"
+                : "Fill in the details to schedule an event"}
+            </p>
+          </div>
         </div>
-        <div className="min-w-0">
-          <h2 className="text-xl font-normal text-gray-900 leading-tight">
-            {isEdit ? "Edit Event" : "Create Event"}
-          </h2>
-          <p className="text-xs font-normal text-gray-400 mt-0.5">
-            {isEdit
-              ? "Update the event details below"
-              : "Fill in the details to schedule an event"}
-          </p>
-        </div>
+
         {onClose && (
           <button
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="absolute top-0 right-0 w-9 h-9 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400 hover:text-gray-700 transition-colors cursor-pointer"
+            className="absolute top-4 right-4 w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors cursor-pointer"
           >
-            ✕
+            <Icon icon="solar:close-circle-linear" className="w-5 h-5" />
           </button>
         )}
       </div>
 
       {/* ---------- Progress ---------- */}
-      <div className="shrink-0 mb-5 flex items-center gap-3">
-        <div className="flex-1 flex gap-1.5">
-          {[detailsDone, scheduleDone, locationDone, participantsDone].map(
-            (done, i) => (
+      <div className="shrink-0 mb-5 flex items-end gap-4">
+        <div className="flex-1 grid grid-cols-4 gap-2">
+          {[
+            { label: "Details", done: detailsDone },
+            { label: "Schedule", done: scheduleDone },
+            { label: "Location", done: locationDone },
+            { label: "People", done: participantsDone },
+          ].map((step) => (
+            <div key={step.label} className="flex flex-col gap-1.5 min-w-0">
               <div
-                key={i}
-                className={`h-1 flex-1 rounded-full transition-colors duration-300 ${
-                  done ? "bg-black" : "bg-gray-100"
+                className={`h-1 rounded-full transition-colors duration-300 ${
+                  step.done ? "bg-black" : "bg-gray-100"
                 }`}
               />
-            ),
-          )}
+              <span
+                className={`text-[9px] uppercase tracking-widest truncate ${
+                  step.done ? "text-gray-700" : "text-gray-300"
+                }`}
+              >
+                {step.label}
+              </span>
+            </div>
+          ))}
         </div>
-        <span className="text-[10px] text-gray-400 uppercase tracking-widest whitespace-nowrap">
+        <span className="text-[10px] text-gray-400 uppercase tracking-widest whitespace-nowrap pb-0.5">
           {doneCount}/4 complete
         </span>
       </div>
@@ -690,40 +701,86 @@ export default function EventCreate({
                 done={locationDone}
               >
                 <div className="flex flex-col gap-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <Field label="Event Type" error={errors.event_type}>
-                      <SelectWrap>
-                        <select
-                          name="event_type"
-                          value={formData.event_type}
-                          onChange={handleChange}
-                          className={selectCls}
-                        >
-                          <option value="">Select type</option>
-                          <option value="online">Online</option>
-                          <option value="offline">Offline</option>
-                        </select>
-                      </SelectWrap>
-                    </Field>
+                  <Field label="Event Type" error={errors.event_type}>
+                    <div className="grid grid-cols-2 gap-1.5 p-1 rounded-xl bg-[#F8F9FA] border border-gray-100">
+                      {[
+                        {
+                          value: "online",
+                          label: "Online",
+                          icon: "solar:videocamera-record-outline",
+                        },
+                        {
+                          value: "offline",
+                          label: "Offline",
+                          icon: "solar:map-point-outline",
+                        },
+                      ].map((opt) => {
+                        const active = formData.event_type === opt.value;
+                        return (
+                          <button
+                            type="button"
+                            key={opt.value}
+                            aria-pressed={active}
+                            onClick={() =>
+                              handleChange({
+                                target: {
+                                  name: "event_type",
+                                  value: opt.value,
+                                },
+                              })
+                            }
+                            className={`flex items-center justify-center gap-2 py-2.5 rounded-lg text-[11px] uppercase tracking-widest transition-all cursor-pointer ${
+                              active
+                                ? "bg-black text-white shadow-md"
+                                : "text-gray-500 hover:bg-white"
+                            }`}
+                          >
+                            <Icon icon={opt.icon} className="w-4 h-4" />
+                            {opt.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </Field>
 
-                    <Field label="When to Notify" error={errors.when_to_notify}>
-                      <SelectWrap>
-                        <select
-                          name="when_to_notify"
-                          value={formData.when_to_notify}
-                          onChange={handleChange}
-                          className={selectCls}
-                        >
-                          <option value="">Select reminder</option>
-                          <option value="5">5 minutes before</option>
-                          <option value="10">10 minutes before</option>
-                          <option value="15">15 minutes before</option>
-                          <option value="20">20 minutes before</option>
-                          <option value="30">30 minutes before</option>
-                        </select>
-                      </SelectWrap>
-                    </Field>
-                  </div>
+                  <Field label="When to Notify" error={errors.when_to_notify}>
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        ...new Set(
+                          ["5", "10", "15", "20", "30", formData.when_to_notify]
+                            .filter(Boolean)
+                            .map(String),
+                        ),
+                      ]
+                        .sort((a, b) => Number(a) - Number(b))
+                        .map((min) => {
+                          const active =
+                            String(formData.when_to_notify) === min;
+                          return (
+                            <button
+                              type="button"
+                              key={min}
+                              aria-pressed={active}
+                              onClick={() =>
+                                handleChange({
+                                  target: {
+                                    name: "when_to_notify",
+                                    value: min,
+                                  },
+                                })
+                              }
+                              className={`px-3.5 py-2 rounded-xl border text-[11px] tracking-wide transition-all cursor-pointer ${
+                                active
+                                  ? "bg-black text-white border-black shadow-md"
+                                  : "bg-[#F8F9FA] text-gray-600 border-gray-100 hover:border-gray-300 hover:bg-white"
+                              }`}
+                            >
+                              {min} min before
+                            </button>
+                          );
+                        })}
+                    </div>
+                  </Field>
 
                   {formData.event_type === "offline" && (
                     <Field label="Place" error={errors.place}>
@@ -959,26 +1016,27 @@ export default function EventCreate({
               </Section>
 
               {/* ---------- Live summary ---------- */}
-              <section className="rounded-2xl border border-gray-100 bg-[#FBFBFC] p-5">
-                <div className="flex items-center gap-2.5 mb-4">
-                  <div className="w-8 h-8 rounded-xl bg-black flex items-center justify-center">
+              <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-zinc-800 via-zinc-900 to-black text-white p-5 shadow-lg">
+                <span className="absolute -right-8 -top-8 w-28 h-28 rounded-full bg-white/5" />
+                <div className="relative flex items-center gap-2.5 mb-4">
+                  <div className="w-8 h-8 rounded-xl bg-white/10 flex items-center justify-center">
                     <Icon
                       icon="solar:clipboard-list-outline"
                       className="w-4 h-4 text-white"
                     />
                   </div>
-                  <h3 className="text-[11px] font-normal text-gray-600 uppercase tracking-[0.2em]">
+                  <h3 className="text-[11px] font-normal text-white/70 uppercase tracking-[0.2em]">
                     Event Summary
                   </h3>
                 </div>
                 <p
-                  className={`text-sm leading-snug mb-4 break-words ${
-                    formData.title ? "text-gray-900" : "text-gray-300"
+                  className={`relative text-[15px] leading-snug mb-4 break-words ${
+                    formData.title ? "text-white" : "text-white/30"
                   }`}
                 >
                   {formData.title || "Untitled event"}
                 </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-4">
+                <div className="relative grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-4">
                   <SummaryRow
                     icon="solar:calendar-outline"
                     label="When"
@@ -1032,7 +1090,7 @@ export default function EventCreate({
         </div>
 
         {/* ---------- Footer (fixed) ---------- */}
-        <div className="shrink-0 pt-4 mt-3 border-t border-gray-100 flex items-center justify-between gap-4">
+        <div className="shrink-0 pt-4 mt-3 border-t border-gray-100 bg-white flex items-center justify-between gap-4">
           <p className="hidden sm:block text-[10px] text-gray-400 uppercase tracking-widest">
             {formData.participation.length} participant
             {formData.participation.length === 1 ? "" : "s"}

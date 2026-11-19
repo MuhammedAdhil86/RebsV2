@@ -1,15 +1,14 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { X, Search, Loader2, Plus } from "lucide-react";
+
+import GlowButton from "../components/helpers/glowbutton";
+import { startProgressToast } from "../components/helpers/progressbar"; // keep filename casing
 import {
-  X,
-  Search,
-  Check,
-  Loader2,
-  Send,
-  FileText,
-  Layers,
-  Plus,
-} from "lucide-react";
-import toast, { Toaster } from "react-hot-toast";
+  showApiToast,
+  showApiError,
+  getApiBody,
+  formatDetail,
+} from "../utils/apiToast";
 import { getActiveUsersLight } from "../service/employeeService";
 import {
   fetchLetterPurposes,
@@ -17,29 +16,23 @@ import {
 } from "../service/mainServices";
 import { generateLetterService } from "../service/cloudflareLetterServices";
 
-const LetterActionModal = ({
-  isOpen,
-  onClose,
-  onExecute,
-  onSuccess,
-  activeTab,
-}) => {
+const isValidEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+
+const LetterActionModal = ({ isOpen, onClose, onSuccess, activeTab }) => {
   const [staff, setStaff] = useState([]);
   const [purposes, setPurposes] = useState([]);
   const [loading, setLoading] = useState(false);
   const [purposesLoading, setPurposesLoading] = useState(false);
-  const [processing, setProcessing] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedEmp, setSelectedEmp] = useState(null);
 
-  // Form States - purpose strictly stored as a string
   const [purpose, setPurpose] = useState("");
   const [cc, setCc] = useState([]);
   const [bcc, setBcc] = useState([]);
   const [tempCc, setTempCc] = useState("");
   const [tempBcc, setTempBcc] = useState("");
 
-  // Fetch Staff and Letter Purposes
+  // Fetch staff and letter purposes when the modal opens
   useEffect(() => {
     if (!isOpen) return;
 
@@ -53,13 +46,11 @@ const LetterActionModal = ({
           fetchLetterPurposes(),
         ]);
 
-        // 1. Process Staff List
         const staffList = Array.isArray(staffRes)
           ? staffRes
           : staffRes?.data?.data || staffRes?.data || [];
         setStaff(staffList);
 
-        // 2. Process Letter Purposes from /letter/list-purposes
         const parsedPurposes = Array.isArray(rawPurposesData)
           ? rawPurposesData
           : rawPurposesData?.data || [];
@@ -75,7 +66,7 @@ const LetterActionModal = ({
         setPurposes(cleanPurposes);
       } catch (err) {
         console.error("Failed to load staff/purposes:", err);
-        toast.error("Failed to load details");
+        showApiError(err, "Failed to load details");
       } finally {
         setLoading(false);
         setPurposesLoading(false);
@@ -90,23 +81,19 @@ const LetterActionModal = ({
     if (purposes.length === 0) return [];
 
     if (activeTab === "pdf") {
-      // If endpoint provides explicit _pdf items, prioritize them
       const explicitPdf = purposes.filter(
         (p) => p.endsWith("_pdf") || p.includes("pdf"),
       );
       if (explicitPdf.length > 0) return explicitPdf;
-
-      // Otherwise dynamically convert _mail suffixes to _pdf
       return purposes.map((p) => p.replace(/_mail$/, "_pdf"));
     }
 
-    // Default to mail/email items
     return purposes.filter(
       (p) => p.endsWith("_mail") || p.includes("mail") || p.includes("email"),
     );
   }, [purposes, activeTab]);
 
-  // Synchronize default selected purpose on tab or data change
+  // Keep a valid default purpose selected
   useEffect(() => {
     if (filteredPurposes.length > 0) {
       if (!purpose || !filteredPurposes.includes(purpose)) {
@@ -119,31 +106,21 @@ const LetterActionModal = ({
 
   // Filter staff by name or uuid
   const filteredStaff = useMemo(() => {
+    const q = searchTerm.toLowerCase();
     return staff.filter((emp) => {
       const fullName = (
         emp.name || `${emp.first_name || ""} ${emp.last_name || ""}`
       ).toLowerCase();
       const uuid = String(emp.uuid || "").toLowerCase();
-      return (
-        fullName.includes(searchTerm.toLowerCase()) ||
-        uuid.includes(searchTerm.toLowerCase())
-      );
+      return fullName.includes(q) || uuid.includes(q);
     });
   }, [staff, searchTerm]);
-
-  // Handle purpose selection change
-  const handlePurposeChange = (e) => {
-    const value = String(e.target.value || "").trim();
-    setPurpose(value);
-  };
-
-  const isValidEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
 
   const handleAddEmail = (type) => {
     const val = type === "cc" ? tempCc.trim() : tempBcc.trim();
     if (!val) return;
     if (!isValidEmail(val)) {
-      return toast.error("Enter a valid email address");
+      return showApiToast("error", "Enter a valid email address");
     }
     if (!(type === "cc" ? cc : bcc).includes(val)) {
       if (type === "cc") {
@@ -157,37 +134,41 @@ const LetterActionModal = ({
   };
 
   const handleClose = () => {
-    if (processing) return;
     setSearchTerm("");
     setSelectedEmp(null);
     setCc([]);
     setBcc([]);
+    setTempCc("");
+    setTempBcc("");
     setPurpose("");
     onClose();
   };
 
-  const handleConfirm = async () => {
+  const handleConfirm = (e) => {
+    if (e?.preventDefault) e.preventDefault();
+
     if (!selectedEmp) {
-      return toast.error("Please select an employee");
+      return showApiToast("error", "Please select an employee");
     }
 
     const finalPurpose = String(purpose || filteredPurposes[0] || "").trim();
     if (!finalPurpose) {
-      return toast.error("Please select a valid document purpose");
+      return showApiToast("error", "Please select a valid document purpose");
     }
 
-    const empUuid = selectedEmp.uuid || selectedEmp.user_id || selectedEmp.id;
-    const userId = String(empUuid).trim();
+    const userId = String(
+      selectedEmp.uuid || selectedEmp.user_id || selectedEmp.id,
+    ).trim();
 
-    // Include any typed-but-not-added emails so they are not lost
+    // Include typed-but-not-added emails so they are not lost
     const pendingCc = tempCc.trim();
     const pendingBcc = tempBcc.trim();
 
     if (pendingCc && !isValidEmail(pendingCc)) {
-      return toast.error("Enter a valid CC email address");
+      return showApiToast("error", "Enter a valid CC email address");
     }
     if (pendingBcc && !isValidEmail(pendingBcc)) {
-      return toast.error("Enter a valid BCC email address");
+      return showApiToast("error", "Enter a valid BCC email address");
     }
 
     const finalCc =
@@ -195,7 +176,6 @@ const LetterActionModal = ({
     const finalBcc =
       pendingBcc && !bcc.includes(pendingBcc) ? [...bcc, pendingBcc] : bcc;
 
-    // Shared payload (used for email request and onExecute callback)
     // Body shape: { user_id, purpose, cc: [...emails, ""], bcc: [...emails, ""] }
     const payload = {
       user_id: userId,
@@ -204,213 +184,182 @@ const LetterActionModal = ({
       bcc: [...finalBcc, ""],
     };
 
-    setProcessing(true);
-    const toastId = toast.loading(
-      activeTab === "pdf" ? "Generating PDF..." : "Sending email...",
-    );
+    const isPdf = activeTab === "pdf";
 
-    try {
-      if (activeTab === "pdf") {
-        // PDF service takes (userId, purpose) as separate arguments
-        console.log("PDF payload:", { user_id: userId, purpose: finalPurpose });
+    // Progress toast (top-right) keeps running after the modal closes
+    const task = startProgressToast({
+      label: isPdf ? "Generating PDF" : "Sending email",
+      storageKey: isPdf ? "letter_pdf_duration_ms" : "letter_email_duration_ms",
+      defaultMs: isPdf ? 6000 : 4000,
+    });
 
-        const res = await generateLetterService(userId, finalPurpose);
-        console.log("PDF response:", res);
+    handleClose();
 
-        toast.success(res?.message || "Successfully generated letter", {
-          id: toastId,
-        });
+    (async () => {
+      try {
+        if (isPdf) {
+          const res = await generateLetterService(userId, finalPurpose);
+          task.finish(
+            getApiBody(res)?.message || "Successfully generated letter",
+          );
 
-        const fileUrl = res?.data?.file_url || res?.file_url;
-        if (fileUrl) {
-          window.open(fileUrl, "_blank", "noopener,noreferrer");
+          const fileUrl = res?.data?.file_url || res?.file_url;
+          if (fileUrl) {
+            const win = window.open(fileUrl, "_blank", "noopener,noreferrer");
+            if (!win) {
+              showApiToast(
+                "info",
+                "Letter generated. Allow popups or open it from Generated List.",
+              );
+            }
+          }
+          onSuccess?.(res, { userId, purpose: finalPurpose });
+        } else {
+          const res = await sendLetterService(payload);
+          task.finish(
+            getApiBody(res)?.message || "Email letter sent successfully!",
+          );
+          onSuccess?.(res, { userId, purpose: finalPurpose });
         }
-
-        if (onSuccess) onSuccess(res);
-      } else {
-        console.log("Email payload:", payload);
-
-        const res = await sendLetterService(payload);
-        console.log("Email response:", res);
-
-        toast.success(res?.message || "Email letter sent successfully!", {
-          id: toastId,
-        });
-
-        if (onSuccess) onSuccess(res);
+      } catch (error) {
+        console.error("Letter request failed:", error?.response?.data || error);
+        // Same title + data split as the toast helper
+        const errBody = error?.response?.data;
+        const message =
+          errBody?.message ||
+          errBody?.error ||
+          error?.message ||
+          "Failed to process letter request";
+        const detail = formatDetail(
+          errBody?.data ?? (errBody?.message ? errBody?.error : undefined),
+        );
+        task.fail(detail ? `${message} — ${detail}` : message);
       }
-
-      if (onExecute) {
-        console.log("onExecute payload:", { ...payload, userId });
-        onExecute({ ...payload, userId });
-      }
-
-      handleClose();
-    } catch (error) {
-      console.error("Letter request failed:", error?.response?.data || error);
-
-      const errMsg =
-        error?.response?.data?.message ||
-        error?.response?.data?.error ||
-        error?.message ||
-        "Failed to process letter request";
-      toast.error(errMsg, { id: toastId });
-    } finally {
-      setProcessing(false);
-    }
+    })();
   };
 
   if (!isOpen) return null;
 
-  const inputBaseClass =
-    "w-full bg-white border border-gray-200 rounded-2xl px-5 py-3.5 outline-none focus:border-black text-[12px] transition-all text-black placeholder:text-gray-400 font-poppins font-normal";
+  const emailFields = [
+    {
+      key: "cc",
+      label: "CC",
+      temp: tempCc,
+      setTemp: setTempCc,
+      list: cc,
+      setList: setCc,
+    },
+    {
+      key: "bcc",
+      label: "BCC",
+      temp: tempBcc,
+      setTemp: setTempBcc,
+      list: bcc,
+      setList: setBcc,
+    },
+  ];
 
   return (
-    <div className="fixed inset-0 z-[10001] flex items-center justify-center bg-black/40 backdrop-blur-sm font-poppins text-[12px]">
-      <Toaster position="top-center" />
-
-      <div className="bg-white w-[95%] max-w-[450px] rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in duration-200 border border-gray-100">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm font-poppins text-[12px]">
+      <div className="bg-white w-[95%] max-w-[480px] rounded-[2rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] border border-white/20">
         {/* Header */}
-        <div className="px-8 py-6 flex items-center justify-between border-b border-gray-50 bg-white">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-2xl bg-gray-50 text-black border border-gray-100">
-              {activeTab === "pdf" ? (
-                <FileText size={20} />
-              ) : (
-                <Send size={20} />
-              )}
-            </div>
-            <div>
-              <h2 className="text-black text-[15px] font-normal uppercase tracking-tight">
-                {activeTab === "pdf" ? "Generate PDF" : "Send Email"}
-              </h2>
-              <p className="text-black/50 text-[9px] tracking-widest uppercase">
-                Select employee & letter purpose
-              </p>
-            </div>
+        <div className="px-8 py-5 flex items-center justify-between border-b border-gray-50 bg-white">
+          <div>
+            <h2 className="text-gray-900 text-[16px] font-medium uppercase">
+              {activeTab === "pdf" ? "Generate PDF" : "Send Email"}
+            </h2>
+            <p className="text-gray-400 text-[10px]">
+              Select employee and letter purpose
+            </p>
           </div>
-          <button
-            type="button"
-            onClick={handleClose}
-            disabled={processing}
-            className="p-2 hover:bg-gray-100 rounded-full text-black transition-colors cursor-pointer disabled:opacity-40"
-          >
+          <button type="button" onClick={handleClose}>
             <X size={20} />
           </button>
         </div>
 
-        <div className="p-8 space-y-6 overflow-y-auto custom-scrollbar">
-          {/* Employee Selection */}
-          <div className="space-y-3">
-            <label className="block text-black ml-1 text-[10px] font-normal tracking-widest uppercase">
-              SELECT EMPLOYEE
-            </label>
-            <div className="relative">
-              <Search
-                className="absolute left-4 top-1/2 -translate-y-1/2 text-black"
-                size={14}
-              />
-              <input
-                type="text"
-                placeholder="Search name or ID..."
-                className={`${inputBaseClass} pl-10`}
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                disabled={processing}
-              />
-            </div>
+        <form onSubmit={handleConfirm} className="p-8 overflow-y-auto">
+          <div className="space-y-5 min-w-0">
+            {/* Employee */}
+            <div className="space-y-2">
+              <label className="block mb-1 font-medium text-gray-700">
+                Employee
+              </label>
+              <div className="relative">
+                <Search
+                  className="absolute left-3 top-3 text-gray-400"
+                  size={16}
+                />
+                <input
+                  type="text"
+                  placeholder="Search name or ID..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-9 border p-2.5 rounded-2xl"
+                />
+              </div>
 
-            <div className="bg-white rounded-2xl border border-gray-100 max-h-[160px] overflow-y-auto p-2 shadow-inner">
-              {loading ? (
-                <div className="flex justify-center py-4">
-                  <Loader2 className="animate-spin text-black" />
-                </div>
-              ) : filteredStaff.length === 0 ? (
-                <div className="text-center py-4 text-gray-400 text-xs">
-                  No employee found
-                </div>
-              ) : (
-                filteredStaff.map((emp) => {
-                  const fullName =
-                    emp.name ||
-                    `${emp.first_name || ""} ${emp.last_name || ""}`;
-                  const isSelected =
-                    (emp.uuid && selectedEmp?.uuid === emp.uuid) ||
-                    (emp.id && selectedEmp?.id === emp.id);
+              <div className="max-h-[180px] overflow-y-auto border rounded-2xl p-2 space-y-1">
+                {loading ? (
+                  <div className="flex justify-center py-6">
+                    <Loader2 className="animate-spin text-gray-400" size={18} />
+                  </div>
+                ) : filteredStaff.length === 0 ? (
+                  <div className="p-3 text-center text-gray-400">
+                    No employee found
+                  </div>
+                ) : (
+                  filteredStaff.map((emp) => {
+                    const fullName =
+                      emp.name ||
+                      `${emp.first_name || ""} ${emp.last_name || ""}`;
+                    const isSelected =
+                      (emp.uuid && selectedEmp?.uuid === emp.uuid) ||
+                      (emp.id && selectedEmp?.id === emp.id);
 
-                  return (
-                    <div
-                      key={emp.uuid || emp.id}
-                      onClick={() => !processing && setSelectedEmp(emp)}
-                      className={`flex items-center justify-between p-3 rounded-xl cursor-pointer transition-all mb-1 ${
-                        isSelected
-                          ? "bg-gray-50 border border-gray-100 shadow-sm"
-                          : "hover:bg-gray-50/50"
-                      } ${processing ? "opacity-60 cursor-not-allowed" : ""}`}
-                    >
-                      <div className="flex items-center gap-3">
-                        {emp.image ? (
-                          <img
-                            src={emp.image}
-                            alt={fullName}
-                            className="w-8 h-8 rounded-full object-cover border border-gray-200"
-                            onError={(e) => {
-                              e.target.style.display = "none";
-                            }}
-                          />
-                        ) : (
-                          <div className="w-8 h-8 bg-black rounded-full flex items-center justify-center text-[10px] font-normal text-white uppercase shrink-0">
-                            {fullName.charAt(0)}
-                          </div>
-                        )}
-                        <div className="flex flex-col text-left">
-                          <span
-                            className={`font-normal text-[12px] leading-tight ${
-                              isSelected
-                                ? "text-black font-medium"
-                                : "text-black/70"
-                            }`}
-                          >
+                    return (
+                      <label
+                        key={emp.uuid || emp.id}
+                        className={`flex justify-between items-center p-2 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors ${
+                          isSelected ? "bg-gray-50" : ""
+                        }`}
+                      >
+                        <div className="flex flex-col min-w-0">
+                          <span className="font-medium text-gray-800 truncate">
                             {fullName}
                           </span>
                           {emp.uuid && (
-                            <span className="text-[10px] text-gray-400 font-mono">
-                              #{emp.uuid}
+                            <span className="text-gray-400 text-[10px] truncate">
+                              {emp.uuid}
+                              {emp.designation_name
+                                ? ` · ${emp.designation_name}`
+                                : ""}
                             </span>
                           )}
                         </div>
-                      </div>
-                      <div
-                        className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all shrink-0 ${
-                          isSelected
-                            ? "bg-black border-black text-white"
-                            : "bg-white border-gray-200"
-                        }`}
-                      >
-                        {isSelected && <Check size={12} strokeWidth={3} />}
-                      </div>
-                    </div>
-                  );
-                })
-              )}
+                        <input
+                          type="radio"
+                          name="letter-employee"
+                          checked={!!isSelected}
+                          onChange={() => setSelectedEmp(emp)}
+                          className="accent-black w-4 h-4"
+                        />
+                      </label>
+                    );
+                  })
+                )}
+              </div>
             </div>
-          </div>
 
-          {/* Dynamic Purpose Dropdown */}
-          <div className="space-y-2">
-            <label className="block text-black ml-1 text-[10px] font-normal tracking-widest uppercase">
-              DOCUMENT PURPOSE
-            </label>
-            <div className="relative">
-              <Layers
-                className="absolute left-4 top-1/2 -translate-y-1/2 text-black"
-                size={14}
-              />
+            {/* Purpose */}
+            <div>
+              <label className="block mb-1 font-medium text-gray-700">
+                Document Purpose
+              </label>
               <select
-                className={`${inputBaseClass} pl-10 appearance-none cursor-pointer font-mono`}
                 value={purpose}
-                onChange={handlePurposeChange}
-                disabled={purposesLoading || processing}
+                onChange={(e) => setPurpose(String(e.target.value).trim())}
+                disabled={purposesLoading}
+                className="w-full border p-3 rounded-2xl disabled:bg-gray-50 disabled:text-gray-400"
               >
                 {purposesLoading ? (
                   <option value="">Loading purposes...</option>
@@ -418,113 +367,81 @@ const LetterActionModal = ({
                   <option value="">No templates available</option>
                 ) : (
                   filteredPurposes.map((p) => (
-                    <option key={p} value={p} className="text-black font-mono">
+                    <option key={p} value={p}>
                       {p}
                     </option>
                   ))
                 )}
               </select>
             </div>
-          </div>
 
-          {/* Email Specific Settings */}
-          {activeTab === "email" && (
-            <div className="space-y-5 pt-4 border-t border-gray-100">
-              {["cc", "bcc"].map((field) => (
-                <div key={field} className="space-y-2">
-                  <label className="block text-black ml-1 text-[10px] font-normal tracking-widest uppercase">
-                    {field}
+            {/* CC / BCC (email only) */}
+            {activeTab === "email" &&
+              emailFields.map((f) => (
+                <div key={f.key} className="space-y-2">
+                  <label className="block mb-1 font-medium text-gray-700">
+                    {f.label}
                   </label>
                   <div className="flex gap-2">
                     <input
                       type="email"
-                      className={inputBaseClass}
-                      placeholder={`Enter ${field} email...`}
-                      value={field === "cc" ? tempCc : tempBcc}
-                      disabled={processing}
-                      onChange={(e) =>
-                        field === "cc"
-                          ? setTempCc(e.target.value)
-                          : setTempBcc(e.target.value)
-                      }
+                      placeholder={`Enter ${f.label} email...`}
+                      value={f.temp}
+                      onChange={(e) => f.setTemp(e.target.value)}
                       onKeyDown={(e) => {
                         if (e.key === "Enter") {
                           e.preventDefault();
-                          handleAddEmail(field);
+                          handleAddEmail(f.key);
                         }
                       }}
+                      className="w-full border p-2.5 rounded-2xl"
                     />
                     <button
                       type="button"
-                      onClick={() => handleAddEmail(field)}
-                      disabled={processing}
-                      className="p-3 bg-black text-white rounded-xl hover:bg-gray-800 transition-colors cursor-pointer disabled:opacity-40"
+                      onClick={() => handleAddEmail(f.key)}
+                      className="px-3 bg-black text-white rounded-2xl hover:bg-gray-800 transition-colors"
                     >
-                      <Plus size={18} />
+                      <Plus size={16} />
                     </button>
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    {(field === "cc" ? cc : bcc).map((email, i) => (
-                      <span
-                        key={i}
-                        className="bg-white border border-black text-[10px] px-2.5 py-1 rounded-lg flex items-center gap-2 text-black"
-                      >
-                        {email}
-                        {!processing && (
+                  {f.list.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {f.list.map((email, i) => (
+                        <span
+                          key={email}
+                          className="border text-[10px] px-2.5 py-1 rounded-full flex items-center gap-2 text-gray-700"
+                        >
+                          {email}
                           <X
                             size={12}
-                            className="cursor-pointer hover:text-red-600"
-                            onClick={() => {
-                              if (field === "cc")
-                                setCc(cc.filter((_, idx) => idx !== i));
-                              else setBcc(bcc.filter((_, idx) => idx !== i));
-                            }}
+                            className="cursor-pointer text-gray-400 hover:text-red-500"
+                            onClick={() =>
+                              f.setList(f.list.filter((_, idx) => idx !== i))
+                            }
                           />
-                        )}
-                      </span>
-                    ))}
-                  </div>
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))}
-            </div>
-          )}
-        </div>
 
-        {/* Footer Actions */}
-        <div className="p-8 bg-white border-t border-gray-50 flex items-center gap-4">
-          <button
-            type="button"
-            onClick={handleClose}
-            disabled={processing}
-            className="flex-1 py-4 text-black font-normal hover:bg-gray-50 rounded-2xl transition-colors uppercase tracking-widest text-[11px] cursor-pointer disabled:opacity-40"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={handleConfirm}
-            disabled={processing}
-            className="flex-[2] bg-black text-white py-4 rounded-2xl hover:bg-gray-900 transition-all shadow-xl shadow-gray-200 flex items-center justify-center gap-3 font-normal uppercase tracking-widest cursor-pointer disabled:opacity-50"
-          >
-            {processing ? (
-              <>
-                <Loader2 className="animate-spin" size={16} />
-                <span className="text-[12px]">Processing...</span>
-              </>
-            ) : (
-              <>
-                <span className="text-[12px]">
-                  {activeTab === "pdf" ? "Process PDF" : "Send Email"}
-                </span>
-                {activeTab === "pdf" ? (
-                  <FileText size={16} />
-                ) : (
-                  <Send size={16} />
-                )}
-              </>
-            )}
-          </button>
-        </div>
+            {/* Footer */}
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={handleClose}
+                className="px-4 py-2 text-gray-600 hover:text-gray-800"
+              >
+                Cancel
+              </button>
+
+              <GlowButton onClick={handleConfirm}>
+                {activeTab === "pdf" ? "Generate PDF" : "Send Email"}
+              </GlowButton>
+            </div>
+          </div>
+        </form>
       </div>
     </div>
   );

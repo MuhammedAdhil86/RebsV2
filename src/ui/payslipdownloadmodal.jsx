@@ -3,8 +3,9 @@ import { X, Search, Loader2 } from "lucide-react";
 import { toast } from "react-toastify";
 
 import GlowButton from "../components/helpers/glowbutton";
-import { getActiveUsersLight } from "../service/employeeService"; // adjust path
-import payrollService from "../service/payrollService"; // adjust path/export style
+import { startProgressToast } from "../components/helpers/progressbar"; // adjust path
+import { getActiveUsersLight } from "../service/employeeService";
+import payrollService from "../service/payrollService";
 
 export default function PayslipDownloadModal({
   open,
@@ -17,7 +18,6 @@ export default function PayslipDownloadModal({
   const [search, setSearch] = useState("");
   const [selectedUuid, setSelectedUuid] = useState("");
   const [loadingUsers, setLoadingUsers] = useState(false);
-  const [downloading, setDownloading] = useState(false);
 
   // Load employees each time the modal opens
   useEffect(() => {
@@ -53,13 +53,12 @@ export default function PayslipDownloadModal({
   }, [users, search]);
 
   const handleClose = () => {
-    if (downloading) return;
     setSearch("");
     setSelectedUuid("");
     onClose();
   };
 
-  const handleDownload = async (e) => {
+  const handleDownload = (e) => {
     if (e) e.preventDefault();
 
     if (!selectedUuid) {
@@ -68,22 +67,25 @@ export default function PayslipDownloadModal({
       });
     }
 
-    try {
-      setDownloading(true);
+    // Progress toast (top-right) keeps running after the modal closes
+    const task = startProgressToast({
+      label: "Generating payslip",
+      storageKey: "payslip_duration_ms",
+      defaultMs: 8000,
+    });
 
-      await payrollService.downloadPayslip({
-        month: monthNumber,
-        year: Number(year),
-        user_id: selectedUuid, // uuid from active users API
-      });
+    const payload = {
+      month: monthNumber,
+      year: Number(year),
+      user_id: selectedUuid, // uuid from active users API
+    };
 
-      toast.success("Payslip downloaded successfully!");
-      handleClose();
-    } catch (err) {
-      toast.error(err?.message || "Failed to download payslip");
-    } finally {
-      setDownloading(false);
-    }
+    handleClose();
+
+    payrollService
+      .downloadPayslip(payload, task.setReal)
+      .then(() => task.finish("Payslip downloaded successfully!"))
+      .catch((err) => task.fail(err?.message || "Failed to download payslip"));
   };
 
   if (!open) return null;
@@ -101,7 +103,7 @@ export default function PayslipDownloadModal({
               Payslip for {month} {year}
             </p>
           </div>
-          <button type="button" onClick={handleClose} disabled={downloading}>
+          <button type="button" onClick={handleClose}>
             <X size={20} />
           </button>
         </div>
@@ -172,7 +174,6 @@ export default function PayslipDownloadModal({
               <button
                 type="button"
                 onClick={handleClose}
-                disabled={downloading}
                 className="px-4 py-2 text-gray-600 hover:text-gray-800"
               >
                 Cancel
@@ -180,13 +181,9 @@ export default function PayslipDownloadModal({
 
               <GlowButton
                 onClick={handleDownload}
-                disabled={!selectedUuid || downloading || loadingUsers}
+                disabled={!selectedUuid || loadingUsers}
               >
-                {downloading ? (
-                  <Loader2 className="animate-spin" size={16} />
-                ) : (
-                  "Download Payslip"
-                )}
+                Download Payslip
               </GlowButton>
             </div>
           </div>

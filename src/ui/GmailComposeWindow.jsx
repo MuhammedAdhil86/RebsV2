@@ -1,7 +1,7 @@
 import React, { useState, useRef, useMemo } from "react";
 import ReactQuill from "react-quill";
 import "react-quill/dist/quill.snow.css";
-import toast from "react-hot-toast";
+import { showApiToast } from "../utils/apiToast"; // adjust path to your toast helper
 import {
   X,
   Mail,
@@ -252,7 +252,10 @@ const GmailComposeWindow = ({
       if (duplicate) return;
 
       if (runningTotal + file.size > MAX_TOTAL_BYTES) {
-        toast.error(`"${file.name}" exceeds the 25 MB attachment limit.`);
+        showApiToast(
+          "error",
+          `"${file.name}" exceeds the 25 MB attachment limit.`,
+        );
         return;
       }
       runningTotal += file.size;
@@ -287,7 +290,7 @@ const GmailComposeWindow = ({
     if (loading) return;
 
     if (to.length === 0) {
-      toast.error("Please specify at least one recipient.");
+      showApiToast("error", "Please specify at least one recipient.");
       return;
     }
     if (

@@ -37,6 +37,7 @@ import {
   resolveApiSuccess,
   resolveApiError,
 } from "../../utils/apiToast"; // adjust path to where apiToast.jsx lives
+import { startProgressToast } from "../../components/helpers/progressbar"; // adjust path, keep filename casing
 
 const Letter = () => {
   // --- Navigation & View States ---
@@ -153,9 +154,19 @@ const Letter = () => {
       return;
     }
 
-    const tid = toast.loading(
-      activeTab === "pdf" ? "Generating PDF..." : "Sending Email...",
-    );
+    // Progress bar toast (top-right) replaces toast.loading
+    const task =
+      activeTab === "pdf"
+        ? startProgressToast({
+            label: "Generating PDF",
+            storageKey: "letter_pdf_duration_ms",
+            defaultMs: 6000,
+          })
+        : startProgressToast({
+            label: "Sending Email",
+            storageKey: "letter_email_duration_ms",
+            defaultMs: 4000,
+          });
 
     try {
       if (activeTab === "pdf") {
@@ -165,7 +176,7 @@ const Letter = () => {
           resolvedPurpose,
         );
 
-        resolveApiSuccess(tid, res, "Successfully generated letter");
+        task.finish(res?.message || "Successfully generated letter");
 
         const fileUrl = res?.data?.file_url;
         if (fileUrl) {
@@ -194,11 +205,15 @@ const Letter = () => {
           payload?.cc || [],
           payload?.bcc || [],
         );
-        resolveApiSuccess(tid, res, "Email Letter Sent Successfully!");
+        task.finish(res?.message || "Email Letter Sent Successfully!");
       }
       setIsActionModalOpen(false);
     } catch (error) {
-      resolveApiError(tid, error, "Failed to process request");
+      task.fail(
+        error?.response?.data?.message ||
+          error?.message ||
+          "Failed to process request",
+      );
     }
   };
 
