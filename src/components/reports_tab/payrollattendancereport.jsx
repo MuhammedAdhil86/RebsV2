@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { Loader2, Download } from "lucide-react";
 import * as XLSX from "xlsx-js-style";
 
 import CustomSelect from "../../ui/customselect";
 import ReportTable from "../../ui/reporttable";
+import Button from "../../ui/button/button";
+import PayslipDownloadModal from "../../ui/payslipdownloadmodal"; // adjust path
 
 import {
   headerStyle,
@@ -30,7 +31,6 @@ const monthNames = [
 ];
 
 export default function PayrollAttendanceReport() {
-  const navigate = useNavigate();
   const now = new Date();
 
   // ================= STATES =================
@@ -38,14 +38,7 @@ export default function PayrollAttendanceReport() {
   const [year, setYear] = useState(String(now.getFullYear()));
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(false);
-
-  // ================= COMPANY BRANDING =================
-  const [companyBranding, setCompanyBranding] = useState({
-    name: "",
-    address: "",
-    logo: "",
-    horizontal_logo: "",
-  });
+  const [showPayslipModal, setShowPayslipModal] = useState(false);
 
   // ================= FETCH DATA =================
   const fetchData = async () => {
@@ -56,15 +49,6 @@ export default function PayrollAttendanceReport() {
         monthNames.indexOf(month) + 1,
         Number(year),
       );
-
-      if (response) {
-        setCompanyBranding({
-          name: response.name || "N/A",
-          address: response.address || "N/A",
-          logo: response.logo || "",
-          horizontal_logo: response.horizontal_logo || "",
-        });
-      }
 
       const processedRecords = Array.isArray(response?.employees)
         ? response.employees.map((emp) => {
@@ -129,93 +113,40 @@ export default function PayrollAttendanceReport() {
     fetchData();
   }, [month, year]);
 
-  // ================= ROW CLICK / PAYSLIP =================
-  const handleRowClick = (row) => {
-    navigate("/payslip", {
-      state: {
-        employeeData: row,
-        name: companyBranding.name,
-        address: companyBranding.address,
-        logo: companyBranding.logo,
-        horizontal_logo: companyBranding.horizontal_logo,
-      },
-    });
-  };
-
   // ================= TABLE COLUMNS =================
   const columns = [
-    {
-      label: "User ID",
-      key: "user_id",
-      align: "center",
-      width: 100,
-    },
+    { label: "User ID", key: "user_id", align: "center", width: 100 },
     {
       label: "Employee Code",
       key: "employee_ref_no",
       align: "center",
       width: 130,
     },
-    {
-      label: "Employee Name",
-      key: "full_name",
-      align: "center",
-      width: 150,
-    },
+    { label: "Employee Name", key: "full_name", align: "center", width: 150 },
     {
       label: "Attendance",
       key: "attendance_pct",
       align: "center",
       width: 120,
     },
-    {
-      label: "Bank Name",
-      key: "bank_name",
-      align: "center",
-      width: 150,
-    },
-    {
-      label: "Account No",
-      key: "account_no",
-      align: "center",
-      width: 150,
-    },
+    { label: "Bank Name", key: "bank_name", align: "center", width: 150 },
+    { label: "Account No", key: "account_no", align: "center", width: 150 },
     {
       label: "Gross Monthly",
       key: "gross_monthly",
       align: "center",
       width: 150,
     },
-    {
-      label: "PT",
-      key: "pt",
-      align: "center",
-      width: 100,
-    },
-    {
-      label: "EPF",
-      key: "epf",
-      align: "center",
-      width: 100,
-    },
-    {
-      label: "TDS",
-      key: "tds.monthly",
-      align: "center",
-      width: 100,
-    },
+    { label: "PT", key: "pt", align: "center", width: 100 },
+    { label: "EPF", key: "epf", align: "center", width: 100 },
+    { label: "TDS", key: "tds.monthly", align: "center", width: 100 },
     {
       label: "Total Deductions",
       key: "total_deductions_monthly",
       align: "center",
       width: 180,
     },
-    {
-      label: "Net Monthly",
-      key: "net_monthly",
-      align: "center",
-      width: 150,
-    },
+    { label: "Net Monthly", key: "net_monthly", align: "center", width: 150 },
   ];
 
   // ================= DOWNLOAD SALARY REPORT =================
@@ -334,7 +265,6 @@ export default function PayrollAttendanceReport() {
       setLoading(true);
 
       // No header row. The first row contains employee data.
-      // Uses the same user_id displayed in the table, not UUID.
       const dataRows = records.map((r) => [
         r.user_id ?? "",
         r.employee_ref_no ?? "",
@@ -348,7 +278,6 @@ export default function PayrollAttendanceReport() {
       const wb = XLSX.utils.book_new();
       const ws = XLSX.utils.aoa_to_sheet(dataRows);
 
-      // Format data cells only; there is no header row.
       const range = XLSX.utils.decode_range(ws["!ref"] || "A1");
 
       for (let R = range.s.r; R <= range.e.r; R++) {
@@ -361,7 +290,6 @@ export default function PayrollAttendanceReport() {
         }
       }
 
-      // Excel column widths
       ws["!cols"] = [
         { wch: 15 }, // User ID
         { wch: 18 }, // Employee Code
@@ -404,23 +332,28 @@ export default function PayrollAttendanceReport() {
         </div>
 
         <div className="flex items-center gap-2">
-          <button
+          <Button
+            onClick={() => setShowPayslipModal(true)}
+            icon={<Download size={12} />}
+          >
+            Payslip Download
+          </Button>
+
+          <Button
             onClick={handleDownloadSalary}
             disabled={!records.length || loading}
-            className="flex items-center gap-2 px-4 py-2 rounded border bg-black text-white hover:bg-gray-800"
+            icon={<Download size={12} />}
           >
-            <Download className="w-4 h-4" />
             Download
-          </button>
+          </Button>
 
-          <button
+          <Button
             onClick={handleDownloadBankExcel}
             disabled={!records.length || loading}
-            className="flex items-center gap-2 px-4 py-2 rounded border bg-blue-600 text-white hover:bg-blue-700"
+            icon={<Download size={12} />}
           >
-            <Download className="w-4 h-4" />
             Bank Download
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -430,14 +363,17 @@ export default function PayrollAttendanceReport() {
             <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
           </div>
         ) : (
-          <ReportTable
-            columns={columns}
-            data={records}
-            rowsPerPage={10}
-            onRowClick={handleRowClick}
-          />
+          <ReportTable columns={columns} data={records} rowsPerPage={10} />
         )}
       </div>
+
+      <PayslipDownloadModal
+        open={showPayslipModal}
+        onClose={() => setShowPayslipModal(false)}
+        month={month}
+        monthNumber={monthNames.indexOf(month) + 1}
+        year={year}
+      />
     </div>
   );
 }

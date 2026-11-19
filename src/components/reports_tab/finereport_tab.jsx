@@ -4,6 +4,7 @@ import * as XLSX from "xlsx-js-style";
 
 import CustomSelect from "../../ui/customselect";
 import ReportTable from "../../ui/reporttable";
+import Button from "../../ui/button/button";
 
 import {
   headerStyle,
@@ -292,14 +293,14 @@ export default function AttendanceFineRecordsReport() {
           </div>
         </div>
 
-        <button
+        {/* Medium Download button */}
+        <Button
           onClick={handleDownloadExcel}
           disabled={!filteredRecords.length || loading}
-          className="flex items-center gap-2 h-[34px] px-4 text-[12px] rounded border bg-black text-white disabled:opacity-50 hover:bg-gray-800 transition-colors cursor-pointer"
+          icon={<Download size={12} />}
         >
-          <Download className="w-4 h-4" />
           Download Report
-        </button>
+        </Button>
       </div>
 
       {/* Table Wrapper Block */}

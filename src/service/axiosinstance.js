@@ -1,44 +1,69 @@
 import axios from "axios";
 
+// -------------------- Constants --------------------
+const API_BASE_URL = "/api_v1"; // Proxy prefix from vite.config.js
+const REQUEST_TIMEOUT_MS = 15000;
+const LOGIN_PATH = "/";
+
+const STORAGE_KEYS = {
+  AUTH_TOKEN: "authToken",
+  RESET_TOKEN: "resetToken",
+};
+
+// Login / password-reset endpoints: never auto-logout or redirect on these.
+// These words must appear in the URLs used in service/authservice.js.
+const PUBLIC_URL_PARTS = ["login", "forgot", "otp", "reset"];
+
+// -------------------- Helpers --------------------
+const isPublicUrl = (url = "") => {
+  const lowerUrl = url.toLowerCase();
+  return PUBLIC_URL_PARTS.some((part) => lowerUrl.includes(part));
+};
+
 /**
- * File uploads (FormData): the instances below default to
+ * File uploads (FormData): the instance below defaults to
  * "Content-Type: application/json". If that header is left on a FormData
  * request, axios converts the form to JSON (files become `{}`) and the backend
  * rejects it. Removing the header lets the browser set
  * "multipart/form-data; boundary=..." itself.
  */
 const stripJsonContentTypeForFormData = (config) => {
-  if (typeof FormData !== "undefined" && config.data instanceof FormData) {
-    if (typeof config.headers?.delete === "function") {
-      config.headers.delete("Content-Type"); // axios >= 1.x AxiosHeaders
-    } else if (config.headers) {
-      delete config.headers["Content-Type"]; // older axios
-    }
+  const isFormData =
+    typeof FormData !== "undefined" && config.data instanceof FormData;
+
+  if (!isFormData) return config;
+
+  if (typeof config.headers?.delete === "function") {
+    config.headers.delete("Content-Type"); // axios >= 1.x (AxiosHeaders)
+  } else if (config.headers) {
+    delete config.headers["Content-Type"]; // older axios
   }
+
   return config;
 };
 
-// Login / password-reset endpoints: never auto-logout or redirect on these.
-// These words must appear in the URLs used in service/authservice.js.
-const PUBLIC_URL_PARTS = ["login", "forgot", "otp", "reset"];
-const isPublicUrl = (url = "") =>
-  PUBLIC_URL_PARTS.some((part) => url.toLowerCase().includes(part));
+/**
+ * Picks the token for a request.
+ * Public (login / reset) URLs prefer the temporary reset token.
+ */
+const resolveToken = (url) => {
+  const authToken = localStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
+  const resetToken = localStorage.getItem(STORAGE_KEYS.RESET_TOKEN);
 
+  return isPublicUrl(url) ? resetToken || authToken : authToken;
+};
+
+// -------------------- Axios Instance --------------------
 const axiosInstance = axios.create({
-  // Using the proxy prefix from vite.config.js
-  baseURL: "/api_v1",
+  baseURL: API_BASE_URL,
   headers: { "Content-Type": "application/json" },
-  timeout: 15000,
+  timeout: REQUEST_TIMEOUT_MS,
 });
 
 // -------------------- Request Interceptor --------------------
 axiosInstance.interceptors.request.use(
   (config) => {
-    const authToken = localStorage.getItem("authToken");
-    const resetToken = localStorage.getItem("resetToken");
-
-    // During the reset flow, use the temporary reset token
-    const token = isPublicUrl(config.url) ? resetToken || authToken : authToken;
+    const token = resolveToken(config.url);
 
     if (token) {
       config.headers["Authorization"] = `Bearer ${token}`;
@@ -56,77 +81,36 @@ axiosInstance.interceptors.response.use(
     // Auto-update token if backend sends a refreshed one,
     // but never let a reset-flow token overwrite the real login token
     const newToken = response.data?.token;
+
     if (newToken && !isPublicUrl(response.config?.url)) {
-      localStorage.setItem("authToken", newToken);
+      localStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, newToken);
     }
+
     return response;
   },
   (error) => {
     const requestUrl = error.config?.url || "";
-    const hadSession = !!localStorage.getItem("authToken");
+    const hadSession = !!localStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
 
     // 401 handling: only for a logged-in user on a private endpoint
-    if (
-      error.response?.status === 401 &&
-      hadSession &&
-      !isPublicUrl(requestUrl)
-    ) {
+    const isUnauthorized =
+      error.response?.status === 401 && hadSession && !isPublicUrl(requestUrl);
+
+    if (isUnauthorized) {
       console.error(
         "Unauthorized request. Redirecting to login...",
         requestUrl,
       );
-      localStorage.removeItem("authToken");
+      localStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
 
       // Only redirect if we aren't already on the login page to avoid loops
-      if (window.location.pathname !== "/") {
-        window.location.href = "/";
+      if (window.location.pathname !== LOGIN_PATH) {
+        window.location.href = LOGIN_PATH;
       }
     }
 
     // Always let the component's catch block show the toast
     return Promise.reject(error);
-  },
-);
-
-// =============================================================
-// 🧪 Independent Testing Instance (Cloudflare Tunnel via Vite Proxy)
-// =============================================================
-export const testingInstance = axios.create({
-  // Uses /cf_tunnel proxy to prevent browser CORS preflight blocks
-  baseURL: "/cf_tunnel",
-  headers: {
-    "Content-Type": "application/json",
-    Accept: "application/json",
-    "ngrok-skip-browser-warning": "true",
-    "bypass-tunnel-reminder": "true",
-  },
-  timeout: 15000,
-});
-
-// Attach Bearer token support
-testingInstance.interceptors.request.use(
-  (config) => {
-    const token =
-      localStorage.getItem("authToken") || localStorage.getItem("token");
-    if (token) {
-      config.headers["Authorization"] = `Bearer ${token.trim()}`;
-    }
-
-    // Make file uploads (FormData) work
-    return stripJsonContentTypeForFormData(config);
-  },
-  (error) => Promise.reject(error),
-);
-
-// Return response or normalized backend error
-testingInstance.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    console.error(
-      "[Testing Instance Error]:",
-      error?.response?.data || error?.message,
-    );
-    return Promise.reject(error?.response?.data || error);
   },
 );
 

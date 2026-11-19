@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { FiDownload } from "react-icons/fi";
 import { Icon } from "@iconify/react";
 import ReportTable from "../../ui/reporttable";
+import Button from "../../ui/button/button";
 import * as XLSX from "xlsx-js-style";
 
 // ✅ API Service
@@ -187,7 +188,7 @@ export default function UnapprovedAbsentReports() {
 
   return (
     <div className="flex flex-col gap-4 text-[13px]">
-      {/* Filters + search + download in one row, all controls 38px tall and bottom-aligned */}
+      {/* Filters + search + download in one row, bottom-aligned */}
       <div className="flex flex-wrap gap-4 items-end bg-gray-50 p-4 rounded-lg border border-gray-100">
         <DateInput
           label="From"
@@ -214,14 +215,15 @@ export default function UnapprovedAbsentReports() {
           <Icon icon="mynaui:search" className={iconCls} />
         </div>
 
-        <button
+        {/* Medium Download button */}
+        <Button
           onClick={handleDownload}
           disabled={!filteredData.length}
-          className="ml-auto flex items-center gap-2 h-[38px] px-4 text-sm rounded-md bg-black text-white hover:bg-gray-800 disabled:bg-gray-300 transition-all whitespace-nowrap"
+          icon={<FiDownload size={12} />}
+          className="ml-auto"
         >
-          <FiDownload className="w-4 h-4" />
           Download
-        </button>
+        </Button>
       </div>
 
       {/* RENDER REPORT TABLE */}

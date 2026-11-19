@@ -1,4 +1,4 @@
-import axiosInstance, { testingInstance } from "./axiosinstance";
+import axiosInstance from "./axiosinstance";
 import {
   getCategory,
   getEmailPurposes,
@@ -20,7 +20,7 @@ import {
   getManualPurposes,
   postSendCustomEmailByPurpose,
   getPurposePlaceholders,
-  postSendCustomEmail
+  postSendCustomEmail,
 } from "../api/api";
 
 /**
@@ -39,7 +39,10 @@ export const fetchCategory = async () => {
     devLog("Category Response:", response);
     return response?.data?.data ?? [];
   } catch (error) {
-    console.error("Error fetching category:", error?.response?.data || error?.message);
+    console.error(
+      "Error fetching category:",
+      error?.response?.data || error?.message,
+    );
     throw error;
   }
 };
@@ -51,7 +54,10 @@ export const fetchAttachments = async (uuid) => {
     devLog("Attachments Response:", response);
     return response?.data?.data ?? [];
   } catch (error) {
-    console.error("Error fetching attachments:", error?.response?.data || error?.message);
+    console.error(
+      "Error fetching attachments:",
+      error?.response?.data || error?.message,
+    );
     throw error;
   }
 };
@@ -65,10 +71,14 @@ export const attachmentUpload = async (employeeUUID, attachmentData) => {
     devLog("Upload Response:", response);
     return response?.data;
   } catch (error) {
-    console.error("Error adding attachment:", error?.response?.data || error?.message);
+    console.error(
+      "Error adding attachment:",
+      error?.response?.data || error?.message,
+    );
     throw error;
   }
 };
+
 /**
  * Fetch list of letter purposes
  * @returns {Promise<string[]>} Array of purpose strings
@@ -77,9 +87,6 @@ export const fetchLetterPurposes = async () => {
   try {
     const response = await axiosInstance.get(getLetterPurposes);
 
-    // devLog if you are using it in your codebase:
-    // devLog("Letter Purposes Response:", response);
-
     // Support both direct array and wrapped response shapes
     const rawData = response?.data?.data ?? response?.data ?? [];
 
@@ -87,7 +94,7 @@ export const fetchLetterPurposes = async () => {
   } catch (error) {
     console.error(
       "Error fetching letter purposes:",
-      error?.response?.data || error?.message
+      error?.response?.data || error?.message,
     );
     return [];
   }
@@ -99,18 +106,27 @@ export const fetchEmailPurposes = async () => {
     devLog("Email Purposes Response:", response);
     return response?.data?.data ?? [];
   } catch (error) {
-    console.error("Error fetching email purposes:", error?.response?.data || error?.message);
+    console.error(
+      "Error fetching email purposes:",
+      error?.response?.data || error?.message,
+    );
     return [];
   }
 };
+
 export const fetchManualPurposes = async () => {
   try {
     const response = await axiosInstance.get(getManualPurposes);
     return response.data;
   } catch (error) {
-    throw error?.response?.data || { message: "Failed to fetch manual mail purposes" };
+    throw (
+      error?.response?.data || {
+        message: "Failed to fetch manual mail purposes",
+      }
+    );
   }
 };
+
 export const fetchPurposePlaceholders = async (purpose) => {
   if (!purpose) return [];
 
@@ -124,13 +140,20 @@ export const fetchPurposePlaceholders = async (purpose) => {
     const raw = response?.data?.placeholders ?? response?.data?.data ?? [];
 
     return (Array.isArray(raw) ? raw : [])
-      .map((item) => (typeof item === "string" ? item : item?.placeholder || item?.label))
+      .map((item) =>
+        typeof item === "string" ? item : item?.placeholder || item?.label,
+      )
       .filter(Boolean);
   } catch (error) {
-    console.error("Error fetching purpose placeholders:", error?.response?.data || error?.message);
+    console.error(
+      "Error fetching purpose placeholders:",
+      error?.response?.data || error?.message,
+    );
     return [];
   }
-};/**
+};
+
+/**
  * Send a custom (composed) email
  * POST /admin/send/custom-email
  */
@@ -159,7 +182,10 @@ export const sendCustomEmailService = async ({
   }
 
   const formData = new FormData();
-  formData.append("use_manual_templates", String(Boolean(use_manual_templates)));
+  formData.append(
+    "use_manual_templates",
+    String(Boolean(use_manual_templates)),
+  );
   formData.append("to", cleanTo.join(","));
   formData.append("cc", clean(cc).join(","));
   formData.append("bcc", clean(bcc).join(","));
@@ -185,10 +211,14 @@ export const sendCustomEmailService = async ({
       error?.message ||
       "Failed to send email";
 
-    console.error("sendCustomEmailService error:", { url: postSendCustomEmail, error: errorMessage });
+    console.error("sendCustomEmailService error:", {
+      url: postSendCustomEmail,
+      error: errorMessage,
+    });
     throw new Error(errorMessage);
   }
 };
+
 /**
  * Send a custom email by purpose
  * POST /admin/send/custom-email/by-purpose/{purpose}
@@ -218,7 +248,10 @@ export const sendCustomEmailByPurposeService = async ({
   }
 
   const formData = new FormData();
-  formData.append("use_manual_templates", String(Boolean(use_manual_templates)));
+  formData.append(
+    "use_manual_templates",
+    String(Boolean(use_manual_templates)),
+  );
   cleanTo.forEach((email) => formData.append("to", email));
   clean(cc).forEach((email) => formData.append("cc", email));
   clean(bcc).forEach((email) => formData.append("bcc", email));
@@ -244,7 +277,10 @@ export const sendCustomEmailByPurposeService = async ({
       error?.message ||
       "Failed to send custom email";
 
-    console.error("sendCustomEmailByPurposeService error:", { url, error: errorMessage });
+    console.error("sendCustomEmailByPurposeService error:", {
+      url,
+      error: errorMessage,
+    });
     throw new Error(errorMessage);
   }
 };
@@ -257,14 +293,19 @@ export const fetchEmailPlaceholders = async () => {
     // Accommodate both response.data.data and response.data
     const rawData = Array.isArray(response?.data)
       ? response.data
-      : response?.data?.data ?? [];
+      : (response?.data?.data ?? []);
 
     // Extract only the clean placeholder string
     return rawData
-      .map((item) => (typeof item === "string" ? item : item?.placeholder || item?.label))
+      .map((item) =>
+        typeof item === "string" ? item : item?.placeholder || item?.label,
+      )
       .filter(Boolean);
   } catch (error) {
-    console.error("Error fetching placeholders:", error?.response?.data || error?.message);
+    console.error(
+      "Error fetching placeholders:",
+      error?.response?.data || error?.message,
+    );
     return [];
   }
 };
@@ -299,10 +340,14 @@ export const createEmailTemplate = async ({
 
     return response?.data;
   } catch (error) {
-    console.error("Error creating email template:", error?.response?.data || error?.message);
+    console.error(
+      "Error creating email template:",
+      error?.response?.data || error?.message,
+    );
     throw error;
   }
 };
+
 // -------------------- FETCH EMAIL TEMPLATES --------------------
 export const fetchEmailTemplates = async () => {
   const url = getEmailTemplates;
@@ -367,25 +412,36 @@ export const updateEmailTemplateService = async ({
       error?.message ||
       "Failed to update email template";
 
-    console.error("updateEmailTemplateService error:", { url, error: errorMessage });
+    console.error("updateEmailTemplateService error:", {
+      url,
+      error: errorMessage,
+    });
 
     throw new Error(errorMessage);
   }
 };
+
 // -------------------- UPLOAD EMAIL TEMPLATE FILE --------------------
 export const uploadEmailTemplateFileService = async (fileData) => {
   try {
     const formData = new FormData();
     Object.keys(fileData).forEach((key) => formData.append(key, fileData[key]));
 
-    const response = await axiosInstance.post(uploadEmailTemplateFile, formData, {
-      headers: { "Content-Type": "multipart/form-data" },
-    });
+    const response = await axiosInstance.post(
+      uploadEmailTemplateFile,
+      formData,
+      {
+        headers: { "Content-Type": "multipart/form-data" },
+      },
+    );
 
     devLog("Upload Email Template Response:", response);
     return response?.data;
   } catch (error) {
-    console.error("Error uploading email template file:", error?.response?.data || error?.message);
+    console.error(
+      "Error uploading email template file:",
+      error?.response?.data || error?.message,
+    );
     throw error;
   }
 };
@@ -405,7 +461,7 @@ export const fetchDefaultEmailTemplates = async () => {
   } catch (error) {
     throw new Error(
       error?.response?.data?.message ||
-      "Failed to fetch default email templates"
+        "Failed to fetch default email templates",
     );
   }
 };
@@ -421,19 +477,28 @@ export const cloneDefaultEmailTemplate = async (default_template_id) => {
     devLog("Clone Default Template Response:", response);
     return response?.data;
   } catch (error) {
-    console.error("Error cloning default template:", error?.response?.data || error?.message);
+    console.error(
+      "Error cloning default template:",
+      error?.response?.data || error?.message,
+    );
     throw error;
   }
 };
+
 export const fetchWeeklyOffShifts = async (type) => {
   try {
     // We append the type parameter to the URL
-    const response = await axiosInstance.get(`${getWeeklyOffShifts}?type=${type}`);
+    const response = await axiosInstance.get(
+      `${getWeeklyOffShifts}?type=${type}`,
+    );
     devLog(`${type} Shifts Response:`, response);
-    
+
     return response?.data?.data ?? [];
   } catch (error) {
-    console.error(`Error fetching ${type} shifts:`, error?.response?.data || error?.message);
+    console.error(
+      `Error fetching ${type} shifts:`,
+      error?.response?.data || error?.message,
+    );
     return []; // Return empty array so Promise.all doesn't fail
   }
 };
@@ -445,7 +510,7 @@ export const createWeeklyOff = async (payload) => {
     const response = await axiosInstance.post(postAddWeekOff, payload);
 
     devLog("Post Weekly Off Response:", response);
-    
+
     return response?.data;
   } catch (error) {
     const errorMessage =
@@ -453,30 +518,31 @@ export const createWeeklyOff = async (payload) => {
       error?.message ||
       "Failed to add weekly off";
 
-    console.error("createWeeklyOff error:", { 
-      url: postAddWeekOff, 
-      error: errorMessage 
+    console.error("createWeeklyOff error:", {
+      url: postAddWeekOff,
+      error: errorMessage,
     });
-    
+
     throw error;
   }
 };
 
-
-
-// ✅ FIXED:
+// -------------------- GENERATE LETTER --------------------
 export const generateLetterService = async (userId, purpose) => {
   const payload = {
     user_id: String(userId),
-    purpose: String(purpose), // ✅ Correct key
+    purpose: String(purpose),
   };
 
   try {
     devLog("Generating Letter with Payload:", payload);
-    const response = await testingInstance.post(postGenerateLetter, payload);
+    const response = await axiosInstance.post(postGenerateLetter, payload);
     return response?.data;
   } catch (error) {
-    const serverMessage = error?.response?.data?.message || error?.message;
+    const serverMessage =
+      error?.response?.data?.message ||
+      error?.response?.data?.error ||
+      error?.message;
     console.error("Generate Letter Backend Error:", serverMessage);
     throw new Error(serverMessage);
   }
@@ -485,15 +551,15 @@ export const generateLetterService = async (userId, purpose) => {
 export const getGeneratedLettersService = async () => {
   try {
     const response = await axiosInstance.get(getGeneratedLettersUrl);
-    console.log("Generated letters response:", response);
+    devLog("Generated letters response:", response);
     // Accommodates direct array, response.data, or response.data.data
     return Array.isArray(response?.data)
       ? response.data
-      : response?.data?.data ?? [];
+      : (response?.data?.data ?? []);
   } catch (error) {
     console.error(
       "Error fetching generated letters:",
-      error?.response?.data || error?.message
+      error?.response?.data || error?.message,
     );
     throw error;
   }
@@ -510,44 +576,16 @@ export const deleteGeneratedLetterService = async (id) => {
 
   try {
     const response = await axiosInstance.delete(deleteGeneratedLetterUrl(id));
-    console.log(`Deleted letter ${id} response:`, response);
+    devLog(`Deleted letter ${id} response:`, response);
     return response?.data;
   } catch (error) {
     console.error(
       `Error deleting generated letter ${id}:`,
-      error?.response?.data || error?.message
+      error?.response?.data || error?.message,
     );
     throw error;
   }
 };
-
-
-
-
-
-// export const generateLetterService = async (userId, category) => {
-//   // Ensure the keys match EXACTLY what the backend documentation says
-//   const payload = {
-//     user_id: String(userId),
-//     letter_category: String(category),
-//   };
-
-//   try {
-//     devLog("Generating Letter with Payload:", payload);
-//     const response = await axiosInstance.post(postGenerateLetter, payload);
-//     return response?.data;
-//   } catch (error) {
-//     // This will help you see if it's a 404, 500, or Proxy error
-//     const serverMessage = error?.response?.data?.message || error?.message;
-//     console.error("Generate Letter Backend Error:", serverMessage);
-//     throw new Error(serverMessage);
-//   }
-// };
-
-
-
-
-
 
 /**
  * Send an Email Letter
@@ -556,7 +594,9 @@ export const sendLetterService = async (userId, purpose, cc = [], bcc = []) => {
   const isObject = typeof userId === "object" && userId !== null;
 
   const resolvedUserId = isObject ? userId.user_id || userId.userId : userId;
-  const resolvedPurpose = isObject ? userId.purpose || userId.letter_category : purpose;
+  const resolvedPurpose = isObject
+    ? userId.purpose || userId.letter_category
+    : purpose;
   const resolvedCc = isObject ? userId.cc : cc;
   const resolvedBcc = isObject ? userId.bcc : bcc;
 
@@ -580,10 +620,14 @@ export const sendLetterService = async (userId, purpose, cc = [], bcc = []) => {
     const response = await axiosInstance.post(postSendLetter, payload);
     return response?.data;
   } catch (error) {
-    console.error("Error sending letter email:", error?.response?.data || error?.message);
+    console.error(
+      "Error sending letter email:",
+      error?.response?.data || error?.message,
+    );
     throw error;
   }
 };
+
 /**
  * Delete Email/Letter Template
  * DELETE admin/templates/{id}
@@ -596,7 +640,6 @@ export const deleteEmailTemplateService = async (id) => {
   }
 
   try {
-    // Directly calls the imported function inline on this line
     const response = await axiosInstance.delete(deleteEmailTemplate(id));
     return response?.data;
   } catch (error) {

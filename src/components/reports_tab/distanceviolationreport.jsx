@@ -4,6 +4,7 @@ import { Loader2, Download } from "lucide-react";
 import * as XLSX from "xlsx-js-style";
 
 import UniversalTable from "../../ui/universal_table";
+import Button from "../../ui/button/button";
 // 👇 Same MapModal used in LogDetails; adjust the path if needed
 import MapModal from "../../utils/mapmodel";
 
@@ -585,18 +586,21 @@ export default function DistanceViolationReport() {
           />
         </div>
 
-        <button
+        {/* Medium Download button */}
+        <Button
           onClick={handleDownload}
           disabled={!records.length || loading || downloading}
-          className={`flex items-center justify-center gap-2 ${CONTROL_HEIGHT} w-full lg:w-auto px-4 rounded-md border border-black bg-black text-white leading-none hover:bg-gray-700 disabled:opacity-60 disabled:cursor-not-allowed`}
+          icon={
+            downloading ? (
+              <Loader2 size={12} className="animate-spin" />
+            ) : (
+              <Download size={12} />
+            )
+          }
+          className="w-full lg:w-auto"
         >
-          {downloading ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
-            <Download className="w-4 h-4" />
-          )}
           {downloading ? "Preparing..." : "Download"}
-        </button>
+        </Button>
       </div>
 
       {/* ================= TABLE =================

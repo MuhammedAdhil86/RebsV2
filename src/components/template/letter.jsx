@@ -28,10 +28,8 @@ import {
   cloneDefaultEmailTemplate,
   deleteEmailTemplateService,
   sendLetterService,
+  generateLetterService,
 } from "../../service/mainServices";
-
-// Cloudflare Dedicated Service (Letter Generation)
-import { generateLetterService } from "../../service/cloudflareLetterServices";
 
 import { toast } from "react-toastify";
 import {
@@ -51,7 +49,7 @@ const Letter = () => {
   const [presetTemplates, setPresetTemplates] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // --- Generated Letters State ---
+  // --- Generated Letters State (session only, not persisted) ---
   const [generatedLetters, setGeneratedLetters] = useState([]);
 
   // --- UI Component States ---
@@ -150,12 +148,18 @@ const Letter = () => {
       return;
     }
 
+    if (!resolvedUserId) {
+      toast.error("Employee is required");
+      return;
+    }
+
     const tid = toast.loading(
       activeTab === "pdf" ? "Generating PDF..." : "Sending Email...",
     );
 
     try {
       if (activeTab === "pdf") {
+        // generateLetterService returns the response body: { data: { file_url, ... } }
         const res = await generateLetterService(
           resolvedUserId,
           resolvedPurpose,
@@ -163,21 +167,25 @@ const Letter = () => {
 
         resolveApiSuccess(tid, res, "Successfully generated letter");
 
-        // generateLetterService may return the axios response or the body
-        const body = res?.data?.data !== undefined ? res.data : res;
-        const fileUrl = body?.data?.file_url;
+        const fileUrl = res?.data?.file_url;
         if (fileUrl) {
-          // Track generated letter entry in list
+          // Track generated letter entry in list (prefer server id/timestamp)
           const newEntry = {
-            id: Date.now(),
+            id: res?.data?.id ?? Date.now(),
             user_id: resolvedUserId,
             purpose: resolvedPurpose,
             file_url: fileUrl,
-            created_at: new Date().toLocaleString(),
+            created_at: res?.data?.created_at ?? new Date().toLocaleString(),
           };
           setGeneratedLetters((prev) => [newEntry, ...prev]);
 
-          window.open(fileUrl, "_blank", "noopener,noreferrer");
+          // Popup blockers can block window.open after an await
+          const win = window.open(fileUrl, "_blank", "noopener,noreferrer");
+          if (!win) {
+            toast.info(
+              "Letter generated. Allow popups or open it from Generated List.",
+            );
+          }
         }
       } else {
         const res = await sendLetterService(

@@ -3,6 +3,7 @@ import { Loader2, Download } from "lucide-react";
 import { Icon } from "@iconify/react";
 import * as XLSX from "xlsx-js-style";
 import ReportTable from "../../ui/reporttable";
+import Button from "../../ui/button/button";
 import { fetchLeaveReport } from "../../service/reportsService";
 import {
   titleStyle,
@@ -266,7 +267,7 @@ export default function LeaveReports() {
         <h2 className="text-[16px] text-gray-800">Leave Reports</h2>
       </div>
 
-      {/* Filters + download in one row, all controls 38px tall and bottom-aligned */}
+      {/* Filters + download in one row, bottom-aligned */}
       <div className="flex flex-wrap gap-4 items-end mb-6 bg-gray-50 p-4 rounded-lg border border-gray-100">
         <DateInput label="From" value={from} onChange={setFrom} max={to} />
 
@@ -279,13 +280,15 @@ export default function LeaveReports() {
           options={APPROVAL_OPTIONS}
         />
 
-        <button
+        {/* Medium Export button */}
+        <Button
           onClick={handleDownload}
           disabled={loading || records.length === 0}
-          className="ml-auto flex items-center gap-2 h-[38px] px-4 text-sm rounded-md bg-black text-white hover:bg-gray-800 disabled:bg-gray-300 transition-all"
+          icon={<Download className="w-4 h-4" />}
+          className="ml-auto"
         >
-          <Download className="w-4 h-4" /> Export Excel
-        </button>
+          Export Excel
+        </Button>
       </div>
 
       {loading ? (

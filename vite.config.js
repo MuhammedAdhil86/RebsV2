@@ -26,14 +26,6 @@ export default defineConfig({
           });
         },
       },
-
-      "/cf_tunnel": {
-        target:
-          "https://review-portraits-complimentary-forest.trycloudflare.com",
-        changeOrigin: true,
-        secure: false,
-        rewrite: (path) => path.replace(/^\/cf_tunnel/, ""),
-      },
     },
   },
   build: {

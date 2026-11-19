@@ -6,6 +6,7 @@ import * as XLSX from "xlsx-js-style";
 
 import ReportTable from "../../ui/reporttable";
 import CustomSelect from "../../ui/customselect";
+import Button from "../../ui/button/button";
 
 // ✅ API (adjust the report service filename if yours differs)
 import { fetchStaffReport } from "../../service/reportsService";
@@ -410,14 +411,14 @@ export default function StaffReport() {
 
         {/* RIGHT */}
         <div className="flex items-center gap-3">
-          <button
-            className="flex items-center px-4 py-1 bg-black text-white rounded whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed"
+          {/* Medium Download button */}
+          <Button
             onClick={handleDownload}
             disabled={!filteredData.length}
+            icon={<FiDownload size={12} />}
           >
-            <FiDownload className="mr-2" />
             Download
-          </button>
+          </Button>
 
           <div className="relative w-[220px]">
             <input

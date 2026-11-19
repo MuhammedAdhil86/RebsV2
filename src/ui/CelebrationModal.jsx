@@ -14,10 +14,16 @@ import {
   Type,
   Image as ImageIcon,
 } from "lucide-react";
-import toast from "react-hot-toast";
+import { toast } from "react-toastify";
 
 import GlowButton from "../components/helpers/glowbutton";
 import announceService from "../service/announceService";
+import {
+  showApiError,
+  showApiToast,
+  resolveApiSuccess,
+  resolveApiError,
+} from "../utils/apiToast";
 
 /* ================= STATIC CONSTANTS ================= */
 
@@ -618,7 +624,7 @@ const CelebrationForm = ({
       } catch (err) {
         if (!cancelled) {
           console.error("Failed to load celebration:", err);
-          toast.error("Failed to load saved celebration");
+          showApiError(err, "Failed to load saved celebration");
           setElements([]);
         }
       } finally {
@@ -724,7 +730,9 @@ const CelebrationForm = ({
       if (file.type.startsWith("image/")) {
         setTemplateFile(file);
         setSelectedId(BG_ID);
-      } else toast.error("Drop an image file to use it as the template");
+      } else {
+        showApiToast("error", "Drop an image file to use it as the template");
+      }
       return;
     }
 
@@ -849,24 +857,26 @@ const CelebrationForm = ({
     if (isSubmitting) return;
 
     if (elements.length === 0) {
-      toast.error("Add at least one item to the template");
+      showApiToast("error", "Add at least one item to the template");
       return;
     }
 
     setIsSubmitting(true);
 
+    const tid = toast.loading("Saving celebration...");
+
     try {
-      await announceService.upsertCelebration({
+      const res = await announceService.upsertCelebration({
         celebration_type: celebrationType,
         celebration_text: elementsToHtml(elements),
         document: templateFile,
       });
 
-      toast.success("Celebration saved successfully!");
+      resolveApiSuccess(tid, res, "Celebration saved successfully!");
       if (onSaved) await onSaved();
     } catch (err) {
-      const errorMsg = err.response?.data?.message || "Internal Server Error";
-      toast.error(`Save Failed: ${errorMsg}`);
+      console.error("Failed to save celebration:", err);
+      resolveApiError(tid, err, "Failed to save celebration");
     } finally {
       setIsSubmitting(false);
     }

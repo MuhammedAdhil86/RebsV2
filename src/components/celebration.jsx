@@ -1,11 +1,16 @@
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { FiEdit2, FiTrash2, FiPlus, FiEye, FiX } from "react-icons/fi";
-import toast from "react-hot-toast";
+import { toast } from "react-toastify";
 
 import announceService from "../service/announceService";
 import DeleteConfirmationModal from "../ui/deletemodal";
 import CelebrationForm from "../ui/CelebrationModal";
+import {
+  showApiError,
+  resolveApiSuccess,
+  resolveApiError,
+} from "../utils/apiToast";
 
 const CELEBRATION_LABELS = {
   BIRTHDAY: "Birthday",
@@ -113,6 +118,7 @@ const CelibrationLayout = () => {
       setCelebrations([...birthdays, ...anniversaries]);
     } catch (error) {
       console.error("Failed to load celebrations:", error);
+      showApiError(error, "Failed to load celebrations");
     } finally {
       setLoading(false);
     }
@@ -160,16 +166,16 @@ const CelibrationLayout = () => {
       selectedCelebration;
     setIsDeleting(true);
 
+    const tid = toast.loading("Deleting celebration...");
+
     try {
-      await announceService.deleteCelebration(celebrationType);
+      const res = await announceService.deleteCelebration(celebrationType);
       setCelebrations((prev) => prev.filter((c) => c.id !== celebrationId));
       setSelectedCelebration(null);
-      toast.success("Celebration deleted successfully");
+      resolveApiSuccess(tid, res, "Celebration deleted successfully");
     } catch (error) {
       console.error("Failed to delete celebration:", error);
-      toast.error(
-        error.response?.data?.message || "Failed to delete celebration",
-      );
+      resolveApiError(tid, error, "Failed to delete celebration");
     } finally {
       setIsDeleting(false);
     }

@@ -53,6 +53,7 @@ import {
   getEmploymentTypeLeaveConfig,
   putEmploymentTypeLeaveConfig,
   deleteEmploymentTypeLeaveConfig as deleteEmploymentTypeLeaveConfigUrl,
+  getPayslipDownloadUrl,
 } from "../api/api";
 
 /* ---------------- PAYLOAD BUILDERS ---------------- */
@@ -870,6 +871,62 @@ const payrollService = {
       payload,
     );
     return response.data;
+  },
+  downloadPayslip: async ({ month, year, user_id }) => {
+    try {
+      const res = await axiosInstance.get(getPayslipDownloadUrl, {
+        params: { month, year, user_id },
+        responseType: "blob",
+      });
+
+      const contentType = res.headers?.["content-type"] || "";
+      console.log("Payslip status:", res.status, "type:", contentType);
+
+      // 200 but not a file (JSON error or HTML from the proxy)
+      if (
+        !contentType.includes("pdf") &&
+        !contentType.includes("octet-stream")
+      ) {
+        const text = await res.data.text();
+        console.error("Payslip non-file response:", text);
+        let msg = "Payslip response is not a file";
+        try {
+          msg = JSON.parse(text)?.message || msg;
+        } catch {}
+        throw new Error(msg);
+      }
+
+      const disposition = res.headers?.["content-disposition"] || "";
+      const match = disposition.match(/filename="?([^"]+)"?/i);
+      const filename = match
+        ? match[1]
+        : `payslip_${user_id}_${month}_${year}.pdf`;
+
+      const blobUrl = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(blobUrl);
+
+      return true;
+    } catch (err) {
+      let message = err.message || "Failed to download payslip";
+      const data = err.response?.data;
+      if (data instanceof Blob) {
+        try {
+          const text = await data.text();
+          console.error("Payslip error body:", text);
+          message = JSON.parse(text)?.message || message;
+        } catch {}
+      } else if (data?.message) {
+        message = data.message;
+      }
+      console.error("Error in downloadPayslip:", err.response || err);
+      throw new Error(message);
+    }
   },
 };
 

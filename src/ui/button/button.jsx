@@ -1,9 +1,9 @@
 import React from "react";
 
 const SIZES = {
-  sm: "text-xs pb-1.5 gap-1.5",
-  md: "text-sm pb-2 gap-2", // medium (default), same as Tab
-  lg: "text-base pb-2.5 gap-2.5",
+  sm: "text-[11px] leading-4 py-1 px-2.5 gap-1.5",
+  md: "text-xs leading-4 py-1.5 px-3 gap-2", // medium (default)
+  lg: "text-sm leading-5 py-1.5 px-4 gap-2.5",
 };
 
 const Button = ({
@@ -11,7 +11,6 @@ const Button = ({
   onClick,
   size = "md",
   icon = null, // optional icon shown before the text
-  underline = true, // red bottom line, same as the active tab
   type = "button",
   disabled = false,
   className = "",
@@ -20,15 +19,12 @@ const Button = ({
     type={type}
     onClick={onClick}
     disabled={disabled}
-    className={`${SIZES[size]} inline-flex items-center font-medium transition-all relative
-      text-gray-900 hover:text-gray-600
-      disabled:opacity-50 disabled:cursor-not-allowed ${className}`}
+    className={`${SIZES[size]} inline-flex items-center justify-center whitespace-nowrap rounded-md font-medium
+      bg-black text-white hover:bg-gray-800 transition-all
+      disabled:bg-gray-300 disabled:cursor-not-allowed ${className}`}
   >
     {icon}
     {children}
-    {underline && (
-      <div className="absolute bottom-0 left-0 w-full h-[2px] bg-red-500" />
-    )}
   </button>
 );
 

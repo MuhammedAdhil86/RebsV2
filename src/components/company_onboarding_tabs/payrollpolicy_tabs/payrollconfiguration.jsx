@@ -4,6 +4,11 @@ import { RefreshCw, Loader2, AlertCircle, Settings2 } from "lucide-react";
 import { toast } from "react-toastify";
 
 import payrollService from "../../../service/payrollService";
+// Adjust this path to wherever InfoTooltip.jsx lives in your project
+import InfoTooltip, {
+  PAYROLL_PERIOD_INFO,
+  SALARY_PERIOD_TYPE_INFO,
+} from "../../../ui/infotooltip";
 
 /* ---------------- OPTIONS ---------------- */
 // value = what the backend expects, label = what the user sees
@@ -137,6 +142,33 @@ const fromApi = (data) => ({
     : "",
 });
 
+/* ---------------- MULTIPLE-PERIOD HANDLING ---------------- */
+
+const MULTIPLE_PERIODS_MSG =
+  "multiple salary periods end in the selected month";
+
+const getErrorMessage = (err) =>
+  err?.response?.data?.message || err?.message || "";
+
+const isMultiplePeriodsError = (err) =>
+  getErrorMessage(err).toLowerCase().includes(MULTIPLE_PERIODS_MSG);
+
+// Prefer a structured list from the API if present,
+// otherwise parse every YYYY-MM-DD found in the error message.
+const extractPeriodStarts = (err) => {
+  const data = err?.response?.data;
+  const structured =
+    data?.period_starts ||
+    data?.period_start_options ||
+    data?.data?.period_starts;
+
+  const list = Array.isArray(structured)
+    ? structured.map((v) => String(v).slice(0, 10))
+    : getErrorMessage(err).match(/\d{4}-\d{2}-\d{2}/g) || [];
+
+  return [...new Set(list)];
+};
+
 /* ---------------- UPSERT FORM (edit mode) ---------------- */
 
 const PayrollConfigurationForm = ({ initialData, onCancel, onSuccess }) => {
@@ -148,6 +180,12 @@ const PayrollConfigurationForm = ({ initialData, onCancel, onSuccess }) => {
   );
   const [saving, setSaving] = useState(false);
 
+  // Filled only when the API says multiple salary periods end in the month
+  const [periodStartOptions, setPeriodStartOptions] = useState([]);
+  const [selectedPeriodStart, setSelectedPeriodStart] = useState("");
+
+  const needsPeriodChoice = periodStartOptions.length > 0;
+
   useEffect(() => {
     if (initialData) {
       setState(fromApi(initialData));
@@ -156,7 +194,13 @@ const PayrollConfigurationForm = ({ initialData, onCancel, onSuccess }) => {
 
   const isFixed = state.salaryPeriodType.startsWith("fixed_");
 
+  const clearPeriodChoice = () => {
+    setPeriodStartOptions([]);
+    setSelectedPeriodStart("");
+  };
+
   const handleTypeChange = (value) => {
+    clearPeriodChoice(); // a changed request invalidates the old choice
     setState((prev) => ({
       ...prev,
       salaryPeriodType: value,
@@ -183,24 +227,18 @@ const PayrollConfigurationForm = ({ initialData, onCancel, onSuccess }) => {
     input.click();
   };
 
-  const handleSave = async () => {
-    if (!state.salaryPeriodType) {
-      toast.error("Please select salary period type");
-      return;
-    }
-
-    if (isFixed && !state.salaryPeriodStartDate) {
-      toast.error("Please select salary period start date");
-      return;
-    }
-
-    // Start date is only sent for fixed_* types
-    const payload = isFixed
+  // periodStart is undefined on the first attempt and set only on the retry
+  const submit = async (periodStart) => {
+    const basePayload = isFixed
       ? {
           salary_period_type: state.salaryPeriodType,
           salary_period_start_date: state.salaryPeriodStartDate,
         }
       : { salary_period_type: state.salaryPeriodType };
+
+    const payload = periodStart
+      ? { ...basePayload, period_start: periodStart } // YYYY-MM-DD
+      : basePayload;
 
     try {
       setSaving(true);
@@ -214,20 +252,55 @@ const PayrollConfigurationForm = ({ initialData, onCancel, onSuccess }) => {
             : "Payroll configuration saved successfully!"),
       );
 
+      clearPeriodChoice();
+
       if (onSuccess) {
         onSuccess(res?.data ?? payload, res);
       }
     } catch (err) {
+      // First attempt only: ask the user to pick a period, then resend
+      if (!periodStart && isMultiplePeriodsError(err)) {
+        const options = extractPeriodStarts(err);
+
+        if (options.length > 0) {
+          setPeriodStartOptions(options);
+          setSelectedPeriodStart(options[0]);
+          toast.info("Multiple salary periods found. Please choose one.");
+          return;
+        }
+      }
+
       console.error("Payroll configuration save error:", err);
 
       toast.error(
-        err?.response?.data?.message ||
-          err?.message ||
-          "Failed to save payroll configuration",
+        getErrorMessage(err) || "Failed to save payroll configuration",
       );
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleSave = () => {
+    if (!state.salaryPeriodType) {
+      toast.error("Please select salary period type");
+      return;
+    }
+
+    if (isFixed && !state.salaryPeriodStartDate) {
+      toast.error("Please select salary period start date");
+      return;
+    }
+
+    if (needsPeriodChoice) {
+      if (!selectedPeriodStart) {
+        toast.error("Please choose a salary period start date");
+        return;
+      }
+      submit(selectedPeriodStart); // retry with period_start
+      return;
+    }
+
+    submit(); // first attempt, no period_start
   };
 
   return (
@@ -241,7 +314,10 @@ const PayrollConfigurationForm = ({ initialData, onCancel, onSuccess }) => {
       <div className="space-y-3">
         {/* Salary Period Type */}
         <div>
-          <p className="text-[12px] text-gray-500 mb-1">Salary Period Type</p>
+          <p className="text-[12px] text-gray-500 mb-1">
+            Salary Period Type
+            <InfoTooltip sections={SALARY_PERIOD_TYPE_INFO} />
+          </p>
 
           <SelectBox
             value={state.salaryPeriodType}
@@ -283,12 +359,13 @@ const PayrollConfigurationForm = ({ initialData, onCancel, onSuccess }) => {
                 ref={dateInputRef}
                 type="date"
                 value={state.salaryPeriodStartDate}
-                onChange={(e) =>
+                onChange={(e) => {
+                  clearPeriodChoice(); // a changed request invalidates the old choice
                   setState((prev) => ({
                     ...prev,
                     salaryPeriodStartDate: e.target.value,
-                  }))
-                }
+                  }));
+                }}
                 tabIndex={-1}
                 aria-hidden="true"
                 className="absolute left-0 bottom-0 w-0 h-0 opacity-0 pointer-events-none"
@@ -297,6 +374,38 @@ const PayrollConfigurationForm = ({ initialData, onCancel, onSuccess }) => {
           </div>
         )}
       </div>
+
+      {/* Multiple salary periods: choose which one to use */}
+      {needsPeriodChoice && (
+        <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3">
+          <p className="text-[12px] font-medium text-amber-800 mb-1">
+            Multiple salary periods end in the selected month
+            <InfoTooltip sections={PAYROLL_PERIOD_INFO} />
+          </p>
+          <p className="text-[11px] text-amber-700 mb-2">
+            Choose the period start date to apply this configuration to.
+          </p>
+
+          <div className="space-y-1.5">
+            {periodStartOptions.map((date) => (
+              <label
+                key={date}
+                className="flex items-center gap-2 text-[12px] text-gray-700 cursor-pointer"
+              >
+                <input
+                  type="radio"
+                  name="period_start"
+                  value={date}
+                  checked={selectedPeriodStart === date}
+                  onChange={() => setSelectedPeriodStart(date)}
+                  className="accent-black"
+                />
+                {formatInputDate(date)}
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Buttons */}
       <div className="flex justify-end gap-2 mt-4">
@@ -315,7 +424,13 @@ const PayrollConfigurationForm = ({ initialData, onCancel, onSuccess }) => {
           disabled={saving}
           className="h-8 px-4 rounded text-[12px] bg-black text-white disabled:opacity-60"
         >
-          {saving ? "Saving..." : isEdit ? "Update" : "Save"}
+          {saving
+            ? "Saving..."
+            : needsPeriodChoice
+              ? "Confirm & Save"
+              : isEdit
+                ? "Update"
+                : "Save"}
         </button>
       </div>
     </div>
@@ -386,6 +501,7 @@ const PayrollConfiguration = () => {
         <div>
           <h3 className="text-base font-medium text-gray-800">
             Payroll Configuration
+            <InfoTooltip sections={SALARY_PERIOD_TYPE_INFO} />
           </h3>
           <p className="text-[11px] text-gray-400 mt-1">
             View your organization's payroll configuration.

@@ -8,7 +8,6 @@ import {
   Trash2,
   Power,
 } from "lucide-react";
-import { toast } from "react-toastify"; // <ToastContainer /> lives in App.jsx
 import PayrollTable from "../../../ui/payrolltable";
 import {
   fetchCompanyLayouts,
@@ -16,42 +15,10 @@ import {
   updateLayoutStatus,
 } from "../../../service/companyService";
 import { confirm } from "../../../ui/ConfirmationModal"; // adjust path to where you saved it
+// Backend message / errors / data toasts. Adjust the path to where you saved it.
+import { showApiSuccess, showApiError } from "../../../utils/apiToast";
 import CreateLayout from "./CreateLayout";
 import UpdateLayout from "./UpdateLayout";
-
-/* ================= TOAST HELPERS ================= */
-// Plain text only: App.jsx's <ToastContainer /> controls how every toast looks.
-
-// Flattens backend "errors" / "data" (string | array | object) into lines.
-const detailsText = (data, key) => {
-  if (data === null || data === undefined || data === "") return [];
-  if (typeof data === "string" || typeof data === "number")
-    return [key ? `${key}: ${data}` : String(data)];
-  if (Array.isArray(data)) return data.flatMap((d) => detailsText(d, key));
-  if (typeof data === "object")
-    return Object.entries(data).flatMap(([k, v]) => detailsText(v, k));
-  return [];
-};
-
-const asText = (v) => (typeof v === "string" ? v : "");
-
-// Backend message + errors + data as one plain string.
-// Works for axios errors ({ response: { data } }), for interceptors that throw
-// the response body itself, and for a plain Error("message").
-const apiErrorText = (error, fallback) => {
-  const res = error?.response?.data ?? error;
-  if (!res) return fallback;
-  if (typeof res === "string") return res.slice(0, 300);
-  const message =
-    asText(res.message) ||
-    asText(res.error) ||
-    asText(error?.message) ||
-    fallback;
-  const details = [
-    ...new Set([...detailsText(res.errors), ...detailsText(res.data)]),
-  ].filter((d) => d !== message);
-  return details.length ? `${message}: ${details.join("; ")}` : message;
-};
 
 const TABS = [
   { key: "email", label: "Email Layout" },
@@ -245,7 +212,7 @@ const LayoutSetup = () => {
 
       const message = getErrorInfo(err).text || "Failed to load layout";
       setErrors((prev) => ({ ...prev, [type]: message }));
-      toast.error(apiErrorText(err, message)); // backend message + errors + data
+      showApiError(err, message); // backend message + data
     }
   }, []);
 
@@ -282,7 +249,7 @@ const LayoutSetup = () => {
     setDeleting(true);
     try {
       const body = await deleteLayout(id, layout_type);
-      if (body?.message) toast.success(body.message); // message from backend
+      showApiSuccess(body, "Layout deleted successfully"); // message from backend
       // remove only the deleted row
       setLayouts((prev) => ({
         ...prev,
@@ -291,8 +258,7 @@ const LayoutSetup = () => {
       setDeleteTarget(null);
     } catch (err) {
       console.error("DELETE ERROR:", err);
-      // backend message + errors + data
-      toast.error(apiErrorText(err, "Failed to delete layout"));
+      showApiError(err, "Failed to delete layout"); // backend message + data
     } finally {
       setDeleting(false);
     }
@@ -316,7 +282,7 @@ const LayoutSetup = () => {
 
     try {
       const body = await updateLayoutStatus(layout_type, id, nextStatus);
-      if (body?.message) toast.success(body.message); // message from backend
+      showApiSuccess(body, "Status updated successfully"); // message from backend
       // update only the changed row
       setLayouts((prev) => ({
         ...prev,
@@ -326,10 +292,7 @@ const LayoutSetup = () => {
       }));
     } catch (err) {
       console.error("STATUS ERROR:", err);
-      // backend message + errors + data
-      toast.error(
-        apiErrorText(err, getErrorInfo(err).text || "Failed to update status"),
-      );
+      showApiError(err, getErrorInfo(err).text || "Failed to update status");
     }
   };
 

@@ -416,6 +416,7 @@ export const getTdsOpeningBalance = "/api/payroll/tds/opening-balance";
 export const postGenerateLetter = "/letter/generate";
 export const postSendLetter = "/letter/send";
 export const postCreateLetterPdfTemplate = "/letter/template/create";
+export const getPayslipDownloadUrl = "/api/payroll/analytics/payslip";
 // FIXED
 export const getUserPayrollTemplateAllocations = (userId) =>
   `/api/payroll/template-allocations/user?user_id=${userId}`;
