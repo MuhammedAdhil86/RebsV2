@@ -1,80 +1,124 @@
 import React, { useEffect, useState } from "react";
-import { FiX, FiPaperclip, FiCopy, FiCheck } from "react-icons/fi";
+import { Icon } from "@iconify/react";
+import ModalButton from "./button/modalbutton";
 
-const statusColors = {
-  Approved: "bg-green-100 text-green-600",
-  Rejected: "bg-red-100 text-red-600",
-  Pending: "bg-yellow-100 text-yellow-700",
+// Reads the ISO string directly (no timezone shift): 11:22:26 AM (11 Jun 2026)
+const formatExactTime12h = (isoString) => {
+  if (!isoString || String(isoString).startsWith("0001-01-01")) return null;
+
+  try {
+    const [datePart, timePart] = isoString.split("T");
+    const [hourStr, minStr, secWithMs] = timePart.split(":");
+    const secStr = secWithMs.substring(0, 2);
+    const [year, month, day] = datePart.split("-");
+
+    let hour = parseInt(hourStr, 10);
+    const ampm = hour >= 12 ? "PM" : "AM";
+    hour = hour % 12;
+    hour = hour ? hour : 12;
+    const formattedHour = hour < 10 ? `0${hour}` : hour;
+
+    const months = [
+      "Jan",
+      "Feb",
+      "Mar",
+      "Apr",
+      "May",
+      "Jun",
+      "Jul",
+      "Aug",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Dec",
+    ];
+    const formattedDate = `${day} ${months[parseInt(month, 10) - 1]} ${year}`;
+
+    return `${formattedHour}:${minStr}:${secStr} ${ampm} (${formattedDate})`;
+  } catch (e) {
+    return null;
+  }
 };
 
-// values sent to the backend (lowercase, as the API expects)
-const PAYOUT_OPTIONS = [
-  { value: "hand", label: "Hand" },
-  { value: "payroll", label: "Payroll" },
-  { value: "voucher", label: "Voucher" },
-];
-
-// Select box sizing (full width inside the modal)
-const SELECT_PLACEHOLDER = "Select payout method";
-const SELECT_MIN_WIDTH = 120;
+// Badge colours for claim status (lowercase input)
+const getStatusBadge = (status) => {
+  if (status.includes("approved")) return "bg-green-100 text-green-700";
+  if (status.includes("rejected"))
+    return "bg-red-50 text-red-600 border border-red-200";
+  return "bg-gray-100 text-gray-700"; // pending / anything else
+};
 
 const getCleanDocType = (file) =>
   file?.document_type?.includes("pdf") ? "PDF" : "IMG";
 
-const Field = ({ label, children }) => (
-  <div>
-    <div className="text-[11px] text-gray-400 font-normal mb-0.5">{label}</div>
-    <div className="text-[13px] text-gray-800 font-medium break-words">
-      {children || "--"}
-    </div>
+// ---------- Theme styles (same as Device Request modal) ----------
+const labelCls = "text-[11px] text-gray-500 mb-1";
+const boxCls = "bg-slate-50 border border-gray-200 px-4 py-3 rounded-lg";
+const valueCls = "text-[13px] text-gray-800 break-words";
+
+// Label + value box; empty values show N/A
+const InfoBox = ({ label, children, className = "" }) => (
+  <div className={boxCls}>
+    <p className={labelCls}>{label}</p>
+    <p className={`${valueCls} ${className}`}>
+      {children !== null && children !== undefined && children !== ""
+        ? children
+        : "N/A"}
+    </p>
   </div>
 );
 
-export default function ViewClaimModal({
+const ViewClaimModal = ({
   open,
   data,
   submitting = false,
   onClose,
   onStatusUpdate,
-}) {
-  const [payoutMethod, setPayoutMethod] = useState("");
-  const [payoutError, setPayoutError] = useState("");
+}) => {
   const [copied, setCopied] = useState(false);
+  const [actionType, setActionType] = useState(null);
 
-  // Reset local state every time a different claim is opened
+  // Reset local state whenever a different claim is opened
   useEffect(() => {
-    setPayoutMethod("");
-    setPayoutError("");
-    setCopied(false);
-  }, [data?.id, open]);
+    if (open && data) {
+      setCopied(false);
+      setActionType(null);
+    }
+  }, [open, data]);
 
-  // Close on Escape
+  // Clear the active action once the parent finishes submitting
+  useEffect(() => {
+    if (!submitting) setActionType(null);
+  }, [submitting]);
+
+  const handleClose = () => {
+    if (!submitting && onClose) onClose();
+  };
+
+  // Close with the Escape key
   useEffect(() => {
     if (!open) return;
-    const onKey = (e) => {
-      if (e.key === "Escape" && !submitting) onClose?.();
+    const onKeyDown = (e) => {
+      if (e.key === "Escape" && !submitting && onClose) onClose();
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, submitting, onClose]);
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open, onClose, submitting]);
 
   if (!open || !data) return null;
 
-  const isPending = data.status === "Pending";
-  const isApproved = data.status === "Approved";
+  const status = data.status ? data.status.toLowerCase() : "pending";
   const attachments = data.attachments || [];
 
-  const handleApprove = () => {
-    if (!payoutMethod) {
-      setPayoutError("Please select a payout method.");
-      return;
-    }
-    setPayoutError("");
-    onStatusUpdate?.(data.id, "Approved", payoutMethod);
-  };
+  const submittedOn = formatExactTime12h(data.created_at);
+  const lastUpdated = formatExactTime12h(data.updated_at);
+  const approvedAt = formatExactTime12h(data.approved_at);
 
-  const handleReject = () => {
-    onStatusUpdate?.(data.id, "Rejected");
+  // The parent runs the API call and shows the backend toast
+  const handleStatusAction = (targetStatus) => {
+    if (submitting) return;
+    setActionType(targetStatus);
+    onStatusUpdate?.(data.id, targetStatus);
   };
 
   const handleCopy = async () => {
@@ -89,226 +133,208 @@ export default function ViewClaimModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 font-['Poppins']"
-      onClick={() => !submitting && onClose?.()}
+      className="fixed inset-0 z-[100] flex items-center justify-center px-4 bg-black/50 backdrop-blur-[2px] font-poppins text-[12px]"
+      onClick={handleClose}
     >
       <div
-        className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto"
+        className="bg-white w-full max-w-[960px] max-h-[90vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in duration-200"
         onClick={(e) => e.stopPropagation()}
       >
         {/* HEADER */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-          <div className="flex items-center gap-3">
-            <h3 className="text-sm font-semibold text-gray-800">
-              Claim Details
-            </h3>
-            <span
-              className={`px-3 py-1 rounded-full text-[10px] font-semibold uppercase tracking-wider ${
-                statusColors[data.status] || statusColors.Pending
-              }`}
-            >
-              {data.status}
+        <div className="flex items-start justify-between gap-3 px-6 pt-5 pb-4 border-b border-gray-100">
+          <div className="flex items-start gap-3">
+            <span className="p-2 bg-slate-100 rounded-lg">
+              <Icon
+                icon="solar:bill-list-outline"
+                className="w-5 h-5 text-black"
+              />
             </span>
+            <div>
+              <h2 className="text-[16px] text-gray-900">Claim Details</h2>
+              <p className="text-[11px] text-gray-500 mt-0.5">
+                Review and update the expense claim
+              </p>
+            </div>
           </div>
           <button
             type="button"
-            onClick={onClose}
-            disabled={submitting}
-            className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 disabled:opacity-40"
+            onClick={handleClose}
             aria-label="Close"
+            disabled={submitting}
+            className="text-gray-400 hover:text-black transition-colors disabled:opacity-50"
           >
-            <FiX size={16} />
+            <Icon icon="material-symbols:close" className="w-6 h-6" />
           </button>
         </div>
 
-        {/* BODY */}
-        <div className="px-5 py-4 space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Employee">{data.name}</Field>
-            <Field label="Designation">{data.designation}</Field>
-            <Field label="Phone">{data.employee_phno}</Field>
-            <Field label="Expense Type">{data.expenseType}</Field>
-            <Field label="Amount">{data.amountDisplay}</Field>
-            <Field label="Expense Date">{data.date}</Field>
-          </div>
+        {/* BODY: employee + expense on the left, request info on the right */}
+        <div className="px-6 py-5 overflow-y-auto">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            {/* ---------- LEFT: EMPLOYEE + EXPENSE ---------- */}
+            <div className="space-y-4 min-w-0">
+              {/* Employee info */}
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 shrink-0 bg-slate-100 border border-gray-200 rounded-full flex items-center justify-center text-[15px] text-gray-700 uppercase">
+                  {data.name && data.name.charAt(0)}
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-[14px] font-medium text-gray-800 leading-tight truncate">
+                    {data.name}
+                  </h3>
+                  <p className="text-[12px] text-gray-500 truncate">
+                    {data.designation}
+                  </p>
+                </div>
+              </div>
 
-          <Field label="Description">{data.description}</Field>
+              <InfoBox label="Phone">{data.employee_phno}</InfoBox>
 
-          {/* ALREADY APPROVED: approval details */}
-          {isApproved && (
-            <div className="rounded-lg border border-green-100 bg-green-50/50 p-3 space-y-2">
-              {data.approved_by && (
-                <div className="text-[12px] text-gray-700">
-                  Approved by:{" "}
-                  <span className="font-medium">{data.approved_by}</span>
-                </div>
-              )}
-              {data.approved_at && (
-                <div className="text-[12px] text-gray-700">
-                  Approved on:{" "}
-                  <span className="font-medium">
-                    {new Date(data.approved_at).toLocaleString("en-IN", {
-                      day: "numeric",
-                      month: "short",
-                      year: "numeric",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </span>
-                </div>
-              )}
-              {data.payout_method && (
-                <div className="text-[12px] text-gray-700">
-                  Payout method:{" "}
-                  <span className="font-medium">{data.payout_method}</span>
-                </div>
-              )}
-              {data.voucher_code && (
-                <div className="flex items-center gap-2 text-[12px] text-gray-700">
-                  Voucher code:
-                  <span className="font-mono font-semibold text-gray-900">
-                    {data.voucher_code}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={handleCopy}
-                    className="inline-flex items-center gap-1 text-blue-600 hover:underline text-[11px]"
-                  >
-                    {copied ? <FiCheck /> : <FiCopy />}
-                    {copied ? "Copied" : "Copy"}
-                  </button>
-                </div>
-              )}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <InfoBox label="Expense Type" className="font-medium">
+                  {data.expenseType}
+                </InfoBox>
+                <InfoBox label="Amount" className="font-medium tabular-nums">
+                  {data.amountDisplay}
+                </InfoBox>
+              </div>
+
+              <InfoBox label="Expense Date" className="tabular-nums">
+                {data.date}
+              </InfoBox>
+
+              <InfoBox label="Description">{data.description}</InfoBox>
             </div>
-          )}
 
-          {/* PENDING: payout method selector */}
-          {isPending && (
-            <div>
-              <label
-                htmlFor="payout-method"
-                className="block text-[11px] text-gray-400 font-normal mb-1"
-              >
-                Payout method (required to approve)
-              </label>
-              <div className="relative w-full">
-                <select
-                  id="payout-method"
-                  value={payoutMethod}
-                  onChange={(e) => {
-                    setPayoutMethod(e.target.value);
-                    setPayoutError("");
-                  }}
-                  disabled={submitting}
-                  className="appearance-none w-full border px-3 py-2.5 text-xs cursor-pointer bg-white focus:outline-none focus:ring-1 focus:ring-black disabled:opacity-60 disabled:cursor-not-allowed"
-                  style={{
-                    width: "100%",
-                    minWidth: `${SELECT_MIN_WIDTH}px`,
-                    borderRadius: "6px",
-                  }}
+            {/* ---------- RIGHT: REQUEST INFO ---------- */}
+            <div className="border border-gray-200 rounded-lg p-4 self-start min-w-0 space-y-4">
+              {/* Title + status */}
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-[13px] font-medium text-gray-800">
+                  Request Details
+                </p>
+                <span
+                  className={`px-3 py-1 rounded-full text-[11px] capitalize whitespace-nowrap ${getStatusBadge(status)}`}
                 >
-                  <option
-                    value=""
-                    style={{
-                      borderBottom: "1px solid #e5e7eb",
-                      padding: "8px",
-                    }}
-                  >
-                    {SELECT_PLACEHOLDER}
-                  </option>
-                  {PAYOUT_OPTIONS.map((opt) => (
-                    <option
-                      key={opt.value}
-                      value={opt.value}
-                      style={{
-                        borderBottom: "1px solid #e5e7eb",
-                        padding: "8px",
-                      }}
-                    >
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-
-                <div className="pointer-events-none absolute inset-y-0 right-2 flex items-center">
-                  <svg
-                    className="w-3 h-3 text-gray-500"
-                    viewBox="0 0 20 20"
-                    fill="currentColor"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.08 1.04l-4.25 4.25a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                </div>
+                  {status}
+                </span>
               </div>
-              {payoutError && (
-                <p className="text-[11px] text-red-500 mt-1">{payoutError}</p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <InfoBox label="Submitted On" className="tabular-nums">
+                  {submittedOn}
+                </InfoBox>
+                <InfoBox label="Initial Status" className="capitalize">
+                  {data.initial_status}
+                </InfoBox>
+              </div>
+
+              {lastUpdated && (
+                <InfoBox label="Last Updated" className="tabular-nums">
+                  {lastUpdated}
+                </InfoBox>
+              )}
+
+              {/* Attachments */}
+              <div className={boxCls}>
+                <p className={labelCls}>Attachments</p>
+                {attachments.length === 0 ? (
+                  <p className={valueCls}>None</p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {attachments.map((file, i) => (
+                      <a
+                        key={file.id}
+                        href={file.path}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1.5 text-[12px] text-gray-800 bg-white border border-gray-200 hover:border-black px-2.5 py-1 rounded-lg whitespace-nowrap transition-colors"
+                      >
+                        <Icon
+                          icon="solar:paperclip-outline"
+                          className="w-3.5 h-3.5 text-gray-500"
+                        />
+                        {getCleanDocType(file)} {i + 1}
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Approved info */}
+              {status === "approved" && (data.approved_by || approvedAt) && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {data.approved_by && (
+                    <InfoBox label="Approved By">{data.approved_by}</InfoBox>
+                  )}
+                  {approvedAt && (
+                    <InfoBox label="Approved At" className="tabular-nums">
+                      {approvedAt}
+                    </InfoBox>
+                  )}
+                </div>
+              )}
+
+              {/* Voucher code (shown only if the backend returns one) */}
+              {data.voucher_code && (
+                <div className={boxCls}>
+                  <p className={labelCls}>Voucher Code</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className={`${valueCls} font-mono select-all`}>
+                      {data.voucher_code}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleCopy}
+                      className="inline-flex items-center gap-1 text-[11px] text-gray-500 hover:text-black transition-colors"
+                    >
+                      <Icon
+                        icon={
+                          copied
+                            ? "material-symbols:check"
+                            : "solar:copy-outline"
+                        }
+                        className="w-4 h-4"
+                      />
+                      {copied ? "Copied" : "Copy"}
+                    </button>
+                  </div>
+                </div>
               )}
             </div>
-          )}
-
-          {/* ATTACHMENTS */}
-          <div>
-            <div className="text-[11px] text-gray-400 font-normal mb-1.5">
-              Attachments
-            </div>
-            {attachments.length === 0 ? (
-              <span className="text-[12px] text-gray-400">None</span>
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                {attachments.map((file, i) => (
-                  <a
-                    key={file.id}
-                    href={file.path}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1.5 text-blue-600 hover:underline bg-blue-50/70 border border-blue-100 px-2.5 py-1 rounded text-[11px] font-semibold tracking-wider whitespace-nowrap"
-                  >
-                    <FiPaperclip className="text-xs text-blue-500" />
-                    {getCleanDocType(file)} {i + 1}
-                  </a>
-                ))}
-              </div>
-            )}
           </div>
         </div>
 
         {/* FOOTER */}
-        <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-100">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={submitting}
-            className="px-4 py-2 text-[12px] font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50"
-          >
-            Close
-          </button>
-
-          {isPending && (
+        <div className="px-6 py-4 border-t border-gray-100 bg-slate-50/60 flex justify-end gap-2">
+          {status === "pending" ? (
             <>
-              <button
-                type="button"
-                onClick={handleReject}
+              <ModalButton
+                variant="danger"
+                onClick={() => handleStatusAction("Rejected")}
                 disabled={submitting}
-                className="px-4 py-2 text-[12px] font-medium text-red-600 bg-red-50 border border-red-100 rounded-lg hover:bg-red-100 disabled:opacity-50"
+                loading={submitting && actionType === "Rejected"}
               >
-                {submitting ? "Please wait..." : "Reject"}
-              </button>
-              <button
-                type="button"
-                onClick={handleApprove}
+                Reject
+              </ModalButton>
+
+              <ModalButton
+                variant="primary"
+                onClick={() => handleStatusAction("Approved")}
                 disabled={submitting}
-                className="px-4 py-2 text-[12px] font-medium text-white bg-black rounded-lg hover:bg-gray-800 disabled:opacity-50"
+                loading={submitting && actionType === "Approved"}
               >
-                {submitting ? "Please wait..." : "Approve"}
-              </button>
+                Approve
+              </ModalButton>
             </>
+          ) : (
+            <ModalButton variant="secondary" onClick={handleClose}>
+              Close
+            </ModalButton>
           )}
         </div>
       </div>
     </div>
   );
-}
+};
+
+export default ViewClaimModal;

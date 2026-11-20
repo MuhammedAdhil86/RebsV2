@@ -15,6 +15,7 @@ import {
   postCelebration,
   getCelebrations,
   deleteCelebration,
+  removeEmoji,
   getNotificationCount, // <- NEW
   markNotificationRead, // <- NEW
   markAllNotificationsRead, // <- NEW
@@ -353,6 +354,21 @@ const announceService = {
     } catch (error) {
       console.error(
         `Error deleting announcement #${id}:`,
+        error.response?.data || error.message,
+      );
+      throw error;
+    }
+  },
+  deleteEmoji: async (id) => {
+    try {
+      const response = await axiosInstance.delete(removeEmoji(id));
+
+      console.log("Emoji removed:", response.data);
+
+      return response.data;
+    } catch (error) {
+      console.error(
+        `Error removing emoji #${id}:`,
         error.response?.data || error.message,
       );
       throw error;

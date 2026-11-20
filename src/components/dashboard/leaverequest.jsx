@@ -1,175 +1,234 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import axiosInstance from "../../service/axiosinstance";
 import { X } from "lucide-react";
+
+const PREVIEW_COUNT = 5;
+const DRAWER_PAGE_SIZE = 20;
+const DATE_OPTIONS = { day: "2-digit", month: "short" };
+
+const startOfDay = (d) => {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x;
+};
+
+// Returns { label, full } so long lists can be shortened visually
+// while the complete text stays available in a tooltip.
+const formatLeaveDates = (leaveDates) => {
+  if (!Array.isArray(leaveDates) || leaveDates.length === 0) {
+    return { label: "-", full: "-" };
+  }
+
+  const dates = leaveDates
+    .map((d) => new Date(d?.date))
+    .filter((d) => !isNaN(d.getTime()))
+    .sort((a, b) => a - b);
+
+  if (dates.length === 0) return { label: "-", full: "-" };
+
+  const fmt = (d) => d.toLocaleDateString("en-GB", DATE_OPTIONS);
+  const today = startOfDay(new Date());
+  const tomorrow = new Date(today);
+  tomorrow.setDate(today.getDate() + 1);
+
+  if (dates.length === 1) {
+    const d = startOfDay(dates[0]);
+    const label =
+      d.getTime() === today.getTime()
+        ? "Today"
+        : d.getTime() === tomorrow.getTime()
+          ? "Tomorrow"
+          : fmt(d);
+    return { label, full: label };
+  }
+
+  const isConsecutive = dates.every(
+    (d, i) =>
+      i === 0 || Math.round((d - dates[i - 1]) / (1000 * 60 * 60 * 24)) === 1,
+  );
+
+  if (isConsecutive) {
+    const label = `${fmt(dates[0])} - ${fmt(dates[dates.length - 1])}`;
+    return { label, full: label };
+  }
+
+  const full = dates.map(fmt).join(", ");
+  // Collapse long non-consecutive lists: "12 Nov, 15 Nov +4"
+  const label =
+    dates.length > 2
+      ? `${dates.slice(0, 2).map(fmt).join(", ")} +${dates.length - 2}`
+      : full;
+  return { label, full };
+};
+
+const LeaveItem = ({ leave, idx }) => {
+  const { label, full } = formatLeaveDates(leave.leave_date);
+
+  return (
+    <li className="flex items-center justify-between gap-3 min-w-0">
+      <div className="flex items-center gap-3 flex-1 min-w-0">
+        <img
+          src={leave.image || `https://i.pravatar.cc/40?img=${(idx % 70) + 1}`}
+          alt={leave.name || "Employee"}
+          loading="lazy"
+          className="w-8 h-8 rounded-full shrink-0 object-cover bg-gray-100"
+        />
+        <div className="min-w-0 flex-1">
+          <p
+            title={leave.name}
+            className="font-normal text-gray-800 text-[13px] font-['Poppins'] truncate"
+          >
+            {leave.name || "Unknown"}
+          </p>
+          <p
+            title={leave.designation}
+            className="text-[10px] font-normal font-['Poppins'] text-gray-500 truncate"
+          >
+            {leave.designation || "No designation"}
+          </p>
+        </div>
+      </div>
+
+      <span
+        title={full}
+        className="shrink-0 max-w-[45%] text-right truncate whitespace-nowrap font-normal text-[11px] font-['Poppins'] text-[#FF000499]"
+      >
+        {label}
+      </span>
+    </li>
+  );
+};
+
+const LeaveList = ({ data }) => (
+  <ul className="space-y-4 min-w-0">
+    {data.map((leave, idx) => (
+      <LeaveItem key={leave.id ?? leave._id ?? idx} leave={leave} idx={idx} />
+    ))}
+  </ul>
+);
 
 const LeaveRequest = () => {
   const [leaveData, setLeaveData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(DRAWER_PAGE_SIZE);
 
-  // Helper function to format dates for display
-  const formatLeaveDates = (leaveDates) => {
-    if (!leaveDates || leaveDates.length === 0) return "-";
-    const options = { day: "2-digit", month: "short" };
-    const dates = leaveDates.map((d) => new Date(d.date));
-    dates.sort((a, b) => a - b);
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(today.getDate() + 1);
-
-    if (dates.length === 1) {
-      const d = dates[0];
-      if (d.getTime() === today.getTime()) return "Today";
-      if (d.getTime() === tomorrow.getTime()) return "Tomorrow";
-      return d.toLocaleDateString("en-GB", options);
-    }
-
-    let isConsecutive = true;
-    for (let i = 1; i < dates.length; i++) {
-      const diff = (dates[i] - dates[i - 1]) / (1000 * 60 * 60 * 24);
-      if (Math.round(diff) !== 1) {
-        isConsecutive = false;
-        break;
-      }
-    }
-
-    if (isConsecutive) {
-      return `${dates[0].toLocaleDateString("en-GB", options)} - ${dates[dates.length - 1].toLocaleDateString("en-GB", options)}`;
-    }
-
-    return dates.map((d) => d.toLocaleDateString("en-GB", options)).join(", ");
-  };
-
-  const loadLeaves = async () => {
+  const loadLeaves = useCallback(async () => {
     try {
-      console.log("--- API Fetch Started ---");
       const res = await axiosInstance.get(
         "admin/leave/get?page=1&limit=50&from=today&to=future&status=approved",
       );
 
-      // LOG 1: Check the raw response from the backend
-      console.log("1. Raw API Response Data:", res.data);
-
-      if (res.data?.data) {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-
-        // LOG 2: Check total count before filtering
-        console.log("2. Total items received:", res.data.data.length);
-
-        const filteredLeaves = res.data.data.filter((leave) => {
+      if (Array.isArray(res.data?.data)) {
+        const today = startOfDay(new Date());
+        const filtered = res.data.data.filter((leave) => {
           const isApproved = leave.manager_approval_status === "Approved";
-          const hasFutureDate = leave.leave_date.some(
+          const hasFutureDate = (leave.leave_date || []).some(
             (d) => new Date(d.date) >= today,
           );
           return isApproved && hasFutureDate;
         });
-
-        // LOG 3: Check data after filtering
-        console.log(
-          "3. Filtered Leaves (Approved & Current/Future):",
-          filteredLeaves,
-        );
-
-        setLeaveData(filteredLeaves);
-      } else {
-        console.warn("API Response structure is unexpected or data is empty.");
+        setLeaveData(filtered);
       }
     } catch (error) {
-      // LOG 4: Log any network or code errors
       console.error("Error fetching leaves:", error);
     } finally {
       setLoading(false);
-      console.log("--- API Fetch Completed ---");
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadLeaves();
-  }, []);
+  }, [loadLeaves]);
 
-  // LOG 5: Log every render to track state changes
-  console.log("Component Render - current leaveData count:", leaveData.length);
+  // Lock body scroll + close on Escape while drawer is open
+  useEffect(() => {
+    if (!isDrawerOpen) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (e) => e.key === "Escape" && setIsDrawerOpen(false);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [isDrawerOpen]);
 
-  const renderLeaveList = (data) => (
-    <ul className="space-y-4">
-      {data.map((leave, idx) => (
-        <li key={idx} className="flex justify-between items-center gap-2">
-          <div className="flex items-center gap-3 flex-1 min-w-0">
-            <img
-              src={leave.image || `https://i.pravatar.cc/40?img=${idx + 10}`}
-              alt={leave.name}
-              className="w-8 h-8 rounded-full flex-shrink-0 object-cover"
-            />
-            <div className="truncate">
-              <p className="font-[400] text-gray-800 text-[13px] font-['Poppins'] truncate">
-                {leave.name || "Unknown"}
-              </p>
-              <p className="text-[10px] font-[400] font-['Poppins'] text-gray-500 truncate">
-                {leave.designation || "No designation"}
-              </p>
-            </div>
-          </div>
-          <span className="whitespace-nowrap font-[400] text-[11px] font-['Poppins'] text-[#FF000499]">
-            {formatLeaveDates(leave.leave_date)}
-          </span>
-        </li>
-      ))}
-    </ul>
+  const openDrawer = () => {
+    setVisibleCount(DRAWER_PAGE_SIZE);
+    setIsDrawerOpen(true);
+  };
+
+  const preview = useMemo(() => leaveData.slice(0, PREVIEW_COUNT), [leaveData]);
+  const drawerItems = useMemo(
+    () => leaveData.slice(0, visibleCount),
+    [leaveData, visibleCount],
   );
 
   return (
     <>
-      <div className="bg-white shadow rounded-lg p-3 w-full">
-        <h3 className="text-sm text-gray-500 mb-4 font-['Poppins']">
+      <div className="bg-white shadow rounded-lg p-3 w-full min-w-0 overflow-hidden">
+        <h3 className="text-sm text-gray-500 mb-4 font-['Poppins'] truncate">
           Leaves and Vacations
         </h3>
 
-        <div className="mb-4">
+        <div className="mb-4 min-w-0">
           {loading ? (
             <p className="text-[12px] text-gray-500">Loading...</p>
           ) : leaveData.length === 0 ? (
             <p className="text-[12px] text-gray-400">No leaves found</p>
           ) : (
-            renderLeaveList(leaveData.slice(0, 5))
+            <LeaveList data={preview} />
           )}
         </div>
 
-        {leaveData.length > 5 && (
+        {leaveData.length > PREVIEW_COUNT && (
           <button
-            onClick={() => setIsDrawerOpen(true)}
+            onClick={openDrawer}
             className="font-['Poppins'] text-[11px] font-medium text-[#4F4C91] hover:underline"
           >
-            View all people
+            View all people ({leaveData.length})
           </button>
         )}
       </div>
 
-      {/* Slider / Drawer */}
       {isDrawerOpen && (
-        <div className="fixed inset-0 z-[999] flex justify-end">
+        <div
+          className="fixed inset-0 z-[999] flex justify-end"
+          role="dialog"
+          aria-modal="true"
+          aria-label="All leaves"
+        >
           <div
             className="absolute inset-0 bg-black/30 backdrop-blur-sm"
             onClick={() => setIsDrawerOpen(false)}
           />
 
-          <div className="relative h-full bg-white shadow-2xl w-[400px] max-w-[90vw] flex flex-col animate-in slide-in-from-right duration-300">
-            <div className="p-5 flex justify-between items-center border-b">
-              <h2 className="text-lg font-medium text-gray-800 font-['Poppins']">
+          <div className="relative h-[100dvh] w-full sm:w-[400px] max-w-full bg-white shadow-2xl flex flex-col overflow-hidden">
+            <div className="shrink-0 p-4 sm:p-5 flex justify-between items-center border-b gap-3">
+              <h2 className="text-lg font-medium text-gray-800 font-['Poppins'] truncate">
                 All Leaves
               </h2>
               <button
                 onClick={() => setIsDrawerOpen(false)}
-                className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+                aria-label="Close"
+                className="p-1 shrink-0 hover:bg-gray-100 rounded-full transition-colors"
               >
                 <X className="w-5 h-5 text-gray-500" />
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-5 scrollbar-thin">
-              {renderLeaveList(leaveData)}
+            <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain p-4 sm:p-5">
+              <LeaveList data={drawerItems} />
+
+              {visibleCount < leaveData.length && (
+                <button
+                  onClick={() => setVisibleCount((c) => c + DRAWER_PAGE_SIZE)}
+                  className="mt-5 w-full py-2 rounded-md border border-gray-200 text-[12px] font-['Poppins'] text-[#4F4C91] hover:bg-gray-50"
+                >
+                  Load more ({leaveData.length - visibleCount} remaining)
+                </button>
+              )}
             </div>
           </div>
         </div>

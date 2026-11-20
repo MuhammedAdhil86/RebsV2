@@ -18,7 +18,7 @@ export const postCelebration = "/employee/celebration/upsert";
 export const getCelebrations = "/employee/celebration/list";
 export const deleteCelebration = (type) =>
   `/employee/celebration/delete?celebration_type=${encodeURIComponent(type)}`;
-
+export const removeEmoji = (id) => `/announcement/emojis/remove/${id}`;
 // Notifications (employee)
 export const getNotificationCount = "/employee/notification/count";
 export const markNotificationRead = (id) => `/employee/notification/${id}/read`;

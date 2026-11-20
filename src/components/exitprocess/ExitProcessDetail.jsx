@@ -29,6 +29,22 @@ const formatDate = (iso) => {
 // "2026-12-01T00:00:00Z" -> "2026-12-01" for <input type="date">
 const toDateInput = (iso) => (iso ? String(iso).slice(0, 10) : "");
 
+// "2026-12-30T00:00:00Z" -> UTC midnight timestamp (avoids timezone drift)
+const parseDay = (iso) => {
+  const s = toDateInput(iso);
+  if (!s) return null;
+  const t = Date.parse(`${s}T00:00:00Z`);
+  return Number.isNaN(t) ? null : t;
+};
+
+const todayUtc = () => {
+  const n = new Date();
+  return Date.UTC(n.getFullYear(), n.getMonth(), n.getDate());
+};
+
+const daysBetween = (a, b) =>
+  a == null || b == null ? null : Math.round((b - a) / 86400000);
+
 const backendMessage = (err, fallback) =>
   err?.response?.data?.message || err?.message || fallback;
 
@@ -46,16 +62,6 @@ const initials = (name) =>
     .join("")
     .slice(0, 2)
     .toUpperCase();
-
-// readable file name from an attachment path/URL
-const fileName = (url = "") => {
-  try {
-    const last = String(url).split("?")[0].split("/").pop() || url;
-    return decodeURIComponent(last);
-  } catch {
-    return url;
-  }
-};
 
 const STATUS_STYLES = {
   completed: "bg-emerald-50 text-emerald-700",
@@ -191,6 +197,17 @@ const GhostButton = ({ children, ...props }) => (
   >
     {children}
   </button>
+);
+
+/* small stat tile for the summary panel */
+const StatTile = ({ label, value, hint }) => (
+  <div className="rounded-xl border border-black/10 bg-zinc-50/60 px-3 py-3 min-w-0">
+    <p className="text-[11px] text-black/40">{label}</p>
+    <p className="text-base text-black mt-0.5 truncate">{value}</p>
+    {hint && (
+      <p className="text-[11px] text-black/40 mt-0.5 truncate">{hint}</p>
+    )}
+  </div>
 );
 
 /* one row of the details list: label left, value right (stacked on phones) */
@@ -654,7 +671,7 @@ const ExitProcessDetail = ({ id, onBack }) => {
     }
   };
 
-  /* ---- step 3: checklist ---- */
+  /* ---- step 2: checklist ---- */
   const saveChecklist = async () => {
     if (savingChecklist) return;
 
@@ -746,6 +763,39 @@ const ExitProcessDetail = ({ id, onBack }) => {
     (c) => (c ?? 0) >= 100,
   ).length;
 
+  // summary panel extras
+  const noticeTotal = daysBetween(
+    parseDay(data.noticePeriodStart),
+    parseDay(data.separationDate),
+  );
+  const daysLeft = daysBetween(todayUtc(), parseDay(data.separationDate));
+  const daysLeftLabel =
+    daysLeft == null
+      ? "—"
+      : daysLeft > 0
+        ? `${daysLeft} ${daysLeft === 1 ? "day" : "days"}`
+        : daysLeft === 0
+          ? "Today"
+          : "Ended";
+
+  const breakdown = [
+    {
+      label: "Initial step",
+      status: initial.status,
+      completion: initial.completion ?? 0,
+    },
+    {
+      label: "Clearance checklist",
+      status: checklistData.status,
+      completion: checklistData.completion ?? 0,
+    },
+    {
+      label: "Exit questionnaire",
+      status: q.status,
+      completion: q.completion ?? 0,
+    },
+  ];
+
   return (
     <div className="space-y-5 sm:space-y-6">
       {backButton}
@@ -778,6 +828,7 @@ const ExitProcessDetail = ({ id, onBack }) => {
       <div className="grid grid-cols-1 2xl:grid-cols-[minmax(0,1fr)_320px] gap-6 2xl:gap-8 items-start">
         {/* SUMMARY PANEL (right on large screens, on top on small ones) */}
         <aside className="min-w-0 2xl:order-2 2xl:sticky 2xl:top-4 border border-black/10 rounded-2xl bg-white overflow-hidden">
+          {/* progress ring */}
           <div className="flex items-center gap-4 p-4 sm:p-6 border-b border-black/10">
             <Ring value={data.completion} />
             <div className="min-w-0">
@@ -793,7 +844,45 @@ const ExitProcessDetail = ({ id, onBack }) => {
             </div>
           </div>
 
+          {/* quick stats */}
+          <div className="grid grid-cols-2 gap-3 p-4 sm:p-6 border-b border-black/10">
+            <StatTile
+              label="Time left"
+              value={daysLeftLabel}
+              hint={`Until ${formatDate(data.separationDate)}`}
+            />
+            <StatTile
+              label="Notice period"
+              value={
+                noticeTotal != null && noticeTotal >= 0
+                  ? `${noticeTotal} days`
+                  : "—"
+              }
+              hint={`From ${formatDate(data.noticePeriodStart)}`}
+            />
+          </div>
+
+          {/* per-section breakdown */}
+          <div className="p-4 sm:p-6 border-b border-black/10 space-y-4">
+            <p className="text-xs text-black/40">Progress breakdown</p>
+            {breakdown.map((b) => (
+              <div key={b.label}>
+                <div className="flex items-center justify-between gap-2 mb-1.5">
+                  <span className="text-sm text-black">{b.label}</span>
+                  <Badge className={statusClass(b.status)}>
+                    {b.status || "—"}
+                  </Badge>
+                </div>
+                <ProgressBar value={b.completion} />
+              </div>
+            ))}
+          </div>
+
+          {/* details */}
           <dl className="px-4 sm:px-6 py-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 sm:gap-x-8 2xl:grid-cols-1 divide-y divide-black/5 sm:divide-y-0 2xl:divide-y">
+            {data.employeeId && (
+              <DetailRow label="Employee ID" value={data.employeeId} />
+            )}
             <DetailRow label="Employment type" value={data.employmentType} />
             {data.department && (
               <DetailRow label="Department" value={data.department} />
@@ -816,12 +905,24 @@ const ExitProcessDetail = ({ id, onBack }) => {
               value={data.reasonForLeaving}
               className="sm:col-span-2 lg:col-span-3 2xl:col-span-1"
             />
-            <DetailRow
-              label="Attachment"
-              value={data.attachment ? fileName(data.attachment) : "None"}
-              className="sm:col-span-2 lg:col-span-3 2xl:col-span-1"
-            />
           </dl>
+
+          {/* attachment button (no file name) */}
+          <div className="p-4 sm:p-6 border-t border-black/10">
+            {data.attachment ? (
+              <a
+                href={data.attachment}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex w-full items-center justify-center gap-2 min-h-[44px] sm:min-h-0 border border-gray-300 text-gray-700 text-sm px-6 py-2.5 sm:py-2 rounded-lg hover:bg-gray-100 transition-all"
+              >
+                <Icon icon="solar:paperclip-outline" className="w-4 h-4" />
+                Open attachment
+              </a>
+            ) : (
+              <p className="text-xs text-black/40 text-center">No attachment</p>
+            )}
+          </div>
         </aside>
 
         {/* STEPS (vertical timeline) */}

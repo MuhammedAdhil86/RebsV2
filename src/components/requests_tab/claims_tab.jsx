@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { toast } from "react-toastify";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import {
   fetchCompanyClaims,
@@ -102,8 +101,8 @@ export default function ClaimsRequestTab() {
 
       setData(transformed);
     } catch (err) {
-      // Backend message + data (or error) in one toast
-      showApiError(err, "Failed to load company claims data.");
+      // Backend message + data (or error) only
+      showApiError(err);
     } finally {
       setLoading(false);
     }
@@ -119,38 +118,28 @@ export default function ClaimsRequestTab() {
 
   // --- TRIGGERED FROM MODAL SUBMIT BUTTONS ---
   // action: "Approved" | "Rejected"
-  // payoutMethod: "hand" | "payroll" | "voucher" (required only when approving)
-  const handleStatusUpdate = async (id, action, payoutMethod) => {
+  const handleStatusUpdate = async (id, action) => {
     if (submittingModal) return;
 
-    if (action === "Approved" && !payoutMethod) {
-      toast.error("Please select a payout method before approving.");
-      return;
-    }
-
     setSubmittingModal(true);
-    const tid = toast.loading("Updating claim...");
     try {
-      const res = await updateCompanyClaimStatus(id, action, payoutMethod);
+      const res = await updateCompanyClaimStatus(id, action);
       const body = getApiBody(res);
 
-      const voucher = body?.data?.voucher_code ?? res?.data?.voucher_code;
+      // Service returned the error body instead of throwing (e.g. 409)
+      if (Number(body?.status_code) >= 400) {
+        showApiToast("error", body?.message, body?.data);
+        return;
+      }
 
-      // Backend message as title; voucher code shown underneath
-      showApiToast(
-        "success",
-        body?.message ||
-          `Claim #${id} has been successfully ${action.toLowerCase()}!`,
-        voucher ? `Voucher code: ${voucher}` : undefined,
-        tid,
-        voucher ? 15000 : 5000, // keep voucher code on screen longer
-      );
+      // Backend message as title, backend data underneath (e.g. voucher code)
+      showApiToast("success", body?.message, body?.data);
 
       setSelectedClaim(null);
       fetchData(); // Reload table data with fresh backend values
     } catch (err) {
-      // Backend message + data (or error) in the same loading toast
-      showApiError(err, `Failed to update status to ${action}`, tid);
+      // Backend message + data (or error) only
+      showApiError(err);
     } finally {
       setSubmittingModal(false);
     }

@@ -12,6 +12,7 @@ import {
   FiBell,
 } from "react-icons/fi";
 import { toast } from "react-toastify"; // uses the global <ToastContainer /> from App.jsx
+import { showApiSuccess, showApiError } from "../utils/apiToast"; // adjust path to where your toast helper file lives
 
 import DashboardLayout from "../ui/pagelayout";
 import HeaderGlobal from "../ui/headerglobal";
@@ -29,39 +30,6 @@ const PRIORITY_OPTIONS = [
   { value: "2", label: "Medium" },
   { value: "3", label: "Low" },
 ];
-
-/* ================= BACKEND MESSAGE HELPERS ================= */
-
-// Pull readable text out of any backend payload shape:
-// "text", { message }, { error }, { detail }, { errors: {...} }, [ ... ]
-const extractMessage = (payload) => {
-  if (!payload) return "";
-
-  if (typeof payload === "string") return payload;
-
-  if (Array.isArray(payload)) {
-    return payload.map(extractMessage).filter(Boolean).join(", ");
-  }
-
-  if (typeof payload === "object") {
-    const direct =
-      payload.message || payload.error || payload.detail || payload.msg;
-
-    if (direct) return extractMessage(direct);
-
-    if (payload.errors) return extractMessage(Object.values(payload.errors));
-  }
-
-  return "";
-};
-
-// Error text from an axios error: backend message first, then network/JS error, then fallback.
-const getErrorMessage = (error, fallback) =>
-  extractMessage(error?.response?.data) || error?.message || fallback;
-
-// Success text from the API result: backend message first, then fallback.
-const getSuccessMessage = (result, fallback) =>
-  extractMessage(result?.message ?? result?.data?.message) || fallback;
 
 // Get attachment type from API or filename.
 const getAttachmentType = (item) => {
@@ -92,6 +60,69 @@ const getFileName = (url) => {
   }
 };
 
+/* ================= EMOJI HELPERS ================= */
+
+// user_emojis can be ["👍"] or [{ id, emoji }]. Support both shapes.
+const getEmojiChar = (entry) =>
+  typeof entry === "string" ? entry : entry?.emoji;
+
+// Find the current user's reaction entry for a given emoji.
+const findMyReaction = (item, emojiChar) =>
+  (item.user_interaction?.user_emojis || []).find(
+    (entry) => getEmojiChar(entry) === emojiChar,
+  );
+
+// Has the current user already reacted with this emoji?
+const hasReacted = (item, emojiChar) =>
+  Boolean(findMyReaction(item, emojiChar));
+
+// Id sent to DELETE /announcement/emojis/remove/{id}.
+// Uses the reaction record id when the API returns it, otherwise the announcement id.
+const getRemoveId = (item, reaction) => {
+  if (reaction && typeof reaction === "object") {
+    const reactionId = reaction.id ?? reaction.emoji_id ?? reaction.reaction_id;
+    if (reactionId !== undefined && reactionId !== null) return reactionId;
+  }
+
+  return item.id;
+};
+
+// Instantly add or remove one emoji in the local announcement data
+// (counts + the current user's own reactions), before the API answers.
+const applyEmojiLocally = (item, emojiChar, shouldAdd) => {
+  const counts = Array.isArray(item.emojis_count) ? item.emojis_count : [];
+
+  const nextCounts = shouldAdd
+    ? counts.some((e) => e.emoji === emojiChar)
+      ? counts.map((e) =>
+          e.emoji === emojiChar ? { ...e, count: (e.count || 0) + 1 } : e,
+        )
+      : [...counts, { emoji: emojiChar, count: 1 }]
+    : counts
+        .map((e) =>
+          e.emoji === emojiChar
+            ? { ...e, count: Math.max(0, (e.count || 0) - 1) }
+            : e,
+        )
+        .filter((e) => (e.count || 0) > 0);
+
+  const mine = item.user_interaction?.user_emojis || [];
+  const usesObjects = mine.some((e) => typeof e === "object");
+
+  const nextMine = shouldAdd
+    ? [...mine, usesObjects ? { emoji: emojiChar } : emojiChar]
+    : mine.filter((e) => getEmojiChar(e) !== emojiChar);
+
+  return {
+    ...item,
+    emojis_count: nextCounts,
+    user_interaction: {
+      ...item.user_interaction,
+      user_emojis: nextMine,
+    },
+  };
+};
+
 const EMPTY_EDIT_FORM = {
   title: "",
   description: "",
@@ -109,6 +140,9 @@ const Announcement = () => {
   const [expandedComments, setExpandedComments] = useState({});
   const [commentInputs, setCommentInputs] = useState({});
   const [likingIds, setLikingIds] = useState(new Set());
+
+  // Announcements with an emoji add/remove request in progress.
+  const [emojiBusyIds, setEmojiBusyIds] = useState(new Set());
 
   // Delete modal states.
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -130,7 +164,7 @@ const Announcement = () => {
       setAnnouncements(Array.isArray(rawData) ? rawData : []);
     } catch (error) {
       console.error("Failed to load announcements:", error);
-      toast.error(getErrorMessage(error, "Failed to load announcements"));
+      showApiError(error, "Failed to load announcements");
     } finally {
       setLoading(false);
     }
@@ -211,7 +245,7 @@ const Announcement = () => {
     } catch (error) {
       console.error("Failed to toggle like:", error);
       setAnnouncements(previous);
-      toast.error(getErrorMessage(error, "Failed to update like"));
+      showApiError(error, "Failed to update like");
     } finally {
       setLikingIds((prev) => {
         const next = new Set(prev);
@@ -233,24 +267,65 @@ const Announcement = () => {
     try {
       const result = await announceService.postComment(id, text);
 
-      toast.success(getSuccessMessage(result, "Comment posted"));
+      showApiSuccess(result, "Comment posted");
 
       handleInputChange(id, "");
       await loadAnnouncements();
     } catch (error) {
       console.error("Failed to post comment:", error);
-      toast.error(getErrorMessage(error, "Failed to post comment"));
+      showApiError(error, "Failed to post comment");
     }
   };
 
-  // Add emoji reaction.
-  const handleEmojiSelect = async (id, emojiChar) => {
+  /* ================= EMOJI ================= */
+
+  // Add the emoji, or remove it if the user already reacted with it.
+  // The screen updates instantly; if the API fails, it rolls back.
+  const handleEmojiToggle = async (item, emojiChar) => {
+    if (emojiBusyIds.has(item.id)) return;
+
+    const myReaction = findMyReaction(item, emojiChar);
+    const isRemoving = Boolean(myReaction);
+    const previous = announcements;
+
+    setEmojiBusyIds((prev) => new Set(prev).add(item.id));
+
+    // Instant update.
+    setAnnouncements((prev) =>
+      prev.map((entry) =>
+        entry.id === item.id
+          ? applyEmojiLocally(entry, emojiChar, !isRemoving)
+          : entry,
+      ),
+    );
+
     try {
-      await announceService.postEmoji(id, emojiChar);
+      if (isRemoving) {
+        // DELETE /announcement/emojis/remove/{id}
+        const removeResult = await announceService.deleteEmoji(
+          getRemoveId(item, myReaction),
+        );
+
+        showApiSuccess(removeResult, "Reaction removed");
+      } else {
+        await announceService.postEmoji(item.id, emojiChar);
+      }
+
+      // Quietly sync with the server (also picks up reaction ids).
       await loadAnnouncements();
     } catch (error) {
-      console.error("Failed to add emoji:", error);
-      toast.error(getErrorMessage(error, "Failed to add reaction"));
+      console.error("Failed to update emoji:", error);
+      setAnnouncements(previous);
+      showApiError(
+        error,
+        isRemoving ? "Failed to remove reaction" : "Failed to add reaction",
+      );
+    } finally {
+      setEmojiBusyIds((prev) => {
+        const next = new Set(prev);
+        next.delete(item.id);
+        return next;
+      });
     }
   };
 
@@ -313,9 +388,7 @@ const Announcement = () => {
         },
       );
 
-      toast.success(
-        getSuccessMessage(result, "Announcement updated successfully"),
-      );
+      showApiSuccess(result, "Announcement updated successfully");
 
       setIsEditModalOpen(false);
       setEditingAnnouncement(null);
@@ -324,7 +397,7 @@ const Announcement = () => {
       await loadAnnouncements(); // refresh with the latest server values
     } catch (error) {
       console.error("Failed to update announcement:", error);
-      toast.error(getErrorMessage(error, "Failed to update announcement"));
+      showApiError(error, "Failed to update announcement");
     } finally {
       setIsUpdating(false);
     }
@@ -378,12 +451,10 @@ const Announcement = () => {
       setIsDeleteModalOpen(false);
       setSelectedAnnouncement(null);
 
-      toast.success(
-        getSuccessMessage(result, "Announcement deleted successfully"),
-      );
+      showApiSuccess(result, "Announcement deleted successfully");
     } catch (error) {
       console.error("Failed to delete announcement:", error);
-      toast.error(getErrorMessage(error, "Failed to delete announcement"));
+      showApiError(error, "Failed to delete announcement");
     } finally {
       setIsDeleting(false);
     }
@@ -567,26 +638,37 @@ const Announcement = () => {
                           </p>
                         )}
 
-                        {/* Emoji reaction counts */}
+                        {/* Emoji reaction counts (click your own reaction to remove it) */}
                         {item.emojis_count && item.emojis_count.length > 0 && (
                           <div className="flex flex-wrap gap-1.5 mt-4">
-                            {item.emojis_count.map((emo, index) => (
-                              <span
-                                key={`${emo.emoji}-${index}`}
-                                className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-0.5 rounded-full border transition-colors ${
-                                  item.user_interaction?.user_emojis?.includes(
-                                    emo.emoji,
-                                  )
-                                    ? "bg-gray-100 border-gray-400 text-black font-semibold"
-                                    : "bg-gray-50 border-gray-100 text-gray-600"
-                                }`}
-                              >
-                                <span>{emo.emoji}</span>
-                                <span className="text-[10px] opacity-70">
-                                  {emo.count}
+                            {item.emojis_count.map((emo, index) => {
+                              const reactedByMe = hasReacted(item, emo.emoji);
+
+                              return (
+                                <span
+                                  key={`${emo.emoji}-${index}`}
+                                  onClick={() =>
+                                    reactedByMe &&
+                                    handleEmojiToggle(item, emo.emoji)
+                                  }
+                                  title={
+                                    reactedByMe
+                                      ? "Click to remove your reaction"
+                                      : undefined
+                                  }
+                                  className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-0.5 rounded-full border transition-colors ${
+                                    reactedByMe
+                                      ? "bg-gray-100 border-gray-400 text-black font-semibold cursor-pointer"
+                                      : "bg-gray-50 border-gray-100 text-gray-600"
+                                  }`}
+                                >
+                                  <span>{emo.emoji}</span>
+                                  <span className="text-[10px] opacity-70">
+                                    {emo.count}
+                                  </span>
                                 </span>
-                              </span>
-                            ))}
+                              );
+                            })}
                           </div>
                         )}
                       </div>
@@ -637,17 +719,19 @@ const Announcement = () => {
                             </button>
                           </div>
 
-                          {/* Emoji picker */}
+                          {/* Emoji picker (click again on one you used to remove it) */}
                           <div className="flex items-center gap-1 bg-gray-50 border border-gray-100 px-1.5 py-0.5 rounded-lg">
                             {EMOJIS.map((emoji) => (
                               <button
                                 key={emoji}
                                 type="button"
-                                onClick={() =>
-                                  handleEmojiSelect(item.id, emoji)
-                                }
+                                onClick={() => handleEmojiToggle(item, emoji)}
                                 className="text-xs p-1 hover:scale-125 transition-transform duration-150"
-                                aria-label={`React with ${emoji}`}
+                                aria-label={
+                                  hasReacted(item, emoji)
+                                    ? `Remove ${emoji} reaction`
+                                    : `React with ${emoji}`
+                                }
                               >
                                 {emoji}
                               </button>
