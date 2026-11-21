@@ -20,6 +20,9 @@ import KpiConfiguration from "./kpi/kpiconfiguration";
 /* Payroll Configuration Sub-Component */
 import PayrollConfiguration from "./payrollpolicy_tabs/payrollconfiguration";
 
+/* Doc Configuration Sub-Component */
+import DocConfiguration from "./leaves_and_vacations/docconfiguration";
+
 /* Reusable TabsSwitch Component */
 import TabsSwitch from "../../ui/tabswitch";
 
@@ -50,6 +53,7 @@ const OrganizationalPolicy = () => {
     { id: "kpi-configuration", label: "KPI Configuration" },
     { id: "leave-configuration", label: "Leave Configuration" },
     { id: "payroll-configuration", label: "Payroll Configuration" },
+    { id: "doc-configuration", label: "Doc Configuration" },
   ];
 
   /* ----------------- Sub-Tabs States ----------------- */
@@ -112,6 +116,9 @@ const OrganizationalPolicy = () => {
       {/* ===== PAYROLL CONFIGURATION ===== */}
       {activeTab === "payroll-configuration" && <PayrollConfiguration />}
 
+      {/* ===== DOC CONFIGURATION ===== */}
+      {activeTab === "doc-configuration" && <DocConfiguration />}
+
       {/* ===== OTHER PLACEHOLDERS ===== */}
       {![
         "work-shift",
@@ -121,6 +128,7 @@ const OrganizationalPolicy = () => {
         "kpi-configuration",
         "leave-configuration",
         "payroll-configuration",
+        "doc-configuration",
       ].includes(activeTab) && (
         <div className="py-10 text-center text-gray-400 italic">
           {tabs.find((t) => t.id === activeTab)?.label} content is under

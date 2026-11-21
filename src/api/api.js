@@ -354,7 +354,11 @@ export const postEmployeeCalendar = "/admin/attendance/listbymonth";
 
 //File Upload for written Policy
 export const writtenFileUpload = "/company/policy-document/add";
-
+// Document List (Doc Configuration)
+export const documentListAdd = "/document-list/add";
+export const documentListUpdate = "/document-list/update"; // + /{id}
+export const documentListGet = "/document-list/get";
+export const documentListDelete = "/document-list/delete"; // + /{id}
 //Attachments
 export const uploadAttachment = "/staff/admin/document/upload/{uuid}";
 export const getCategory = "/admin/document-category/get";

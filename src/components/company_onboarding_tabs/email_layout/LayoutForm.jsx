@@ -66,6 +66,20 @@ const isBlankHtml = (html) => {
 // Keep only the keys your backend really replaces.
 const LAYOUT_PLACEHOLDERS = ["SenderLogoURL", "ReceiverLogoURL"];
 
+// Fixed size for Sender / Receiver logos in header and footer.
+// (If LayoutCanvas also needs it, move this to a shared constants file
+// and import it in both places to avoid a circular import.)
+const LOGO_STYLE =
+  "height:65px; max-width:185px; width:auto; object-fit:contain;";
+
+// Forces LOGO_STYLE on every SenderLogoURL / ReceiverLogoURL <img> before saving
+const enforceLogoStyle = (html) =>
+  (html || "").replace(/<img\b[^>]*>/gi, (tag) => {
+    if (!/src="\{\{\.(Sender|Receiver)LogoURL\}\}"/i.test(tag)) return tag;
+    const withoutStyle = tag.replace(/\sstyle="[^"]*"/i, "");
+    return withoutStyle.replace(/<img/i, `<img style="${LOGO_STYLE}"`);
+  });
+
 // Letters: the page is 210mm wide and the canvas is 600px wide.
 const MM_TO_PX = 600 / 210;
 const mmToPx = (mm) => Math.max(40, Math.round((Number(mm) || 0) * MM_TO_PX));
@@ -152,10 +166,17 @@ const LayoutForm = ({ mode, layoutType, layout: initialData, onClose }) => {
       return;
     }
 
+    // Always save Sender / Receiver logos with the fixed size
+    const payload = {
+      ...form,
+      header_html: enforceLogoStyle(form.header_html),
+      footer_html: enforceLogoStyle(form.footer_html),
+    };
+
     // The API rejects header / footer HTML over 200 KB
     const tooBig = [
-      ["Header", form.header_html],
-      ["Footer", form.footer_html],
+      ["Header", payload.header_html],
+      ["Footer", payload.footer_html],
     ].find(([, html]) => html.length > 200 * 1000);
     if (tooBig) {
       toast.error(
@@ -164,7 +185,6 @@ const LayoutForm = ({ mode, layoutType, layout: initialData, onClose }) => {
       return;
     }
 
-    const payload = { ...form };
     if (isLetter) {
       payload.background_position = normalizePosition(
         payload.background_position,

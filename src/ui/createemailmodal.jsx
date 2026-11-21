@@ -56,7 +56,7 @@ Quill.register(StyledImage, true);
 
 // Static logo size used for Sender / Receiver logo (and any "logo" placeholder)
 const LOGO_STYLE =
-  "height:55px; max-width:180px; width:auto; object-fit:contain;";
+  "height:65px; max-width:185px; width:auto; object-fit:contain;";
 
 // Universal color palette
 const COLOR_PALETTE = [
