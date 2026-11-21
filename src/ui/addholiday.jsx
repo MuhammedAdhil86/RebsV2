@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { X, Upload, ChevronDown } from "lucide-react";
 import { Icon } from "@iconify/react";
-import { toast } from "react-toastify"; // <ToastContainer /> lives in App.jsx
+import { showApiError, showApiToast } from "../utils/apiToast"; // adjust path if needed
 import { getBranchData } from "../service/companyService";
 
 const HolidayModal = ({ isOpen, onClose, onSubmitAction, editData = null }) => {
@@ -35,7 +35,8 @@ const HolidayModal = ({ isOpen, onClose, onSubmitAction, editData = null }) => {
           const data = await getBranchData();
           if (data) setBranches(data);
         } catch (error) {
-          toast.error(
+          showApiError(
+            error,
             "Failed to load branches. Please check your network connection.",
           );
         }
@@ -113,7 +114,7 @@ const HolidayModal = ({ isOpen, onClose, onSubmitAction, editData = null }) => {
     if (loading) return;
 
     if (formData.selectedBranches.length === 0) {
-      toast.error("Please select at least one target branch.");
+      showApiToast("error", "Please select at least one target branch.");
       return;
     }
 

@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { Plus, List as ListIcon, Upload } from "lucide-react";
 import { Icon } from "@iconify/react";
-import { toast } from "react-toastify"; // <ToastContainer /> lives in App.jsx
+import { showApiError, showApiSuccess } from "../../../utils/apiToast"; // adjust path if needed
 import HolidayCalendar from "./holidayscalender";
 import HolidayList from "./holidayslist";
 import {
@@ -14,33 +14,6 @@ import { getBranchData } from "../../../service/companyService";
 import HolidayModal from "../../../ui/addholiday";
 import BulkUploadModal from "../../../ui/holidaybulk";
 
-/* ================= TOAST HELPERS ================= */
-// Plain text only: App.jsx's <ToastContainer /> controls how every toast looks.
-
-// Flattens backend "errors" / "data" (string | array | object) into lines.
-const detailsText = (data, key) => {
-  if (data === null || data === undefined || data === "") return [];
-  if (typeof data === "string" || typeof data === "number")
-    return [key ? `${key}: ${data}` : String(data)];
-  if (Array.isArray(data)) return data.flatMap((d) => detailsText(d, key));
-  if (typeof data === "object")
-    return Object.entries(data).flatMap(([k, v]) => detailsText(v, k));
-  return [];
-};
-
-// Backend message + errors + data as one plain string.
-// Also works when a service throws a plain Error("message").
-const apiErrorText = (error, fallback) => {
-  const res = error?.response?.data;
-  if (!res) return error?.message || fallback;
-  if (typeof res === "string") return res.slice(0, 300);
-  const message = res.message || res.error || fallback;
-  const details = [
-    ...new Set([...detailsText(res.errors), ...detailsText(res.data)]),
-  ].filter((d) => d !== message);
-  return details.length ? `${message}: ${details.join("; ")}` : message;
-};
-
 const Holidays = () => {
   const [activeTab, setActiveTab] = useState("calendar");
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -48,20 +21,20 @@ const Holidays = () => {
   const [monthHolidays, setMonthHolidays] = useState([]);
   const [yearHolidays, setYearHolidays] = useState([]);
   const [branchOptions, setBranchOptions] = useState([]);
+  // Branch filter shared by calendar and list ("0" = all, no branch_id sent)
+  const [selectedBranch, setSelectedBranch] = useState("0");
   const [currentMonth, setCurrentMonth] = useState(
     new Date(new Date().getFullYear(), new Date().getMonth(), 1),
   );
 
-  // The "Syncing holiday records..." toast shows only on the very first load
-  const syncToastShown = useRef(false);
-
   // Year shared by the calendar and the list
   const selectedYear = currentMonth.getFullYear();
 
-  // Load every holiday of the selected year (GET /admin/holiday/get?year=YYYY)
-  const loadYearHolidays = async (year) => {
+  // Load every holiday of the selected year
+  // (GET /admin/holiday/get?year=YYYY&branch_id=N)
+  const loadYearHolidays = async (year, branchId = selectedBranch) => {
     try {
-      const data = await fetchAllHolidays(year);
+      const data = await fetchAllHolidays(year, branchId);
       // Safety net: keep only rows that belong to the requested year
       setYearHolidays(
         (data || []).filter(
@@ -70,7 +43,7 @@ const Holidays = () => {
       );
     } catch (e) {
       console.error("Failed to load year holidays:", e);
-      toast.error(apiErrorText(e, "Failed to load holidays for this year."));
+      showApiError(e, "Failed to load holidays for this year.");
     }
   };
 
@@ -81,19 +54,12 @@ const Holidays = () => {
     );
 
   const loadData = async () => {
-    // Show the sync toast only the first time, every later refresh is silent
-    const showSync = !syncToastShown.current;
-    syncToastShown.current = true;
-    const syncToastId = "dashboard-sync-toast";
-    if (showSync) {
-      toast.loading("Syncing holiday records...", { toastId: syncToastId });
-    }
-
     try {
       const [rawMonthData, rawBranches] = await Promise.all([
         fetchHolidaysByDate(
           currentMonth.getMonth() + 1,
           currentMonth.getFullYear(),
+          selectedBranch,
         ),
         getBranchData(),
       ]);
@@ -108,28 +74,27 @@ const Holidays = () => {
           })),
         );
       }
-      if (showSync) toast.dismiss(syncToastId);
     } catch (e) {
       console.error("Dashboard Synchronization Interrupted:", e);
-      if (showSync) toast.dismiss(syncToastId);
-      toast.error(apiErrorText(e, "Failed to sync holiday records dashboard."));
+      showApiError(e, "Failed to sync holiday records dashboard.");
     }
   };
 
-  // Calendar data + branches: reload when the month changes
+  // Calendar data + branches: reload when the month or branch changes
   useEffect(() => {
     loadData();
-  }, [currentMonth]);
+  }, [currentMonth, selectedBranch]);
 
-  // List data: reload only when the year changes
+  // List data: reload when the year or the branch filter changes
   useEffect(() => {
-    loadYearHolidays(selectedYear);
-  }, [selectedYear]);
+    loadYearHolidays(selectedYear, selectedBranch);
+  }, [selectedYear, selectedBranch]);
 
   // Refresh both views silently (after add / edit / delete / bulk upload).
-  // Returns a promise so callers can wait until the screen is up to date.
+  // Keeps the current branch filter. Returns a promise so callers can wait
+  // until the screen is up to date.
   const refreshAll = () =>
-    Promise.all([loadData(), loadYearHolidays(selectedYear)]);
+    Promise.all([loadData(), loadYearHolidays(selectedYear, selectedBranch)]);
 
   // Instantly drop a deleted holiday from the calendar and the list
   const removeHolidayLocal = (id) => {
@@ -145,12 +110,7 @@ const Holidays = () => {
     isEditMode,
     editId = null,
   ) => {
-    // 1. Fire sequential processing toast with tracking token
-    const toastId = toast.loading(
-      isEditMode ? "Updating holiday record..." : "Saving new holiday...",
-    );
-
-    // 2. Create the genuine multipart/form-data payload container instance
+    // 1. Create the genuine multipart/form-data payload container instance
     const data = new FormData();
     data.append("title", formDataPayload.title.trim());
     data.append("date", formDataPayload.date);
@@ -174,11 +134,10 @@ const Holidays = () => {
         ? await modifyHoliday(editId, data)
         : await addHoliday(data);
 
-      // 3. Replace loading toast with the success message from backend
-      toast.dismiss(toastId);
-      toast.success(
-        response?.message ||
-          (isEditMode ? "Holiday updated!" : "Holiday added!"),
+      // 2. Success toast with the backend message
+      showApiSuccess(
+        response,
+        isEditMode ? "Holiday updated!" : "Holiday added!",
       );
 
       // Wait for fresh data so the list is already updated when the modal closes
@@ -187,9 +146,8 @@ const Holidays = () => {
     } catch (error) {
       console.error("Core Processing Operation Rejection:", error);
 
-      // 4. Show the backend message + errors + data
-      toast.dismiss(toastId);
-      toast.error(apiErrorText(error, "Failed to save holiday structure."));
+      // 3. Error toast with the backend message + data
+      showApiError(error, "Failed to save holiday structure.");
       throw error; // Bubble error down to preserve inner user state
     }
   };
@@ -262,6 +220,9 @@ const Holidays = () => {
             currentMonth={currentMonth}
             setCurrentMonth={setCurrentMonth}
             getBranchName={getBranchName}
+            branchOptions={branchOptions}
+            selectedBranch={selectedBranch}
+            onBranchChange={setSelectedBranch}
           />
         ) : (
           <HolidayList
@@ -269,6 +230,9 @@ const Holidays = () => {
             year={selectedYear}
             onYearChange={changeYear}
             getBranchName={getBranchName}
+            branchOptions={branchOptions}
+            selectedBranch={selectedBranch}
+            onBranchChange={setSelectedBranch}
             onRefresh={refreshAll}
             onRemoved={removeHolidayLocal}
             onSubmitAction={handleHolidaySubmit}

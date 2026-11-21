@@ -27,11 +27,13 @@ const backendError = (error) => {
   return new Error(unique.length ? unique.join(": ") : error.message);
 };
 
-export const fetchAllHolidays = async (year) => {
+export const fetchAllHolidays = async (year, branchId) => {
   try {
-    const response = await axiosInstance.get(getFetchAllHolidays, {
-      params: year ? { year } : {},
-    });
+    const params = {};
+    if (year) params.year = year;
+    if (branchId && String(branchId) !== "0") params.branch_id = branchId;
+
+    const response = await axiosInstance.get(getFetchAllHolidays, { params });
     return response.data?.data ?? [];
   } catch (error) {
     throw backendError(error);
@@ -81,10 +83,13 @@ export const removeHoliday = async (id) => {
   }
 };
 
-export const fetchHolidaysByDate = async (month, year) => {
+export const fetchHolidaysByDate = async (month, year, branchId) => {
   try {
     const url = getHolidayByMonthYear(month, year);
-    const response = await axiosInstance.get(url);
+    const params = {};
+    if (branchId && String(branchId) !== "0") params.branch_id = branchId;
+
+    const response = await axiosInstance.get(url, { params });
     const rawData = response.data?.data || [];
 
     return rawData.map((item) => ({

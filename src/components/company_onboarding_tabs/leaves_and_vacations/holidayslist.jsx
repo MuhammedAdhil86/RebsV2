@@ -7,9 +7,10 @@ import {
   AlertTriangle,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
 } from "lucide-react";
 import { Icon } from "@iconify/react";
-import { toast } from "react-toastify"; // <ToastContainer /> lives in App.jsx
+import { showApiSuccess, showApiError } from "../../../utils/apiToast"; // adjust path if needed
 import { removeHoliday } from "../../../service/holidayservices";
 import HolidayModal from "../../../ui/addholiday";
 
@@ -27,6 +28,9 @@ const HolidayList = ({
   year,
   onYearChange,
   getBranchName,
+  branchOptions = [],
+  selectedBranch = "0",
+  onBranchChange,
   onRefresh,
   onRemoved,
   onSubmitAction,
@@ -70,35 +74,21 @@ const HolidayList = ({
     closeEditModal();
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     const { id } = deleteModal;
     closeDeleteModal();
 
-    const request = removeHoliday(id);
+    try {
+      const res = await removeHoliday(id);
+      showApiSuccess(res, "Holiday deleted successfully!");
 
-    // Remove the row instantly, then silently re-sync with the server
-    request
-      .then(() => {
-        if (onRemoved) onRemoved(id);
-        if (onRefresh) onRefresh();
-      })
-      .catch(() => {}); // the error toast below already reports it
-
-    // Look, position and duration come from the global <ToastContainer /> in App.jsx
-    toast.promise(request, {
-      pending: "Deleting holiday...",
-      success: {
-        render({ data: res }) {
-          return res?.message || "Holiday deleted successfully!";
-        },
-      },
+      // Remove the row instantly, then silently re-sync with the server
+      if (onRemoved) onRemoved(id);
+      if (onRefresh) onRefresh();
+    } catch (err) {
       // removeHoliday already throws an Error carrying the backend text
-      error: {
-        render({ data: err }) {
-          return err?.message || "Failed to delete holiday.";
-        },
-      },
-    });
+      showApiError(err, "Failed to delete holiday.");
+    }
   };
 
   return (
@@ -152,8 +142,8 @@ const HolidayList = ({
         editData={selectedHoliday}
       />
 
-      {/* --- YEAR SWITCHER --- */}
-      <div className="flex items-center justify-between mb-5">
+      {/* --- YEAR SWITCHER + BRANCH FILTER --- */}
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
         <div>
           <h2 className="text-2xl font-semibold text-black tracking-tight">
             {year}
@@ -164,22 +154,47 @@ const HolidayList = ({
               : `${sorted.length} holiday${sorted.length > 1 ? "s" : ""} this year`}
           </p>
         </div>
-        <div className="flex items-center border border-black/10 rounded-lg overflow-hidden">
-          <button
-            aria-label="Previous year"
-            onClick={() => onYearChange(-1)}
-            className="p-2 text-black hover:bg-black/5 transition-colors"
-          >
-            <ChevronLeft size={16} />
-          </button>
-          <div className="w-px h-5 bg-black/10" />
-          <button
-            aria-label="Next year"
-            onClick={() => onYearChange(1)}
-            className="p-2 text-black hover:bg-black/5 transition-colors"
-          >
-            <ChevronRight size={16} />
-          </button>
+
+        <div className="flex items-center gap-2">
+          {onBranchChange && (
+            <div className="relative">
+              <select
+                aria-label="Filter by branch"
+                value={selectedBranch}
+                onChange={(e) => onBranchChange(e.target.value)}
+                className="appearance-none h-9 border border-black/10 rounded-lg pl-3 pr-9 text-xs text-black bg-white cursor-pointer focus:outline-none focus:border-black transition-colors"
+              >
+                <option value="0">All Branches</option>
+                {branchOptions.map((b) => (
+                  <option key={b.value} value={b.value}>
+                    {b.label}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown
+                size={14}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-black/50 pointer-events-none"
+              />
+            </div>
+          )}
+
+          <div className="flex items-center border border-black/10 rounded-lg overflow-hidden">
+            <button
+              aria-label="Previous year"
+              onClick={() => onYearChange(-1)}
+              className="p-2 text-black hover:bg-black/5 transition-colors"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <div className="w-px h-5 bg-black/10" />
+            <button
+              aria-label="Next year"
+              onClick={() => onYearChange(1)}
+              className="p-2 text-black hover:bg-black/5 transition-colors"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
         </div>
       </div>
 

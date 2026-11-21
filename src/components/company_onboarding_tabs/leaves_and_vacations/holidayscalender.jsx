@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { ChevronLeft, ChevronRight, MapPin } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronDown, MapPin } from "lucide-react";
 import { Icon } from "@iconify/react";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -15,6 +15,9 @@ const HolidayCalendar = ({
   currentMonth,
   setCurrentMonth,
   getBranchName,
+  branchOptions = [],
+  selectedBranch = "0",
+  onBranchChange,
 }) => {
   const year = currentMonth.getFullYear();
   const month = currentMonth.getMonth();
@@ -106,10 +109,32 @@ const HolidayCalendar = ({
         </div>
 
         <div className="flex items-center gap-2">
+          {onBranchChange && (
+            <div className="relative">
+              <select
+                aria-label="Filter by branch"
+                value={selectedBranch}
+                onChange={(e) => onBranchChange(e.target.value)}
+                className="appearance-none h-9 border border-black/10 rounded-lg pl-3 pr-9 text-xs text-black bg-white cursor-pointer focus:outline-none focus:border-black transition-colors"
+              >
+                <option value="0">All Branches</option>
+                {branchOptions.map((b) => (
+                  <option key={b.value} value={b.value}>
+                    {b.label}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown
+                size={14}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-black/50 pointer-events-none"
+              />
+            </div>
+          )}
+
           <button
             onClick={goToToday}
             disabled={isCurrentMonth}
-            className="px-3.5 py-2 text-xs font-medium text-black border border-black/10 rounded-lg hover:bg-black/5 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            className="h-9 px-3.5 text-xs font-medium text-black border border-black/10 rounded-lg hover:bg-black/5 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
           >
             Today
           </button>

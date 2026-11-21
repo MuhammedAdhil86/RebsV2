@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { X, Upload, HelpCircle, Download } from "lucide-react";
-import { toast } from "react-toastify"; // <ToastContainer /> lives in App.jsx
+import { showApiError, showApiSuccess, showApiToast } from "../utils/apiToast"; // adjust path if needed
 import { uploadHolidayCSV } from "../service/holidayservices";
 import { getBranchData } from "../service/companyService";
 // Demo CSV saved in src/assets/docs/holidays.csv
@@ -20,7 +20,10 @@ const BulkUploadModal = ({ isOpen, onClose, onRefresh }) => {
           const data = await getBranchData();
           if (data) setBranches(data);
         } catch (error) {
-          toast.error("Failed to load branches. Please check your connection.");
+          showApiError(
+            error,
+            "Failed to load branches. Please check your connection.",
+          );
         }
       };
       loadBranches();
@@ -62,14 +65,18 @@ const BulkUploadModal = ({ isOpen, onClose, onRefresh }) => {
     if (loading) return;
 
     if (selectedBranches.length === 0) {
-      toast.error(
+      showApiToast(
+        "error",
         "Please select at least one branch for this holiday dataset.",
       );
       return;
     }
 
     if (!selectedFile) {
-      toast.error("Please provide a valid template CSV file structure.");
+      showApiToast(
+        "error",
+        "Please provide a valid template CSV file structure.",
+      );
       return;
     }
 
@@ -88,41 +95,19 @@ const BulkUploadModal = ({ isOpen, onClose, onRefresh }) => {
       });
     }
 
-    const action = uploadHolidayCSV(data);
-
-    toast.promise(
-      action,
-      {
-        pending: <b>Uploading holidays database...</b>,
-        success: {
-          render({ data: res }) {
-            onRefresh();
-            onClose();
-            return (
-              res?.message || "Bulk holiday database processed successfully!"
-            );
-          },
-          icon: "🎉",
-          autoClose: 4000,
-        },
-        error: {
-          render({ data: err }) {
-            const errorMsg =
-              err?.response?.data?.message ||
-              err?.message ||
-              "Something went wrong processing bulk file.";
-            return <b>{errorMsg}</b>;
-          },
-          autoClose: 5000,
-        },
-      },
-      { style: { minWidth: "250px" } },
-    );
-
     try {
-      await action;
+      const res = await uploadHolidayCSV(data);
+
+      // Success toast with the backend message
+      showApiSuccess(res, "Bulk holiday database processed successfully!");
+
+      if (onRefresh) onRefresh();
+      onClose();
     } catch (error) {
       console.error("Bulk Upload Error:", error);
+
+      // Error toast with the backend message + data
+      showApiError(error, "Something went wrong processing bulk file.");
     } finally {
       setLoading(false);
     }
@@ -325,7 +310,8 @@ const BulkUploadModal = ({ isOpen, onClose, onRefresh }) => {
                 onChange={(e) => {
                   const file = e.target.files[0];
                   if (file && !file.name.endsWith(".csv")) {
-                    toast.error(
+                    showApiToast(
+                      "error",
                       "Invalid format file option selected. Please use a .csv layout",
                     );
                     e.target.value = "";
