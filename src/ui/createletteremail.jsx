@@ -53,7 +53,7 @@ Quill.register(StyledImage, true);
 
 // Static logo size used for Sender / Receiver logo (and any "logo" placeholder)
 const LOGO_STYLE =
-  "height:48px; max-width:160px; width:auto; object-fit:contain;";
+  "height:55px; max-width:180px; width:auto; object-fit:contain;";
 
 // Forces the static logo size on every logo <img> before saving
 // (SenderLogoURL, ReceiverLogoURL, any placeholder with "logo" in src/alt)

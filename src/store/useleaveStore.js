@@ -105,17 +105,34 @@ const useLeaveStore = create((set, get) => ({
     set({ loading: true, error: null });
 
     try {
-      const sanitizedPayload = {
-        leave_date: leaveData.leave_date.map((d) => ({
-          date: String(d.date),
-          half_day: Boolean(d.half_day),
-          half_day_type: d.half_day ? Number(d.half_day_type || 1) : 0,
-        })),
-        reason: leaveData.reason || "Applied by Admin",
-        leave_policy: Number(leaveData.leave_policy || 1),
-        lop: false,
-        cc: Array.isArray(leaveData.cc) ? leaveData.cc : [],
-      };
+      const isEventLeave = !!leaveData.event_date;
+
+      let sanitizedPayload;
+
+      if (isEventLeave) {
+        // 8.4 Event leave: event_date + from_date + to_date (no leave_date list)
+        sanitizedPayload = {
+          leave_policy: Number(leaveData.leave_policy),
+          reason: leaveData.reason || "Applied by Admin",
+          cc: Array.isArray(leaveData.cc) ? leaveData.cc : [],
+          event_date: String(leaveData.event_date),
+          from_date: String(leaveData.from_date),
+          to_date: String(leaveData.to_date),
+        };
+      } else {
+        // 8.3 Regular leave: unchanged
+        sanitizedPayload = {
+          leave_date: (leaveData.leave_date || []).map((d) => ({
+            date: String(d.date),
+            half_day: Boolean(d.half_day),
+            half_day_type: d.half_day ? Number(d.half_day_type || 1) : 0,
+          })),
+          reason: leaveData.reason || "Applied by Admin",
+          leave_policy: Number(leaveData.leave_policy || 1),
+          lop: false,
+          cc: Array.isArray(leaveData.cc) ? leaveData.cc : [],
+        };
+      }
 
       const response = await axiosInstance.post(
         `/admin/leave/apply?employeeId=${employeeId}`,
@@ -136,7 +153,6 @@ const useLeaveStore = create((set, get) => ({
       throw new Error(serverMessage);
     }
   },
-
   // -------------------------------
   // APPROVE / REJECT LEAVE
   // -------------------------------

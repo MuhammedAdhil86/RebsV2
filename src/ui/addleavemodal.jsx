@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useMemo } from "react";
-import { X, Search, Loader2 } from "lucide-react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
+import { X, Search, Loader2, ChevronDown, Check } from "lucide-react";
 import { Icon } from "@iconify/react";
 import { getAllStaff } from "../service/staffservice";
 import useLeaveStore from "../store/useleaveStore";
 import GlowButton from "../components/helpers/glowbutton";
-import { toast } from "react-toastify";
+import { showApiToast, showApiSuccess, showApiError } from "../utils/apiToast"; // adjust path if needed
 
 /* ---------- date helpers (local time, no timezone shifts) ---------- */
 const pad = (n) => String(n).padStart(2, "0");
@@ -22,6 +22,10 @@ const formatKey = (k) =>
     month: "short",
     year: "numeric",
   });
+
+// Whole days between two "YYYY-MM-DD" keys, both days counted
+const daysBetween = (fromKey, toKeyValue) =>
+  Math.round((parseKey(toKeyValue) - parseKey(fromKey)) / 86400000) + 1;
 
 const WEEKDAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 const MONTHS = [
@@ -43,23 +47,139 @@ const emptyForm = {
   employeeUuid: "",
   leave_policy: "",
   reason: "",
-  leave_date: [], // [{ date, half_day, half_day_type }]
+  leave_date: [], // regular leave: [{ date, half_day, half_day_type }]
+  event_date: "", // event leave
+  from_date: "", // event leave
+  to_date: "", // event leave
   cc: [],
 };
 
+// A policy is "event leave" when its accrual method is "event" (or flagged so)
+const isEventPolicy = (policy) =>
+  !!policy &&
+  (policy.accrual_method === "event" || policy.event_based === true);
+
+// Same label style as the Announcement modal
+const labelClass = "block mb-1 font-medium text-gray-700";
+
+/* ------------------------------------------------------------------ */
+/* DateField: custom calendar icon, whole field opens the picker.      */
+/* Text size / style follows the Announcement modal (12px, p-3,        */
+/* rounded-2xl, gray-700 medium labels).                               */
+/* ------------------------------------------------------------------ */
+const DateField = ({ label, value, onChange, min, max, disabled = false }) => (
+  <div>
+    {label && <label className={labelClass}>{label}</label>}
+    <div className="relative">
+      <input
+        type="date"
+        min={min}
+        max={max}
+        disabled={disabled}
+        value={value || ""}
+        onChange={(e) => onChange(e.target.value)}
+        className="relative w-full border p-3 pr-10 rounded-2xl disabled:bg-gray-50 disabled:text-gray-400
+          [&::-webkit-calendar-picker-indicator]:absolute
+          [&::-webkit-calendar-picker-indicator]:inset-0
+          [&::-webkit-calendar-picker-indicator]:w-full
+          [&::-webkit-calendar-picker-indicator]:h-full
+          [&::-webkit-calendar-picker-indicator]:opacity-0
+          [&::-webkit-calendar-picker-indicator]:cursor-pointer"
+      />
+      <Icon
+        icon="solar:calendar-outline"
+        className="w-4 h-4 text-gray-700 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none"
+      />
+    </div>
+  </div>
+);
+
+/* ------------------------------------------------------------------ */
+/* SelectField: custom dropdown, same text style as the Announcement   */
+/* modal.                                                              */
+/* ------------------------------------------------------------------ */
+const SelectField = ({
+  label,
+  options = [],
+  value,
+  onChange,
+  placeholder = "Select...",
+  disabled = false,
+}) => {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const selected = options.find((o) => String(o.value) === String(value));
+
+  return (
+    <div className="relative" ref={ref}>
+      {label && <label className={labelClass}>{label}</label>}
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => setOpen((o) => !o)}
+        className="w-full border p-3 rounded-2xl text-left bg-white flex justify-between items-center select-none disabled:bg-gray-50 disabled:text-gray-400"
+      >
+        <span
+          className={`truncate pr-2 ${selected ? "text-gray-900" : "text-gray-400"}`}
+        >
+          {selected ? selected.label : placeholder}
+        </span>
+        <ChevronDown
+          size={16}
+          className={`text-gray-400 flex-shrink-0 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      {open && (
+        <div className="absolute top-full left-0 right-0 mt-1 bg-white border rounded-2xl shadow-xl z-20 max-h-[180px] overflow-y-auto p-2 space-y-1">
+          {options.length === 0 && (
+            <div className="p-3 text-center text-gray-400">No options</div>
+          )}
+          {options.map((o) => {
+            const active = String(o.value) === String(value);
+            return (
+              <button
+                type="button"
+                key={o.value}
+                onClick={() => {
+                  onChange(o.value);
+                  setOpen(false);
+                }}
+                className={`w-full flex items-center justify-between gap-2 p-2 rounded-lg text-left transition-colors hover:bg-gray-50 ${
+                  active ? "bg-gray-50" : ""
+                }`}
+              >
+                <span className="font-medium text-gray-800 truncate">
+                  {o.label}
+                </span>
+                {active && <Check size={14} className="flex-shrink-0" />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const AdminLeaveModal = ({ isOpen, onClose }) => {
-  const {
-    applyLeaveAdmin,
-    fetchEmployeeLeavePolicies,
-    employeeLeavePolicies = [],
-    loading,
-  } = useLeaveStore();
+  const { applyLeaveAdmin, fetchEmployeeLeavePolicies, employeeLeavePolicies } =
+    useLeaveStore();
 
   const [staffList, setStaffList] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [fetchingPolicies, setFetchingPolicies] = useState(false);
 
-  // Calendar state
+  // Calendar state (regular leave)
   const today = new Date();
   const todayKey = keyFromDate(today);
   const [view, setView] = useState({
@@ -72,25 +192,78 @@ const AdminLeaveModal = ({ isOpen, onClose }) => {
 
   const [formData, setFormData] = useState(emptyForm);
 
+  // Local submit state, so a stuck store `loading` flag can never block the button
+  const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
+
+  // Works whether the store keeps the array or the whole { count, policies }
+  const policyList = useMemo(() => {
+    if (Array.isArray(employeeLeavePolicies)) return employeeLeavePolicies;
+    if (Array.isArray(employeeLeavePolicies?.policies))
+      return employeeLeavePolicies.policies;
+    return [];
+  }, [employeeLeavePolicies]);
+
+  // The policy picked in the dropdown, and whether it is an event leave
+  const selectedPolicy = useMemo(
+    () =>
+      policyList.find((p) => String(p.id) === String(formData.leave_policy)) ||
+      null,
+    [policyList, formData.leave_policy],
+  );
+  const isEventLeave = isEventPolicy(selectedPolicy);
+
+  // Event leave: length of the chosen period
+  const eventDays = useMemo(() => {
+    if (!formData.from_date || !formData.to_date) return 0;
+    if (formData.to_date < formData.from_date) return 0;
+    return daysBetween(formData.from_date, formData.to_date);
+  }, [formData.from_date, formData.to_date]);
+
+  const maxEventDays =
+    Number(
+      selectedPolicy?.settings?.long_leave_max_days ??
+        selectedPolicy?.settings?.short_leave_max_days,
+    ) || null;
+
+  const exceedsMax = !!maxEventDays && eventDays > maxEventDays;
+
   // Fetch staff list when modal opens
   useEffect(() => {
-    if (isOpen) {
-      const fetchStaff = async () => {
-        try {
-          const staff = await getAllStaff();
-          setStaffList(Array.isArray(staff) ? staff : []);
-        } catch (err) {
-          setStaffList([]);
-        }
-      };
-      fetchStaff();
-    }
+    if (!isOpen) return;
+    const fetchStaff = async () => {
+      try {
+        const staff = await getAllStaff();
+        setStaffList(Array.isArray(staff) ? staff : []);
+      } catch (err) {
+        setStaffList([]);
+        showApiError(err, "Failed to load staff list");
+      }
+    };
+    fetchStaff();
   }, [isOpen]);
+
+  // Reset the dates when the employee / policy changes (regular <-> event)
+  const resetDates = (prev) => ({
+    ...prev,
+    leave_date: [],
+    event_date: "",
+    from_date: "",
+    to_date: "",
+  });
+
+  const handlePolicyChange = (policyId) => {
+    setAnchor(null);
+    setFormData((prev) => ({
+      ...resetDates(prev),
+      leave_policy: policyId,
+    }));
+  };
 
   // Handle employee selection and fetch their leave policies
   const handleEmployeeChange = async (employeeId) => {
     setFormData((prev) => ({
-      ...prev,
+      ...resetDates(prev),
       employeeUuid: employeeId,
       leave_policy: "",
     }));
@@ -99,21 +272,21 @@ const AdminLeaveModal = ({ isOpen, onClose }) => {
 
     setFetchingPolicies(true);
     try {
-      const policies = await fetchEmployeeLeavePolicies(employeeId);
-      if (Array.isArray(policies) && policies.length > 0) {
-        setFormData((prev) => ({
-          ...prev,
-          leave_policy: policies[0].id,
-        }));
+      const res = await fetchEmployeeLeavePolicies(employeeId);
+      const list = Array.isArray(res) ? res : res?.policies;
+      if (Array.isArray(list) && list.length > 0) {
+        setFormData((prev) => ({ ...prev, leave_policy: list[0].id }));
+      } else if (Array.isArray(list)) {
+        showApiToast("error", "No leave policies found for this employee");
       }
     } catch (err) {
-      toast.error("Failed to load leave policies for selected employee");
+      showApiError(err, "Failed to load leave policies for selected employee");
     } finally {
       setFetchingPolicies(false);
     }
   };
 
-  /* ---------- calendar selection logic ---------- */
+  /* ---------- calendar selection logic (regular leave) ---------- */
   const selectedMap = useMemo(() => {
     const map = {};
     formData.leave_date.forEach((r) => (map[r.date] = r));
@@ -228,38 +401,83 @@ const AdminLeaveModal = ({ isOpen, onClose }) => {
   };
 
   const handleSubmit = async (e) => {
-    if (e) e.preventDefault();
+    if (e && e.preventDefault) e.preventDefault();
+    // Prevent double submit (button click + form submit)
+    if (submittingRef.current) return;
+
     if (!formData.employeeUuid)
-      return toast.error("Please select an employee", {
-        toastId: "leave-employee",
-      });
+      return showApiToast("error", "Please select an employee");
     if (!formData.leave_policy)
-      return toast.error("Please select a leave policy", {
-        toastId: "leave-policy",
-      });
-    if (formData.leave_date.length === 0)
-      return toast.error("Please select at least one leave date", {
-        toastId: "leave-dates",
-      });
+      return showApiToast("error", "Please select a leave policy");
 
-    try {
-      await applyLeaveAdmin(formData.employeeUuid, {
-        leave_date: sortedDates,
-        reason: formData.reason,
+    let payload;
+
+    if (isEventLeave) {
+      // 8.4 Event leave: event_date + from_date + to_date
+      if (!formData.event_date)
+        return showApiToast("error", "Please select the event date");
+      if (!formData.from_date || !formData.to_date)
+        return showApiToast(
+          "error",
+          "Please select the leave start and end dates",
+        );
+      if (formData.to_date < formData.from_date)
+        return showApiToast(
+          "error",
+          "End date cannot be before the start date",
+        );
+      if (exceedsMax)
+        return showApiToast(
+          "error",
+          `Leave cannot be longer than ${maxEventDays} days for this policy`,
+        );
+
+      payload = {
         leave_policy: Number(formData.leave_policy),
+        reason: formData.reason,
         cc: formData.cc,
-      });
+        event_date: formData.event_date,
+        from_date: formData.from_date,
+        to_date: formData.to_date,
+      };
+    } else {
+      // 8.3 Regular leave: list of dates
+      if (formData.leave_date.length === 0)
+        return showApiToast("error", "Please select at least one leave date");
 
-      toast.success("Leave applied successfully!");
+      payload = {
+        leave_policy: Number(formData.leave_policy),
+        reason: formData.reason,
+        cc: formData.cc,
+        leave_date: sortedDates,
+      };
+    }
+
+    submittingRef.current = true;
+    setSubmitting(true);
+    try {
+      const res = await applyLeaveAdmin(formData.employeeUuid, payload);
+      showApiSuccess(res, "Leave applied successfully!");
       handleClose();
     } catch (err) {
-      const message =
-        err?.response?.data?.message || err?.message || "Failed to apply leave";
-      toast.error(message);
+      showApiError(err, "Failed to apply leave");
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
     }
   };
 
   if (!isOpen) return null;
+
+  const employeeOptions = staffList.map((s) => ({
+    value: s.uuid,
+    label: s.full_name || s.name,
+  }));
+
+  const policyOptions = policyList.map((p) => ({
+    value: p.id,
+    label: `${p.name}${isEventPolicy(p) ? " (Event)" : ""}`,
+  }));
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm font-poppins text-[12px]">
@@ -280,69 +498,40 @@ const AdminLeaveModal = ({ isOpen, onClose }) => {
         </div>
 
         <form onSubmit={handleSubmit} className="p-8 overflow-y-auto">
-          {/* Two columns: inputs on the left, calendar on the right */}
+          {/* Two columns: inputs on the left, calendar / event on the right */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             {/* ================= LEFT: inputs ================= */}
             <div className="space-y-5 min-w-0">
-              {/* Employee Selection */}
-              <div>
-                <label className="block mb-1 font-medium text-gray-700">
-                  Employee
-                </label>
-                <select
-                  value={formData.employeeUuid}
-                  onChange={(e) => handleEmployeeChange(e.target.value)}
-                  className="w-full border p-3 rounded-2xl"
-                >
-                  <option value="">Select Staff Member</option>
-                  {staffList.map((s) => (
-                    <option key={s.uuid} value={s.uuid}>
-                      {s.full_name || s.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {/* Employee */}
+              <SelectField
+                label="Employee"
+                placeholder="Select Staff Member"
+                options={employeeOptions}
+                value={formData.employeeUuid}
+                onChange={handleEmployeeChange}
+              />
 
-              {/* Leave Policy Selection */}
-              <div>
-                <label className="block mb-1 font-medium text-gray-700">
-                  Leave Policy / Type
-                </label>
-                <select
-                  value={formData.leave_policy}
-                  disabled={!formData.employeeUuid || fetchingPolicies}
-                  onChange={(e) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      leave_policy: Number(e.target.value),
-                    }))
-                  }
-                  className="w-full border p-3 rounded-2xl disabled:bg-gray-50 disabled:text-gray-400"
-                >
-                  <option value="">
-                    {fetchingPolicies
-                      ? "Loading policies..."
-                      : !formData.employeeUuid
-                        ? "Select an employee first"
-                        : !employeeLeavePolicies ||
-                            employeeLeavePolicies.length === 0
-                          ? "No policies found"
-                          : "Select Leave Policy"}
-                  </option>
-                  {Array.isArray(employeeLeavePolicies) &&
-                    employeeLeavePolicies.map((policy) => (
-                      <option key={policy.id} value={policy.id}>
-                        {policy.name}
-                      </option>
-                    ))}
-                </select>
-              </div>
+              {/* Leave Policy */}
+              <SelectField
+                label="Leave Policy / Type"
+                disabled={!formData.employeeUuid || fetchingPolicies}
+                placeholder={
+                  fetchingPolicies
+                    ? "Loading policies..."
+                    : !formData.employeeUuid
+                      ? "Select an employee first"
+                      : policyList.length === 0
+                        ? "No policies found"
+                        : "Select Leave Policy"
+                }
+                options={policyOptions}
+                value={formData.leave_policy}
+                onChange={handlePolicyChange}
+              />
 
               {/* CC Notification Search */}
               <div className="space-y-2">
-                <label className="block mb-1 font-medium text-gray-700">
-                  CC (Notify Staff)
-                </label>
+                <label className={labelClass}>CC (Notify Staff)</label>
                 <div className="relative">
                   <Search
                     className="absolute left-3 top-3 text-gray-400"
@@ -385,9 +574,7 @@ const AdminLeaveModal = ({ isOpen, onClose }) => {
 
               {/* Reason Section */}
               <div>
-                <label className="block mb-1 font-medium text-gray-700">
-                  Reason
-                </label>
+                <label className={labelClass}>Reason</label>
                 <textarea
                   rows="3"
                   value={formData.reason}
@@ -400,211 +587,327 @@ const AdminLeaveModal = ({ isOpen, onClose }) => {
               </div>
             </div>
 
-            {/* ================= RIGHT: calendar ================= */}
+            {/* ================= RIGHT: event leave / calendar ================= */}
             <div className="min-w-0">
-              <div className="flex items-center justify-between mb-1">
-                <label className="font-medium text-gray-700">Leave Dates</label>
-                {formData.leave_date.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={clearDates}
-                    className="text-gray-400 hover:text-red-500 transition-colors"
-                  >
-                    Clear all
-                  </button>
-                )}
-              </div>
+              {isEventLeave ? (
+                <>
+                  {/* ---------- 8.4 EVENT LEAVE VIEW (date range) ---------- */}
+                  <label className={labelClass}>Event Leave</label>
 
-              <div className="border rounded-2xl p-4">
-                {/* Mode switch */}
-                <div className="flex items-center justify-between gap-2 mb-3">
-                  <div className="flex bg-gray-100 rounded-full p-0.5">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setRangeMode(false);
-                        setAnchor(null);
-                      }}
-                      className={`px-3 py-1 rounded-full transition-colors ${
-                        !rangeMode
-                          ? "bg-black text-white"
-                          : "text-gray-600 hover:text-gray-900"
-                      }`}
-                    >
-                      Pick days
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setRangeMode(true);
-                        setAnchor(null);
-                      }}
-                      className={`px-3 py-1 rounded-full transition-colors ${
-                        rangeMode
-                          ? "bg-black text-white"
-                          : "text-gray-600 hover:text-gray-900"
-                      }`}
-                    >
-                      Select range
-                    </button>
+                  <div className="border rounded-2xl p-4 space-y-4">
+                    <div>
+                      <p className="font-medium text-gray-900 text-[13px]">
+                        {selectedPolicy.name}
+                      </p>
+                      <p className="text-[10px] text-gray-400 mt-0.5">
+                        This is an event based leave. Pick the event date and
+                        the leave period, no need to mark each day.
+                      </p>
+                    </div>
+
+                    {selectedPolicy.can_apply === false && (
+                      <div className="rounded-xl bg-amber-50 border border-amber-100 text-amber-700 px-3 py-2 text-[11px]">
+                        {selectedPolicy.can_apply_reason?.message ||
+                          "This employee may not be eligible for this leave right now. The server may reject this request."}
+                      </div>
+                    )}
+
+                    <div>
+                      <DateField
+                        label="Event Date"
+                        value={formData.event_date}
+                        onChange={(v) =>
+                          setFormData((prev) => ({ ...prev, event_date: v }))
+                        }
+                      />
+                      {selectedPolicy.settings?.event_apply_window_days ? (
+                        <p className="mt-1 text-[10px] text-gray-400">
+                          Apply window:{" "}
+                          {selectedPolicy.settings.event_apply_window_days} days
+                        </p>
+                      ) : null}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <DateField
+                        label="From Date"
+                        value={formData.from_date}
+                        onChange={(v) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            from_date: v,
+                            // keep the range valid if the new start is after the end
+                            to_date:
+                              prev.to_date && prev.to_date < v
+                                ? ""
+                                : prev.to_date,
+                          }))
+                        }
+                      />
+                      <DateField
+                        label="To Date"
+                        min={formData.from_date || undefined}
+                        value={formData.to_date}
+                        onChange={(v) =>
+                          setFormData((prev) => ({ ...prev, to_date: v }))
+                        }
+                      />
+                    </div>
+
+                    {/* Summary */}
+                    {eventDays > 0 && (
+                      <div className="rounded-xl bg-gray-50 border border-gray-100 px-3 py-2.5">
+                        <p className="text-gray-800 font-medium">
+                          {formatKey(formData.from_date)} to{" "}
+                          {formatKey(formData.to_date)}
+                        </p>
+                        <p className="text-gray-500 mt-0.5">
+                          {eventDays} day{eventDays !== 1 ? "s" : ""} of leave
+                        </p>
+                        {exceedsMax && (
+                          <p className="text-red-500 mt-1 text-[11px]">
+                            This is longer than the policy maximum of{" "}
+                            {maxEventDays} days.
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Policy info chips */}
+                    <div className="flex flex-wrap gap-2 text-[10px]">
+                      {selectedPolicy.final_balance !== undefined && (
+                        <span className="px-2.5 py-1 rounded-full bg-gray-100 text-gray-600">
+                          Balance: {Number(selectedPolicy.final_balance)} days
+                        </span>
+                      )}
+                      {maxEventDays && (
+                        <span className="px-2.5 py-1 rounded-full bg-gray-100 text-gray-600">
+                          Max: {maxEventDays} days
+                        </span>
+                      )}
+                      {selectedPolicy.settings?.document_required && (
+                        <span className="px-2.5 py-1 rounded-full bg-gray-100 text-gray-600">
+                          Document required
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* ---------- 8.3 REGULAR LEAVE VIEW (calendar) ---------- */}
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="font-medium text-gray-700">
+                      Leave Dates
+                    </label>
+                    {formData.leave_date.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={clearDates}
+                        className="text-gray-400 hover:text-red-500 transition-colors"
+                      >
+                        Clear all
+                      </button>
+                    )}
                   </div>
 
-                  {rangeMode && (
-                    <label className="flex items-center gap-2 text-gray-600 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        className="accent-black w-4 h-4 rounded"
-                        checked={skipWeekends}
-                        onChange={(e) => setSkipWeekends(e.target.checked)}
-                      />
-                      Skip weekends
-                    </label>
-                  )}
-                </div>
-
-                {/* Month navigation */}
-                <div className="flex items-center justify-between mb-2">
-                  <button
-                    type="button"
-                    onClick={() => changeMonth(-1)}
-                    aria-label="Previous month"
-                    className="p-1.5 rounded-full hover:bg-gray-100 transition-colors"
-                  >
-                    <Icon
-                      icon="solar:alt-arrow-left-outline"
-                      className="w-4 h-4"
-                    />
-                  </button>
-                  <span className="font-medium text-gray-900 text-[13px]">
-                    {MONTHS[view.month]} {view.year}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => changeMonth(1)}
-                    aria-label="Next month"
-                    className="p-1.5 rounded-full hover:bg-gray-100 transition-colors"
-                  >
-                    <Icon
-                      icon="solar:alt-arrow-right-outline"
-                      className="w-4 h-4"
-                    />
-                  </button>
-                </div>
-
-                {/* Weekday header */}
-                <div className="grid grid-cols-7 mb-1">
-                  {WEEKDAYS.map((w) => (
-                    <div
-                      key={w}
-                      className="text-center text-[10px] text-gray-400 py-1"
-                    >
-                      {w}
-                    </div>
-                  ))}
-                </div>
-
-                {/* Day grid */}
-                <div className="grid grid-cols-7 gap-y-1">
-                  {calendarCells.map((day, i) => {
-                    if (day === null) return <div key={`b-${i}`} />;
-                    const key = toKey(view.year, view.month, day);
-                    const row = selectedMap[key];
-                    const isSelected = !!row;
-                    const isToday = key === todayKey;
-                    const isAnchor = key === anchor;
-                    const isWeekend = i % 7 === 0 || i % 7 === 6;
-
-                    return (
-                      <div key={key} className="flex justify-center">
+                  <div className="border rounded-2xl p-4">
+                    {/* Mode switch */}
+                    <div className="flex items-center justify-between gap-2 mb-3">
+                      <div className="flex bg-gray-100 rounded-full p-0.5">
                         <button
                           type="button"
-                          onClick={() => handleDayClick(key)}
-                          title={row?.half_day ? "Half day" : undefined}
-                          className={`relative w-9 h-9 rounded-full flex items-center justify-center transition-colors ${
-                            isSelected
-                              ? "bg-black text-white font-medium"
-                              : isAnchor
-                                ? "bg-gray-200 text-gray-900 font-medium"
-                                : isWeekend
-                                  ? "text-gray-400 hover:bg-gray-100"
-                                  : "text-gray-800 hover:bg-gray-100"
-                          } ${
-                            isToday && !isSelected
-                              ? "ring-1 ring-black ring-inset"
-                              : ""
+                          onClick={() => {
+                            setRangeMode(false);
+                            setAnchor(null);
+                          }}
+                          className={`px-3 py-1 rounded-full transition-colors ${
+                            !rangeMode
+                              ? "bg-black text-white"
+                              : "text-gray-600 hover:text-gray-900"
                           }`}
                         >
-                          {day}
-                          {isSelected && row.half_day && (
-                            <span className="absolute bottom-1 w-1 h-1 rounded-full bg-white" />
-                          )}
+                          Pick days
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRangeMode(true);
+                            setAnchor(null);
+                          }}
+                          className={`px-3 py-1 rounded-full transition-colors ${
+                            rangeMode
+                              ? "bg-black text-white"
+                              : "text-gray-600 hover:text-gray-900"
+                          }`}
+                        >
+                          Select range
                         </button>
                       </div>
-                    );
-                  })}
-                </div>
 
-                <p className="mt-3 text-[10px] text-gray-400">
-                  {rangeMode
-                    ? anchor
-                      ? `Start: ${formatKey(anchor)}. Now tap the end date.`
-                      : "Tap a start date, then an end date to add the whole range."
-                    : "Tap any day to select or unselect it."}
-                </p>
-              </div>
+                      {rangeMode && (
+                        <label className="flex items-center gap-2 text-gray-600 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            className="accent-black w-4 h-4 rounded"
+                            checked={skipWeekends}
+                            onChange={(e) => setSkipWeekends(e.target.checked)}
+                          />
+                          Skip weekends
+                        </label>
+                      )}
+                    </div>
 
-              {/* Selected dates */}
-              {sortedDates.length > 0 && (
-                <div className="mt-3">
-                  <p className="mb-2 text-gray-500">
-                    {sortedDates.length} date
-                    {sortedDates.length > 1 ? "s" : ""} selected · {totalDays}{" "}
-                    day{totalDays !== 1 ? "s" : ""} of leave
-                  </p>
-                  <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
-                    {sortedDates.map((row) => (
-                      <div
-                        key={row.date}
-                        className="flex items-center justify-between gap-3 border px-3 py-2 rounded-2xl"
+                    {/* Month navigation */}
+                    <div className="flex items-center justify-between mb-2">
+                      <button
+                        type="button"
+                        onClick={() => changeMonth(-1)}
+                        aria-label="Previous month"
+                        className="p-1.5 rounded-full hover:bg-gray-100 transition-colors"
                       >
-                        <span className="font-medium text-gray-800">
-                          {formatKey(row.date)}
-                        </span>
+                        <Icon
+                          icon="solar:alt-arrow-left-outline"
+                          className="w-4 h-4"
+                        />
+                      </button>
+                      <span className="font-medium text-gray-900 text-[13px]">
+                        {MONTHS[view.month]} {view.year}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => changeMonth(1)}
+                        aria-label="Next month"
+                        className="p-1.5 rounded-full hover:bg-gray-100 transition-colors"
+                      >
+                        <Icon
+                          icon="solar:alt-arrow-right-outline"
+                          className="w-4 h-4"
+                        />
+                      </button>
+                    </div>
 
-                        <div className="flex items-center gap-3">
-                          <label className="flex items-center gap-2 text-gray-600 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              className="accent-black w-4 h-4 rounded"
-                              checked={row.half_day}
-                              onChange={(e) =>
-                                updateDateRow(row.date, {
-                                  half_day: e.target.checked,
-                                  half_day_type: e.target.checked ? 1 : 0,
-                                })
-                              }
-                            />
-                            Half Day
-                          </label>
-
-                          <button
-                            type="button"
-                            onClick={() => removeDate(row.date)}
-                            aria-label="Remove date"
-                            title="Remove"
-                            className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
-                          >
-                            <Icon
-                              icon="solar:trash-bin-trash-outline"
-                              className="w-4 h-4"
-                            />
-                          </button>
+                    {/* Weekday header */}
+                    <div className="grid grid-cols-7 mb-1">
+                      {WEEKDAYS.map((w) => (
+                        <div
+                          key={w}
+                          className="text-center text-[10px] text-gray-400 py-1"
+                        >
+                          {w}
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
+
+                    {/* Day grid */}
+                    <div className="grid grid-cols-7 gap-y-1">
+                      {calendarCells.map((day, i) => {
+                        if (day === null) return <div key={`b-${i}`} />;
+                        const key = toKey(view.year, view.month, day);
+                        const row = selectedMap[key];
+                        const isSelected = !!row;
+                        const isToday = key === todayKey;
+                        const isAnchor = key === anchor;
+                        const isWeekend = i % 7 === 0 || i % 7 === 6;
+
+                        return (
+                          <div key={key} className="flex justify-center">
+                            <button
+                              type="button"
+                              onClick={() => handleDayClick(key)}
+                              title={row?.half_day ? "Half day" : undefined}
+                              className={`relative w-9 h-9 rounded-full flex items-center justify-center transition-colors ${
+                                isSelected
+                                  ? "bg-black text-white font-medium"
+                                  : isAnchor
+                                    ? "bg-gray-200 text-gray-900 font-medium"
+                                    : isWeekend
+                                      ? "text-gray-400 hover:bg-gray-100"
+                                      : "text-gray-800 hover:bg-gray-100"
+                              } ${
+                                isToday && !isSelected
+                                  ? "ring-1 ring-black ring-inset"
+                                  : ""
+                              }`}
+                            >
+                              {day}
+                              {isSelected && row.half_day && (
+                                <span className="absolute bottom-1 w-1 h-1 rounded-full bg-white" />
+                              )}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <p className="mt-3 text-[10px] text-gray-400">
+                      {rangeMode
+                        ? anchor
+                          ? `Start: ${formatKey(anchor)}. Now tap the end date.`
+                          : "Tap a start date, then an end date to add the whole range."
+                        : "Tap any day to select or unselect it."}
+                    </p>
                   </div>
-                </div>
+
+                  {/* Selected dates */}
+                  {sortedDates.length > 0 && (
+                    <div className="mt-3">
+                      <p className="mb-2 text-gray-500">
+                        {sortedDates.length} date
+                        {sortedDates.length > 1 ? "s" : ""} selected ·{" "}
+                        {totalDays} day{totalDays !== 1 ? "s" : ""} of leave
+                      </p>
+                      <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
+                        {sortedDates.map((row) => (
+                          <div
+                            key={row.date}
+                            className="flex items-center justify-between gap-3 border px-3 py-2 rounded-2xl"
+                          >
+                            <span className="font-medium text-gray-800">
+                              {formatKey(row.date)}
+                            </span>
+
+                            <div className="flex items-center gap-3">
+                              {/* Only show Half Day when the policy allows it */}
+                              {selectedPolicy?.settings?.allow_half_day !==
+                                false && (
+                                <label className="flex items-center gap-2 text-gray-600 cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    className="accent-black w-4 h-4 rounded"
+                                    checked={row.half_day}
+                                    onChange={(e) =>
+                                      updateDateRow(row.date, {
+                                        half_day: e.target.checked,
+                                        half_day_type: e.target.checked ? 1 : 0,
+                                      })
+                                    }
+                                  />
+                                  Half Day
+                                </label>
+                              )}
+
+                              <button
+                                type="button"
+                                onClick={() => removeDate(row.date)}
+                                aria-label="Remove date"
+                                title="Remove"
+                                className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                              >
+                                <Icon
+                                  icon="solar:trash-bin-trash-outline"
+                                  className="w-4 h-4"
+                                />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
+
               {/* Footer: Cancel / Confirm under the calendar */}
               <div className="flex justify-end gap-3 pt-5">
                 <button
@@ -617,9 +920,9 @@ const AdminLeaveModal = ({ isOpen, onClose }) => {
 
                 <GlowButton
                   onClick={handleSubmit}
-                  disabled={loading || fetchingPolicies}
+                  disabled={submitting || fetchingPolicies}
                 >
-                  {loading ? (
+                  {submitting ? (
                     <Loader2 className="animate-spin" size={16} />
                   ) : (
                     "Confirm Leave"
