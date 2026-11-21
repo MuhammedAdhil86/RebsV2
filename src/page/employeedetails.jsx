@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Bell, X } from "lucide-react";
 import { Icon } from "@iconify/react";
 import DashboardLayout from "../ui/pagelayout";
+import HeaderGlobal from "../ui/headerglobal";
 import avatar from "../assets/img/avatar.svg";
 import { toast } from "react-toastify"; // uses the global <ToastContainer /> from App.jsx (DO NOT add a container here)
 
@@ -132,30 +133,10 @@ export default function EmployeeProfile() {
   return (
     <DashboardLayout userName={selectedEmployee?.first_name || "Employee"}>
       <div className="bg-[#f9fafb] min-h-screen">
-        <header className="flex items-center justify-between bg-white px-6 py-3 border-b shadow-sm rounded-xl mb-4">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => navigate(-1)}
-              className="flex items-center text-sm text-gray-600 hover:text-gray-800"
-            >
-              <ArrowLeft size={16} className="mr-1" />
-              Back
-            </button>
-            <h1 className="text-lg text-gray-800 font-medium">
-              Employee Profile
-            </h1>
-          </div>
-          <div className="flex items-center gap-4">
-            <button className="p-2 rounded-full hover:bg-gray-100 text-gray-600">
-              <Bell size={20} />
-            </button>
-            <img
-              src={selectedEmployee?.image || avatar}
-              alt="Avatar"
-              className="w-8 h-8 rounded-full border object-cover"
-            />
-          </div>
-        </header>
+        {/* Global header */}
+        <div className="mb-4">
+          <HeaderGlobal userName="Admin" />
+        </div>
 
         <div className="flex gap-3 p-3">
           <aside className="sticky top-4 h-fit w-60 bg-white border rounded-2xl p-6 flex flex-col items-center shadow-sm">
