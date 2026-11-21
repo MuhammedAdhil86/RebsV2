@@ -23,6 +23,17 @@ const parseDate = (value) => {
   return isNaN(fallback) ? null : fallback;
 };
 
+// Branch text for a card, read from the API's `branches: [{ id, name }]`.
+// Falls back to the old single `branch` id if the API ever sends it.
+const getBranchText = (h, getBranchName) => {
+  if (h.applies_to_all_branches) return "All Branches";
+  const names = Array.isArray(h.branches)
+    ? h.branches.map((b) => b?.name).filter(Boolean)
+    : [];
+  if (names.length === 0) return getBranchName(h.branch);
+  return names.length > 3 ? `${names.length} branches` : names.join(", ");
+};
+
 const HolidayList = ({
   holidays,
   year,
@@ -314,8 +325,15 @@ const HolidayList = ({
 
                     <div className="flex items-center gap-1.5 text-black/60 mt-1.5">
                       <MapPin size={14} className="text-black shrink-0" />
-                      <span className="text-xs font-medium truncate">
-                        {getBranchName(h.branch)}
+                      <span
+                        className="text-xs font-medium truncate"
+                        title={
+                          Array.isArray(h.branches)
+                            ? h.branches.map((b) => b?.name).join(", ")
+                            : undefined
+                        }
+                      >
+                        {getBranchText(h, getBranchName)}
                       </span>
                     </div>
                   </div>

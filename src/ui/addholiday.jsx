@@ -49,7 +49,15 @@ const HolidayModal = ({ isOpen, onClose, onSubmitAction, editData = null }) => {
           ? new Date(editData.date).toISOString().split("T")[0]
           : "";
         let initialBranches = [];
-        if (editData.branch) {
+        if (editData.applies_to_all_branches) {
+          initialBranches = ["0"];
+        } else if (
+          Array.isArray(editData.branches) &&
+          editData.branches.length > 0
+        ) {
+          // API shape: branches: [{ id, name }]
+          initialBranches = editData.branches.map((b) => String(b.id));
+        } else if (editData.branch) {
           initialBranches = Array.isArray(editData.branch)
             ? editData.branch.map(String)
             : [String(editData.branch)];
