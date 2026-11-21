@@ -79,34 +79,6 @@ const RequestPreferencesCard = ({ formData, handleChange }) => {
             </div>
           )}
         </div>
-
-        {/* 3. Future Date Leave */}
-        <div>
-          <CheckboxRow
-            label="Allow applying for leave on future dates"
-            checked={formData.allow_future_leave || false}
-            onChange={(e) =>
-              handleChange("allow_future_leave", e.target.checked)
-            }
-          />
-          {formData.allow_future_leave && (
-            <div className="ml-6 mt-2">
-              <input
-                type="text"
-                inputMode="numeric"
-                className="w-full bg-[#F4F6F8] border border-gray-200 rounded-xl px-3 py-2 text-[11px] focus:outline-none"
-                placeholder="days after today"
-                value={formData.future_leave_limit ?? ""}
-                onChange={(e) =>
-                  handleChange(
-                    "future_leave_limit",
-                    toPositiveInt(e.target.value),
-                  )
-                }
-              />
-            </div>
-          )}
-        </div>
       </div>
     </div>
   );

@@ -26,6 +26,7 @@ const REQUEST_NUMBER_FIELDS = [
   { key: "long_leave_max_days", label: "Long Leave Maximum Days" },
   { key: "short_leave_max_days", label: "Short Leave Maximum Days" },
   { key: "max_requests_per_period", label: "Maximum Requests Per Period" },
+  { key: "min_service_value", label: "Minimum Service Required" },
 ];
 
 /* value = what the backend expects (lowercase), label = what the user sees */
@@ -33,6 +34,13 @@ const REQUEST_LIMIT_PERIODS = [
   { value: "month", label: "Month" },
   { value: "year", label: "Year" },
   { value: "service", label: "Service" },
+];
+
+/* value = what the backend expects (lowercase), label = what the user sees */
+const MIN_SERVICE_UNITS = [
+  { value: "days", label: "Days" },
+  { value: "months", label: "Months" },
+  { value: "years", label: "Years" },
 ];
 
 const DEFAULT_REQUEST_CONFIG = {
@@ -48,6 +56,8 @@ const DEFAULT_REQUEST_CONFIG = {
   document_required_after_days: "",
   event_based: false,
   event_apply_window_days: "",
+  min_service_value: "",
+  min_service_unit: "months",
 };
 
 /* -------------------- REUSABLE STYLES -------------------- */
@@ -227,6 +237,17 @@ const ScopeSelectors = ({
    GET    /leave-policy/company/request-config
    PUT    /leave-policy/company/request-config
    DELETE /leave-policy/company/request-config/{settings_id}
+
+   Request body:
+   {
+     leave_policy_id, branch_id, is_enabled,
+     long_leave_advance_days, short_leave_advance_days,
+     long_leave_max_days, short_leave_max_days,
+     max_requests_per_period, request_limit_period,
+     allow_half_day, document_required, document_required_after_days,
+     event_based, event_apply_window_days,
+     min_service_value, min_service_unit
+   }
 ============================================================ */
 
 const LeaveRequestConfigCard = ({ leavePolicies, branches }) => {
@@ -305,6 +326,8 @@ const LeaveRequestConfigCard = ({ leavePolicies, branches }) => {
       event_apply_window_days: toInputValue(
         savedConfig.event_apply_window_days,
       ),
+      min_service_value: toInputValue(savedConfig.min_service_value),
+      min_service_unit: savedConfig.min_service_unit ?? "months",
     });
   }, [savedConfig, leavePolicyId, branchId]);
 
@@ -342,6 +365,8 @@ const LeaveRequestConfigCard = ({ leavePolicies, branches }) => {
     try {
       setSaving(true);
 
+      const minServiceValue = toNumberOrNull(config.min_service_value);
+
       const payload = {
         leave_policy_id: selectedPolicyId,
         branch_id: selectedBranchId,
@@ -363,6 +388,10 @@ const LeaveRequestConfigCard = ({ leavePolicies, branches }) => {
         event_apply_window_days: config.event_based
           ? toNumberOrNull(config.event_apply_window_days)
           : null,
+        min_service_value: minServiceValue,
+        /* A unit without a value is meaningless, so send both or neither */
+        min_service_unit:
+          minServiceValue == null ? null : config.min_service_unit,
       };
 
       const response = await saveLeaveRequestConfig(payload);
@@ -491,6 +520,14 @@ const LeaveRequestConfigCard = ({ leavePolicies, branches }) => {
               />
             </div>
           ))}
+
+          <ScopeSelect
+            label="Minimum Service Unit"
+            value={config.min_service_unit}
+            onChange={(value) => handleChange("min_service_unit", value)}
+            disabled={saving}
+            options={MIN_SERVICE_UNITS}
+          />
 
           <ScopeSelect
             label="Request Limit Period"
