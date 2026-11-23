@@ -51,6 +51,28 @@ const getStatusBadge = (status) => {
 const getCleanDocType = (file) =>
   file?.document_type?.includes("pdf") ? "PDF" : "IMG";
 
+// Payout methods accepted by PUT /admin/{claimID}/update-status
+const PAYOUT_METHODS = [
+  {
+    value: "hand",
+    label: "Hand",
+    hint: "Paid in person",
+    icon: "solar:hand-money-outline",
+  },
+  {
+    value: "payroll",
+    label: "Payroll",
+    hint: "Added to salary",
+    icon: "solar:wallet-money-outline",
+  },
+  {
+    value: "voucher",
+    label: "Voucher",
+    hint: "Code is generated",
+    icon: "solar:ticket-outline",
+  },
+];
+
 // ---------- Theme styles (same as Device Request modal) ----------
 const labelCls = "text-[11px] text-gray-500 mb-1";
 const boxCls = "bg-slate-50 border border-gray-200 px-4 py-3 rounded-lg";
@@ -77,12 +99,14 @@ const ViewClaimModal = ({
 }) => {
   const [copied, setCopied] = useState(false);
   const [actionType, setActionType] = useState(null);
+  const [payoutMethod, setPayoutMethod] = useState("");
 
   // Reset local state whenever a different claim is opened
   useEffect(() => {
     if (open && data) {
       setCopied(false);
       setActionType(null);
+      setPayoutMethod("");
     }
   }, [open, data]);
 
@@ -114,11 +138,16 @@ const ViewClaimModal = ({
   const lastUpdated = formatExactTime12h(data.updated_at);
   const approvedAt = formatExactTime12h(data.approved_at);
 
-  // The parent runs the API call and shows the backend toast
+  // Approve sends (id, "Approved", payoutMethod); Reject sends (id, "Rejected")
   const handleStatusAction = (targetStatus) => {
     if (submitting) return;
+    if (targetStatus === "Approved" && !payoutMethod) return;
     setActionType(targetStatus);
-    onStatusUpdate?.(data.id, targetStatus);
+    onStatusUpdate?.(
+      data.id,
+      targetStatus,
+      targetStatus === "Approved" ? payoutMethod : undefined,
+    );
   };
 
   const handleCopy = async () => {
@@ -167,12 +196,11 @@ const ViewClaimModal = ({
           </button>
         </div>
 
-        {/* BODY: employee + expense on the left, request info on the right */}
+        {/* BODY */}
         <div className="px-6 py-5 overflow-y-auto">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
             {/* ---------- LEFT: EMPLOYEE + EXPENSE ---------- */}
             <div className="space-y-4 min-w-0">
-              {/* Employee info */}
               <div className="flex items-center gap-3">
                 <div className="w-11 h-11 shrink-0 bg-slate-100 border border-gray-200 rounded-full flex items-center justify-center text-[15px] text-gray-700 uppercase">
                   {data.name && data.name.charAt(0)}
@@ -207,7 +235,6 @@ const ViewClaimModal = ({
 
             {/* ---------- RIGHT: REQUEST INFO ---------- */}
             <div className="border border-gray-200 rounded-lg p-4 self-start min-w-0 space-y-4">
-              {/* Title + status */}
               <div className="flex items-center justify-between gap-3">
                 <p className="text-[13px] font-medium text-gray-800">
                   Request Details
@@ -260,21 +287,72 @@ const ViewClaimModal = ({
                 )}
               </div>
 
-              {/* Approved info */}
-              {status === "approved" && (data.approved_by || approvedAt) && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {data.approved_by && (
-                    <InfoBox label="Approved By">{data.approved_by}</InfoBox>
-                  )}
-                  {approvedAt && (
-                    <InfoBox label="Approved At" className="tabular-nums">
-                      {approvedAt}
-                    </InfoBox>
-                  )}
+              {/* Payout method picker (pending only; required to approve) */}
+              {status === "pending" && (
+                <div className={boxCls}>
+                  <p className={labelCls}>
+                    Payout Method{" "}
+                    <span className="text-gray-400">(required to approve)</span>
+                  </p>
+                  <div
+                    role="radiogroup"
+                    aria-label="Payout method"
+                    className="grid grid-cols-1 sm:grid-cols-3 gap-2"
+                  >
+                    {PAYOUT_METHODS.map((m) => {
+                      const selected = payoutMethod === m.value;
+                      return (
+                        <button
+                          key={m.value}
+                          type="button"
+                          role="radio"
+                          aria-checked={selected}
+                          disabled={submitting}
+                          onClick={() => setPayoutMethod(m.value)}
+                          className={`flex flex-col items-start gap-1 text-left px-3 py-2 rounded-lg border transition-colors disabled:opacity-50 ${
+                            selected
+                              ? "bg-white border-black ring-1 ring-black"
+                              : "bg-white border-gray-200 hover:border-gray-400"
+                          }`}
+                        >
+                          <span className="flex items-center gap-1.5 text-[12px] text-gray-800">
+                            <Icon
+                              icon={m.icon}
+                              className={`w-4 h-4 ${selected ? "text-black" : "text-gray-500"}`}
+                            />
+                            {m.label}
+                          </span>
+                          <span className="text-[10px] text-gray-500">
+                            {m.hint}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
 
-              {/* Voucher code (shown only if the backend returns one) */}
+              {/* Approved info */}
+              {status === "approved" &&
+                (data.approved_by || approvedAt || data.payout_method) && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {data.approved_by && (
+                      <InfoBox label="Approved By">{data.approved_by}</InfoBox>
+                    )}
+                    {approvedAt && (
+                      <InfoBox label="Approved At" className="tabular-nums">
+                        {approvedAt}
+                      </InfoBox>
+                    )}
+                    {data.payout_method && (
+                      <InfoBox label="Payout Method" className="capitalize">
+                        {data.payout_method}
+                      </InfoBox>
+                    )}
+                  </div>
+                )}
+
+              {/* Voucher code */}
               {data.voucher_code && (
                 <div className={boxCls}>
                   <p className={labelCls}>Voucher Code</p>
@@ -320,7 +398,7 @@ const ViewClaimModal = ({
               <ModalButton
                 variant="primary"
                 onClick={() => handleStatusAction("Approved")}
-                disabled={submitting}
+                disabled={submitting || !payoutMethod}
                 loading={submitting && actionType === "Approved"}
               >
                 Approve

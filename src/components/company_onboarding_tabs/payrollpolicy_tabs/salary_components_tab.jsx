@@ -1,14 +1,11 @@
 import React, { useState, useEffect } from "react";
 import axiosInstance from "../../../service/axiosinstance";
-import payrollService from "../../../service/payrollService";
 import Earnings from "./salary_component_tabs/component_earnings_tab";
-import Reimbursements from "./salary_component_tabs/reimbursements";
 import EditSalaryComponent from "./salary_component_tabs/component_edit_earning ";
 
 const SalaryComponents = () => {
   const [activeSubTab, setActiveSubTab] = useState("earnings");
   const [earningsData, setEarningsData] = useState([]);
-  const [reimbursementData, setReimbursementData] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -17,9 +14,8 @@ const SalaryComponents = () => {
 
   const subTabs = [
     { id: "earnings", label: "Earnings" },
-    { id: "deductions", label: "Deductions" },
-    { id: "benefits", label: "Benefits" },
-    { id: "reimbursements", label: "Reimbursements" },
+    // { id: "deductions", label: "Deductions" },
+    // { id: "benefits", label: "Benefits" },
   ];
 
   const fetchAllData = async (signal) => {
@@ -27,13 +23,11 @@ const SalaryComponents = () => {
       setIsLoading(true);
       setError(null);
 
-      // Fetch from both sources concurrently
-      const [compRes, reimbursements] = await Promise.all([
-        axiosInstance.get("/api/payroll/components", { signal }),
-        payrollService.getReimbursements(signal),
-      ]);
+      const compRes = await axiosInstance.get("/api/payroll/components", {
+        signal,
+      });
 
-      // 1. Process Earnings Data
+      // Process Earnings Data
       const compItems = compRes.data?.data?.items;
       if (Array.isArray(compItems)) {
         const filteredEarnings = compItems
@@ -56,24 +50,6 @@ const SalaryComponents = () => {
         setEarningsData(filteredEarnings);
       } else {
         setEarningsData([]);
-      }
-
-      // 2. Process Reimbursements Data
-      if (Array.isArray(reimbursements)) {
-        const processedReimbursements = reimbursements.map((item) => {
-          if (item.company_id === 0) {
-            return {
-              ...item,
-              name: `${item.name} (Default Template)`,
-              isReadOnly: true,
-              canDelete: false,
-            };
-          }
-          return { ...item, canDelete: true };
-        });
-        setReimbursementData(processedReimbursements);
-      } else {
-        setReimbursementData([]);
       }
     } catch (err) {
       if (err.name !== "CanceledError") {
@@ -152,20 +128,12 @@ const SalaryComponents = () => {
           />
         )}
 
-        {activeSubTab === "reimbursements" && (
-          <Reimbursements
-            data={reimbursementData}
-            onEdit={handleEditRow}
-            onRefresh={fetchAllData}
-          />
-        )}
-
-        {["deductions", "benefits"].includes(activeSubTab) && (
+        {/* {["deductions", "benefits"].includes(activeSubTab) && (
           <div className="py-20 text-center text-gray-400 italic font-poppins">
             {activeSubTab.charAt(0).toUpperCase() + activeSubTab.slice(1)}{" "}
             coming soon.
           </div>
-        )}
+        )} */}
       </div>
     </div>
   );

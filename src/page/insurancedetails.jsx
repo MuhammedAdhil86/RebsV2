@@ -5,7 +5,6 @@ import DashboardLayout from "../ui/pagelayout";
 import HeaderGlobal from "../ui/headerglobal";
 import EmployeeInsuranceTab from "../components/insurance/employee_insurance_tab";
 import InsuranceSettingsTab from "../components/insurance/insurance_settings_tab";
-import InsuranceClaimsTab from "../components/insurance/claims_tab";
 
 // Change this to the real route of your ManageInsurancePage
 const MANAGE_INSURANCE_PATH = "/insurance";
@@ -79,11 +78,6 @@ export default function InsuranceDetails() {
                 isActive={activeTab === "providers"}
                 onClick={() => setActiveTab("providers")}
               />
-              <TabButton
-                title="Insurance Claims"
-                isActive={activeTab === "claims"}
-                onClick={() => setActiveTab("claims")}
-              />
             </div>
 
             <div className="p-4">
@@ -97,7 +91,6 @@ export default function InsuranceDetails() {
               {activeTab === "providers" && (
                 <InsuranceSettingsTab uuid={uuid} />
               )}
-              {activeTab === "claims" && <InsuranceClaimsTab uuid={uuid} />}
             </div>
           </div>
         </div>

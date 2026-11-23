@@ -25,6 +25,7 @@ const AddBasicInformation = () => {
   const [timeZones, setTimeZones] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showUploadOptions, setShowUploadOptions] = useState(false);
+  const [loadingLocation, setLoadingLocation] = useState(false);
 
   // Preview URLs for UI display only
   const [logoPreview, setLogoPreview] = useState("");
@@ -110,15 +111,42 @@ const AddBasicInformation = () => {
     setShowUploadOptions(false);
   };
 
+  /* ---------------- Fetch Current Location Logic (same as Add Branch) ---------------- */
   const handleGetLocation = async () => {
-    try {
-      const coords = await getGeolocation();
-      setValue("latitude", String(coords.latitude));
-      setValue("longitude", String(coords.longitude));
-      toast.success("Location updated");
-    } catch (err) {
-      toast.error("Could not fetch location");
+    if (!navigator.geolocation) {
+      toast.error("Your browser does not support location access");
+      return;
     }
+
+    setLoadingLocation(true);
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const lat = position.coords.latitude.toString();
+        const lng = position.coords.longitude.toString();
+
+        try {
+          const formattedLocation = await getGeolocation(lat, lng);
+          const opts = { shouldDirty: true, shouldValidate: true };
+
+          setValue("latitude", lat, opts);
+          setValue("longitude", lng, opts);
+          if (formattedLocation) setValue("location", formattedLocation, opts);
+
+          toast.success("Current location added successfully");
+        } catch (err) {
+          toast.error("Could not get your location details. Please try again");
+        } finally {
+          setLoadingLocation(false);
+        }
+      },
+      (error) => {
+        toast.error(
+          "Location access was denied. Please allow location permission in your browser settings",
+        );
+        setLoadingLocation(false);
+      },
+    );
   };
 
   const onFormSubmit = async (values) => {
@@ -364,13 +392,23 @@ const AddBasicInformation = () => {
                     ))}
                   </select>
                 </div>
-                <button
-                  type="button"
+                <div
                   onClick={handleGetLocation}
-                  className="ml-2 w-9 h-9 border border-gray-300 rounded-md flex items-center justify-center hover:bg-gray-50"
+                  className={`ml-2 flex items-center justify-center w-10 h-10 border border-gray-300 rounded-md transition ${
+                    loadingLocation
+                      ? "bg-gray-200 cursor-not-allowed"
+                      : "cursor-pointer hover:bg-gray-100"
+                  }`}
                 >
-                  <Icon icon="solar:gps-bold" />
-                </button>
+                  <Icon
+                    icon={
+                      loadingLocation
+                        ? "line-md:loading-twotone-loop"
+                        : "mdi:location"
+                    }
+                    className={`${loadingLocation ? "text-blue-500" : "text-gray-600"} text-[18px]`}
+                  />
+                </div>
               </div>
             </div>
           </div>

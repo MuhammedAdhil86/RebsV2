@@ -37,7 +37,7 @@ export const putStatusUpdate = "/admin/attendance/status/update";
 export const getEmployeeByIdApi = (employeeId) => `/staff/get/${employeeId}`;
 
 export const postEmployeeListbyMonth = "/admin/attendance/listbymonth";
-
+export const getSubscriptionDetail = "/subscription/details";
 //leaveapproval
 
 export const putLeaveApproval = "/admin/leave/change-status/:leave_id";

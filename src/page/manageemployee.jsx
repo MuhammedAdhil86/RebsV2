@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from "react";
 import DashboardLayout from "../ui/pagelayout";
 import HeaderGlobal from "../ui/headerglobal";
 import avatar from "../assets/img/avatar.svg";
-import { FiSearch, FiPlus, FiMoreHorizontal } from "react-icons/fi";
+import { FiSearch, FiMoreHorizontal } from "react-icons/fi";
 import {
   ChevronDown,
   Shield,
@@ -12,14 +12,20 @@ import {
   MoreVertical,
 } from "lucide-react";
 import { Icon } from "@iconify/react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import useEmployeeStore from "../store/employeeStore";
 import UniversalTable from "../ui/universal_table";
 import { toast } from "react-toastify";
 import { fetchDeletedUsers } from "../service/employeeService";
+import {
+  getBranchData,
+  getDepartmentData,
+  getDesignationData,
+} from "../service/companyService";
 import DeactivateConfirmationModal from "../ui/deactivatemodal";
 
-const API_BASE_URL = "https://rebs-hr-cwhyx.ondigitalocean.app/";
+// No trailing slash (paths below already start with "/")
+const API_BASE_URL = "https://rebs-hr-cwhyx.ondigitalocean.app";
 
 const TABS = [
   { key: "all", label: "All Employees" },
@@ -27,6 +33,42 @@ const TABS = [
   { key: "inactive", label: "Inactive Employees" },
   { key: "deleted", label: "Deleted Employees" },
 ];
+
+const EMPTY_FILTERS = {
+  branch_id: "",
+  department_id: "",
+  designation_id: "",
+};
+
+/**
+ * Reusable select with a custom arrow.
+ * - appearance-none removes the browser's default arrow
+ * - the arrow is absolutely positioned, vertically centered, 10px from the right
+ * - pointer-events-none lets clicks pass through the arrow to the select
+ * - pr-8 keeps long text from running under the arrow
+ */
+function FilterSelect({ value, onChange, placeholder, options, getLabel }) {
+  return (
+    <div className="relative">
+      <select
+        value={value}
+        onChange={onChange}
+        className="appearance-none border border-gray-300 bg-white rounded-lg pl-3 pr-8 py-2 text-[12px] text-gray-700 cursor-pointer focus:outline-none focus:ring-1 focus:ring-black min-w-[130px] max-w-[170px] truncate"
+      >
+        <option value="">{placeholder}</option>
+        {options.map((o) => (
+          <option key={o.id} value={o.id}>
+            {getLabel(o)}
+          </option>
+        ))}
+      </select>
+      <ChevronDown
+        size={14}
+        className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500"
+      />
+    </div>
+  );
+}
 
 function ManageEmployees() {
   const {
@@ -47,13 +89,41 @@ function ManageEmployees() {
   const dropdownRef = useRef(null);
   const navigate = useNavigate();
 
+  // Filters + dropdown option lists
+  const [filters, setFilters] = useState(EMPTY_FILTERS);
+  const [branches, setBranches] = useState([]);
+  const [departments, setDepartments] = useState([]);
+  const [designations, setDesignations] = useState([]);
+
   // Local state tracking for deleted data engine
   const [deletedEmployees, setDeletedEmployees] = useState([]);
   const [loadingDeleted, setLoadingDeleted] = useState(false);
 
   const isDeletedTab = tab === "deleted";
   const loading = isDeletedTab ? loadingDeleted : initialLoading;
+  const hasActiveFilters =
+    filters.branch_id || filters.department_id || filters.designation_id;
 
+  // Load dropdown options once
+  useEffect(() => {
+    const loadFilterOptions = async () => {
+      try {
+        const [b, d, des] = await Promise.all([
+          getBranchData(),
+          getDepartmentData(),
+          getDesignationData(),
+        ]);
+        setBranches(b || []);
+        setDepartments(d || []);
+        setDesignations(des || []);
+      } catch (err) {
+        toast.error("Failed to load filter options.");
+      }
+    };
+    loadFilterOptions();
+  }, []);
+
+  // Load employees (refetches when tab or filters change)
   useEffect(() => {
     if (isDeletedTab) {
       const loadDeletedData = async () => {
@@ -69,10 +139,10 @@ function ManageEmployees() {
       };
       loadDeletedData();
     } else {
-      fetchEmployees();
+      fetchEmployees(filters);
     }
-    setSelectedRows([]); // Clear check state models on tab context changes
-  }, [tab, fetchEmployees]);
+    setSelectedRows([]); // Clear check state models on tab/filter changes
+  }, [tab, filters, fetchEmployees]);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -83,6 +153,10 @@ function ManageEmployees() {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  // Only one filter active at a time: picking one resets the others
+  const handleFilterChange = (key) => (e) =>
+    setFilters({ ...EMPTY_FILTERS, [key]: e.target.value });
 
   const formatDate = (dateStr) => {
     if (!dateStr) return "N/A";
@@ -160,7 +234,7 @@ function ManageEmployees() {
         `Users ${activate ? "activated" : "deactivated"} successfully!`,
       );
       setSelectedRows([]);
-      fetchEmployees();
+      fetchEmployees(filters); // keep active filters applied
     } catch (err) {
       console.error("Bulk update failed:", err);
       toast.error(`Bulk update failed: ${err.message}`);
@@ -169,7 +243,7 @@ function ManageEmployees() {
 
   const handleActivateUser = () => bulkUpdateStatus(true);
 
-  // Deactivate now opens a confirmation modal first
+  // Deactivate opens a confirmation modal first
   const handleDeactivateUser = () => {
     if (selectedRows.length === 0) return;
     setIsDropdownOpen(false);
@@ -219,7 +293,7 @@ function ManageEmployees() {
       setSelectedRows([]);
       setShowDeleteConfirm(false);
       setDeleteReason("");
-      fetchEmployees();
+      fetchEmployees(filters); // keep active filters applied
     } catch (error) {
       console.error("Delete failed:", error);
       toast.error(`Delete failed: ${error.message}`);
@@ -328,7 +402,7 @@ function ManageEmployees() {
       label: (
         <input
           type="checkbox"
-          className="h-4 w-4 rounded border-gray-300 text-blue-600 cursor-pointer disabled:opacity-40"
+          className="h-4 w-4 rounded border-gray-300 text-black cursor-pointer disabled:opacity-40"
           onChange={handleSelectAll}
           checked={
             filteredData.length > 0 &&
@@ -342,7 +416,7 @@ function ManageEmployees() {
         return (
           <input
             type="checkbox"
-            className="h-4 w-4 rounded border-gray-300 text-blue-600 cursor-pointer disabled:opacity-40"
+            className="h-4 w-4 rounded border-gray-300 text-black cursor-pointer disabled:opacity-40"
             checked={selectedRows.includes(rowId)}
             onChange={(e) => handleSelectRow(e, rowId)}
             disabled={isDeletedTab}
@@ -473,7 +547,7 @@ function ManageEmployees() {
           <HeaderGlobal userName="Admin" />
 
           {/* Page Subtitle Context Title */}
-          <div className="flex justify-between items-center border-b border-gray-200 pb-2 -mt-">
+          <div className="flex justify-between items-center border-b border-gray-200 pb-2">
             <h1 className="text-xl font-medium text-gray-800">
               Manage Employees
             </h1>
@@ -507,7 +581,43 @@ function ManageEmployees() {
                 : `${filteredData.length} Total ${isDeletedTab ? "Deleted Record(s)" : "Employees"}`}
             </span>
 
-            <div className="flex items-center space-x-3">
+            <div className="flex items-center flex-wrap gap-3">
+              {/* Filters (not applied to the Deleted tab) */}
+              {!isDeletedTab && (
+                <>
+                  <FilterSelect
+                    value={filters.branch_id}
+                    onChange={handleFilterChange("branch_id")}
+                    placeholder="All Branches"
+                    options={branches}
+                    getLabel={(b) => b.name}
+                  />
+                  <FilterSelect
+                    value={filters.department_id}
+                    onChange={handleFilterChange("department_id")}
+                    placeholder="All Departments"
+                    options={departments}
+                    getLabel={(d) => d.name}
+                  />
+                  <FilterSelect
+                    value={filters.designation_id}
+                    onChange={handleFilterChange("designation_id")}
+                    placeholder="All Designations"
+                    options={designations}
+                    getLabel={(d) => d.name}
+                  />
+                  {hasActiveFilters && (
+                    <button
+                      type="button"
+                      onClick={() => setFilters(EMPTY_FILTERS)}
+                      className="text-[12px] text-black hover:underline"
+                    >
+                      Clear filters
+                    </button>
+                  )}
+                </>
+              )}
+
               {/* Operations Dropdown Panel */}
               {view === "table" && !isDeletedTab && (
                 <div className="relative" ref={dropdownRef}>
@@ -616,7 +726,7 @@ function ManageEmployees() {
                 <input
                   type="text"
                   placeholder="Search"
-                  className="border border-gray-300 rounded-lg pl-8 pr-3 py-2 text-[12px] focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  className="border border-gray-300 rounded-lg pl-8 pr-3 py-2 text-[12px] focus:outline-none focus:ring-1 focus:ring-black"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
@@ -672,7 +782,7 @@ function ManageEmployees() {
               value={deleteReason}
               onChange={(e) => setDeleteReason(e.target.value)}
               rows={3}
-              className="w-full border border-gray-300 rounded-md p-2 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="w-full border border-gray-300 rounded-md p-2 text-sm mb-4 focus:outline-none focus:ring-1 focus:ring-red-500"
               placeholder="Enter reason..."
             ></textarea>
 

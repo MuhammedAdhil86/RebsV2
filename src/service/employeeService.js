@@ -41,10 +41,17 @@ import {
 import axiosInstance from "../service/axiosinstance";
 import { extractErrorMessage } from "../utils/errorUtils";
 // Fetch all staff details
-export const getStaffDetails = async () => {
+// employeeService.js
+export const getStaffDetails = async (filters = {}) => {
   try {
-    const response = await axiosInstance.get(getEmployeeDetails);
-    console.log("Staff details response:", response);
+    const { branch_id, department_id, designation_id } = filters;
+
+    const params = {};
+    if (branch_id) params.branch_id = branch_id;
+    if (department_id) params.department_id = department_id;
+    if (designation_id) params.designation_id = designation_id;
+
+    const response = await axiosInstance.get(getEmployeeDetails, { params });
     return response.data.data;
   } catch (error) {
     console.error("Error fetching staff details:", error);

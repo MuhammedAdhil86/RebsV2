@@ -25,14 +25,19 @@ const useEmployeeStore = create((set) => ({
   setEmployees: (emps) => set({ employees: emps }),
   triggerRefresh: () => set((s) => ({ refreshTrigger: s.refreshTrigger + 1 })),
 
-  fetchEmployees: async () => {
+  // Fetch employees. filters = { branch_id, department_id, designation_id }
+  fetchEmployees: async (filters = {}) => {
     try {
-      set({ loading: true });
-      const data = await getStaffDetails();
-      set({ employees: data, selectedEmployee: data[0] || null, loading: false });
+      set({ loading: true, error: null });
+      const data = await getStaffDetails(filters);
+      set({
+        employees: data || [],
+        selectedEmployee: data?.[0] || null,
+        loading: false,
+      });
     } catch (error) {
       console.error("Error fetching employee details:", error);
-      set({ error, loading: false });
+      set({ employees: [], error, loading: false });
     }
   },
 

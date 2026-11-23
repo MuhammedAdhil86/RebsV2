@@ -1,15 +1,124 @@
-import React, { useMemo, useRef, useEffect } from "react";
+import React, { useMemo, useRef, useEffect, useState } from "react";
 import {
   X,
   Search,
   Loader2,
   CheckCircle2,
-  Users,
   ChevronRight,
   ChevronLeft,
+  ChevronDown,
   Check,
+  AlertTriangle,
 } from "lucide-react";
-import CustomSelect from "../ui/customselect";
+import { Icon } from "@iconify/react";
+import GlowButton from "../components/helpers/glowbutton";
+/* ------------------------------------------------------------------ */
+/* Shared look (same as the Apply Admin Leave modal):                  */
+/* 12px text, p-3 fields, rounded-2xl, gray-700 medium labels.         */
+/* ------------------------------------------------------------------ */
+const labelClass = "block mb-1 font-medium text-gray-700";
+
+const DateField = ({ label, value, onChange, min, max, disabled = false }) => (
+  <div>
+    {label && <label className={labelClass}>{label}</label>}
+    <div className="relative">
+      <input
+        type="date"
+        min={min}
+        max={max}
+        disabled={disabled}
+        value={value || ""}
+        onChange={(e) => onChange(e.target.value)}
+        className="relative w-full border p-3 pr-10 rounded-2xl disabled:bg-gray-50 disabled:text-gray-400
+          [&::-webkit-calendar-picker-indicator]:absolute
+          [&::-webkit-calendar-picker-indicator]:inset-0
+          [&::-webkit-calendar-picker-indicator]:w-full
+          [&::-webkit-calendar-picker-indicator]:h-full
+          [&::-webkit-calendar-picker-indicator]:opacity-0
+          [&::-webkit-calendar-picker-indicator]:cursor-pointer"
+      />
+      <Icon
+        icon="solar:calendar-outline"
+        className="w-4 h-4 text-gray-700 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none"
+      />
+    </div>
+  </div>
+);
+
+const SelectField = ({
+  label,
+  options = [],
+  value,
+  onChange,
+  placeholder = "Select...",
+  disabled = false,
+}) => {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const selected = options.find((o) => String(o.value) === String(value));
+
+  return (
+    <div className="relative" ref={ref}>
+      {label && <label className={labelClass}>{label}</label>}
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => setOpen((o) => !o)}
+        className="w-full border p-3 rounded-2xl text-left bg-white flex justify-between items-center select-none disabled:bg-gray-50 disabled:text-gray-400"
+      >
+        <span
+          className={`truncate pr-2 ${selected ? "text-gray-900" : "text-gray-400"}`}
+        >
+          {selected ? selected.label : placeholder}
+        </span>
+        <ChevronDown
+          size={16}
+          className={`text-gray-400 flex-shrink-0 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      {open && (
+        <div className="absolute top-full left-0 right-0 mt-1 bg-white border rounded-2xl shadow-xl z-20 max-h-[180px] overflow-y-auto p-2 space-y-1">
+          {options.length === 0 && (
+            <div className="p-3 text-center text-gray-400">No options</div>
+          )}
+          {options.map((o) => {
+            const active = String(o.value) === String(value);
+            return (
+              <button
+                type="button"
+                key={o.value}
+                onClick={() => {
+                  onChange(o.value);
+                  setOpen(false);
+                }}
+                className={`w-full flex items-center justify-between gap-2 p-2 rounded-lg text-left transition-colors hover:bg-gray-50 ${
+                  active ? "bg-gray-50" : ""
+                }`}
+              >
+                <span className="font-medium text-gray-800 truncate">
+                  {o.label}
+                </span>
+                {active && <Check size={14} className="flex-shrink-0" />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* ------------------------------------------------------------------ */
 
 const getInitials = (name = "") =>
   name
@@ -24,6 +133,31 @@ const FILTER_MODE_OPTIONS = [
   { value: "department", label: "Filter by Department" },
   { value: "branch", label: "Filter by Branch" },
 ];
+
+const BANK_NOTICE =
+  "Payroll can still be processed, but some employee payment details may be missing due to incomplete bank information. Please update the required bank details to ensure accurate and complete payroll processing.";
+
+// Glow animation (soft pulse). Disabled when the user prefers reduced motion.
+const GLOW_STYLES = `
+@keyframes bank-text-glow {
+  0%, 100% {
+    text-shadow: 0 0 2px rgba(245, 158, 11, 0.25), 0 0 6px rgba(245, 158, 11, 0.25);
+  }
+  50% {
+    text-shadow: 0 0 4px rgba(245, 158, 11, 0.6), 0 0 12px rgba(245, 158, 11, 0.55), 0 0 20px rgba(245, 158, 11, 0.35);
+  }
+}
+@keyframes bank-icon-glow {
+  0%, 100% { filter: drop-shadow(0 0 2px rgba(245, 158, 11, 0.4)); }
+  50% { filter: drop-shadow(0 0 7px rgba(245, 158, 11, 0.9)); }
+}
+.bank-glow-text { animation: bank-text-glow 2.2s ease-in-out infinite; }
+.bank-glow-icon { animation: bank-icon-glow 2.2s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .bank-glow-text, .bank-glow-icon { animation: none; }
+  .bank-glow-text { text-shadow: 0 0 6px rgba(245, 158, 11, 0.4); }
+}
+`;
 
 const AllocatePayrollModal = ({
   isOpen,
@@ -99,108 +233,112 @@ const AllocatePayrollModal = ({
       ? filters?.departments || []
       : filters?.branches || [];
 
-  const filterSelectOptions = [
-    { value: "", label: "-- Choose Option --" },
-    ...filterOptions.map((item) => ({ value: item.id, label: item.name })),
-  ];
+  const filterSelectOptions = filterOptions.map((item) => ({
+    value: item.id,
+    label: item.name,
+  }));
 
-  const templateOptions = [
-    { value: "", label: "Select a template..." },
-    ...templates.map((t) => ({ value: t.id, label: t.name })),
-  ];
+  const templateOptions = templates.map((t) => ({
+    value: t.id,
+    label: t.name,
+  }));
 
   const selectedTemplate = templates.find(
     (t) => String(t.id) === String(formData.template_id),
   );
 
+  const todayKey = new Date(
+    new Date().getTime() - new Date().getTimezoneOffset() * 60000,
+  )
+    .toISOString()
+    .slice(0, 10);
+
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm font-poppins font-normal text-[12px] p-4">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl h-[640px] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200 border border-zinc-200">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm font-poppins text-[12px]">
+      <style>{GLOW_STYLES}</style>
+
+      <div className="bg-white w-[95%] max-w-[720px] h-[640px] max-h-[90vh] rounded-[2rem] shadow-2xl overflow-hidden flex flex-col border border-white/20">
         {/* --- Header --- */}
-        <div className="p-6 border-b border-zinc-100 flex justify-between items-center bg-white shrink-0">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-black rounded-2xl text-white">
-              <Users size={22} />
-            </div>
-            <div>
-              <h2 className="text-[16px] text-black leading-tight font-normal">
-                Bulk Payroll Allocation
-              </h2>
-              <div className="flex items-center gap-2 mt-1">
-                {/* step indicator */}
-                <div className="flex items-center gap-1">
-                  {[1, 2].map((n) => (
-                    <span
-                      key={n}
-                      className={`h-1.5 rounded-full transition-all ${
-                        n === step ? "w-6 bg-black" : "w-1.5 bg-zinc-300"
-                      }`}
-                    />
-                  ))}
-                </div>
-                <span className="text-zinc-400 text-[10px] font-normal">
-                  Step {step} of 2 ·{" "}
-                  {step === 1 ? "Select Employees" : "Configure Terms"}
-                </span>
+        <div className="px-8 py-5 flex items-center justify-between border-b border-gray-50 bg-white shrink-0">
+          <div>
+            <h2 className="text-gray-900 text-[16px] font-medium uppercase">
+              Bulk Payroll Allocation
+            </h2>
+            <div className="flex items-center gap-2 mt-0.5">
+              <div className="flex items-center gap-1">
+                {[1, 2].map((n) => (
+                  <span
+                    key={n}
+                    className={`h-1.5 rounded-full transition-all ${
+                      n === step ? "w-6 bg-black" : "w-1.5 bg-gray-300"
+                    }`}
+                  />
+                ))}
               </div>
+              <span className="text-gray-400 text-[10px]">
+                Step {step} of 2 ·{" "}
+                {step === 1 ? "Select Employees" : "Configure Terms"}
+              </span>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-zinc-100 rounded-full transition-colors text-zinc-400 hover:text-black"
-          >
-            <X size={24} />
+          <button type="button" onClick={onClose}>
+            <X size={20} />
           </button>
+        </div>
+
+        {/* --- Bank details notice (always visible, both steps) --- */}
+        <div
+          role="note"
+          className="shrink-0 flex items-start gap-3 px-8 py-3 bg-amber-50 border-b border-amber-200"
+        >
+          <AlertTriangle
+            size={18}
+            className="bank-glow-icon text-amber-500 shrink-0 mt-0.5"
+          />
+          <p className="bank-glow-text text-[11px] leading-relaxed text-amber-700">
+            {BANK_NOTICE}
+          </p>
         </div>
 
         {/* --- Content Area --- */}
         <div className="flex-1 overflow-hidden">
           {step === 1 ? (
             <div className="flex flex-col h-full">
-              <div className="p-5 bg-zinc-50 border-b border-zinc-100 space-y-4">
+              <div className="px-8 py-4 border-b border-gray-50 space-y-4">
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] text-zinc-500 uppercase tracking-widest ml-1 font-normal">
-                      Selection Mode
-                    </label>
-                    <CustomSelect
-                      fullWidth
-                      className="bg-white py-3 rounded-xl border-zinc-200"
-                      value={filterType}
-                      options={FILTER_MODE_OPTIONS}
-                      onChange={(val) => handleFilterSelect(val, "")}
-                    />
-                  </div>
+                  <SelectField
+                    label="Selection Mode"
+                    options={FILTER_MODE_OPTIONS}
+                    value={filterType}
+                    onChange={(val) => handleFilterSelect(val, "")}
+                  />
 
                   {filterType !== "employee" && (
-                    <div className="space-y-1.5 animate-in slide-in-from-right-2">
-                      <label className="text-[10px] text-zinc-500 uppercase tracking-widest ml-1 font-normal">
-                        Select {filterType}
-                      </label>
-                      <CustomSelect
-                        fullWidth
-                        className="bg-white py-3 border-black text-black"
-                        value={
-                          filterType === "department"
-                            ? activeFilters.dept
-                            : activeFilters.branch
-                        }
-                        options={filterSelectOptions}
-                        onChange={(val) => handleFilterSelect(filterType, val)}
-                      />
-                    </div>
+                    <SelectField
+                      label={`Select ${
+                        filterType === "department" ? "Department" : "Branch"
+                      }`}
+                      placeholder="Choose option"
+                      options={filterSelectOptions}
+                      value={
+                        filterType === "department"
+                          ? activeFilters.dept
+                          : activeFilters.branch
+                      }
+                      onChange={(val) => handleFilterSelect(filterType, val)}
+                    />
                   )}
                 </div>
 
-                <div className="relative group">
+                <div className="relative">
                   <Search
-                    className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-black transition-colors"
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
                     size={16}
                   />
                   <input
                     type="text"
                     placeholder="Search staff by name or ID..."
-                    className="w-full pl-12 pr-10 py-3 bg-white border border-zinc-200 rounded-xl outline-none focus:border-black transition-all font-normal"
+                    className="w-full pl-9 pr-10 border p-3 rounded-2xl"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                   />
@@ -208,7 +346,7 @@ const AllocatePayrollModal = ({
                     <button
                       type="button"
                       onClick={() => setSearchQuery("")}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full text-zinc-400 hover:text-black hover:bg-zinc-100"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full text-gray-400 hover:text-black hover:bg-gray-100"
                     >
                       <X size={14} />
                     </button>
@@ -216,11 +354,11 @@ const AllocatePayrollModal = ({
                 </div>
               </div>
 
-              <div className="flex-1 overflow-y-auto">
+              <div className="flex-1 overflow-y-auto px-4">
                 <table className="w-full text-left border-collapse">
-                  <thead className="sticky top-0 bg-white border-b border-zinc-100 text-zinc-400 uppercase text-[10px] tracking-widest z-10 font-normal">
+                  <thead className="sticky top-0 bg-white border-b border-gray-100 text-gray-400 uppercase text-[10px] tracking-wide z-10">
                     <tr>
-                      <th className="p-5 w-12">
+                      <th className="p-3 w-12">
                         <input
                           ref={selectAllRef}
                           type="checkbox"
@@ -230,26 +368,26 @@ const AllocatePayrollModal = ({
                           title="Select all"
                         />
                       </th>
-                      <th className="p-5 font-normal">
+                      <th className="p-3 font-medium">
                         Staff Details
                         {filteredIds.length > 0 && (
-                          <span className="ml-2 normal-case tracking-normal text-zinc-400">
+                          <span className="ml-2 normal-case tracking-normal text-gray-400">
                             ({selectedInViewCount}/{filteredIds.length})
                           </span>
                         )}
                       </th>
-                      <th className="p-5 text-right pr-10 font-normal">
+                      <th className="p-3 text-right pr-4 font-medium">
                         Department
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-zinc-50">
+                  <tbody className="divide-y divide-gray-50">
                     {loading ? (
                       <tr>
                         <td colSpan={3} className="p-10 text-center">
                           <Loader2
                             className="animate-spin text-black inline-block"
-                            size={22}
+                            size={20}
                           />
                         </td>
                       </tr>
@@ -257,7 +395,7 @@ const AllocatePayrollModal = ({
                       <tr>
                         <td
                           colSpan={3}
-                          className="p-10 text-center text-zinc-400"
+                          className="p-10 text-center text-gray-400"
                         >
                           No employees found
                         </td>
@@ -271,17 +409,11 @@ const AllocatePayrollModal = ({
                             key={id}
                             onClick={() => toggleStaff(id)}
                             className={`transition-colors cursor-pointer select-none ${
-                              isSelected
-                                ? "bg-zinc-100 hover:bg-zinc-100"
-                                : "hover:bg-zinc-50"
+                              isSelected ? "bg-gray-50" : "hover:bg-gray-50"
                             }`}
                           >
                             <td
-                              className={`p-5 border-l-2 ${
-                                isSelected
-                                  ? "border-black"
-                                  : "border-transparent"
-                              }`}
+                              className="p-3"
                               onClick={(e) => e.stopPropagation()}
                             >
                               <input
@@ -291,13 +423,13 @@ const AllocatePayrollModal = ({
                                 onChange={() => toggleStaff(id)}
                               />
                             </td>
-                            <td className="p-5">
+                            <td className="p-3">
                               <div className="flex items-center gap-3">
                                 <div
-                                  className={`h-9 w-9 rounded-full flex items-center justify-center text-[11px] shrink-0 transition-colors ${
+                                  className={`h-8 w-8 rounded-full flex items-center justify-center text-[11px] shrink-0 transition-colors ${
                                     isSelected
                                       ? "bg-black text-white"
-                                      : "bg-zinc-100 text-zinc-600"
+                                      : "bg-gray-100 text-gray-600"
                                   }`}
                                 >
                                   {isSelected ? (
@@ -307,10 +439,10 @@ const AllocatePayrollModal = ({
                                   )}
                                 </div>
                                 <div>
-                                  <div className="text-black text-[13px] font-normal">
+                                  <div className="font-medium text-gray-800">
                                     {staff.full_name}
                                   </div>
-                                  <div className="text-[11px] text-zinc-400 font-normal">
+                                  <div className="text-[10px] text-gray-400">
                                     ID:{" "}
                                     {staff.employee_id ||
                                       String(id).slice(0, 8)}
@@ -318,8 +450,8 @@ const AllocatePayrollModal = ({
                                 </div>
                               </div>
                             </td>
-                            <td className="p-5 text-right pr-10">
-                              <span className="inline-block px-2.5 py-1 rounded-full bg-zinc-100 text-zinc-500 text-[11px]">
+                            <td className="p-3 text-right pr-4">
+                              <span className="inline-block px-2.5 py-1 rounded-full bg-gray-100 text-gray-600 text-[10px]">
                                 {staff.department_name ||
                                   staff.department ||
                                   "N/A"}
@@ -334,136 +466,110 @@ const AllocatePayrollModal = ({
               </div>
             </div>
           ) : (
-            <div className="p-12 space-y-10 flex-1 h-full flex flex-col justify-center bg-white animate-in slide-in-from-right-4">
-              <div className="bg-black p-8 rounded-3xl flex items-center gap-6 text-white shadow-2xl shadow-zinc-200">
-                <div className="h-16 w-16 bg-white/10 rounded-2xl flex items-center justify-center">
-                  <CheckCircle2 className="text-white" size={36} />
+            <div className="px-8 py-6 h-full overflow-y-auto space-y-5">
+              <div className="bg-black p-5 rounded-2xl flex items-center gap-4 text-white">
+                <div className="h-12 w-12 bg-white/10 rounded-2xl flex items-center justify-center">
+                  <CheckCircle2 className="text-white" size={26} />
                 </div>
                 <div>
-                  <h4 className="text-[18px] tracking-tight font-normal">
+                  <h4 className="text-[16px] font-medium">
                     {selectedStaff.length} Employees Ready
                   </h4>
-                  <p className="text-zinc-400 text-[11px] mt-1 uppercase tracking-widest font-normal">
+                  <p className="text-gray-400 text-[10px] mt-0.5 uppercase tracking-wide">
                     Confirm configuration terms
                   </p>
                 </div>
               </div>
 
-              <div className="space-y-8">
-                <div className="space-y-2.5">
-                  <label className="block text-zinc-400 uppercase text-[10px] tracking-widest ml-1 font-normal">
-                    Salary Template
-                  </label>
-                  <CustomSelect
-                    fullWidth
-                    className="bg-zinc-50 py-4 rounded-2xl border-zinc-200 text-black text-[12px]"
-                    value={formData.template_id}
-                    options={templateOptions}
-                    onChange={(val) =>
-                      setFormData({ ...formData, template_id: val })
-                    }
-                  />
-                  {selectedTemplate && (
-                    <p className="ml-1 text-[11px] text-zinc-400">
-                      Using: {selectedTemplate.name}
-                    </p>
-                  )}
-                </div>
+              <div>
+                <SelectField
+                  label="Salary Template"
+                  placeholder="Select a template..."
+                  options={templateOptions}
+                  value={formData.template_id}
+                  onChange={(val) =>
+                    setFormData({ ...formData, template_id: val })
+                  }
+                />
+                {selectedTemplate && (
+                  <p className="mt-1 text-[10px] text-gray-400">
+                    Using: {selectedTemplate.name}
+                  </p>
+                )}
+              </div>
 
-                <div className="grid grid-cols-2 gap-6">
-                  <div className="space-y-2.5">
-                    <label className="block text-zinc-400 uppercase text-[10px] tracking-widest ml-1 font-normal">
-                      Start Date
-                    </label>
-                    <input
-                      type="date"
-                      min={new Date(
-                        new Date().getTime() -
-                          new Date().getTimezoneOffset() * 60000,
-                      )
-                        .toISOString()
-                        .slice(0, 10)}
-                      className="w-full p-4 bg-zinc-50 border border-zinc-200 rounded-2xl outline-none focus:border-black transition-all font-normal"
-                      value={formData.from_date}
-                      onChange={(e) =>
-                        setFormData({ ...formData, from_date: e.target.value })
-                      }
-                    />
-                  </div>
-                  <div className="space-y-2.5">
-                    <label className="block text-zinc-400 uppercase text-[10px] tracking-widest ml-1 font-normal">
-                      End Date
-                    </label>
-                    <input
-                      type="date"
-                      min={formData.from_date || undefined}
-                      className="w-full p-4 bg-zinc-50 border border-zinc-200 rounded-2xl outline-none focus:border-black transition-all font-normal"
-                      value={formData.to_date}
-                      onChange={(e) =>
-                        setFormData({ ...formData, to_date: e.target.value })
-                      }
-                    />
-                  </div>
-                </div>
+              <div className="grid grid-cols-2 gap-4">
+                <DateField
+                  label="Start Date"
+                  min={todayKey}
+                  value={formData.from_date}
+                  onChange={(v) => setFormData({ ...formData, from_date: v })}
+                />
+                <DateField
+                  label="End Date"
+                  min={formData.from_date || undefined}
+                  value={formData.to_date}
+                  onChange={(v) => setFormData({ ...formData, to_date: v })}
+                />
               </div>
             </div>
           )}
         </div>
 
         {/* --- Footer --- */}
-        <div className="p-6 border-t border-zinc-100 bg-zinc-50 flex justify-between items-center shrink-0">
+        <div className="px-8 py-4 border-t border-gray-50 flex justify-between items-center shrink-0">
           <div className="flex items-center gap-3">
             <div className="h-1.5 w-1.5 rounded-full bg-black animate-pulse" />
-            <span className="text-black uppercase tracking-widest text-[11px] font-normal">
-              {selectedStaff.length} SELECTED
+            <span className="text-gray-900 uppercase tracking-wide font-medium">
+              {selectedStaff.length} Selected
             </span>
             {step === 1 && selectedStaff.length > 0 && (
               <button
                 type="button"
                 onClick={() => setSelectedStaff([])}
-                className="text-[11px] text-zinc-400 hover:text-black underline underline-offset-2 transition-colors"
+                className="text-gray-400 hover:text-red-500 transition-colors"
               >
                 Clear
               </button>
             )}
           </div>
 
-          <div className="flex gap-4">
+          <div className="flex items-center gap-3">
             {step === 2 ? (
               <button
+                type="button"
                 onClick={() => setStep(1)}
-                className="px-6 py-3 text-zinc-500 hover:text-black transition-colors flex items-center gap-1 font-normal"
+                className="px-4 py-2 text-gray-600 hover:text-gray-800 flex items-center gap-1"
               >
                 <ChevronLeft size={16} /> Back
               </button>
             ) : (
               <button
+                type="button"
                 onClick={onClose}
-                className="px-6 py-3 text-zinc-500 hover:text-black transition-colors font-normal"
+                className="px-4 py-2 text-gray-600 hover:text-gray-800"
               >
                 Cancel
               </button>
             )}
+
             {step === 1 ? (
-              <button
-                disabled={selectedStaff.length === 0}
+              <GlowButton
                 onClick={() => setStep(2)}
-                className="px-10 py-3 bg-black text-white rounded-2xl disabled:opacity-20 hover:bg-zinc-800 flex items-center gap-2 transition-all active:scale-95 shadow-lg font-normal"
+                disabled={selectedStaff.length === 0}
               >
-                Next Step <ChevronRight size={16} />
-              </button>
+                <span className="flex items-center gap-1">
+                  Next Step <ChevronRight size={16} />
+                </span>
+              </GlowButton>
             ) : (
-              <button
-                disabled={!isFormValid || loading}
-                onClick={onSubmit}
-                className="px-10 py-3 bg-black text-white rounded-2xl hover:bg-zinc-800 flex items-center gap-2 transition-all active:scale-95 disabled:opacity-20 shadow-lg font-normal"
-              >
+              <GlowButton onClick={onSubmit} disabled={!isFormValid || loading}>
                 {loading ? (
-                  <Loader2 className="animate-spin" size={18} />
+                  <Loader2 className="animate-spin" size={16} />
                 ) : (
                   "Confirm Allocation"
                 )}
-              </button>
+              </GlowButton>
             )}
           </div>
         </div>

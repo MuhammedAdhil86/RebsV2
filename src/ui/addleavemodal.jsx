@@ -171,6 +171,304 @@ const SelectField = ({
   );
 };
 
+/* ------------------------------------------------------------------ */
+/* PolicyDetails: "View details" button + animated accordion           */
+/* ------------------------------------------------------------------ */
+const yesNo = (v) => (v ? "Yes" : "No");
+const orDash = (v) => (v === null || v === undefined || v === "" ? "-" : v);
+const days = (v) =>
+  v === null || v === undefined || v === ""
+    ? "-"
+    : `${Number(v)} day${Number(v) === 1 ? "" : "s"}`;
+const cap = (s) =>
+  s ? String(s).charAt(0).toUpperCase() + String(s).slice(1) : "-";
+
+const DetailRow = ({ label, value }) => (
+  <div className="flex justify-between gap-4 py-1.5 border-b border-gray-50 last:border-0">
+    <span className="text-gray-500">{label}</span>
+    <span className="font-medium text-gray-800 text-right">{value}</span>
+  </div>
+);
+
+const DetailSection = ({ title, children }) => (
+  <div>
+    <p className="text-[10px] uppercase tracking-wide text-gray-400 mb-1">
+      {title}
+    </p>
+    <div>{children}</div>
+  </div>
+);
+
+// Every key we render explicitly. Anything else the API sends shows up
+// automatically in the "Other fields" section, so nothing is ever missed.
+const KNOWN_POLICY_KEYS = [
+  "accrual_method",
+  "booked_days",
+  "branch",
+  "can_apply",
+  "can_apply_reason",
+  "code",
+  "color",
+  "employment_type",
+  "event_based",
+  "events_taken",
+  "final_balance",
+  "has_employment_setting",
+  "id",
+  "is_enabled",
+  "leave_type",
+  "name",
+  "postpone_accrual_period",
+  "reporting_manager_name",
+  "settings",
+  "total_leave",
+  "total_used",
+];
+
+const KNOWN_SETTING_KEYS = [
+  "allow_half_day",
+  "document_required",
+  "document_required_after_days",
+  "event_apply_window_days",
+  "long_leave_advance_days",
+  "long_leave_max_days",
+  "max_requests_per_period",
+  "min_service_unit",
+  "min_service_value",
+  "request_limit_period",
+  "short_leave_advance_days",
+  "short_leave_max_days",
+];
+
+// Generic value formatter for the "Other fields" fallback
+const showVal = (v) => {
+  if (v === null || v === undefined || v === "") return "-";
+  if (typeof v === "boolean") return yesNo(v);
+  if (Array.isArray(v)) return v.length ? v.map(showVal).join(", ") : "-";
+  if (typeof v === "object")
+    return Object.entries(v)
+      .map(([k, x]) => `${k}: ${showVal(x)}`)
+      .join(" | ");
+  return String(v);
+};
+
+const labelize = (k) => cap(String(k).replace(/_/g, " "));
+
+const PolicyDetails = ({ policy, open, onToggle }) => {
+  if (!policy) return null;
+  const s = policy.settings || {};
+  const event = isEventPolicy(policy);
+
+  // Anything the API sends that is not listed above
+  const extraPolicyKeys = Object.keys(policy).filter(
+    (k) => !KNOWN_POLICY_KEYS.includes(k),
+  );
+  const extraSettingKeys = Object.keys(s).filter(
+    (k) => !KNOWN_SETTING_KEYS.includes(k),
+  );
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        className="flex items-center gap-1.5 font-medium text-gray-700 hover:text-black transition-colors"
+      >
+        <span
+          className="w-2.5 h-2.5 rounded-full"
+          style={{ backgroundColor: policy.color || "#999" }}
+        />
+        {open ? "Hide details" : "View details"}
+        <ChevronDown
+          size={14}
+          className={`transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      {/* grid-rows trick = smooth height animation */}
+      <div
+        className={`grid transition-all duration-300 ease-in-out ${
+          open
+            ? "grid-rows-[1fr] opacity-100 mt-2"
+            : "grid-rows-[0fr] opacity-0"
+        }`}
+      >
+        <div className="overflow-hidden">
+          <div className="border rounded-2xl p-4 space-y-4 bg-gray-50/50 max-h-[340px] overflow-y-auto">
+            {/* ---------------- Overview ---------------- */}
+            <DetailSection title="Overview">
+              <DetailRow label="Policy ID" value={orDash(policy.id)} />
+              <DetailRow label="Name" value={orDash(policy.name)} />
+              <DetailRow label="Code" value={orDash(policy.code)} />
+              <DetailRow
+                label="Colour"
+                value={
+                  policy.color ? (
+                    <span className="inline-flex items-center gap-1.5">
+                      <span
+                        className="w-3 h-3 rounded-full border border-gray-200"
+                        style={{ backgroundColor: policy.color }}
+                      />
+                      {policy.color}
+                    </span>
+                  ) : (
+                    "-"
+                  )
+                }
+              />
+              <DetailRow label="Leave type" value={orDash(policy.leave_type)} />
+              <DetailRow
+                label="Accrual method"
+                value={cap(policy.accrual_method)}
+              />
+              <DetailRow
+                label="Event based"
+                value={yesNo(policy.event_based === true || event)}
+              />
+              <DetailRow
+                label="Status"
+                value={policy.is_enabled ? "Enabled" : "Disabled"}
+              />
+              <DetailRow label="Branch" value={orDash(policy.branch?.name)} />
+              <DetailRow label="Branch ID" value={orDash(policy.branch?.id)} />
+              <DetailRow
+                label="Employment type"
+                value={orDash(policy.employment_type?.name)}
+              />
+              <DetailRow
+                label="Employment type ID"
+                value={orDash(policy.employment_type?.id)}
+              />
+              <DetailRow
+                label="Reporting manager"
+                value={orDash(policy.reporting_manager_name)}
+              />
+              <DetailRow
+                label="Has employment setting"
+                value={yesNo(policy.has_employment_setting)}
+              />
+              <DetailRow
+                label="Postpone accrual period"
+                value={cap(policy.postpone_accrual_period)}
+              />
+            </DetailSection>
+
+            {/* ---------------- Balance ---------------- */}
+            <DetailSection title="Balance">
+              <DetailRow label="Total leave" value={days(policy.total_leave)} />
+              <DetailRow label="Total used" value={days(policy.total_used)} />
+              <DetailRow label="Booked days" value={days(policy.booked_days)} />
+              <DetailRow
+                label="Final balance"
+                value={days(policy.final_balance)}
+              />
+              <DetailRow
+                label="Events taken"
+                value={orDash(policy.events_taken)}
+              />
+            </DetailSection>
+
+            {/* ---------------- Eligibility ---------------- */}
+            <DetailSection title="Eligibility">
+              <DetailRow
+                label="Can apply"
+                value={
+                  <span
+                    className={
+                      policy.can_apply === false
+                        ? "text-red-500"
+                        : "text-green-600"
+                    }
+                  >
+                    {yesNo(policy.can_apply)}
+                  </span>
+                }
+              />
+              <DetailRow
+                label="Reason code"
+                value={orDash(policy.can_apply_reason?.code)}
+              />
+              <DetailRow
+                label="Reason message"
+                value={orDash(policy.can_apply_reason?.message)}
+              />
+            </DetailSection>
+
+            {/* ---------------- Settings ---------------- */}
+            <DetailSection title="Settings">
+              <DetailRow
+                label="Allow half day"
+                value={yesNo(s.allow_half_day)}
+              />
+              <DetailRow
+                label="Document required"
+                value={yesNo(s.document_required)}
+              />
+              <DetailRow
+                label="Document required after"
+                value={days(s.document_required_after_days)}
+              />
+              <DetailRow
+                label="Event apply window"
+                value={days(s.event_apply_window_days)}
+              />
+              <DetailRow
+                label="Short leave advance notice"
+                value={days(s.short_leave_advance_days)}
+              />
+              <DetailRow
+                label="Short leave max days"
+                value={days(s.short_leave_max_days)}
+              />
+              <DetailRow
+                label="Long leave advance notice"
+                value={days(s.long_leave_advance_days)}
+              />
+              <DetailRow
+                label="Long leave max days"
+                value={days(s.long_leave_max_days)}
+              />
+              <DetailRow
+                label="Max requests per period"
+                value={orDash(s.max_requests_per_period)}
+              />
+              <DetailRow
+                label="Request limit period"
+                value={cap(s.request_limit_period)}
+              />
+              <DetailRow
+                label="Min service value"
+                value={orDash(s.min_service_value)}
+              />
+              <DetailRow
+                label="Min service unit"
+                value={cap(s.min_service_unit)}
+              />
+              {extraSettingKeys.map((k) => (
+                <DetailRow key={k} label={labelize(k)} value={showVal(s[k])} />
+              ))}
+            </DetailSection>
+
+            {/* ---------------- Anything new from the API ---------------- */}
+            {extraPolicyKeys.length > 0 && (
+              <DetailSection title="Other fields">
+                {extraPolicyKeys.map((k) => (
+                  <DetailRow
+                    key={k}
+                    label={labelize(k)}
+                    value={showVal(policy[k])}
+                  />
+                ))}
+              </DetailSection>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const AdminLeaveModal = ({ isOpen, onClose }) => {
   const { applyLeaveAdmin, fetchEmployeeLeavePolicies, employeeLeavePolicies } =
     useLeaveStore();
@@ -178,6 +476,7 @@ const AdminLeaveModal = ({ isOpen, onClose }) => {
   const [staffList, setStaffList] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [fetchingPolicies, setFetchingPolicies] = useState(false);
+  const [showPolicyDetails, setShowPolicyDetails] = useState(false);
 
   // Calendar state (regular leave)
   const today = new Date();
@@ -254,6 +553,7 @@ const AdminLeaveModal = ({ isOpen, onClose }) => {
 
   const handlePolicyChange = (policyId) => {
     setAnchor(null);
+    setShowPolicyDetails(false);
     setFormData((prev) => ({
       ...resetDates(prev),
       leave_policy: policyId,
@@ -262,6 +562,7 @@ const AdminLeaveModal = ({ isOpen, onClose }) => {
 
   // Handle employee selection and fetch their leave policies
   const handleEmployeeChange = async (employeeId) => {
+    setShowPolicyDetails(false);
     setFormData((prev) => ({
       ...resetDates(prev),
       employeeUuid: employeeId,
@@ -397,6 +698,7 @@ const AdminLeaveModal = ({ isOpen, onClose }) => {
     setSearchTerm("");
     setAnchor(null);
     setRangeMode(false);
+    setShowPolicyDetails(false);
     onClose();
   };
 
@@ -497,7 +799,7 @@ const AdminLeaveModal = ({ isOpen, onClose }) => {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-8 overflow-y-auto">
+        <form onSubmit={handleSubmit} className="px-8 overflow-y-auto">
           {/* Two columns: inputs on the left, calendar / event on the right */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             {/* ================= LEFT: inputs ================= */}
@@ -528,6 +830,15 @@ const AdminLeaveModal = ({ isOpen, onClose }) => {
                 value={formData.leave_policy}
                 onChange={handlePolicyChange}
               />
+
+              {/* Policy details accordion */}
+              {selectedPolicy && (
+                <PolicyDetails
+                  policy={selectedPolicy}
+                  open={showPolicyDetails}
+                  onToggle={() => setShowPolicyDetails((o) => !o)}
+                />
+              )}
 
               {/* CC Notification Search */}
               <div className="space-y-2">

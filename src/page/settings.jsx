@@ -4,15 +4,423 @@ import { useNavigate } from "react-router-dom";
 import DashboardLayout from "../ui/pagelayout";
 import HeaderGlobal from "../ui/headerglobal";
 import avatar from "../assets/img/avatar.svg";
-import { FiUser, FiInfo, FiLogOut, FiCamera } from "react-icons/fi";
+import {
+  FiUser,
+  FiInfo,
+  FiLogOut,
+  FiCamera,
+  FiCreditCard,
+  FiUsers,
+  FiCalendar,
+  FiClock,
+  FiBox,
+  FiAlertTriangle,
+} from "react-icons/fi";
 import {
   getMyPersonalProfile,
   updateMyPersonalProfile,
   updateProfileImage,
 } from "../service/employeeService";
+import { getSubscriptionDetailsData } from "../service/companyService"; // adjust to the file where you added it
+import { showApiError } from "../utils/apiToast"; // adjust path if needed
 import SettingsProfile from "../components/settingsprofile";
 import LogoutConfirmationModal from "../ui/conformationmodal";
 import { useAuthStore } from "../store/authStore";
+
+/* ------------------------------------------------------------------ */
+/* Subscription helpers                                                */
+/* ------------------------------------------------------------------ */
+const fmtDate = (k) => {
+  if (!k) return "-";
+  const [y, m, d] = String(k).split("T")[0].split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+};
+
+const daysBetweenKeys = (a, b) => {
+  const [y1, m1, d1] = String(a).split("T")[0].split("-").map(Number);
+  const [y2, m2, d2] = String(b).split("T")[0].split("-").map(Number);
+  return (
+    Math.round(
+      (new Date(y2, m2 - 1, d2) - new Date(y1, m1 - 1, d1)) / 86400000,
+    ) + 1
+  );
+};
+
+const money = (n) => `₹${Number(n || 0).toLocaleString("en-IN")}`;
+
+// "ACTIVE" -> "Active"
+const capFirst = (s) =>
+  s
+    ? String(s).charAt(0).toUpperCase() + String(s).slice(1).toLowerCase()
+    : "-";
+
+const SubRow = ({ label, value }) => (
+  <div className="flex justify-between gap-4 py-2.5 border-b border-gray-100 last:border-0 text-[13px]">
+    <span className="text-gray-500 font-normal">{label}</span>
+    <span className="text-gray-800 text-right font-normal">{value}</span>
+  </div>
+);
+
+const SubCard = ({ title, icon: IconCmp, children }) => (
+  <div className="border border-gray-200 rounded-2xl p-5 bg-white">
+    <div className="flex items-center gap-2 mb-2">
+      {IconCmp && (
+        <span className="w-7 h-7 rounded-lg bg-gray-100 flex items-center justify-center text-gray-700">
+          <IconCmp size={14} />
+        </span>
+      )}
+      <p className="text-[13px] uppercase tracking-wider text-gray-400 font-normal">
+        {title}
+      </p>
+    </div>
+    {children}
+  </div>
+);
+
+const StatTile = ({ icon: IconCmp, label, value, sub }) => (
+  <div className="border border-gray-200 rounded-2xl p-4 bg-white flex items-center gap-3">
+    <span className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center text-gray-800 flex-shrink-0">
+      <IconCmp size={18} />
+    </span>
+    <div className="min-w-0">
+      <p className="text-[13px] uppercase tracking-wider text-gray-400 font-normal">
+        {label}
+      </p>
+      <p className="text-[13px] text-gray-900 truncate font-normal">{value}</p>
+      {sub && <p className="text-[13px] text-gray-500 font-normal">{sub}</p>}
+    </div>
+  </div>
+);
+
+// Circular progress ring showing days left
+const DaysRing = ({ remaining, percentLeft, color }) => {
+  const r = 44;
+  const c = 2 * Math.PI * r;
+  const offset = c - (Math.min(100, Math.max(0, percentLeft)) / 100) * c;
+  return (
+    <div className="relative w-32 h-32 flex-shrink-0">
+      <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
+        <circle
+          cx="50"
+          cy="50"
+          r={r}
+          fill="none"
+          stroke="rgba(255,255,255,0.12)"
+          strokeWidth="8"
+        />
+        <circle
+          cx="50"
+          cy="50"
+          r={r}
+          fill="none"
+          stroke={color}
+          strokeWidth="8"
+          strokeLinecap="round"
+          strokeDasharray={c}
+          strokeDashoffset={offset}
+          style={{ transition: "stroke-dashoffset 0.8s ease" }}
+        />
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className="text-3xl text-white leading-none font-normal">
+          {remaining}
+        </span>
+        <span className="text-[13px] text-white/60 mt-1 font-normal">
+          day{remaining !== 1 ? "s" : ""} left
+        </span>
+      </div>
+    </div>
+  );
+};
+
+/* ------------------------------------------------------------------ */
+/* SubscriptionTab: fetches GET /subscription/details when opened      */
+/* ------------------------------------------------------------------ */
+const SubscriptionTab = () => {
+  const [sub, setSub] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
+
+  const load = async () => {
+    try {
+      setLoading(true);
+      setFailed(false);
+      const data = await getSubscriptionDetailsData();
+      setSub(data);
+    } catch (err) {
+      setFailed(true);
+      showApiError(err, "Failed to load subscription details");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="space-y-4 animate-pulse">
+        <div className="h-44 rounded-3xl bg-gray-100" />
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="h-20 rounded-2xl bg-gray-100" />
+          <div className="h-20 rounded-2xl bg-gray-100" />
+          <div className="h-20 rounded-2xl bg-gray-100" />
+        </div>
+        <div className="h-48 rounded-2xl bg-gray-100" />
+      </div>
+    );
+  }
+
+  if (failed || !sub) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[300px] gap-3">
+        <p className="text-gray-500 text-[13px] font-normal">
+          Could not load subscription details.
+        </p>
+        <button
+          type="button"
+          onClick={load}
+          className="bg-black text-white px-4 py-1.5 rounded text-[13px] font-normal hover:bg-gray-800 transition-all"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  const isActive = String(sub.status).toUpperCase() === "ACTIVE";
+  const remaining = Math.max(Number(sub.days_remaining) || 0, 0);
+  const totalPeriodDays =
+    sub.start_date && sub.end_date
+      ? daysBetweenKeys(sub.start_date, sub.end_date)
+      : 0;
+  const percentLeft =
+    totalPeriodDays > 0 ? (remaining / totalPeriodDays) * 100 : 0;
+  const expiringSoon = !sub.is_expired && remaining <= 7;
+
+  const includedUsers = Number(sub.included_users) || 0;
+  const additionalUsers = Number(sub.additional_users) || 0;
+  const totalUsers =
+    Number(sub.total_user_limit) || includedUsers + additionalUsers;
+  const includedPct = totalUsers ? (includedUsers / totalUsers) * 100 : 0;
+  const additionalPct = totalUsers ? (additionalUsers / totalUsers) * 100 : 0;
+
+  const totalAmount =
+    Number(sub.base_amount || 0) + Number(sub.additional_users_amount || 0);
+  const period = String(sub.billing_period || "period").toLowerCase();
+
+  const statusLabel = sub.is_expired ? "Expired" : capFirst(sub.status);
+  const statusStyle = sub.is_expired
+    ? { pill: "bg-red-400/15 text-red-300", dot: "bg-red-400" }
+    : isActive
+      ? { pill: "bg-emerald-400/15 text-emerald-300", dot: "bg-emerald-400" }
+      : { pill: "bg-amber-400/15 text-amber-300", dot: "bg-amber-400" };
+
+  const ringColor = sub.is_expired
+    ? "#f87171"
+    : expiringSoon
+      ? "#fbbf24"
+      : "#34d399";
+
+  return (
+    <div className="space-y-5">
+      {/* ---------- HERO ---------- */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-gray-900 via-gray-800 to-black text-white p-6 sm:p-7">
+        <div className="absolute -right-16 -top-16 w-56 h-56 rounded-full bg-white/5" />
+        <div className="absolute -right-6 -bottom-24 w-52 h-52 rounded-full bg-white/5" />
+
+        <div className="relative flex flex-wrap items-center justify-between gap-6">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2 mb-3">
+              <span
+                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[13px] font-normal ${statusStyle.pill}`}
+              >
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${statusStyle.dot} ${
+                    isActive && !sub.is_expired ? "animate-pulse" : ""
+                  }`}
+                />
+                {statusLabel}
+              </span>
+              {sub.is_trial && (
+                <span className="px-3 py-1 rounded-full text-[13px] bg-sky-400/15 text-sky-300 font-normal">
+                  Trial
+                </span>
+              )}
+              <span className="px-3 py-1 rounded-full text-[13px] bg-white/10 text-white/80 font-normal">
+                {sub.billing_period}
+              </span>
+            </div>
+
+            <h2 className="text-2xl font-normal truncate">{sub.plan_name}</h2>
+            <p className="text-[13px] text-white/60 mt-0.5 font-normal">
+              {sub.company_name}
+            </p>
+
+            <div className="flex flex-wrap items-center gap-2 mt-4 text-[13px] font-normal">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 text-white/80">
+                <FiCalendar size={12} /> {fmtDate(sub.start_date)}
+              </span>
+              <span className="text-white/40">to</span>
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 text-white/80">
+                <FiCalendar size={12} /> {fmtDate(sub.end_date)}
+              </span>
+            </div>
+          </div>
+
+          <DaysRing
+            remaining={remaining}
+            percentLeft={percentLeft}
+            color={ringColor}
+          />
+        </div>
+      </div>
+
+      {/* ---------- EXPIRY BANNER ---------- */}
+      {(sub.is_expired || expiringSoon) && (
+        <div
+          className={`flex items-start gap-3 rounded-2xl border px-4 py-3 text-[13px] font-normal ${
+            sub.is_expired
+              ? "bg-red-50 border-red-100 text-red-600"
+              : "bg-amber-50 border-amber-100 text-amber-700"
+          }`}
+        >
+          <FiAlertTriangle className="mt-0.5 flex-shrink-0" size={16} />
+          <span>
+            {sub.expiry_message ||
+              (sub.is_expired
+                ? "Your subscription has expired."
+                : "Your subscription is about to expire.")}
+          </span>
+        </div>
+      )}
+
+      {/* ---------- STAT TILES ---------- */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <StatTile
+          icon={FiBox}
+          label="Service"
+          value={String(sub.service || "-").toUpperCase()}
+          sub={sub.plan_name}
+        />
+        <StatTile
+          icon={FiUsers}
+          label="User limit"
+          value={`${totalUsers} users`}
+          sub={`${includedUsers} included + ${additionalUsers} extra`}
+        />
+        <StatTile
+          icon={FiCreditCard}
+          label={`Per ${period}`}
+          value={money(totalAmount)}
+          sub="Base + additional users"
+        />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* ---------- PLAN ---------- */}
+        <SubCard title="Plan details" icon={FiClock}>
+          <SubRow label="Billing period" value={sub.billing_period || "-"} />
+          <SubRow
+            label="Included services"
+            value={
+              Array.isArray(sub.plan_services) && sub.plan_services.length
+                ? sub.plan_services
+                    .map((s) => String(s).toUpperCase())
+                    .join(", ")
+                : "-"
+            }
+          />
+          <SubRow label="Start date" value={fmtDate(sub.start_date)} />
+          <SubRow label="Base end date" value={fmtDate(sub.base_end_date)} />
+          {Number(sub.extension_days) > 0 && (
+            <SubRow
+              label="Extension"
+              value={
+                <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 text-[13px]">
+                  +{sub.extension_days} days
+                </span>
+              }
+            />
+          )}
+          <SubRow label="End date" value={fmtDate(sub.end_date)} />
+        </SubCard>
+
+        {/* ---------- USERS ---------- */}
+        <SubCard title="User seats" icon={FiUsers}>
+          <div className="flex items-end justify-between mb-3">
+            <p className="text-3xl text-gray-900 font-normal leading-none">
+              {totalUsers}
+              <span className="text-[13px] text-gray-400 ml-1">
+                total seats
+              </span>
+            </p>
+          </div>
+
+          <div className="w-full h-2.5 rounded-full bg-gray-100 overflow-hidden flex">
+            <div
+              className="h-full bg-black transition-all duration-500"
+              style={{ width: `${includedPct}%` }}
+            />
+            <div
+              className="h-full bg-gray-400 transition-all duration-500"
+              style={{ width: `${additionalPct}%` }}
+            />
+          </div>
+
+          <div className="flex flex-wrap gap-x-5 gap-y-1 mt-3 text-[13px] text-gray-600 font-normal">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-black" />
+              Included: {includedUsers}
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-gray-400" />
+              Additional: {additionalUsers}
+            </span>
+          </div>
+
+          <div className="mt-3">
+            <SubRow
+              label="Price per additional user"
+              value={money(sub.additional_user_price)}
+            />
+          </div>
+        </SubCard>
+      </div>
+
+      {/* ---------- BILLING ---------- */}
+      <div className="border border-gray-200 rounded-2xl p-5 bg-white">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="w-7 h-7 rounded-lg bg-gray-100 flex items-center justify-center text-gray-700">
+            <FiCreditCard size={14} />
+          </span>
+          <p className="text-[13px] uppercase tracking-wider text-gray-400 font-normal">
+            Billing summary
+          </p>
+        </div>
+
+        <SubRow label="Base amount" value={money(sub.base_amount)} />
+        <SubRow
+          label={`Additional users (${additionalUsers} x ${money(sub.additional_user_price)})`}
+          value={money(sub.additional_users_amount)}
+        />
+
+        <div className="flex items-center justify-between mt-3 rounded-xl bg-gray-900 text-white px-4 py-3">
+          <span className="text-[13px] font-normal text-white/80">
+            Total / {period}
+          </span>
+          <span className="text-xl font-normal">{money(totalAmount)}</span>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 function Settings() {
   const navigate = useNavigate();
@@ -370,6 +778,18 @@ function Settings() {
 
                   <button
                     type="button"
+                    onClick={() => setActiveTab("subscription")}
+                    className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm transition-all font-normal ${
+                      activeTab === "subscription"
+                        ? "bg-black text-white"
+                        : "text-gray-700 hover:bg-gray-100"
+                    }`}
+                  >
+                    <FiCreditCard className="text-lg" /> Subscription
+                  </button>
+
+                  <button
+                    type="button"
                     onClick={() => setActiveTab("about")}
                     className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm transition-all font-normal ${
                       activeTab === "about"
@@ -411,6 +831,8 @@ function Settings() {
                     handleUpdate={handleUpdate}
                   />
                 )}
+
+                {activeTab === "subscription" && <SubscriptionTab />}
 
                 {activeTab === "about" && (
                   <div>

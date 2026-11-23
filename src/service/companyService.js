@@ -53,6 +53,7 @@ import {
   getCompanyLayouts,
   companyLayoutByType,
   getAllLeavePolicy,
+  getSubscriptionDetail,
 } from "../api/api";
 
 export const getBranchData = async () => {
@@ -912,6 +913,18 @@ export const fetchShiftMappedPolicies = async (shiftId) => {
     return Array.isArray(list) ? list : [];
   } catch (error) {
     console.error(`Error fetching policies for shift ${shiftId}:`, error);
+    throw error;
+  }
+};
+export const getSubscriptionDetailsData = async () => {
+  try {
+    const response = await axiosInstance.get(getSubscriptionDetail);
+
+    // Your other APIs return { status_code, message, data }.
+    // The sample you pasted looks like a plain object, so this handles both.
+    return response.data?.data ?? response.data;
+  } catch (error) {
+    console.error("Error fetching subscription details:", error);
     throw error;
   }
 };

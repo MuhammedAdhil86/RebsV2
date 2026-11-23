@@ -118,12 +118,13 @@ export default function ClaimsRequestTab() {
 
   // --- TRIGGERED FROM MODAL SUBMIT BUTTONS ---
   // action: "Approved" | "Rejected"
-  const handleStatusUpdate = async (id, action) => {
+  // payoutMethod: "hand" | "payroll" | "voucher" (only sent when approving)
+  const handleStatusUpdate = async (id, action, payoutMethod) => {
     if (submittingModal) return;
 
     setSubmittingModal(true);
     try {
-      const res = await updateCompanyClaimStatus(id, action);
+      const res = await updateCompanyClaimStatus(id, action, payoutMethod);
       const body = getApiBody(res);
 
       // Service returned the error body instead of throwing (e.g. 409)
