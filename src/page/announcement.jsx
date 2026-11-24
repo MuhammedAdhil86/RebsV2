@@ -8,8 +8,7 @@ import {
   FiTrash2,
   FiEdit2,
   FiX,
-  FiLayout,
-  FiBell,
+  FiPlus,
 } from "react-icons/fi";
 import { toast } from "react-toastify"; // uses the global <ToastContainer /> from App.jsx
 import { showApiSuccess, showApiError } from "../utils/apiToast"; // adjust path to where your toast helper file lives
@@ -20,9 +19,17 @@ import announceService from "../service/announceService";
 import DeleteConfirmationModal from "../ui/deletemodal";
 // Celebrations view (lives in ../ui).
 import CelibrationLayout from "../components/celebration";
+// Create announcement modal.
+import AnnouncementModal from "../components/dashboard/announcement"; // <-- adjust path to where AnnouncementModal.jsx lives
 
 const EMOJIS = ["👍", "❤️", "🔥", "🙌", "😍"];
 const IMAGE_TYPES = ["jpg", "jpeg", "png", "gif", "webp", "svg"];
+
+// Tabs: Announcement is first, Celebration is second.
+const TABS = [
+  { key: "announcements", label: "Announcement" },
+  { key: "celebrations", label: "Celebration" },
+];
 
 // Priority options (matches the create modal: 1 = High, 2 = Medium, 3 = Low).
 const PRIORITY_OPTIONS = [
@@ -134,7 +141,7 @@ const Announcement = () => {
   const [announcements, setAnnouncements] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Which list is visible: "announcements" or "celebrations".
+  // Which tab is active: "announcements" (first) or "celebrations" (second).
   const [view, setView] = useState("announcements");
 
   const [expandedComments, setExpandedComments] = useState({});
@@ -143,6 +150,12 @@ const Announcement = () => {
 
   // Announcements with an emoji add/remove request in progress.
   const [emojiBusyIds, setEmojiBusyIds] = useState(new Set());
+
+  // Create modal state (announcement).
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+
+  // Celebration create button: each click bumps this number, which opens the form.
+  const [celebrationCreateTrigger, setCelebrationCreateTrigger] = useState(0);
 
   // Delete modal states.
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -327,6 +340,17 @@ const Announcement = () => {
         return next;
       });
     }
+  };
+
+  /* ================= CREATE ================= */
+
+  // Open / close the create announcement modal.
+  const handleOpenCreateModal = () => setIsCreateModalOpen(true);
+  const handleCloseCreateModal = () => setIsCreateModalOpen(false);
+
+  // After a successful broadcast, reload the list so the new one shows up.
+  const handleCreateSuccess = () => {
+    loadAnnouncements();
   };
 
   /* ================= EDIT ================= */
@@ -520,44 +544,54 @@ const Announcement = () => {
         <HeaderGlobal userName="Admin" />
 
         <div className="p-4 mx-auto space-y-6 pb-4">
-          {/* Toolbar: one button switches between Layout and Announcement */}
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-[14px] font-semibold text-gray-900">
-              {view === "announcements" ? "Announcements" : "Celebrations"}
-            </h2>
+          {/* Tabs: Announcement (first) | Celebration (second) + black Create button */}
+          <div className="flex items-center justify-between gap-6 border-b border-gray-200">
+            <div className="flex items-center gap-6">
+              {TABS.map((tab) => {
+                const isActive = view === tab.key;
 
+                return (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    onClick={() => setView(tab.key)}
+                    className={`pb-3 text-sm transition-colors border-b-2 -mb-px ${
+                      isActive
+                        ? "border-black text-black font-medium"
+                        : "border-transparent text-gray-500 hover:text-gray-800"
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Same black button on both tabs: creates an announcement or a celebration */}
             <button
               type="button"
-              onClick={() =>
-                setView((v) =>
-                  v === "announcements" ? "celebrations" : "announcements",
-                )
-              }
-              className="inline-flex items-center gap-1.5 text-xs font-medium text-white bg-black hover:bg-gray-800 px-3 py-2 rounded-lg transition-colors"
-              title={
+              onClick={
                 view === "announcements"
-                  ? "Switch to layout"
-                  : "Back to announcements"
+                  ? handleOpenCreateModal
+                  : () => setCelebrationCreateTrigger((n) => n + 1)
               }
+              className="mb-2 inline-flex items-center gap-1.5 text-xs font-medium text-white bg-black hover:bg-gray-800 px-3.5 py-2 rounded-lg transition-colors shadow-sm"
             >
-              {view === "announcements" ? (
-                <>
-                  <FiLayout size={14} />
-                  <span>Celebration</span>
-                </>
-              ) : (
-                <>
-                  <FiBell size={14} />
-                  <span>Announcement</span>
-                </>
-              )}
+              <FiPlus size={14} />
+              <span>
+                {view === "announcements"
+                  ? "Create Announcement"
+                  : "Create Celebration"}
+              </span>
             </button>
           </div>
 
-          {/* ================= CELEBRATIONS VIEW ================= */}
-          {view === "celebrations" && <CelibrationLayout />}
+          {/* ================= CELEBRATIONS TAB ================= */}
+          {view === "celebrations" && (
+            <CelibrationLayout createTrigger={celebrationCreateTrigger} />
+          )}
 
-          {/* ================= ANNOUNCEMENTS VIEW ================= */}
+          {/* ================= ANNOUNCEMENTS TAB ================= */}
           {view === "announcements" && (
             <>
               {loading ? (
@@ -829,6 +863,13 @@ const Announcement = () => {
           )}
         </div>
       </div>
+
+      {/* Create announcement modal */}
+      <AnnouncementModal
+        isOpen={isCreateModalOpen}
+        onClose={handleCloseCreateModal}
+        onSuccess={handleCreateSuccess}
+      />
 
       {/* Edit announcement modal */}
       {isEditModalOpen && editingAnnouncement && (

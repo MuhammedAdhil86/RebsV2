@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { FiEdit2, FiTrash2, FiPlus, FiEye, FiX } from "react-icons/fi";
+import { FiEdit2, FiTrash2, FiEye, FiX } from "react-icons/fi";
 import { toast } from "react-toastify";
 
 import announceService from "../service/announceService";
@@ -93,7 +93,9 @@ const buildCelebrationHtml = (celebration) => {
   return `<body style="margin:0;padding:24px 0;background:#f3f4f6"><div style="position:relative;width:${TEMPLATE_WIDTH}px;margin:0 auto;background:#fff;box-shadow:0 4px 24px rgba(0,0,0,0.12)">${background}${filled}</div></body>`;
 };
 
-const CelibrationLayout = () => {
+// createTrigger: a number from the parent. Every time it increases (the black
+// "Create" button in the Celebration tab), the create form opens.
+const CelibrationLayout = ({ createTrigger = 0 }) => {
   const [celebrations, setCelebrations] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -124,7 +126,7 @@ const CelibrationLayout = () => {
     }
   };
 
-  // Loads every time the layout is shown (it mounts when the view opens).
+  // Loads every time the layout is shown (it mounts when the tab opens).
   useEffect(() => {
     loadCelebrations();
   }, []);
@@ -150,6 +152,16 @@ const CelibrationLayout = () => {
   const openForm = (type, edit = false) => setForm({ type, isEdit: edit });
 
   const closeForm = () => setForm(null);
+
+  // Open the create form when the parent's Create button is clicked.
+  // The starting value is remembered so re-opening the tab does not open the form by itself.
+  const lastTrigger = useRef(createTrigger);
+  useEffect(() => {
+    if (createTrigger !== lastTrigger.current) {
+      lastTrigger.current = createTrigger;
+      openForm(undefined, false);
+    }
+  }, [createTrigger]);
 
   const handleCloseDelete = () => {
     if (isDeleting) return;
@@ -198,18 +210,6 @@ const CelibrationLayout = () => {
 
   return (
     <div className="space-y-6">
-      {/* Top bar: new celebration */}
-      <div className="flex items-center justify-end gap-3">
-        <button
-          type="button"
-          onClick={() => openForm(undefined, false)}
-          className="inline-flex items-center gap-1.5 text-xs font-medium text-black border border-gray-200 hover:bg-gray-100 px-3 py-2 rounded-lg transition-colors"
-        >
-          <FiPlus size={14} />
-          <span>New Celebration</span>
-        </button>
-      </div>
-
       {loading ? (
         <div className="bg-white p-12 flex justify-center rounded-lg shadow-sm">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-black" />
