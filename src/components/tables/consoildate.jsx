@@ -3,14 +3,13 @@ import {
   Download,
   Search,
   ArrowLeft,
-  Bell,
   Loader2,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import DashboardLayout from "../../ui/pagelayout";
-import avatar from "../../assets/img/avatar.svg";
+import HeaderGlobal from "../../ui/headerglobal"; // <-- adjust path/filename to where it lives
 import { fetchConsolidatedData } from "../../service/employeeService";
 
 // IMPORT EXCEL LOGIC AND STYLES
@@ -21,6 +20,25 @@ import {
   textCellStyle,
   numberCellStyle,
 } from "../helpers/exelsheet";
+
+// ---- Current month / year (used as defaults) ----
+const now = new Date();
+const CURRENT_MONTH = String(now.getMonth() + 1).padStart(2, "0"); // "01" - "12"
+const CURRENT_YEAR = String(now.getFullYear());
+
+// First year shown in the dropdown
+const START_YEAR = 2023;
+
+// ["01", "02", ... "12"]
+const MONTHS = Array.from({ length: 12 }, (_, i) =>
+  String(i + 1).padStart(2, "0"),
+);
+
+// [2023, 2024, ... current year]
+const YEARS = Array.from(
+  { length: now.getFullYear() - START_YEAR + 1 },
+  (_, i) => START_YEAR + i,
+);
 
 // "2025-08-05" -> "05-08-2025" (falls back to the raw value / "-")
 const formatJoinDate = (value) => {
@@ -38,8 +56,8 @@ const TH = "font-['Poppins'] font-normal px-4 py-3";
 const ConsolidatedData = () => {
   const navigate = useNavigate();
   const [data, setData] = useState([]);
-  const [month, setMonth] = useState("10"); // Default October
-  const [year, setYear] = useState("2025");
+  const [month, setMonth] = useState(CURRENT_MONTH); // Default: current month
+  const [year, setYear] = useState(CURRENT_YEAR); // Default: current year
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
@@ -179,31 +197,22 @@ const ConsolidatedData = () => {
   return (
     <DashboardLayout>
       <div className="min-h-screen w-full bg-[#f9fafb] p-3">
-        {/* Header */}
-        <header className="flex items-center justify-between bg-white px-6 py-3 border rounded-xl mb-6">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => navigate(-1)}
-              className="flex items-center text-sm text-gray-600 hover:text-gray-800"
-            >
-              <ArrowLeft size={16} className="mr-1" />
-              Back
-            </button>
-            <h1 className="text-lg font-medium text-gray-800 font-['Poppins']">
-              Consolidated Data
-            </h1>
-          </div>
-          <div className="flex items-center gap-4">
-            <button className="p-2 rounded-full hover:bg-gray-100">
-              <Bell size={20} className="text-gray-600" />
-            </button>
-            <img
-              src={avatar}
-              alt="User Avatar"
-              className="w-8 h-8 rounded-full border object-cover"
-            />
-          </div>
-        </header>
+        {/* Global header (greeting, notifications, settings) */}
+        <HeaderGlobal />
+
+        {/* Page title row */}
+        <div className="flex items-center gap-3 bg-white px-6 py-3 border rounded-xl my-4">
+          <button
+            onClick={() => navigate(-1)}
+            className="flex items-center text-sm text-gray-600 hover:text-gray-800"
+          >
+            <ArrowLeft size={16} className="mr-1" />
+            Back
+          </button>
+          <h1 className="text-lg font-medium text-gray-800 font-['Poppins']">
+            Consolidated Data
+          </h1>
+        </div>
 
         {/* Filters */}
         <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
@@ -213,20 +222,7 @@ const ConsolidatedData = () => {
               onChange={(e) => setMonth(e.target.value)}
               className="border border-gray-300 rounded-md px-3 py-1.5 h-8 text-xs bg-white font-medium text-gray-700 cursor-pointer"
             >
-              {[
-                "01",
-                "02",
-                "03",
-                "04",
-                "05",
-                "06",
-                "07",
-                "08",
-                "09",
-                "10",
-                "11",
-                "12",
-              ].map((m, idx) => (
+              {MONTHS.map((m, idx) => (
                 <option key={m} value={m}>
                   {new Date(0, idx).toLocaleString("default", {
                     month: "long",
@@ -240,7 +236,7 @@ const ConsolidatedData = () => {
               onChange={(e) => setYear(e.target.value)}
               className="border border-gray-300 rounded-md px-3 py-1.5 h-8 text-xs bg-white font-medium text-gray-700 cursor-pointer"
             >
-              {[2023, 2024, 2025, 2026].map((y) => (
+              {YEARS.map((y) => (
                 <option key={y} value={y}>
                   {y}
                 </option>

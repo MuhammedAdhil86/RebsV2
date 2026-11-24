@@ -726,20 +726,15 @@ export const fetchCompanyClaims = async () => {
   }
 };
 
-export const updateCompanyClaimStatus = async (id, action, payoutMethod) => {
+export const updateCompanyClaimStatus = async (id, action) => {
   try {
-    // New API allowed values: "Approved" | "Rejected" (capitalized, no lowercasing)
+    // Allowed values: "Approved" | "Rejected" (capitalized, no lowercasing)
     const body = { status: action };
-
-    // payout_method is required only when approving: hand | payroll | voucher
-    if (action === "Approved") {
-      body.payout_method = payoutMethod;
-    }
 
     const response = await axiosInstance.put(approveCompanyClaim(id), body);
 
     console.log("Approve/Reject claim response:", response);
-    return response.data; // { status_code, message, data: { voucher_code } }
+    return response.data; // { status_code, message, data }
   } catch (error) {
     console.error(`Error updating status for claim ID ${id}:`, error);
     throw error;
