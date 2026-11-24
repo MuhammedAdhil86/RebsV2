@@ -3,9 +3,8 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import DashboardLayout from "../ui/pagelayout";
 import HeaderGlobal from "../ui/headerglobal";
 import { getDepartmentData } from "../service/companyService";
-import { getActiveUsersLight } from "../service/employeeService";
 import CustomSelect from "../ui/customselect"; // adjust path/file name if different
-import CompanyOverview, { useKpiData } from "../components/kpi/CompanyOverview";
+import CompanyOverview from "../components/kpi/CompanyOverview";
 import TeamKpi from "../components/kpi/TeamKpi";
 import IndividualKpi from "../components/kpi/IndividualKpi";
 
@@ -31,14 +30,6 @@ const TABS = [
 ];
 
 const TAB_KEY = "kpi_active_tab";
-
-// Active-users-light rows can name things differently, so read them defensively
-const lightUserName = (u) =>
-  (
-    u?.name ||
-    u?.user_name ||
-    `${u?.first_name || ""} ${u?.last_name || ""}`
-  ).trim() || `User ${u?.id ?? u?.user_id ?? ""}`;
 
 function Kpi() {
   const now = new Date();
@@ -79,34 +70,9 @@ function Kpi() {
 
   const { month, year } = period;
 
-  // Individual tab: employee dropdown options (active users)
-  const options = useKpiData(
-    async () => {
-      const users = await getActiveUsersLight();
-      return (Array.isArray(users) ? users : [])
-        .map((u) => ({
-          // The dashboard endpoint expects the employee code (uuid), not the row id
-          id: String(u.uuid ?? u.user_id ?? u.id ?? ""),
-          name: lightUserName(u),
-          sub: u.department_name || u.department || "",
-        }))
-        .filter((o) => o.id);
-    },
-    [],
-    activeTab === "individual",
-  );
-
-  const employeeOptions = options.data || [];
-
-  // Pick the first employee when nothing (or an unknown one) is selected
-  useEffect(() => {
-    if (!employeeOptions.length) return;
-    if (!employeeOptions.some((o) => o.id === employeeId)) {
-      setEmployeeId(employeeOptions[0].id);
-    }
-  }, [employeeOptions, employeeId]);
-
-  // Clicking a name in Company / Team opens that person's Individual tab
+  // Clicking a name in Company / Team opens that person's Individual tab.
+  // The employee list itself is loaded inside IndividualKpi
+  // (getStafffilteredLight for the logged-in user's department).
   const openEmployee = (id) => {
     setEmployeeId(id);
     setActiveTab("individual");
@@ -120,13 +86,6 @@ function Kpi() {
       label: String(d.name || d.department_name || "").trim(),
     })),
   ];
-
-  const employeeSelectOptions = employeeOptions.length
-    ? employeeOptions.map((o) => ({
-        value: o.id,
-        label: o.sub ? `${o.name} (${o.sub})` : o.name,
-      }))
-    : [{ value: "", label: "No employees" }];
 
   const tabButtonClass = (id) =>
     `pb-2 px-1 transition-all relative whitespace-nowrap ${
@@ -183,16 +142,6 @@ function Kpi() {
                 />
               )}
 
-              {activeTab === "individual" && (
-                <CustomSelect
-                  label="Employee"
-                  value={employeeId}
-                  onChange={setEmployeeId}
-                  minWidth={220}
-                  options={employeeSelectOptions}
-                />
-              )}
-
               <button
                 onClick={goToCurrent}
                 disabled={isCurrentPeriod}
@@ -238,7 +187,7 @@ function Kpi() {
           {activeTab === "individual" && (
             <IndividualKpi
               employeeId={employeeId}
-              options={options}
+              onEmployeeChange={setEmployeeId}
               month={month}
               year={year}
             />

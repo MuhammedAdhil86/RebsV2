@@ -3,6 +3,7 @@
 import {
   getEmployeeDetails,
   getActiveUsersLightUrl,
+  getStafffilteredLightUrl,
   employeeDelete,
   updateBasicInfo,
   getEmployeeStatus,
@@ -12,6 +13,7 @@ import {
   getEmployeeRole,
   postAddBankInformation,
   updateWorkInformation,
+  getMyReporteesUrl,
   updateIDInfo,
   updateWorkExperience,
   getDailyAttendance,
@@ -65,6 +67,35 @@ export const getActiveUsersLight = async () => {
     return response.data.data;
   } catch (error) {
     console.error("Error fetching active users light:", error);
+    throw error;
+  }
+};
+
+export const getMyReportees = async () => {
+  try {
+    const response = await axiosInstance.get(getMyReporteesUrl);
+    return response.data.data;
+  } catch (error) {
+    console.error("Error fetching my reportees:", error);
+    throw error;
+  }
+};
+export const getStafffilteredLight = async (filters = {}) => {
+  try {
+    const { limit, department, uuid, employee_ref_no } = filters;
+
+    const params = {};
+    if (limit) params.limit = limit;
+    if (department) params.department = department;
+    if (uuid) params.uuid = uuid;
+    if (employee_ref_no) params.employee_ref_no = employee_ref_no;
+
+    const response = await axiosInstance.get(getStafffilteredLightUrl, {
+      params,
+    });
+    return response.data.data;
+  } catch (error) {
+    console.error("Error fetching staff report light:", error);
     throw error;
   }
 };

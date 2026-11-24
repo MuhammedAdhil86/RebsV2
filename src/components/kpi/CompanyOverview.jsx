@@ -502,6 +502,29 @@ const avatarBg = (id) => {
   return CARD_BGS[h % CARD_BGS.length];
 };
 
+// Photo from the staff API when available, initials otherwise
+const Avatar = ({ id, name, image, className = "" }) => {
+  const [failed, setFailed] = useState(false);
+  if (image && !failed) {
+    return (
+      <img
+        src={image}
+        alt={name}
+        onError={() => setFailed(true)}
+        className={`${className} object-cover shrink-0`}
+      />
+    );
+  }
+  return (
+    <div
+      className={`${className} text-black flex items-center justify-center font-medium shrink-0`}
+      style={{ background: avatarBg(id) }}
+    >
+      {initials(name) || "?"}
+    </div>
+  );
+};
+
 const SectionLabel = ({ children }) => (
   <p className="text-xs font-semibold text-black/45">{children}</p>
 );
@@ -750,7 +773,7 @@ const FactRow = ({ label, value, hint }) => (
   </div>
 );
 
-const EmployeeDetail = ({ e, flags, kpi }) => {
+export const EmployeeDetail = ({ e, flags, kpi, info, hideFlags }) => {
   const worked = Number(e.worked_days) || 0;
   const eligible = Number(e.eligible_days) || 0;
   const workedPct = eligible > 0 ? Math.min(100, (worked / eligible) * 100) : 0;
@@ -761,12 +784,12 @@ const EmployeeDetail = ({ e, flags, kpi }) => {
       {/* Profile column */}
       <aside className="bg-zinc-50/70 px-5 py-5 lg:border-r border-b lg:border-b-0 border-black/10 space-y-5">
         <div className="flex items-center gap-3 min-w-0">
-          <div
-            className="w-14 h-14 rounded-full text-black flex items-center justify-center text-sm font-medium shrink-0"
-            style={{ background: avatarBg(e.user_id) }}
-          >
-            {initials(nameOf(e)) || "?"}
-          </div>
+          <Avatar
+            id={e.user_id}
+            name={nameOf(e)}
+            image={info?.image}
+            className="w-14 h-14 rounded-full text-sm"
+          />
           <div className="min-w-0">
             <p className="text-sm font-medium text-black truncate">
               {nameOf(e)}
@@ -780,6 +803,13 @@ const EmployeeDetail = ({ e, flags, kpi }) => {
         <div>
           <FactRow label="Designation" value={e.designation} />
           <FactRow label="Department" value={e.department} />
+          {info && (
+            <>
+              <FactRow label="Employee ref no" value={info.employee_ref_no} />
+              <FactRow label="Branch" value={info.branch_name} />
+              <FactRow label="Role" value={info.role} />
+            </>
+          )}
           <FactRow label="Review status" value={humanize(e.review_status)} />
           <FactRow label="Band" value={humanize(e.band)} />
           <FactRow label="Overall rating" value={num(e.overall_rating, 1)} />
@@ -810,22 +840,24 @@ const EmployeeDetail = ({ e, flags, kpi }) => {
           />
         </div>
 
-        <div>
-          <p className="text-xs font-semibold text-black/45 mb-2">
-            Needs attention
-          </p>
-          {flags?.length ? (
-            <div className="flex flex-wrap gap-1.5">
-              {flags.map((r) => (
-                <Badge key={r} className="bg-red-50 text-red-600">
-                  {humanize(r)}
-                </Badge>
-              ))}
-            </div>
-          ) : (
-            <p className="text-xs text-black/50">No flags</p>
-          )}
-        </div>
+        {!hideFlags && (
+          <div>
+            <p className="text-xs font-semibold text-black/45 mb-2">
+              Needs attention
+            </p>
+            {flags?.length ? (
+              <div className="flex flex-wrap gap-1.5">
+                {flags.map((r) => (
+                  <Badge key={r} className="bg-red-50 text-red-600">
+                    {humanize(r)}
+                  </Badge>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-black/50">No flags</p>
+            )}
+          </div>
+        )}
       </aside>
 
       {/* Data column */}
@@ -1443,12 +1475,11 @@ export const DashboardView = ({ kpi, scope, onOpenEmployee }) => {
                   >
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div className="flex items-center gap-3 min-w-0">
-                        <div
-                          className="w-11 h-11 rounded-full text-black flex items-center justify-center text-xs font-medium shrink-0"
-                          style={{ background: avatarBg(e.user_id) }}
-                        >
-                          {initials(nameOf(e)) || "?"}
-                        </div>
+                        <Avatar
+                          id={e.user_id}
+                          name={nameOf(e)}
+                          className="w-11 h-11 rounded-full text-xs"
+                        />
                         <div className="min-w-0">
                           <div className="flex items-center gap-2 min-w-0">
                             <h3 className="text-sm font-medium text-black truncate">

@@ -69,7 +69,8 @@ export const getStaff = "/master/staff";
 export const getEmployeeDetails = "/staff/get";
 export const getEmployeeRole = "/master/role";
 export const getActiveUsersLightUrl = "/staff/get-active-users-light";
-
+export const getStafffilteredLightUrl = "/staff/report/light";
+export const getMyReporteesUrl = "/staff/my-reportees";
 // TimeSheet
 export const getEmployeeTimesheets = (params = {}) => {
   const query = new URLSearchParams(params).toString();

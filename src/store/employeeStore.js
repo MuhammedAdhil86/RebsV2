@@ -42,7 +42,7 @@ const useEmployeeStore = create((set) => ({
   },
 
   // Fetch light list of active users
-  fetchLightUsers: async () => {
+  fetchUsers: async () => {
     try {
       set({ lightLoading: true, lightError: null });
       const data = await getActiveUsersLight();
