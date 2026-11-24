@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import toast from "react-hot-toast";
+import { showApiSuccess, showApiError } from "../utils/apiToast"; // adjust path to where your toast helper lives
 
 const normalizeHexColor = (color, fallback = "#3B82F6") => {
   if (!color || typeof color !== "string") return fallback;
@@ -150,7 +150,8 @@ const ConfigView = ({ fetchApi, updateApi, onCreateClick }) => {
       setFormData(mergedData);
       setIsEditing(false);
 
-      toast.success("Employee code rule updated successfully!");
+      // Backend message is used as the toast title (falls back to this text)
+      showApiSuccess(response, "Employee code rule updated successfully!");
     } catch (error) {
       console.error("PUT Request Error:", error);
       const errorMessage =
@@ -160,21 +161,29 @@ const ConfigView = ({ fetchApi, updateApi, onCreateClick }) => {
         "Failed to update rule.";
 
       setSubmitError(errorMessage);
-      toast.error(errorMessage, { duration: 5000, id: "employee-code-error" });
+
+      // Toast: backend message as title, backend data underneath
+      showApiError(error, "Failed to update rule.");
     } finally {
       setLoading(false);
     }
   };
 
+  // Live Pattern Preview: Prefixes + Base Code + Padding Digits + Starting Number + Suffixes
   const prefixes = formData?.prefixes || [];
   const suffixes = formData?.suffixes || [];
-  const prefixStr = prefixes.length ? `${prefixes.join("-")}-` : "";
-  const suffixStr = suffixes.length ? `-${suffixes.join("-")}` : "";
+
+  const prefixStr = prefixes.join("");
+  const baseCode = String(formData?.code || "").trim();
+  const suffixStr = suffixes.join("");
+
+  const digits = Math.max(0, Number(formData?.placeholder_digits) || 0);
   const numberStr = String(formData?.starting_number ?? "").padStart(
-    formData?.placeholder_digits ?? 0,
+    digits,
     "0",
   );
-  const sampleCode = `${prefixStr}${numberStr}${suffixStr}`;
+
+  const sampleCode = `${prefixStr}${baseCode}${numberStr}${suffixStr}`;
   const isOverLengthLimit = sampleCode.length > 20;
 
   if (fetchingData) {

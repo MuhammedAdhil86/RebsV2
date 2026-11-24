@@ -24,7 +24,7 @@ const MONTHS = [
 ];
 
 const TABS = [
-  { id: "company", label: "Company" },
+  { id: "Overview", label: "Overview" },
   { id: "team", label: "Team" },
   { id: "individual", label: "Individual" },
 ];
@@ -35,7 +35,7 @@ function Kpi() {
   const now = new Date();
 
   const [activeTab, setActiveTab] = useState(
-    () => localStorage.getItem(TAB_KEY) || "company",
+    () => localStorage.getItem(TAB_KEY) || "Overview",
   );
   const [period, setPeriod] = useState({
     month: now.getMonth() + 1,
@@ -125,14 +125,14 @@ function Kpi() {
                 <span className="text-black/30">{period.year}</span>
               </h2>
               <p className="text-xs text-black/40 mt-0.5">
-                {activeTab === "company" && "Company KPI dashboard"}
+                {activeTab === "Overview" && "Company KPI dashboard"}
                 {activeTab === "team" && "Team KPI dashboard"}
                 {activeTab === "individual" && "Individual KPI dashboard"}
               </p>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              {activeTab === "company" && (
+              {activeTab === "Overview" && (
                 <CustomSelect
                   label="Department"
                   value={departmentId}
@@ -171,7 +171,7 @@ function Kpi() {
           </div>
 
           {/* TAB PANELS */}
-          {activeTab === "company" && (
+          {activeTab === "Overview" && (
             <CompanyOverview
               month={month}
               year={year}

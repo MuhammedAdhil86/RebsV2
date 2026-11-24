@@ -1386,26 +1386,7 @@ export const DashboardView = ({ kpi, scope, onOpenEmployee }) => {
                   className="pl-9 pr-3 py-2 w-full text-xs border border-black/10 rounded-lg outline-none focus:border-black transition-colors"
                 />
               </div>
-              <div className="relative">
-                <select
-                  value={department}
-                  onChange={(ev) => setDepartment(ev.target.value)}
-                  aria-label="Filter by department"
-                  className="appearance-none w-full sm:w-auto pl-3 pr-9 py-2 text-xs text-black border border-black/10 rounded-lg bg-white cursor-pointer outline-none transition-colors hover:border-black/30 focus:border-black focus:ring-2 focus:ring-black/10"
-                >
-                  <option value="all">All departments</option>
-                  {departments.map((d) => (
-                    <option key={d} value={d}>
-                      {d}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown
-                  size={14}
-                  aria-hidden="true"
-                  className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-black/50"
-                />
-              </div>
+
               <div className="relative">
                 <select
                   value={sort}
