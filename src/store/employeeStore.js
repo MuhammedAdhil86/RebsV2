@@ -6,7 +6,7 @@ import {
 import axiosInstance from "../service/axiosinstance";
 import { getEmployeeDetails } from "../api/api"; // your API endpoint
 
-const useEmployeeStore = create((set) => ({
+const useEmployeeStore = create((set, get) => ({
   employees: [],
   loading: false,
   error: null,
@@ -41,8 +41,8 @@ const useEmployeeStore = create((set) => ({
     }
   },
 
-  // Fetch light list of active users
-  fetchUsers: async () => {
+  // Fetch light list of active users  (renamed from fetchUsers)
+  fetchLightUsers: async () => {
     try {
       set({ lightLoading: true, lightError: null });
       const data = await getActiveUsersLight();
@@ -52,6 +52,9 @@ const useEmployeeStore = create((set) => ({
       set({ lightError: error, lightLoading: false });
     }
   },
+
+  // Old name kept so existing usages don't break
+  fetchUsers: () => get().fetchLightUsers(),
 
   // Fetch single employee by ID
   fetchEmployeeById: async (id) => {
